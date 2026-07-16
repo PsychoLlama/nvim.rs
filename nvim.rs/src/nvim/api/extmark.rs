@@ -14,11 +14,7 @@ extern "C" {
     fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
     fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
     fn mh_delete_uint32_t(set: *mut Set_uint32_t, key: *mut uint32_t) -> uint32_t;
-    fn mh_put_uint32_t(
-        set: *mut Set_uint32_t,
-        key: uint32_t,
-        new: *mut MHPutStatus,
-    ) -> uint32_t;
+    fn mh_put_uint32_t(set: *mut Set_uint32_t, key: uint32_t, new: *mut MHPutStatus) -> uint32_t;
     fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t;
     fn mh_get_String(set: *mut Set_String, key: String_0) -> uint32_t;
     fn map_put_ref_String_int(
@@ -38,12 +34,7 @@ extern "C" {
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn object_to_hl_id(
         obj: Object,
         what: *const ::core::ffi::c_char,
@@ -91,12 +82,7 @@ extern "C" {
         mark_id: uint32_t,
         subpriority: DecorPriority,
     );
-    fn decor_to_dict_legacy(
-        dict: *mut Dict,
-        decor: DecorInline,
-        hl_name: bool,
-        arena: *mut Arena,
-    );
+    fn decor_to_dict_legacy(dict: *mut Dict, decor: DecorInline, hl_name: bool, arena: *mut Arena);
     fn hl_group_name(hl_id: ::core::ffi::c_int, hl_name: bool) -> Object;
     fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider;
     fn decor_provider_clear(p: *mut DecorProvider);
@@ -144,10 +130,7 @@ extern "C" {
     fn schar_high(sc: schar_T) -> bool;
     fn mt_inspect(b: *mut MarkTree, keys: bool, dot: bool) -> String_0;
     fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
-    fn utfc_ptr2schar(
-        p: *const ::core::ffi::c_char,
-        firstc: *mut ::core::ffi::c_int,
-    ) -> schar_T;
+    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
     fn changed_window_setting(wp: *mut win_T);
     fn init_sign_text(
@@ -2206,12 +2189,8 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 87] = unsafe {
         *b"void nvim_set_decoration_provider(Integer, KeyDict_set_decoration_provider *, Error *)\0",
     )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
@@ -2281,17 +2260,11 @@ unsafe extern "C" fn set_put_ptr_t(
         != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
 #[inline]
-unsafe extern "C" fn set_has_uint32_t(
-    mut set: *mut Set_uint32_t,
-    mut key: uint32_t,
-) -> bool {
+unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
     return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 #[inline]
-unsafe extern "C" fn set_del_uint32_t(
-    mut set: *mut Set_uint32_t,
-    mut key: uint32_t,
-) -> uint32_t {
+unsafe extern "C" fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> uint32_t {
     mh_delete_uint32_t(set, &raw mut key);
     return key;
 }
@@ -2354,8 +2327,8 @@ pub unsafe extern "C" fn api_extmark_free_all_mem() {
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<String_0>(),
     };
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut namespace_ids.values
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut namespace_ids.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -2376,10 +2349,7 @@ pub unsafe extern "C" fn nvim_create_namespace(mut name: String_0) -> Integer {
     next_namespace_id = next_namespace_id + 1;
     id = c2rust_fresh0;
     if name.size > 0 as size_t {
-        let mut name_alloc: String_0 = copy_string(
-            name,
-            ::core::ptr::null_mut::<Arena>(),
-        );
+        let mut name_alloc: String_0 = copy_string(name, ::core::ptr::null_mut::<Arena>());
         map_put_String_int(&raw mut namespace_ids, name_alloc, id as ::core::ffi::c_int);
     }
     return id as Integer;
@@ -2459,17 +2429,18 @@ pub unsafe extern "C" fn virt_text_to_array(
         }
         let mut hl_array: Array = arena_array(
             arena,
-            if i < j { j.wrapping_sub(i).wrapping_add(1 as size_t) } else { 0 as size_t },
+            if i < j {
+                j.wrapping_sub(i).wrapping_add(1 as size_t)
+            } else {
+                0 as size_t
+            },
         );
         while i < j {
             let mut hl_id: ::core::ffi::c_int = (*vt.items.offset(i as isize)).hl_id;
             if hl_id >= 0 as ::core::ffi::c_int {
                 let c2rust_fresh2 = hl_array.size;
                 hl_array.size = hl_array.size.wrapping_add(1);
-                *hl_array.items.offset(c2rust_fresh2 as isize) = hl_group_name(
-                    hl_id,
-                    hl_name,
-                );
+                *hl_array.items.offset(c2rust_fresh2 as isize) = hl_group_name(hl_id, hl_name);
             }
             i = i.wrapping_add(1);
         }
@@ -2488,10 +2459,7 @@ pub unsafe extern "C" fn virt_text_to_array(
             if hl_id_0 >= 0 as ::core::ffi::c_int {
                 let c2rust_fresh4 = hl_array.size;
                 hl_array.size = hl_array.size.wrapping_add(1);
-                *hl_array.items.offset(c2rust_fresh4 as isize) = hl_group_name(
-                    hl_id_0,
-                    hl_name,
-                );
+                *hl_array.items.offset(c2rust_fresh4 as isize) = hl_group_name(hl_id_0, hl_name);
             }
             let c2rust_fresh5 = chunk.size;
             chunk.size = chunk.size.wrapping_add(1);
@@ -2502,10 +2470,7 @@ pub unsafe extern "C" fn virt_text_to_array(
         } else if hl_id_0 >= 0 as ::core::ffi::c_int {
             let c2rust_fresh6 = chunk.size;
             chunk.size = chunk.size.wrapping_add(1);
-            *chunk.items.offset(c2rust_fresh6 as isize) = hl_group_name(
-                hl_id_0,
-                hl_name,
-            );
+            *chunk.items.offset(c2rust_fresh6 as isize) = hl_group_name(hl_id_0, hl_name);
         }
         let c2rust_fresh7 = chunks.size;
         chunks.size = chunks.size.wrapping_add(1);
@@ -2559,8 +2524,8 @@ unsafe extern "C" fn extmark_to_array(
                 .wrapping_div(::core::mem::size_of::<KeySetLink>())
                 .wrapping_div(
                     (::core::mem::size_of::<[KeySetLink; 36]>()
-                        .wrapping_rem(::core::mem::size_of::<KeySetLink>()) == 0)
-                        as ::core::ffi::c_int as size_t,
+                        .wrapping_rem(::core::mem::size_of::<KeySetLink>())
+                        == 0) as ::core::ffi::c_int as size_t,
                 ),
         );
         let c2rust_fresh11 = dict.size;
@@ -2577,9 +2542,7 @@ unsafe extern "C" fn extmark_to_array(
         let c2rust_fresh12 = dict.size;
         dict.size = dict.size.wrapping_add(1);
         *dict.items.offset(c2rust_fresh12 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"right_gravity\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"right_gravity\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
@@ -2613,9 +2576,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh15 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh15 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"end_right_gravity\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"end_right_gravity\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed {
@@ -2628,9 +2589,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh16 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh16 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"undo_restore\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"undo_restore\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed { boolean: false },
@@ -2641,9 +2600,7 @@ unsafe extern "C" fn extmark_to_array(
             let c2rust_fresh17 = dict.size;
             dict.size = dict.size.wrapping_add(1);
             *dict.items.offset(c2rust_fresh17 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"invalidate\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"invalidate\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeBoolean,
                     data: C2Rust_Unnamed { boolean: true },
@@ -2725,9 +2682,7 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
     if b.is_null() {
         return rv;
     }
-    if !(ns_id == -1 as Integer
-        || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0)
-    {
+    if !(ns_id == -1 as Integer || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0) {
         api_err_invalid(
             err,
             b"ns_id\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2791,20 +2746,13 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
         -1 as Integer
     };
     if limit == 0 as Integer {
-        return rv
+        return rv;
     } else if limit < 0 as Integer {
         limit = INT64_MAX as Integer;
     }
     let mut l_row: ::core::ffi::c_int = 0;
     let mut l_col: colnr_T = 0;
-    if !extmark_get_index_from_obj(
-        b,
-        ns_id,
-        start,
-        &raw mut l_row,
-        &raw mut l_col,
-        err,
-    ) {
+    if !extmark_get_index_from_obj(b, ns_id, start, &raw mut l_row, &raw mut l_col, err) {
         return rv;
     }
     let mut u_row: ::core::ffi::c_int = 0;
@@ -2834,10 +2782,16 @@ pub unsafe extern "C" fn nvim_buf_get_extmarks(
         type_0,
         (*opts).overlap as bool,
     );
-    rv = arena_array(arena, if marks.size < rv_limit { marks.size } else { rv_limit });
+    rv = arena_array(
+        arena,
+        if marks.size < rv_limit {
+            marks.size
+        } else {
+            rv_limit
+        },
+    );
     if reverse {
-        let mut i: ::core::ffi::c_int = marks.size as ::core::ffi::c_int
-            - 1 as ::core::ffi::c_int;
+        let mut i: ::core::ffi::c_int = marks.size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
         while i >= 0 as ::core::ffi::c_int && rv.size < rv_limit {
             let c2rust_fresh20 = rv.size;
             rv.size = rv.size.wrapping_add(1);
@@ -2932,9 +2886,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
         },
         next: ::core::ptr::null_mut::<DecorVirtText>(),
     };
-    let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut has_hl: bool = false_0 != 0;
     let mut has_hl_multiple: bool = false_0 != 0;
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
@@ -2969,8 +2921,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                 line2 = -1 as ::core::ffi::c_int;
                 did_end_line = false_0 != 0;
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__end_line
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__end_line
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
@@ -2991,8 +2942,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     }
                 }
                 strict = if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__strict
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__strict
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     (*opts).strict as ::core::ffi::c_int
@@ -3000,8 +2950,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     true_0
                 } != 0;
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__end_row
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__end_row
                     != 0 as ::core::ffi::c_ulonglong
                     || did_end_line as ::core::ffi::c_int != 0
                 {
@@ -3024,13 +2973,11 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                 }
                 col2 = -1 as colnr_T;
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__end_col
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__end_col
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     let mut val_0: Integer = (*opts).end_col;
-                    if !(val_0 >= -1 as Integer
-                        && val_0 <= MAXCOL as ::core::ffi::c_int as Integer)
+                    if !(val_0 >= -1 as Integer && val_0 <= MAXCOL as ::core::ffi::c_int as Integer)
                     {
                         api_err_invalid(
                             err,
@@ -3048,14 +2995,12 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     }
                 }
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__hl_group
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__hl_group
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     's_293: {
                         if (*opts).hl_group.type_0 as ::core::ffi::c_uint
-                            == kObjectTypeArray as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             let mut arr: Array = (*opts).hl_group.data.array;
                             if arr.size >= 1 as size_t {
@@ -3106,33 +3051,29 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     has_hl = hl.hl_id > 0 as ::core::ffi::c_int;
                 }
                 sign.hl_id = (*opts).sign_hl_group as ::core::ffi::c_int;
-                sign.cursorline_hl_id = (*opts).cursorline_hl_group
-                    as ::core::ffi::c_int;
+                sign.cursorline_hl_id = (*opts).cursorline_hl_group as ::core::ffi::c_int;
                 sign.number_hl_id = (*opts).number_hl_group as ::core::ffi::c_int;
                 sign.line_hl_id = (*opts).line_hl_group as ::core::ffi::c_int;
-                if sign.hl_id != 0 || sign.cursorline_hl_id != 0
-                    || sign.number_hl_id != 0 || sign.line_hl_id != 0
+                if sign.hl_id != 0
+                    || sign.cursorline_hl_id != 0
+                    || sign.number_hl_id != 0
+                    || sign.line_hl_id != 0
                 {
                     sign.flags = (sign.flags as ::core::ffi::c_int
-                        | kSHIsSign as ::core::ffi::c_int) as uint16_t;
+                        | kSHIsSign as ::core::ffi::c_int)
+                        as uint16_t;
                 }
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__conceal
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__conceal
                     != 0 as ::core::ffi::c_ulonglong
                 {
-                    hl.flags = (hl.flags as ::core::ffi::c_int
-                        | kSHConceal as ::core::ffi::c_int) as uint16_t;
+                    hl.flags = (hl.flags as ::core::ffi::c_int | kSHConceal as ::core::ffi::c_int)
+                        as uint16_t;
                     has_hl = true_0 != 0;
                     if (*opts).conceal.size > 0 as size_t {
                         let mut ch: ::core::ffi::c_int = 0;
-                        hl.conceal_char = utfc_ptr2schar(
-                            (*opts).conceal.data,
-                            &raw mut ch,
-                        );
-                        if !(hl.conceal_char != 0
-                            && vim_isprintc(ch) as ::core::ffi::c_int != 0)
-                        {
+                        hl.conceal_char = utfc_ptr2schar((*opts).conceal.data, &raw mut ch);
+                        if !(hl.conceal_char != 0 && vim_isprintc(ch) as ::core::ffi::c_int != 0) {
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
@@ -3145,12 +3086,12 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     }
                 }
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__conceal_lines
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__conceal_lines
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     hl.flags = (hl.flags as ::core::ffi::c_int
-                        | kSHConcealLines as ::core::ffi::c_int) as uint16_t;
+                        | kSHConcealLines as ::core::ffi::c_int)
+                        as uint16_t;
                     has_hl = true_0 != 0;
                     if (*opts).conceal_lines.size > 0 as size_t {
                         if !(*(*opts).conceal_lines.data as ::core::ffi::c_int
@@ -3168,31 +3109,21 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     }
                 }
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__virt_text
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__virt_text
                     != 0 as ::core::ffi::c_ulonglong
                 {
-                    virt_text.data.virt_text = parse_virt_text(
-                        (*opts).virt_text,
-                        err,
-                        &raw mut virt_text.width,
-                    );
-                    if (*err).type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    virt_text.data.virt_text =
+                        parse_virt_text((*opts).virt_text, err, &raw mut virt_text.width);
+                    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_error;
                     }
                 }
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__virt_text_pos
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__virt_text_pos
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     let mut str: String_0 = (*opts).virt_text_pos;
-                    if strequal(
-                        b"eol\0".as_ptr() as *const ::core::ffi::c_char,
-                        str.data,
-                    ) {
+                    if strequal(b"eol\0".as_ptr() as *const ::core::ffi::c_char, str.data) {
                         virt_text.pos = kVPosEndOfLine;
                     } else if strequal(
                         b"overlay\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3209,10 +3140,8 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         str.data,
                     ) {
                         virt_text.pos = kVPosEndOfLineRightAlign;
-                    } else if strequal(
-                        b"inline\0".as_ptr() as *const ::core::ffi::c_char,
-                        str.data,
-                    ) {
+                    } else if strequal(b"inline\0".as_ptr() as *const ::core::ffi::c_char, str.data)
+                    {
                         virt_text.pos = kVPosInline;
                     } else if true {
                         api_err_invalid(
@@ -3244,17 +3173,13 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         kVTHide as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
-                    })
-                        | (if (*opts).virt_text_repeat_linebreak as ::core::ffi::c_int
-                            != 0
-                        {
-                            kVTRepeatLinebreak as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }))) as uint8_t;
+                    }) | (if (*opts).virt_text_repeat_linebreak as ::core::ffi::c_int != 0 {
+                        kVTRepeatLinebreak as ::core::ffi::c_int
+                    } else {
+                        0 as ::core::ffi::c_int
+                    }))) as uint8_t;
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__hl_mode
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__hl_mode
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     let mut str_0: String_0 = (*opts).hl_mode;
@@ -3262,14 +3187,12 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         b"replace\0".as_ptr() as *const ::core::ffi::c_char,
                         str_0.data,
                     ) {
-                        virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int
-                            as uint8_t;
+                        virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
                     } else if strequal(
                         b"combine\0".as_ptr() as *const ::core::ffi::c_char,
                         str_0.data,
                     ) {
-                        virt_text.hl_mode = kHlModeCombine as ::core::ffi::c_int
-                            as uint8_t;
+                        virt_text.hl_mode = kHlModeCombine as ::core::ffi::c_int as uint8_t;
                     } else if strequal(
                         b"blend\0".as_ptr() as *const ::core::ffi::c_char,
                         str_0.data,
@@ -3283,13 +3206,13 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     kErrorTypeValidation,
                                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                                     b"cannot use 'blend' hl_mode with inline virtual text\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
+                                        .as_ptr()
+                                        as *const ::core::ffi::c_char,
                                 );
                                 break '_error;
                             }
                         }
-                        virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int
-                            as uint8_t;
+                        virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
                     } else if true {
                         api_err_invalid(
                             err,
@@ -3301,9 +3224,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         break '_error;
                     }
                 }
-                virt_lines_flags = if (*opts).virt_lines_leftcol as ::core::ffi::c_int
-                    != 0
-                {
+                virt_lines_flags = if (*opts).virt_lines_leftcol as ::core::ffi::c_int != 0 {
                     kVLLeftcol as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
@@ -3326,8 +3247,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         if true {
                             api_err_invalid(
                                 err,
-                                b"virt_lines_overflow\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"virt_lines_overflow\0".as_ptr() as *const ::core::ffi::c_char,
                                 str_1.data,
                                 0 as int64_t,
                                 true_0 != 0,
@@ -3338,8 +3258,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                 }
                 's_785: {
                     if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_set_extmark__virt_lines
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__virt_lines
                         != 0 as ::core::ffi::c_ulonglong
                     {
                         let mut a: Array = (*opts).virt_lines;
@@ -3348,10 +3267,8 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                             if j >= a.size {
                                 break 's_785;
                             }
-                            if kObjectTypeArray as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
-                                != (*a.items.offset(j as isize)).type_0
-                                    as ::core::ffi::c_uint
+                            if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
+                                != (*a.items.offset(j as isize)).type_0 as ::core::ffi::c_uint
                             {
                                 api_err_exp(
                                     err,
@@ -3370,29 +3287,25 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 if virt_lines.data.virt_lines.size
                                     == virt_lines.data.virt_lines.capacity
                                 {
-                                    virt_lines.data.virt_lines.capacity = (if virt_lines
-                                        .data
-                                        .virt_lines
-                                        .capacity != 0
-                                    {
-                                        virt_lines.data.virt_lines.capacity
-                                            << 1 as ::core::ffi::c_int
-                                    } else {
-                                        8 as size_t
-                                    });
+                                    virt_lines.data.virt_lines.capacity =
+                                        (if virt_lines.data.virt_lines.capacity != 0 {
+                                            virt_lines.data.virt_lines.capacity
+                                                << 1 as ::core::ffi::c_int
+                                        } else {
+                                            8 as size_t
+                                        });
                                     virt_lines.data.virt_lines.items = xrealloc(
                                         virt_lines.data.virt_lines.items
                                             as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<virt_line>()
                                             .wrapping_mul(virt_lines.data.virt_lines.capacity),
-                                    ) as *mut virt_line;
-                                } else {};
+                                    )
+                                        as *mut virt_line;
+                                } else {
+                                };
                                 let c2rust_fresh22 = virt_lines.data.virt_lines.size;
-                                virt_lines.data.virt_lines.size = virt_lines
-                                    .data
-                                    .virt_lines
-                                    .size
-                                    .wrapping_add(1);
+                                virt_lines.data.virt_lines.size =
+                                    virt_lines.data.virt_lines.size.wrapping_add(1);
                                 *virt_lines
                                     .data
                                     .virt_lines
@@ -3400,7 +3313,8 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     .offset(c2rust_fresh22 as isize) = virt_line {
                                     line: jtem,
                                     flags: virt_lines_flags,
-                                } as virt_line;
+                                }
+                                    as virt_line;
                                 if (*err).type_0 as ::core::ffi::c_int
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
@@ -3418,13 +3332,10 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         0 as ::core::ffi::c_int
                     }) as uint8_t;
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__priority
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__priority
                     != 0 as ::core::ffi::c_ulonglong
                 {
-                    if !((*opts).priority >= 0 as Integer
-                        && (*opts).priority <= 65535 as Integer)
-                    {
+                    if !((*opts).priority >= 0 as Integer && (*opts).priority <= 65535 as Integer) {
                         api_err_invalid(
                             err,
                             b"priority\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3441,8 +3352,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     }
                 }
                 if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__sign_text
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__sign_text
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
@@ -3462,20 +3372,20 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         break '_error;
                     } else {
                         sign.flags = (sign.flags as ::core::ffi::c_int
-                            | kSHIsSign as ::core::ffi::c_int) as uint16_t;
+                            | kSHIsSign as ::core::ffi::c_int)
+                            as uint16_t;
                     }
                 }
-                right_gravity = if (*opts).is_set__set_extmark_
-                    as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_set_extmark__right_gravity
+                right_gravity = if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__right_gravity
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     (*opts).right_gravity as ::core::ffi::c_int
                 } else {
                     true_0
                 } != 0;
-                if line2 == -1 as ::core::ffi::c_int && col2 == -1 as ::core::ffi::c_int
+                if line2 == -1 as ::core::ffi::c_int
+                    && col2 == -1 as ::core::ffi::c_int
                     && (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
                         & (1 as ::core::ffi::c_ulonglong) << 30 as ::core::ffi::c_int
                         != 0 as ::core::ffi::c_ulonglong
@@ -3484,14 +3394,13 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         err,
                         kErrorTypeValidation,
                         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"cannot set end_right_gravity without end_row or end_col\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"cannot set end_right_gravity without end_row or end_col\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 } else {
                     len = 0 as colnr_T;
                     if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_set_extmark__spell
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__spell
                         != 0 as ::core::ffi::c_ulonglong
                     {
                         hl.flags = (hl.flags as ::core::ffi::c_int
@@ -3503,8 +3412,7 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                         has_hl = true_0 != 0;
                     }
                     if (*opts).is_set__set_extmark_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_set_extmark__url
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_set_extmark__url
                         != 0 as ::core::ffi::c_ulonglong
                     {
                         url = string_to_cstr((*opts).url);
@@ -3512,12 +3420,14 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                     }
                     if (*opts).ui_watched {
                         hl.flags = (hl.flags as ::core::ffi::c_int
-                            | kSHUIWatched as ::core::ffi::c_int) as uint16_t;
+                            | kSHUIWatched as ::core::ffi::c_int)
+                            as uint16_t;
                         if virt_text.pos as ::core::ffi::c_uint
                             == kVPosOverlay as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             hl.flags = (hl.flags as ::core::ffi::c_int
-                                | kSHUIWatchedOverlay as ::core::ffi::c_int) as uint16_t;
+                                | kSHUIWatchedOverlay as ::core::ffi::c_int)
+                                as uint16_t;
                         }
                         has_hl = true_0 != 0;
                     }
@@ -3688,44 +3598,48 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 err,
                                 kErrorTypeException,
                                 b"cannot set emphemeral mark outside of a decoration provider\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                             break '_error;
                         } else {
                             let mut decor_flags: uint16_t = 0 as uint16_t;
-                            let mut decor_alloc: *mut DecorVirtText = ::core::ptr::null_mut::<
-                                DecorVirtText,
-                            >();
+                            let mut decor_alloc: *mut DecorVirtText =
+                                ::core::ptr::null_mut::<DecorVirtText>();
                             if virt_text.data.virt_text.size != 0 {
                                 decor_alloc = decor_put_vt(virt_text, decor_alloc);
                                 if virt_text.pos as ::core::ffi::c_uint
                                     == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
                                     decor_flags = (decor_flags as ::core::ffi::c_int
-                                        | MT_FLAG_DECOR_VIRT_TEXT_INLINE) as uint16_t;
+                                        | MT_FLAG_DECOR_VIRT_TEXT_INLINE)
+                                        as uint16_t;
                                 }
                             }
                             if virt_lines.data.virt_lines.size != 0 {
                                 decor_alloc = decor_put_vt(virt_lines, decor_alloc);
                                 decor_flags = (decor_flags as ::core::ffi::c_int
-                                    | MT_FLAG_DECOR_VIRT_LINES) as uint16_t;
+                                    | MT_FLAG_DECOR_VIRT_LINES)
+                                    as uint16_t;
                             }
-                            let mut decor_indexed: uint32_t = DECOR_ID_INVALID
-                                as uint32_t;
-                            if sign.flags as ::core::ffi::c_int
-                                & kSHIsSign as ::core::ffi::c_int != 0
+                            let mut decor_indexed: uint32_t = DECOR_ID_INVALID as uint32_t;
+                            if sign.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int
+                                != 0
                             {
                                 sign.next = decor_indexed;
                                 decor_indexed = decor_put_sh(sign);
                                 if sign.text[0 as ::core::ffi::c_int as usize] != 0 {
                                     decor_flags = (decor_flags as ::core::ffi::c_int
-                                        | MT_FLAG_DECOR_SIGNTEXT) as uint16_t;
+                                        | MT_FLAG_DECOR_SIGNTEXT)
+                                        as uint16_t;
                                 }
-                                if sign.number_hl_id != 0 || sign.line_hl_id != 0
+                                if sign.number_hl_id != 0
+                                    || sign.line_hl_id != 0
                                     || sign.cursorline_hl_id != 0
                                 {
                                     decor_flags = (decor_flags as ::core::ffi::c_int
-                                        | MT_FLAG_DECOR_SIGNHL) as uint16_t;
+                                        | MT_FLAG_DECOR_SIGNHL)
+                                        as uint16_t;
                                 }
                             }
                             if has_hl_multiple {
@@ -3738,26 +3652,31 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                         err,
                                     );
                                     if hl_id_0 > 0 as ::core::ffi::c_int {
-                                        let mut sh_0: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
+                                        let mut sh_0: DecorSignHighlight =
+                                            DECOR_SIGN_HIGHLIGHT_INIT;
                                         sh_0.hl_id = hl_id_0;
                                         sh_0.flags = (if (*opts).hl_eol as ::core::ffi::c_int != 0 {
                                             kSHHlEol as ::core::ffi::c_int
                                         } else {
                                             0 as ::core::ffi::c_int
-                                        }) as uint16_t;
+                                        })
+                                            as uint16_t;
                                         sh_0.next = decor_indexed;
                                         decor_indexed = decor_put_sh(sh_0);
                                         decor_flags = (decor_flags as ::core::ffi::c_int
-                                            | MT_FLAG_DECOR_HL) as uint16_t;
+                                            | MT_FLAG_DECOR_HL)
+                                            as uint16_t;
                                     }
                                     i_0 = i_0.wrapping_sub(1);
                                 }
                             }
                             if hl.flags as ::core::ffi::c_int
-                                & kSHConcealLines as ::core::ffi::c_int != 0
+                                & kSHConcealLines as ::core::ffi::c_int
+                                != 0
                             {
                                 decor_flags = (decor_flags as ::core::ffi::c_int
-                                    | MT_FLAG_DECOR_CONCEAL_LINES) as uint16_t;
+                                    | MT_FLAG_DECOR_CONCEAL_LINES)
+                                    as uint16_t;
                             }
                             let mut decor: DecorInline = DECOR_INLINE_INIT;
                             if !decor_alloc.is_null()
@@ -3780,8 +3699,8 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                 decor.data.hl = hl;
                             }
                             if has_hl {
-                                decor_flags = (decor_flags as ::core::ffi::c_int
-                                    | MT_FLAG_DECOR_HL) as uint16_t;
+                                decor_flags = (decor_flags as ::core::ffi::c_int | MT_FLAG_DECOR_HL)
+                                    as uint16_t;
                             }
                             extmark_set(
                                 b,
@@ -3862,9 +3781,7 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
     if b.is_null() {
         return;
     }
-    if !(line_start >= 0 as Integer
-        && line_start < MAXLNUM as ::core::ffi::c_int as Integer)
-    {
+    if !(line_start >= 0 as Integer && line_start < MAXLNUM as ::core::ffi::c_int as Integer) {
         api_err_invalid(
             err,
             b"line number\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3879,7 +3796,11 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
     }
     extmark_clear(
         b,
-        if ns_id < 0 as Integer { 0 as uint32_t } else { ns_id as uint32_t },
+        if ns_id < 0 as Integer {
+            0 as uint32_t
+        } else {
+            ns_id as uint32_t
+        },
         line_start as ::core::ffi::c_int,
         0 as colnr_T,
         line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
@@ -3894,11 +3815,12 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
 ) {
     let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true_0 != 0);
     '_c2rust_label: {
-        if !p.is_null() {} else {
+        if !p.is_null() {
+        } else {
             __assert_fail(
                 b"p != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/extmark.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/api/extmark.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 1083 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -3959,7 +3881,8 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
         },
     ];
     let mut i: size_t = 0 as size_t;
-    while !cbs[i as usize].source.is_null() && !cbs[i as usize].dest.is_null()
+    while !cbs[i as usize].source.is_null()
+        && !cbs[i as usize].dest.is_null()
         && !cbs[i as usize].name.is_null()
     {
         let mut v: *mut LuaRef = cbs[i as usize].source;
@@ -4005,11 +3928,7 @@ unsafe extern "C" fn extmark_get_index_from_obj(
                 return false;
             }
         }
-        let mut extmark: MTPair = extmark_from_id(
-            buf,
-            ns_id as uint32_t,
-            id as uint32_t,
-        );
+        let mut extmark: MTPair = extmark_from_id(buf, ns_id as uint32_t, id as uint32_t);
         if !(extmark.start.pos.row >= 0 as int32_t) {
             api_err_invalid(
                 err,
@@ -4028,11 +3947,9 @@ unsafe extern "C" fn extmark_get_index_from_obj(
     {
         let mut pos: Array = obj.data.array;
         if !(pos.size == 2 as size_t
-            && (*pos.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
+            && (*pos.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
                 == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*pos.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
+            && (*pos.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
                 == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
             api_err_exp(
@@ -4098,11 +4015,11 @@ pub unsafe extern "C" fn parse_virt_text(
                 break '_free_exit;
             } else {
                 let mut chunk: Array = (*chunks.items.offset(i as isize)).data.array;
-                if !(chunk.size > 0 as size_t && chunk.size <= 2 as size_t
+                if !(chunk.size > 0 as size_t
+                    && chunk.size <= 2 as size_t
                     && (*chunk.items.offset(0 as ::core::ffi::c_int as isize)).type_0
                         as ::core::ffi::c_uint
-                        == kObjectTypeString as ::core::ffi::c_int
-                            as ::core::ffi::c_uint)
+                        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
                 {
                     api_set_error(
                         err,
@@ -4113,20 +4030,16 @@ pub unsafe extern "C" fn parse_virt_text(
                     );
                     break '_free_exit;
                 } else {
-                    let mut str: String_0 = (*chunk
-                        .items
-                        .offset(0 as ::core::ffi::c_int as isize))
+                    let mut str: String_0 = (*chunk.items.offset(0 as ::core::ffi::c_int as isize))
                         .data
                         .string;
                     let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
                     's_146: {
                         if chunk.size == 2 as size_t {
-                            let mut hl: Object = *chunk
-                                .items
-                                .offset(1 as ::core::ffi::c_int as isize);
+                            let mut hl: Object =
+                                *chunk.items.offset(1 as ::core::ffi::c_int as isize);
                             if hl.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeArray as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 let mut arr: Array = hl.data.array;
                                 let mut j: size_t = 0 as size_t;
@@ -4156,22 +4069,25 @@ pub unsafe extern "C" fn parse_virt_text(
                                                 virt_text.items as *mut ::core::ffi::c_void,
                                                 ::core::mem::size_of::<VirtTextChunk>()
                                                     .wrapping_mul(virt_text.capacity),
-                                            ) as *mut VirtTextChunk;
-                                        } else {};
+                                            )
+                                                as *mut VirtTextChunk;
+                                        } else {
+                                        };
                                         let c2rust_fresh23 = virt_text.size;
                                         virt_text.size = virt_text.size.wrapping_add(1);
-                                        *virt_text.items.offset(c2rust_fresh23 as isize) = VirtTextChunk {
-                                            text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                            hl_id: hl_id,
-                                        };
+                                        *virt_text.items.offset(c2rust_fresh23 as isize) =
+                                            VirtTextChunk {
+                                                text: ::core::ptr::null_mut::<::core::ffi::c_char>(
+                                                ),
+                                                hl_id: hl_id,
+                                            };
                                     }
                                     j = j.wrapping_add(1);
                                 }
                             } else {
                                 hl_id = object_to_hl_id(
                                     hl,
-                                    b"virt_text highlight\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"virt_text highlight\0".as_ptr() as *const ::core::ffi::c_char,
                                     err,
                                 );
                                 if (*err).type_0 as ::core::ffi::c_int
@@ -4202,7 +4118,8 @@ pub unsafe extern "C" fn parse_virt_text(
                             ::core::mem::size_of::<VirtTextChunk>()
                                 .wrapping_mul(virt_text.capacity),
                         ) as *mut VirtTextChunk;
-                    } else {};
+                    } else {
+                    };
                     let c2rust_fresh24 = virt_text.size;
                     virt_text.size = virt_text.size.wrapping_add(1);
                     *virt_text.items.offset(c2rust_fresh24 as isize) = VirtTextChunk {
@@ -4288,8 +4205,7 @@ pub unsafe extern "C" fn nvim__ns_set(
                 (*tp).tp_firstwin
             };
             while !wp_0.is_null() {
-                if set_has_ptr_t(&raw mut windows, wp_0 as ptr_t) as ::core::ffi::c_int
-                    != 0
+                if set_has_ptr_t(&raw mut windows, wp_0 as ptr_t) as ::core::ffi::c_int != 0
                     && !set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
                 {
                     set_put_uint32_t(
@@ -4307,7 +4223,8 @@ pub unsafe extern "C" fn nvim__ns_set(
                     }
                 }
                 if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t)
-                    as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
                     && !set_has_ptr_t(&raw mut windows, wp_0 as ptr_t)
                 {
                     set_del_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t);
@@ -4360,8 +4277,8 @@ pub unsafe extern "C" fn nvim__ns_set(
             tp_0 = (*tp_0).tp_next as *mut tabpage_T;
         }
     } else if !set_scoped
-        && set_has_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t)
-            as ::core::ffi::c_int != 0
+        && set_has_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t) as ::core::ffi::c_int
+            != 0
     {
         set_del_uint32_t(&raw mut namespace_localscope, ns_id as uint32_t);
         let mut tp_1: *mut tabpage_T = first_tabpage as *mut tabpage_T;
@@ -4414,7 +4331,11 @@ pub unsafe extern "C" fn nvim__ns_get(
     let mut count: size_t = 0 as size_t;
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id as uint32_t) {
                 count = count.wrapping_add(1);
@@ -4443,7 +4364,8 @@ pub unsafe extern "C" fn nvim__ns_get(
                         windows.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity),
                     ) as *mut Object;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh25 = windows.size;
                 windows.size = windows.size.wrapping_add(1);
                 *windows.items.offset(c2rust_fresh25 as isize) = object {
@@ -4466,49 +4388,30 @@ pub unsafe extern "C" fn nvim__ns_get(
 pub const KEYSET_OPTIDX_set_extmark__id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_set_extmark__url: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_set_extmark__spell: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__strict: ::core::ffi::c_int = 6
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__end_col: ::core::ffi::c_int = 7
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__conceal: ::core::ffi::c_int = 8
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__hl_mode: ::core::ffi::c_int = 9
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__end_row: ::core::ffi::c_int = 10
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__end_line: ::core::ffi::c_int = 11
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__hl_group: ::core::ffi::c_int = 12
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__priority: ::core::ffi::c_int = 13
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__sign_text: ::core::ffi::c_int = 15
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_text: ::core::ffi::c_int = 16
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_lines: ::core::ffi::c_int = 19
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark___subpriority: ::core::ffi::c_int = 20
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__undo_restore: ::core::ffi::c_int = 21
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__conceal_lines: ::core::ffi::c_int = 22
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__right_gravity: ::core::ffi::c_int = 24
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_text_pos: ::core::ffi::c_int = 26
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_text_win_col: ::core::ffi::c_int = 31
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_lines_overflow: ::core::ffi::c_int = 34
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmark__hl_name: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__strict: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__end_col: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__conceal: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__hl_mode: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__end_row: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__end_line: ::core::ffi::c_int = 11 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__hl_group: ::core::ffi::c_int = 12 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__priority: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__sign_text: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__virt_text: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__virt_lines: ::core::ffi::c_int = 19 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark___subpriority: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__undo_restore: ::core::ffi::c_int = 21 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__conceal_lines: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__right_gravity: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__virt_text_pos: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__virt_text_win_col: ::core::ffi::c_int =
+    31 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_set_extmark__virt_lines_overflow: ::core::ffi::c_int =
+    34 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_extmark__hl_name: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_extmarks__type: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmarks__limit: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmarks__hl_name: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_extmarks__limit: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_extmarks__hl_name: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_ns_opts__wins: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NULL_STRING: String_0 = STRING_INIT;
 pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
@@ -4519,30 +4422,30 @@ pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
         items: ::core::ptr::null_mut::<Object>(),
     },
 };
-pub const MT_FLAG_PAIRED: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
-pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const MT_FLAG_PAIRED: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
+pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALID: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
+pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn mt_paired(mut key: MTKey) -> bool {
     return key.flags as ::core::ffi::c_int & MT_FLAG_PAIRED != 0;

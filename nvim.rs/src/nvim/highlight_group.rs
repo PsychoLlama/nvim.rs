@@ -52,10 +52,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn strcasecmp(
         __s1: *const ::core::ffi::c_char,
@@ -93,12 +91,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_int;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn apply_autocmds(
         event: event_T,
         fname: *mut ::core::ffi::c_char,
@@ -109,11 +102,7 @@ extern "C" {
     static mut p_bg: *mut ::core::ffi::c_char;
     static mut p_verbose: OptInt;
     fn vim_strup(p: *mut ::core::ffi::c_char);
-    fn vim_memcpy_up(
-        dst: *mut ::core::ffi::c_char,
-        src: *const ::core::ffi::c_char,
-        n: size_t,
-    );
+    fn vim_memcpy_up(dst: *mut ::core::ffi::c_char, src: *const ::core::ffi::c_char, n: size_t);
     fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -136,10 +125,7 @@ extern "C" {
     fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append_via_ptr(
-        gap: *mut garray_T,
-        item_size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     static mut Columns: ::core::ffi::c_int;
     static mut clear_cmdline: bool;
     static mut msg_col: ::core::ffi::c_int;
@@ -205,11 +191,7 @@ extern "C" {
     fn msg_clr_eos();
     fn msg_advance(col: ::core::ffi::c_int);
     static mut msg_grid: ScreenGrid;
-    fn set_option_value_give_err(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    );
+    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
     fn option_was_set(opt_idx: OptIndex) -> bool;
     fn reset_option_was_set(opt_idx: OptIndex);
     fn os_delay(ms: uint64_t, ignoreinput: bool);
@@ -2851,18 +2833,13 @@ pub const DIP_ALL: C2Rust_Unnamed_22 = 1;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"_Bool hlgroup2dict(Dict *, NS, int, Arena *)\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"_Bool hlgroup2dict(Dict *, NS, int, Arena *)\0",
+    )
 };
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     pos: 0 as size_t,
@@ -2879,12 +2856,9 @@ pub const KEYSET_OPTIDX_highlight__fg: ::core::ffi::c_int = 2 as ::core::ffi::c_
 pub const KEYSET_OPTIDX_highlight__sp: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_highlight__update: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_highlight__id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__link: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__name: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__create: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_highlight__link: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_highlight__name: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_highlight__create: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 static mut value_init_int: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
@@ -2975,8 +2949,7 @@ static mut hl_name_table: [*mut ::core::ffi::c_char; 18] = [
     b"italic\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"reverse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"inverse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"strikethrough\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
+    b"strikethrough\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"altfont\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"dim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"blink\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3006,34 +2979,27 @@ static mut hl_attr_table: [::core::ffi::c_int; 18] = [
     0 as ::core::ffi::c_int,
 ];
 static mut e_highlight_group_name_not_found_str: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E411: Highlight group not found: %s\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E411: Highlight group not found: %s\0",
+    )
 };
 static mut e_group_has_settings_highlight_link_ignored: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 49],
-        [::core::ffi::c_char; 49],
-    >(*b"E414: Group has settings, highlight link ignored\0")
+    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+        *b"E414: Group has settings, highlight link ignored\0",
+    )
 };
 static mut e_unexpected_equal_sign_str: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E415: Unexpected equal sign: %s\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E415: Unexpected equal sign: %s\0",
+    )
 };
 static mut e_missing_equal_sign_str_2: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E416: Missing equal sign: %s\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E416: Missing equal sign: %s\0",
+    )
 };
 static mut e_missing_argument_str: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E417: Missing argument: %s\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E417: Missing argument: %s\0")
 };
 static mut highlight_init_both: [*const ::core::ffi::c_char; 175] = [
     b"Cursor            guifg=bg      guibg=fg\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3574,10 +3540,8 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
     b"NvimInternalError ctermfg=Red ctermbg=Red guifg=Red guibg=Red\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimAssignment Operator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimPlainAssignment NvimAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimAugmentedAssignment NvimAssignment\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimPlainAssignment NvimAssignment\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimAugmentedAssignment NvimAssignment\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimAssignmentWithAddition NvimAugmentedAssignment\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimAssignmentWithSubtraction NvimAugmentedAssignment\0".as_ptr()
@@ -3585,63 +3549,41 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
     b"default link NvimAssignmentWithConcatenation NvimAugmentedAssignment\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimOperator Operator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimUnaryOperator NvimOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimUnaryPlus NvimUnaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimUnaryMinus NvimUnaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimUnaryOperator NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimUnaryPlus NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimUnaryMinus NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimNot NvimUnaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimBinaryOperator NvimOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimComparison NvimBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimComparisonModifier NvimComparison\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimBinaryPlus NvimBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimBinaryMinus NvimBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimConcat NvimBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimConcatOrSubscript NvimConcat\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimBinaryOperator NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimComparison NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimComparisonModifier NvimComparison\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimBinaryPlus NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimBinaryMinus NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimConcat NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimConcatOrSubscript NvimConcat\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimOr NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimAnd NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimMultiplication NvimBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimDivision NvimBinaryOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimMultiplication NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimDivision NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimMod NvimBinaryOperator\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimTernary NvimOperator\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimTernaryColon NvimTernary\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimTernaryColon NvimTernary\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimParenthesis Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimLambda NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimNestingParenthesis NvimParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimCallingParenthesis NvimParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimSubscript NvimParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimSubscriptBracket NvimSubscript\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimSubscriptColon NvimSubscript\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimNestingParenthesis NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimCallingParenthesis NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimSubscript NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimSubscriptBracket NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimSubscriptColon NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimCurly NvimSubscript\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimContainer NvimParenthesis\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimContainer NvimParenthesis\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimDict NvimContainer\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimList NvimContainer\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimIdentifier Identifier\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierScope NvimIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimIdentifierScope NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimIdentifierScopeDelimiter NvimIdentifier\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierName NvimIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimIdentifierKey NvimIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimIdentifierName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimIdentifierKey NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimColon Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimComma Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimArrow Delimiter\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3650,55 +3592,43 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
     b"default link NvimFloat NvimNumber\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimNumberPrefix Type\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimOptionSigil Type\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimOptionName NvimIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimOptionScope NvimIdentifierScope\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimOptionName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimOptionScope NvimIdentifierScope\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimOptionScopeDelimiter NvimIdentifierScopeDelimiter\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimEnvironmentSigil NvimOptionSigil\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimEnvironmentName NvimIdentifier\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimEnvironmentSigil NvimOptionSigil\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimEnvironmentName NvimIdentifier\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimString String\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimStringBody NvimString\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimStringQuote NvimString\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimStringSpecial SpecialChar\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimSingleQuote NvimStringQuote\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimSingleQuotedBody NvimStringBody\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimStringSpecial SpecialChar\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimSingleQuote NvimStringQuote\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimSingleQuotedBody NvimStringBody\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimSingleQuotedQuote NvimStringSpecial\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimDoubleQuote NvimStringQuote\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimDoubleQuotedBody NvimStringBody\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimDoubleQuote NvimStringQuote\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimDoubleQuotedBody NvimStringBody\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimDoubleQuotedEscape NvimStringSpecial\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimFigureBrace NvimInternalError\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimFigureBrace NvimInternalError\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimSingleQuotedUnknownEscape NvimInternalError\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimSpacing Normal\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidSingleQuotedUnknownEscape NvimInternalError\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalid Error\0".as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignment NvimInvalid\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidAssignment NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidPlainAssignment NvimInvalidAssignment\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidAugmentedAssignment NvimInvalidAssignment\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignmentWithAddition NvimInvalidAugmentedAssignment\0"
-        .as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignmentWithSubtraction NvimInvalidAugmentedAssignment\0"
-        .as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidAssignmentWithConcatenation NvimInvalidAugmentedAssignment\0"
-        .as_ptr() as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOperator NvimInvalid\0".as_ptr()
+    b"default link NvimInvalidAssignmentWithAddition NvimInvalidAugmentedAssignment\0".as_ptr()
         as *const ::core::ffi::c_char,
+    b"default link NvimInvalidAssignmentWithSubtraction NvimInvalidAugmentedAssignment\0".as_ptr()
+        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidAssignmentWithConcatenation NvimInvalidAugmentedAssignment\0".as_ptr()
+        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidOperator NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidUnaryOperator NvimInvalidOperator\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidUnaryPlus NvimInvalidUnaryOperator\0".as_ptr()
@@ -3731,12 +3661,10 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidMod NvimInvalidBinaryOperator\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidTernary NvimInvalidOperator\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidTernary NvimInvalidOperator\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidTernaryColon NvimInvalidTernary\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDelimiter NvimInvalid\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidDelimiter NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidParenthesis NvimInvalidDelimiter\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidLambda NvimInvalidParenthesis\0".as_ptr()
@@ -3751,18 +3679,13 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidSubscriptColon NvimInvalidSubscript\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidCurly NvimInvalidSubscript\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidCurly NvimInvalidSubscript\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidContainer NvimInvalidParenthesis\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidDict NvimInvalidContainer\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidList NvimInvalidContainer\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidValue NvimInvalid\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidIdentifier NvimInvalidValue\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidDict NvimInvalidContainer\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidList NvimInvalidContainer\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidValue NvimInvalid\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidIdentifier NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidIdentifierScope NvimInvalidIdentifier\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidIdentifierScopeDelimiter NvimInvalidIdentifier\0".as_ptr()
@@ -3771,18 +3694,12 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidIdentifierKey NvimInvalidIdentifier\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidColon NvimInvalidDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidComma NvimInvalidDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidArrow NvimInvalidDelimiter\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidRegister NvimInvalidValue\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidNumber NvimInvalidValue\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidFloat NvimInvalidNumber\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidColon NvimInvalidDelimiter\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidComma NvimInvalidDelimiter\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidArrow NvimInvalidDelimiter\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidRegister NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidNumber NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidFloat NvimInvalidNumber\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidNumberPrefix NvimInvalidNumber\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidOptionSigil NvimInvalidIdentifier\0".as_ptr()
@@ -3791,16 +3708,14 @@ pub static mut highlight_init_cmdline: [*const ::core::ffi::c_char; 141] = [
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidOptionScope NvimInvalidIdentifierScope\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidOptionScopeDelimiter NvimInvalidIdentifierScopeDelimiter\0"
-        .as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidOptionScopeDelimiter NvimInvalidIdentifierScopeDelimiter\0".as_ptr()
+        as *const ::core::ffi::c_char,
     b"default link NvimInvalidEnvironmentSigil NvimInvalidOptionSigil\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidEnvironmentName NvimInvalidIdentifier\0".as_ptr()
         as *const ::core::ffi::c_char,
-    b"default link NvimInvalidString NvimInvalidValue\0".as_ptr()
-        as *const ::core::ffi::c_char,
-    b"default link NvimInvalidStringBody NvimStringBody\0".as_ptr()
-        as *const ::core::ffi::c_char,
+    b"default link NvimInvalidString NvimInvalidValue\0".as_ptr() as *const ::core::ffi::c_char,
+    b"default link NvimInvalidStringBody NvimStringBody\0".as_ptr() as *const ::core::ffi::c_char,
     b"default link NvimInvalidStringQuote NvimInvalidString\0".as_ptr()
         as *const ::core::ffi::c_char,
     b"default link NvimInvalidStringSpecial NvimStringSpecial\0".as_ptr()
@@ -3837,9 +3752,7 @@ pub unsafe extern "C" fn highlight_group_name(
     return (*(highlight_ga.ga_data as *mut HlGroup).offset(id as isize)).sg_name;
 }
 #[no_mangle]
-pub unsafe extern "C" fn highlight_link_id(
-    mut id: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn highlight_link_id(mut id: ::core::ffi::c_int) -> ::core::ffi::c_int {
     return (*(highlight_ga.ga_data as *mut HlGroup).offset(id as isize)).sg_link;
 }
 #[no_mangle]
@@ -3853,9 +3766,8 @@ pub unsafe extern "C" fn syn_init_cmdline_highlight(mut reset: bool, mut init: b
 #[no_mangle]
 pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
     static mut had_both: bool = false_0 != 0;
-    let mut p: *mut ::core::ffi::c_char = get_var_value(
-        b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut p: *mut ::core::ffi::c_char =
+        get_var_value(b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char);
     if !p.is_null() {
         let mut copy_p: *mut ::core::ffi::c_char = xstrdup(p);
         let mut okay: bool = load_colors(copy_p) != 0;
@@ -3866,23 +3778,22 @@ pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
     }
     if both {
         had_both = true_0 != 0;
-        let pp: *const *const ::core::ffi::c_char = &raw mut highlight_init_both
-            as *mut *const ::core::ffi::c_char;
+        let pp: *const *const ::core::ffi::c_char =
+            &raw mut highlight_init_both as *mut *const ::core::ffi::c_char;
         let mut i: size_t = 0 as size_t;
         while !(*pp.offset(i as isize)).is_null() {
             do_highlight(*pp.offset(i as isize), reset, true_0 != 0);
             i = i.wrapping_add(1);
         }
     } else if !had_both {
-        return
+        return;
     }
-    let pp_0: *const *const ::core::ffi::c_char = if *p_bg as ::core::ffi::c_int
-        == 'l' as ::core::ffi::c_int
-    {
-        &raw mut highlight_init_light as *mut *const ::core::ffi::c_char
-    } else {
-        &raw mut highlight_init_dark as *mut *const ::core::ffi::c_char
-    };
+    let pp_0: *const *const ::core::ffi::c_char =
+        if *p_bg as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
+            &raw mut highlight_init_light as *mut *const ::core::ffi::c_char
+        } else {
+            &raw mut highlight_init_dark as *mut *const ::core::ffi::c_char
+        };
     let mut i_0: size_t = 0 as size_t;
     while !(*pp_0.offset(i_0 as isize)).is_null() {
         do_highlight(*pp_0.offset(i_0 as isize), reset, true_0 != 0);
@@ -3891,9 +3802,7 @@ pub unsafe extern "C" fn init_highlight(mut both: bool, mut reset: bool) {
     syn_init_cmdline_highlight(false_0 != 0, false_0 != 0);
 }
 #[no_mangle]
-pub unsafe extern "C" fn load_colors(
-    mut name: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn load_colors(mut name: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     static mut recursive: bool = false_0 != 0;
     if recursive {
         return OK;
@@ -3901,15 +3810,32 @@ pub unsafe extern "C" fn load_colors(
     recursive = true_0 != 0;
     let mut buflen: size_t = strlen(name).wrapping_add(12 as size_t);
     let mut buf: *mut ::core::ffi::c_char = xmalloc(buflen) as *mut ::core::ffi::c_char;
-    apply_autocmds(EVENT_COLORSCHEMEPRE, name, (*curbuf).b_fname, false_0 != 0, curbuf);
-    snprintf(buf, buflen, b"colors/%s.*\0".as_ptr() as *const ::core::ffi::c_char, name);
+    apply_autocmds(
+        EVENT_COLORSCHEMEPRE,
+        name,
+        (*curbuf).b_fname,
+        false_0 != 0,
+        curbuf,
+    );
+    snprintf(
+        buf,
+        buflen,
+        b"colors/%s.*\0".as_ptr() as *const ::core::ffi::c_char,
+        name,
+    );
     let mut retval: ::core::ffi::c_int = source_runtime_vim_lua(
         buf,
         DIP_START as ::core::ffi::c_int + DIP_OPT as ::core::ffi::c_int,
     );
     xfree(buf as *mut ::core::ffi::c_void);
     if retval == OK {
-        apply_autocmds(EVENT_COLORSCHEME, name, (*curbuf).b_fname, false_0 != 0, curbuf);
+        apply_autocmds(
+            EVENT_COLORSCHEME,
+            name,
+            (*curbuf).b_fname,
+            false_0 != 0,
+            curbuf,
+        );
     }
     recursive = false_0 != 0;
     return retval;
@@ -4100,33 +4026,30 @@ pub unsafe extern "C" fn set_hl_group(
     mut link_id: ::core::ffi::c_int,
 ) {
     let mut idx: ::core::ffi::c_int = id - 1 as ::core::ffi::c_int;
-    let mut is_default: bool = attrs.rgb_ae_attr
-        & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0;
+    let mut is_default: bool = attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0;
     if is_default as ::core::ffi::c_int != 0
-        && hl_has_settings(idx, true_0 != 0) as ::core::ffi::c_int != 0 && !(*dict).force
+        && hl_has_settings(idx, true_0 != 0) as ::core::ffi::c_int != 0
+        && !(*dict).force
     {
         return;
     }
-    let mut g: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
-        .offset(idx as isize);
+    let mut g: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
     (*g).sg_cleared = false_0 != 0;
     let mut old_link: ::core::ffi::c_int = (*g).sg_link;
     if link_id > 0 as ::core::ffi::c_int {
         (*g).sg_link = link_id;
         (*g).sg_script_ctx = current_sctx;
-        (*g).sg_script_ctx.sc_lnum
-            += (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum;
+        (*g).sg_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        .es_lnum;
         nlua_set_sctx(&raw mut (*g).sg_script_ctx);
         (*g).sg_set |= SG_LINK as ::core::ffi::c_int;
         if is_default {
             (*g).sg_deflink = link_id;
             (*g).sg_deflink_sctx = current_sctx;
-            (*g).sg_deflink_sctx.sc_lnum
-                += (*(exestack.ga_data as *mut estack_T)
-                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum;
+            (*g).sg_deflink_sctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+            .es_lnum;
             nlua_set_sctx(&raw mut (*g).sg_deflink_sctx);
         }
     } else {
@@ -4134,9 +4057,10 @@ pub unsafe extern "C" fn set_hl_group(
     }
     let mut update: bool = (*dict).is_set__highlight_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__update
-        != 0 as ::core::ffi::c_ulonglong && (*dict).update as ::core::ffi::c_int != 0;
-    (*g).sg_gui = (attrs.rgb_ae_attr & !(HL_DEFAULT as ::core::ffi::c_int as int32_t))
-        as ::core::ffi::c_int;
+        != 0 as ::core::ffi::c_ulonglong
+        && (*dict).update as ::core::ffi::c_int != 0;
+    (*g).sg_gui =
+        (attrs.rgb_ae_attr & !(HL_DEFAULT as ::core::ffi::c_int as int32_t)) as ::core::ffi::c_int;
     (*g).sg_rgb_fg = attrs.rgb_fg_color;
     (*g).sg_rgb_bg = attrs.rgb_bg_color;
     (*g).sg_rgb_sp = attrs.rgb_sp_color;
@@ -4206,9 +4130,7 @@ pub unsafe extern "C" fn set_hl_group(
             }
         } else if !update {
             *cattrs[j as usize].dest = kColorIdxNone as ::core::ffi::c_int;
-        } else if old_link > 0 as ::core::ffi::c_int
-            && cattrs[j as usize].val >= 0 as RgbValue
-        {
+        } else if old_link > 0 as ::core::ffi::c_int && cattrs[j as usize].val >= 0 as RgbValue {
             let mut linked: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
                 .offset((old_link - 1 as ::core::ffi::c_int) as isize);
             let mut linked_idx: ::core::ffi::c_int = if j == 0 as ::core::ffi::c_int {
@@ -4218,9 +4140,7 @@ pub unsafe extern "C" fn set_hl_group(
             } else {
                 (*linked).sg_rgb_sp_idx
             };
-            *cattrs[j as usize].dest = if linked_idx
-                != kColorIdxNone as ::core::ffi::c_int
-            {
+            *cattrs[j as usize].dest = if linked_idx != kColorIdxNone as ::core::ffi::c_int {
                 linked_idx
             } else {
                 kColorIdxHex as ::core::ffi::c_int
@@ -4228,8 +4148,8 @@ pub unsafe extern "C" fn set_hl_group(
         }
         j += 1;
     }
-    (*g).sg_cterm = (attrs.cterm_ae_attr
-        & !(HL_DEFAULT as ::core::ffi::c_int as int32_t)) as ::core::ffi::c_int;
+    (*g).sg_cterm = (attrs.cterm_ae_attr & !(HL_DEFAULT as ::core::ffi::c_int as int32_t))
+        as ::core::ffi::c_int;
     (*g).sg_cterm_bg = attrs.cterm_bg_color as ::core::ffi::c_int;
     (*g).sg_cterm_fg = attrs.cterm_fg_color as ::core::ffi::c_int;
     (*g).sg_cterm_bold = (*g).sg_cterm & HL_BOLD as ::core::ffi::c_int != 0;
@@ -4239,20 +4159,20 @@ pub unsafe extern "C" fn set_hl_group(
         (*g).sg_blend = -1 as ::core::ffi::c_int;
     }
     (*g).sg_script_ctx = current_sctx;
-    (*g).sg_script_ctx.sc_lnum
-        += (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum;
+    (*g).sg_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    .es_lnum;
     nlua_set_sctx(&raw mut (*g).sg_script_ctx);
     (*g).sg_attr = hl_get_syn_attr(0 as ::core::ffi::c_int, id, attrs);
-    if strcmp((*g).sg_name_u, b"NORMAL\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
+    if strcmp(
+        (*g).sg_name_u,
+        b"NORMAL\0".as_ptr() as *const ::core::ffi::c_char,
+    ) == 0 as ::core::ffi::c_int
     {
         cterm_normal_fg_color = (*g).sg_cterm_fg;
         cterm_normal_bg_color = (*g).sg_cterm_bg;
         let mut did_changed: bool = false_0 != 0;
-        if normal_bg != (*g).sg_rgb_bg || normal_fg != (*g).sg_rgb_fg
-            || normal_sp != (*g).sg_rgb_sp
+        if normal_bg != (*g).sg_rgb_bg || normal_fg != (*g).sg_rgb_fg || normal_sp != (*g).sg_rgb_sp
         {
             did_changed = true_0 != 0;
         }
@@ -4280,19 +4200,18 @@ unsafe extern "C" fn set_gui_color(
 ) -> bool {
     if init as ::core::ffi::c_int != 0
         && (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
-            & SG_GUI as ::core::ffi::c_int != 0
+            & SG_GUI as ::core::ffi::c_int
+            != 0
     {
         return false_0 != 0;
     }
     if !init {
-        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
-            |= SG_GUI as ::core::ffi::c_int;
+        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set |=
+            SG_GUI as ::core::ffi::c_int;
     }
     let mut old_color: RgbValue = *color;
     let mut old_idx: ::core::ffi::c_int = *color_idx;
-    if strcmp(arg, b"NONE\0".as_ptr() as *const ::core::ffi::c_char)
-        != 0 as ::core::ffi::c_int
-    {
+    if strcmp(arg, b"NONE\0".as_ptr() as *const ::core::ffi::c_char) != 0 as ::core::ffi::c_int {
         *color = name_to_color(arg, color_idx);
     } else {
         *color = -1 as ::core::ffi::c_int as RgbValue;
@@ -4347,15 +4266,12 @@ pub unsafe extern "C" fn do_highlight(
         dolink = true_0 != 0;
     }
     if !doclear && !dolink && ends_excmd(*linep as uint8_t as ::core::ffi::c_int) != 0 {
-        let mut id: ::core::ffi::c_int = syn_name2id_len(
-            line,
-            name_end.offset_from(line) as size_t,
-        );
+        let mut id: ::core::ffi::c_int =
+            syn_name2id_len(line, name_end.offset_from(line) as size_t);
         if id == 0 as ::core::ffi::c_int {
             semsg(
                 gettext(
-                    &raw const e_highlight_group_name_not_found_str
-                        as *const ::core::ffi::c_char,
+                    &raw const e_highlight_group_name_not_found_str as *const ::core::ffi::c_char,
                 ),
                 line,
             );
@@ -4394,10 +4310,8 @@ pub unsafe extern "C" fn do_highlight(
             );
             return;
         }
-        let mut from_id: ::core::ffi::c_int = syn_check_group(
-            from_start,
-            from_end.offset_from(from_start) as size_t,
-        );
+        let mut from_id: ::core::ffi::c_int =
+            syn_check_group(from_start, from_end.offset_from(from_start) as size_t);
         if strncmp(
             to_start,
             b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4417,31 +4331,32 @@ pub unsafe extern "C" fn do_highlight(
             {
                 (*hlgroup).sg_deflink = to_id;
                 (*hlgroup).sg_deflink_sctx = current_sctx;
-                (*hlgroup).sg_deflink_sctx.sc_lnum
-                    += (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum;
+                (*hlgroup).sg_deflink_sctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                .es_lnum;
                 nlua_set_sctx(&raw mut (*hlgroup).sg_deflink_sctx);
             }
         }
         if from_id > 0 as ::core::ffi::c_int
             && (!init || (*hlgroup).sg_set == 0 as ::core::ffi::c_int)
         {
-            if to_id > 0 as ::core::ffi::c_int && !forceit && !init
+            if to_id > 0 as ::core::ffi::c_int
+                && !forceit
+                && !init
                 && hl_has_settings(from_id - 1 as ::core::ffi::c_int, dodefault)
-                    as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
             {
                 if (*(exestack.ga_data as *mut estack_T)
                     .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name
-                    .is_null() && !dodefault
+                .es_name
+                .is_null()
+                    && !dodefault
                 {
-                    emsg(
-                        gettext(
-                            &raw const e_group_has_settings_highlight_link_ignored
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(
+                        &raw const e_group_has_settings_highlight_link_ignored
+                            as *const ::core::ffi::c_char,
+                    ));
                 }
             } else if (*hlgroup).sg_link != to_id
                 || (*hlgroup).sg_script_ctx.sc_sid != current_sctx.sc_sid
@@ -4452,10 +4367,9 @@ pub unsafe extern "C" fn do_highlight(
                 }
                 (*hlgroup).sg_link = to_id;
                 (*hlgroup).sg_script_ctx = current_sctx;
-                (*hlgroup).sg_script_ctx.sc_lnum
-                    += (*(exestack.ga_data as *mut estack_T)
-                        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum;
+                (*hlgroup).sg_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+                    .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                .es_lnum;
                 nlua_set_sctx(&raw mut (*hlgroup).sg_script_ctx);
                 (*hlgroup).sg_cleared = false_0 != 0;
                 redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
@@ -4469,8 +4383,7 @@ pub unsafe extern "C" fn do_highlight(
         if ends_excmd(*line as uint8_t as ::core::ffi::c_int) != 0 {
             do_unlet(
                 b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 14]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 14]>().wrapping_sub(1 as size_t),
                 true_0 != 0,
             );
             restore_cterm_colors();
@@ -4487,10 +4400,7 @@ pub unsafe extern "C" fn do_highlight(
         name_end = skiptowhite(line);
         linep = skipwhite(name_end);
     }
-    let mut id_0: ::core::ffi::c_int = syn_check_group(
-        line,
-        name_end.offset_from(line) as size_t,
-    );
+    let mut id_0: ::core::ffi::c_int = syn_check_group(line, name_end.offset_from(line) as size_t);
     if id_0 == 0 as ::core::ffi::c_int {
         return;
     }
@@ -4500,8 +4410,7 @@ pub unsafe extern "C" fn do_highlight(
     {
         return;
     }
-    let mut item_before: HlGroup = *(highlight_ga.ga_data as *mut HlGroup)
-        .offset(idx as isize);
+    let mut item_before: HlGroup = *(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
     let mut is_normal_group: bool = strcmp(
         (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_name_u,
         b"NORMAL\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4511,8 +4420,8 @@ pub unsafe extern "C" fn do_highlight(
     {
         highlight_clear(idx);
         if !doclear {
-            (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set = 0
-                as ::core::ffi::c_int;
+            (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set =
+                0 as ::core::ffi::c_int;
         }
     }
     let mut did_change: bool = false_0 != 0;
@@ -4520,17 +4429,12 @@ pub unsafe extern "C" fn do_highlight(
     let mut key: [::core::ffi::c_char; 64] = [0; 64];
     let mut arg: [::core::ffi::c_char; 512] = [0; 512];
     if !doclear {
-        let mut arg_start: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut arg_start: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         while ends_excmd(*linep as uint8_t as ::core::ffi::c_int) == 0 {
             let mut key_start: *const ::core::ffi::c_char = linep;
             if *linep as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
                 semsg(
-                    gettext(
-                        &raw const e_unexpected_equal_sign_str
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(&raw const e_unexpected_equal_sign_str as *const ::core::ffi::c_char),
                     key_start,
                 );
                 error = true_0 != 0;
@@ -4544,23 +4448,15 @@ pub unsafe extern "C" fn do_highlight(
                 }
                 let mut key_len: size_t = linep.offset_from(key_start) as size_t;
                 if key_len
-                    > ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
-                        .wrapping_sub(1 as usize)
+                    > ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(1 as usize)
                 {
-                    emsg(
-                        gettext(
-                            b"E423: Illegal argument\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(
+                        b"E423: Illegal argument\0".as_ptr() as *const ::core::ffi::c_char
+                    ));
                     error = true_0 != 0;
                     break;
                 } else {
-                    vim_memcpy_up(
-                        &raw mut key as *mut ::core::ffi::c_char,
-                        key_start,
-                        key_len,
-                    );
+                    vim_memcpy_up(&raw mut key as *mut ::core::ffi::c_char, key_start, key_len);
                     key[key_len as usize] = NUL as ::core::ffi::c_char;
                     linep = skipwhite(linep);
                     if strcmp(
@@ -4569,24 +4465,20 @@ pub unsafe extern "C" fn do_highlight(
                     ) == 0 as ::core::ffi::c_int
                     {
                         if !init
-                            || (*(highlight_ga.ga_data as *mut HlGroup)
-                                .offset(idx as isize))
-                                .sg_set == 0 as ::core::ffi::c_int
+                            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
+                                == 0 as ::core::ffi::c_int
                         {
                             if !init {
-                                (*(highlight_ga.ga_data as *mut HlGroup)
-                                    .offset(idx as isize))
-                                    .sg_set
-                                    |= SG_CTERM as ::core::ffi::c_int
-                                        + SG_GUI as ::core::ffi::c_int;
+                                (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
+                                    .sg_set |=
+                                    SG_CTERM as ::core::ffi::c_int + SG_GUI as ::core::ffi::c_int;
                             }
                             highlight_clear(idx);
                         }
                     } else if *linep as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
                         semsg(
                             gettext(
-                                &raw const e_missing_equal_sign_str_2
-                                    as *const ::core::ffi::c_char,
+                                &raw const e_missing_equal_sign_str_2 as *const ::core::ffi::c_char,
                             ),
                             key_start,
                         );
@@ -4614,26 +4506,20 @@ pub unsafe extern "C" fn do_highlight(
                         if linep == arg_start {
                             semsg(
                                 gettext(
-                                    &raw const e_missing_argument_str
-                                        as *const ::core::ffi::c_char,
+                                    &raw const e_missing_argument_str as *const ::core::ffi::c_char,
                                 ),
                                 key_start,
                             );
                             error = true_0 != 0;
                             break;
                         } else {
-                            let mut arg_len: size_t = linep.offset_from(arg_start)
-                                as size_t;
+                            let mut arg_len: size_t = linep.offset_from(arg_start) as size_t;
                             if arg_len
                                 > ::core::mem::size_of::<[::core::ffi::c_char; 512]>()
                                     .wrapping_sub(1 as usize)
                             {
-                                emsg(
-                                    gettext(
-                                        b"E423: Illegal argument\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                );
+                                emsg(gettext(b"E423: Illegal argument\0".as_ptr()
+                                    as *const ::core::ffi::c_char));
                                 error = true_0 != 0;
                                 break;
                             } else {
@@ -4644,9 +4530,7 @@ pub unsafe extern "C" fn do_highlight(
                                     arg_len,
                                 );
                                 arg[arg_len as usize] = NUL as ::core::ffi::c_char;
-                                if *linep as ::core::ffi::c_int
-                                    == '\'' as ::core::ffi::c_int
-                                {
+                                if *linep as ::core::ffi::c_int == '\'' as ::core::ffi::c_int {
                                     linep = linep.offset(1);
                                 }
                                 if strcmp(
@@ -4667,20 +4551,30 @@ pub unsafe extern "C" fn do_highlight(
                                     let mut i_0: ::core::ffi::c_int = 0;
                                     while arg[off as usize] as ::core::ffi::c_int != NUL {
                                         i_0 = ::core::mem::size_of::<[::core::ffi::c_int; 18]>()
-                                            .wrapping_div(::core::mem::size_of::<::core::ffi::c_int>())
+                                            .wrapping_div(
+                                                ::core::mem::size_of::<::core::ffi::c_int>(),
+                                            )
                                             .wrapping_div(
                                                 (::core::mem::size_of::<[::core::ffi::c_int; 18]>()
-                                                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_int>())
-                                                    == 0) as ::core::ffi::c_int as usize,
-                                            ) as ::core::ffi::c_int;
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        ::core::ffi::c_int,
+                                                    >(
+                                                    ))
+                                                    == 0)
+                                                    as ::core::ffi::c_int
+                                                    as usize,
+                                            )
+                                            as ::core::ffi::c_int;
                                         loop {
                                             i_0 -= 1;
                                             if i_0 < 0 as ::core::ffi::c_int {
                                                 break;
                                             }
                                             let mut len: ::core::ffi::c_int = strlen(
-                                                hl_name_table[i_0 as usize] as *const ::core::ffi::c_char,
-                                            ) as ::core::ffi::c_int;
+                                                hl_name_table[i_0 as usize]
+                                                    as *const ::core::ffi::c_char,
+                                            )
+                                                as ::core::ffi::c_int;
                                             if strncasecmp(
                                                 (&raw mut arg as *mut ::core::ffi::c_char)
                                                     .offset(off as isize),
@@ -4691,7 +4585,8 @@ pub unsafe extern "C" fn do_highlight(
                                                 continue;
                                             }
                                             if hl_attr_table[i_0 as usize]
-                                                & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0
+                                                & HL_UNDERLINE_MASK as ::core::ffi::c_int
+                                                != 0
                                             {
                                                 attr &= !(HL_UNDERLINE_MASK as ::core::ffi::c_int);
                                             }
@@ -4701,10 +4596,8 @@ pub unsafe extern "C" fn do_highlight(
                                         }
                                         if i_0 < 0 as ::core::ffi::c_int {
                                             semsg(
-                                                gettext(
-                                                    b"E418: Illegal value: %s\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(b"E418: Illegal value: %s\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
                                                 &raw mut arg as *mut ::core::ffi::c_char,
                                             );
                                             error = true_0 != 0;
@@ -4719,41 +4612,47 @@ pub unsafe extern "C" fn do_highlight(
                                         break;
                                     }
                                     if *(&raw mut key as *mut ::core::ffi::c_char)
-                                        as ::core::ffi::c_int == 'C' as ::core::ffi::c_int
+                                        as ::core::ffi::c_int
+                                        == 'C' as ::core::ffi::c_int
                                     {
                                         if !init
                                             || (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_set & SG_CTERM as ::core::ffi::c_int == 0
+                                            .sg_set
+                                                & SG_CTERM as ::core::ffi::c_int
+                                                == 0
                                         {
                                             if !init {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_set |= SG_CTERM as ::core::ffi::c_int;
+                                                .sg_set |= SG_CTERM as ::core::ffi::c_int;
                                             }
                                             (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_cterm = attr;
+                                            .sg_cterm = attr;
                                             (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_cterm_bold = false_0 != 0;
+                                            .sg_cterm_bold = false_0 != 0;
                                         }
                                     } else if *(&raw mut key as *mut ::core::ffi::c_char)
-                                        as ::core::ffi::c_int == 'G' as ::core::ffi::c_int
+                                        as ::core::ffi::c_int
+                                        == 'G' as ::core::ffi::c_int
                                     {
                                         if !init
                                             || (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_set & SG_GUI as ::core::ffi::c_int == 0
+                                            .sg_set
+                                                & SG_GUI as ::core::ffi::c_int
+                                                == 0
                                         {
                                             if !init {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_set |= SG_GUI as ::core::ffi::c_int;
+                                                .sg_set |= SG_GUI as ::core::ffi::c_int;
                                             }
                                             (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_gui = attr;
+                                            .sg_gui = attr;
                                         }
                                     }
                                 } else if strcmp(
@@ -4773,32 +4672,38 @@ pub unsafe extern "C" fn do_highlight(
                                         if !init
                                             || (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_set & SG_CTERM as ::core::ffi::c_int == 0
+                                            .sg_set
+                                                & SG_CTERM as ::core::ffi::c_int
+                                                == 0
                                         {
                                             if !init {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_set |= SG_CTERM as ::core::ffi::c_int;
+                                                .sg_set |= SG_CTERM as ::core::ffi::c_int;
                                             }
                                             if key[5 as ::core::ffi::c_int as usize]
-                                                as ::core::ffi::c_int == 'F' as ::core::ffi::c_int
+                                                as ::core::ffi::c_int
+                                                == 'F' as ::core::ffi::c_int
                                                 && (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_cterm_bold as ::core::ffi::c_int != 0
+                                                .sg_cterm_bold
+                                                    as ::core::ffi::c_int
+                                                    != 0
                                             {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_cterm &= !(HL_BOLD as ::core::ffi::c_int);
+                                                .sg_cterm &= !(HL_BOLD as ::core::ffi::c_int);
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_cterm_bold = false_0 != 0;
+                                                .sg_cterm_bold = false_0 != 0;
                                             }
                                             let mut color: ::core::ffi::c_int = 0;
                                             if ascii_isdigit(
                                                 *(&raw mut arg as *mut ::core::ffi::c_char)
                                                     as ::core::ffi::c_int,
                                             ) {
-                                                color = atoi(&raw mut arg as *mut ::core::ffi::c_char);
+                                                color =
+                                                    atoi(&raw mut arg as *mut ::core::ffi::c_char);
                                             } else if strcasecmp(
                                                 &raw mut arg as *mut ::core::ffi::c_char,
                                                 b"fg\0".as_ptr() as *const ::core::ffi::c_char
@@ -4806,14 +4711,13 @@ pub unsafe extern "C" fn do_highlight(
                                             ) == 0 as ::core::ffi::c_int
                                             {
                                                 if cterm_normal_fg_color != 0 {
-                                                    color = cterm_normal_fg_color - 1 as ::core::ffi::c_int;
+                                                    color = cterm_normal_fg_color
+                                                        - 1 as ::core::ffi::c_int;
                                                 } else {
-                                                    emsg(
-                                                        gettext(
-                                                            b"E419: FG color unknown\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ),
-                                                    );
+                                                    emsg(gettext(
+                                                        b"E419: FG color unknown\0".as_ptr()
+                                                            as *const ::core::ffi::c_char,
+                                                    ));
                                                     error = true_0 != 0;
                                                     break;
                                                 }
@@ -4824,58 +4728,76 @@ pub unsafe extern "C" fn do_highlight(
                                             ) == 0 as ::core::ffi::c_int
                                             {
                                                 if cterm_normal_bg_color > 0 as ::core::ffi::c_int {
-                                                    color = cterm_normal_bg_color - 1 as ::core::ffi::c_int;
+                                                    color = cterm_normal_bg_color
+                                                        - 1 as ::core::ffi::c_int;
                                                 } else {
-                                                    emsg(
-                                                        gettext(
-                                                            b"E420: BG color unknown\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ),
-                                                    );
+                                                    emsg(gettext(
+                                                        b"E420: BG color unknown\0".as_ptr()
+                                                            as *const ::core::ffi::c_char,
+                                                    ));
                                                     error = true_0 != 0;
                                                     break;
                                                 }
                                             } else {
-                                                let mut off_0: ::core::ffi::c_int = if (*(&raw mut arg
-                                                    as *mut ::core::ffi::c_char) as ::core::ffi::c_int)
-                                                    < 'a' as ::core::ffi::c_int
-                                                    || *(&raw mut arg as *mut ::core::ffi::c_char)
-                                                        as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-                                                {
-                                                    *(&raw mut arg as *mut ::core::ffi::c_char)
-                                                        as ::core::ffi::c_int
-                                                } else {
-                                                    *(&raw mut arg as *mut ::core::ffi::c_char)
-                                                        as ::core::ffi::c_int
-                                                        - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                                                };
+                                                let mut off_0: ::core::ffi::c_int =
+                                                    if (*(&raw mut arg as *mut ::core::ffi::c_char)
+                                                        as ::core::ffi::c_int)
+                                                        < 'a' as ::core::ffi::c_int
+                                                        || *(&raw mut arg
+                                                            as *mut ::core::ffi::c_char)
+                                                            as ::core::ffi::c_int
+                                                            > 'z' as ::core::ffi::c_int
+                                                    {
+                                                        *(&raw mut arg as *mut ::core::ffi::c_char)
+                                                            as ::core::ffi::c_int
+                                                    } else {
+                                                        *(&raw mut arg as *mut ::core::ffi::c_char)
+                                                            as ::core::ffi::c_int
+                                                            - ('a' as ::core::ffi::c_int
+                                                                - 'A' as ::core::ffi::c_int)
+                                                    };
                                                 let mut i_1: ::core::ffi::c_int = 0;
                                                 i_1 = ::core::mem::size_of::<
                                                     [*mut ::core::ffi::c_char; 28],
-                                                >()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
+                                                >(
+                                                )
+                                                .wrapping_div(::core::mem::size_of::<
+                                                    *mut ::core::ffi::c_char,
+                                                >(
+                                                ))
+                                                .wrapping_div(
+                                                    (::core::mem::size_of::<
+                                                        [*mut ::core::ffi::c_char; 28],
+                                                    >(
                                                     )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut ::core::ffi::c_char; 28]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    ) as ::core::ffi::c_int;
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        *mut ::core::ffi::c_char,
+                                                    >(
+                                                    )) == 0)
+                                                        as ::core::ffi::c_int
+                                                        as usize,
+                                                )
+                                                    as ::core::ffi::c_int;
                                                 loop {
                                                     i_1 -= 1;
                                                     if i_1 < 0 as ::core::ffi::c_int {
                                                         break;
                                                     }
                                                     if off_0
-                                                        == *color_names[i_1 as usize]
-                                                            .offset(0 as ::core::ffi::c_int as isize)
+                                                        == *color_names[i_1 as usize].offset(
+                                                            0 as ::core::ffi::c_int as isize,
+                                                        )
                                                             as ::core::ffi::c_int
                                                         && strcasecmp(
-                                                            (&raw mut arg as *mut ::core::ffi::c_char)
-                                                                .offset(1 as ::core::ffi::c_int as isize),
-                                                            color_names[i_1 as usize]
-                                                                .offset(1 as ::core::ffi::c_int as isize),
+                                                            (&raw mut arg
+                                                                as *mut ::core::ffi::c_char)
+                                                                .offset(
+                                                                    1 as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
+                                                            color_names[i_1 as usize].offset(
+                                                                1 as ::core::ffi::c_int as isize,
+                                                            ),
                                                         ) == 0 as ::core::ffi::c_int
                                                     {
                                                         break;
@@ -4895,56 +4817,75 @@ pub unsafe extern "C" fn do_highlight(
                                                     let mut bold: TriState = kNone;
                                                     color = lookup_color(
                                                         i_1,
-                                                        key[5 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                                                        key[5 as ::core::ffi::c_int as usize]
+                                                            as ::core::ffi::c_int
                                                             == 'F' as ::core::ffi::c_int,
                                                         &raw mut bold,
                                                     );
-                                                    if bold as ::core::ffi::c_int == kTrue as ::core::ffi::c_int
+                                                    if bold as ::core::ffi::c_int
+                                                        == kTrue as ::core::ffi::c_int
                                                     {
+                                                        (*(highlight_ga.ga_data
+                                                            as *mut HlGroup)
+                                                            .offset(idx as isize))
+                                                        .sg_cterm |= HL_BOLD as ::core::ffi::c_int;
                                                         (*(highlight_ga.ga_data as *mut HlGroup)
                                                             .offset(idx as isize))
-                                                            .sg_cterm |= HL_BOLD as ::core::ffi::c_int;
-                                                        (*(highlight_ga.ga_data as *mut HlGroup)
-                                                            .offset(idx as isize))
-                                                            .sg_cterm_bold = true_0 != 0;
+                                                        .sg_cterm_bold = true_0 != 0;
                                                     } else if bold as ::core::ffi::c_int
                                                         == kFalse as ::core::ffi::c_int
                                                     {
-                                                        (*(highlight_ga.ga_data as *mut HlGroup)
+                                                        (*(highlight_ga.ga_data
+                                                            as *mut HlGroup)
                                                             .offset(idx as isize))
-                                                            .sg_cterm &= !(HL_BOLD as ::core::ffi::c_int);
+                                                        .sg_cterm &=
+                                                            !(HL_BOLD as ::core::ffi::c_int);
                                                     }
                                                 }
                                             }
                                             if key[5 as ::core::ffi::c_int as usize]
-                                                as ::core::ffi::c_int == 'F' as ::core::ffi::c_int
+                                                as ::core::ffi::c_int
+                                                == 'F' as ::core::ffi::c_int
                                             {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_cterm_fg = color + 1 as ::core::ffi::c_int;
+                                                .sg_cterm_fg = color + 1 as ::core::ffi::c_int;
                                                 if is_normal_group {
-                                                    cterm_normal_fg_color = color + 1 as ::core::ffi::c_int;
+                                                    cterm_normal_fg_color =
+                                                        color + 1 as ::core::ffi::c_int;
                                                 }
                                             } else {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_cterm_bg = color + 1 as ::core::ffi::c_int;
+                                                .sg_cterm_bg = color + 1 as ::core::ffi::c_int;
                                                 if is_normal_group {
-                                                    cterm_normal_bg_color = color + 1 as ::core::ffi::c_int;
+                                                    cterm_normal_bg_color =
+                                                        color + 1 as ::core::ffi::c_int;
                                                     if !ui_rgb_attached() {
                                                         if color >= 0 as ::core::ffi::c_int {
-                                                            let mut dark: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+                                                            let mut dark: ::core::ffi::c_int =
+                                                                -1 as ::core::ffi::c_int;
                                                             if t_colors < 16 as ::core::ffi::c_int {
-                                                                dark = (color == 0 as ::core::ffi::c_int
-                                                                    || color == 4 as ::core::ffi::c_int) as ::core::ffi::c_int;
-                                                            } else if color < 16 as ::core::ffi::c_int {
-                                                                dark = (color < 7 as ::core::ffi::c_int
-                                                                    || color == 8 as ::core::ffi::c_int) as ::core::ffi::c_int;
+                                                                dark = (color
+                                                                    == 0 as ::core::ffi::c_int
+                                                                    || color
+                                                                        == 4 as ::core::ffi::c_int)
+                                                                    as ::core::ffi::c_int;
+                                                            } else if color
+                                                                < 16 as ::core::ffi::c_int
+                                                            {
+                                                                dark = (color
+                                                                    < 7 as ::core::ffi::c_int
+                                                                    || color
+                                                                        == 8 as ::core::ffi::c_int)
+                                                                    as ::core::ffi::c_int;
                                                             }
                                                             if dark != -1 as ::core::ffi::c_int
                                                                 && dark
                                                                     != (*p_bg as ::core::ffi::c_int
-                                                                        == 'd' as ::core::ffi::c_int) as ::core::ffi::c_int
+                                                                        == 'd'
+                                                                            as ::core::ffi::c_int)
+                                                                        as ::core::ffi::c_int
                                                                 && !option_was_set(kOptBackground)
                                                             {
                                                                 set_option_value_give_err(
@@ -4963,7 +4904,9 @@ pub unsafe extern "C" fn do_highlight(
                                                                     },
                                                                     0 as ::core::ffi::c_int,
                                                                 );
-                                                                reset_option_was_set(kOptBackground);
+                                                                reset_option_was_set(
+                                                                    kOptBackground,
+                                                                );
                                                             }
                                                         }
                                                     }
@@ -4981,15 +4924,15 @@ pub unsafe extern "C" fn do_highlight(
                                             &raw mut arg as *mut ::core::ffi::c_char,
                                             &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_fg,
+                                            .sg_rgb_fg,
                                             &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_fg_idx,
+                                            .sg_rgb_fg_idx,
                                         );
                                         if is_normal_group {
                                             normal_fg = (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_fg;
+                                            .sg_rgb_fg;
                                         }
                                     } else if strcmp(
                                         &raw mut key as *mut ::core::ffi::c_char,
@@ -5002,15 +4945,15 @@ pub unsafe extern "C" fn do_highlight(
                                             &raw mut arg as *mut ::core::ffi::c_char,
                                             &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_bg,
+                                            .sg_rgb_bg,
                                             &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_bg_idx,
+                                            .sg_rgb_bg_idx,
                                         );
                                         if is_normal_group {
                                             normal_bg = (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_bg;
+                                            .sg_rgb_bg;
                                         }
                                     } else if strcmp(
                                         &raw mut key as *mut ::core::ffi::c_char,
@@ -5023,15 +4966,15 @@ pub unsafe extern "C" fn do_highlight(
                                             &raw mut arg as *mut ::core::ffi::c_char,
                                             &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_sp,
+                                            .sg_rgb_sp,
                                             &raw mut (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_sp_idx,
+                                            .sg_rgb_sp_idx,
                                         );
                                         if is_normal_group {
                                             normal_sp = (*(highlight_ga.ga_data as *mut HlGroup)
                                                 .offset(idx as isize))
-                                                .sg_rgb_sp;
+                                            .sg_rgb_sp;
                                         }
                                     } else if !(strcmp(
                                         &raw mut key as *mut ::core::ffi::c_char,
@@ -5054,22 +4997,22 @@ pub unsafe extern "C" fn do_highlight(
                                             {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_blend = strtol(
+                                                .sg_blend = strtol(
                                                     &raw mut arg as *mut ::core::ffi::c_char,
-                                                    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+                                                    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(
+                                                    ),
                                                     10 as ::core::ffi::c_int,
-                                                ) as ::core::ffi::c_int;
+                                                )
+                                                    as ::core::ffi::c_int;
                                             } else {
                                                 (*(highlight_ga.ga_data as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                    .sg_blend = -1 as ::core::ffi::c_int;
+                                                .sg_blend = -1 as ::core::ffi::c_int;
                                             }
                                         } else {
                                             semsg(
-                                                gettext(
-                                                    b"E423: Illegal argument: %s\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(b"E423: Illegal argument: %s\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
                                                 key_start,
                                             );
                                             error = true_0 != 0;
@@ -5077,17 +5020,18 @@ pub unsafe extern "C" fn do_highlight(
                                         }
                                     }
                                 }
-                                (*(highlight_ga.ga_data as *mut HlGroup)
-                                    .offset(idx as isize))
+                                (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
                                     .sg_cleared = false_0 != 0;
                                 if !init
                                     || (*(highlight_ga.ga_data as *mut HlGroup)
                                         .offset(idx as isize))
-                                        .sg_set & SG_LINK as ::core::ffi::c_int == 0
+                                    .sg_set
+                                        & SG_LINK as ::core::ffi::c_int
+                                        == 0
                                 {
                                     (*(highlight_ga.ga_data as *mut HlGroup)
                                         .offset(idx as isize))
-                                        .sg_link = 0 as ::core::ffi::c_int;
+                                    .sg_link = 0 as ::core::ffi::c_int;
                                 }
                                 linep = skipwhite(linep);
                             }
@@ -5111,13 +5055,13 @@ pub unsafe extern "C" fn do_highlight(
         set_hl_attr(idx);
     }
     (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx = current_sctx;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx.sc_lnum
-        += (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
+        .sg_script_ctx
+        .sc_lnum += (*(exestack.ga_data as *mut estack_T)
+        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    .es_lnum;
     nlua_set_sctx(
-        &raw mut (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
-            .sg_script_ctx,
+        &raw mut (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx,
     );
     if (did_change as ::core::ffi::c_int != 0
         || memcmp(
@@ -5125,7 +5069,8 @@ pub unsafe extern "C" fn do_highlight(
                 as *const ::core::ffi::c_void,
             &raw mut item_before as *const ::core::ffi::c_void,
             ::core::mem::size_of::<HlGroup>(),
-        ) != 0 as ::core::ffi::c_int) && !did_highlight_changed
+        ) != 0 as ::core::ffi::c_int)
+        && !did_highlight_changed
     {
         if !updating_screen {
             redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
@@ -5141,72 +5086,64 @@ pub unsafe extern "C" fn restore_cterm_colors() {
     cterm_normal_fg_color = 0 as ::core::ffi::c_int;
     cterm_normal_bg_color = 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn hl_has_settings(
-    mut idx: ::core::ffi::c_int,
-    mut check_link: bool,
-) -> bool {
+unsafe extern "C" fn hl_has_settings(mut idx: ::core::ffi::c_int, mut check_link: bool) -> bool {
     return (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
-        as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        as ::core::ffi::c_int
+        == 0 as ::core::ffi::c_int
         && ((*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_attr
             != 0 as ::core::ffi::c_int
             || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_fg
                 != 0 as ::core::ffi::c_int
             || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bg
                 != 0 as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
-                .sg_rgb_fg_idx != kColorIdxNone as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
-                .sg_rgb_bg_idx != kColorIdxNone as ::core::ffi::c_int
-            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize))
-                .sg_rgb_sp_idx != kColorIdxNone as ::core::ffi::c_int
+            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg_idx
+                != kColorIdxNone as ::core::ffi::c_int
+            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg_idx
+                != kColorIdxNone as ::core::ffi::c_int
+            || (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp_idx
+                != kColorIdxNone as ::core::ffi::c_int
             || check_link as ::core::ffi::c_int != 0
                 && (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_set
-                    & SG_LINK as ::core::ffi::c_int != 0);
+                    & SG_LINK as ::core::ffi::c_int
+                    != 0);
 }
 unsafe extern "C" fn highlight_clear(mut idx: ::core::ffi::c_int) {
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared = true_0
-        != 0;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_attr = 0
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm = 0
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bold = false_0
-        != 0;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_fg = 0
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bg = 0
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_gui = 0
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg = -1
-        as ::core::ffi::c_int as RgbValue;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg = -1
-        as ::core::ffi::c_int as RgbValue;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp = -1
-        as ::core::ffi::c_int as RgbValue;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg_idx = kColorIdxNone
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg_idx = kColorIdxNone
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp_idx = kColorIdxNone
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_blend = -1
-        as ::core::ffi::c_int;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_link = (*(highlight_ga
-        .ga_data as *mut HlGroup)
-        .offset(idx as isize))
-        .sg_deflink;
-    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx = (*(highlight_ga
-        .ga_data as *mut HlGroup)
-        .offset(idx as isize))
-        .sg_deflink_sctx;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared = true_0 != 0;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_attr =
+        0 as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm =
+        0 as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bold = false_0 != 0;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_fg =
+        0 as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cterm_bg =
+        0 as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_gui = 0 as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg =
+        -1 as ::core::ffi::c_int as RgbValue;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg =
+        -1 as ::core::ffi::c_int as RgbValue;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp =
+        -1 as ::core::ffi::c_int as RgbValue;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_fg_idx =
+        kColorIdxNone as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_bg_idx =
+        kColorIdxNone as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_rgb_sp_idx =
+        kColorIdxNone as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_blend =
+        -1 as ::core::ffi::c_int;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_link =
+        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_deflink;
+    (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_script_ctx =
+        (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_deflink_sctx;
 }
 pub const LIST_ATTR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LIST_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LIST_INT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
-    let mut sgp: *const HlGroup = (highlight_ga.ga_data as *mut HlGroup)
-        .offset((id - 1 as ::core::ffi::c_int) as isize);
+    let mut sgp: *const HlGroup =
+        (highlight_ga.ga_data as *mut HlGroup).offset((id - 1 as ::core::ffi::c_int) as isize);
     let mut didh: bool = false_0 != 0;
     if message_filtered((*sgp).sg_name) {
         return;
@@ -5301,13 +5238,13 @@ unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
         );
         msg_putchar(' ' as ::core::ffi::c_int);
         msg_outtrans(
-            (*(highlight_ga.ga_data as *mut HlGroup)
-                .offset(
-                    ((*(highlight_ga.ga_data as *mut HlGroup)
-                        .offset((id - 1 as ::core::ffi::c_int) as isize))
-                        .sg_link - 1 as ::core::ffi::c_int) as isize,
-                ))
-                .sg_name,
+            (*(highlight_ga.ga_data as *mut HlGroup).offset(
+                ((*(highlight_ga.ga_data as *mut HlGroup)
+                    .offset((id - 1 as ::core::ffi::c_int) as isize))
+                .sg_link
+                    - 1 as ::core::ffi::c_int) as isize,
+            ))
+            .sg_name,
             0 as ::core::ffi::c_int,
             false_0 != 0,
         );
@@ -5332,8 +5269,8 @@ unsafe extern "C" fn hlgroup2dict(
     mut hl_id: ::core::ffi::c_int,
     mut arena: *mut Arena,
 ) -> bool {
-    let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
-        .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
+    let mut sgp: *mut HlGroup =
+        (highlight_ga.ga_data as *mut HlGroup).offset((hl_id - 1 as ::core::ffi::c_int) as isize);
     let mut ns: NS = ns_id;
     let mut link: ::core::ffi::c_int = if ns_id == 0 as ::core::ffi::c_int {
         (*sgp).sg_link
@@ -5343,19 +5280,18 @@ unsafe extern "C" fn hlgroup2dict(
     if link == -1 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    if ns_id == 0 as ::core::ffi::c_int && (*sgp).sg_cleared as ::core::ffi::c_int != 0
+    if ns_id == 0 as ::core::ffi::c_int
+        && (*sgp).sg_cleared as ::core::ffi::c_int != 0
         && (*sgp).sg_set == 0 as ::core::ffi::c_int
     {
         return false_0 != 0;
     }
     ns = ns_id;
-    let mut attr: HlAttrs = syn_attr2entry(
-        if ns_id == 0 as ::core::ffi::c_int {
-            (*sgp).sg_attr
-        } else {
-            ns_get_hl(&raw mut ns, hl_id, false_0 != 0, (*sgp).sg_set != 0)
-        },
-    );
+    let mut attr: HlAttrs = syn_attr2entry(if ns_id == 0 as ::core::ffi::c_int {
+        (*sgp).sg_attr
+    } else {
+        ns_get_hl(&raw mut ns, hl_id, false_0 != 0, (*sgp).sg_set != 0)
+    });
     *hl = arena_dict(
         arena,
         (HLATTRS_DICT_SIZE as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t,
@@ -5373,12 +5309,13 @@ unsafe extern "C" fn hlgroup2dict(
     }
     if link > 0 as ::core::ffi::c_int {
         '_c2rust_label: {
-            if 1 as ::core::ffi::c_int <= link && link <= highlight_ga.ga_len {} else {
+            if 1 as ::core::ffi::c_int <= link && link <= highlight_ga.ga_len {
+            } else {
                 __assert_fail(
                     b"1 <= link && link <= highlight_ga.ga_len\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/highlight_group.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/highlight_group.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     1661 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -5394,17 +5331,20 @@ unsafe extern "C" fn hlgroup2dict(
                     string: cstr_as_string(
                         (*(highlight_ga.ga_data as *mut HlGroup)
                             .offset((link - 1 as ::core::ffi::c_int) as isize))
-                            .sg_name,
+                        .sg_name,
                     ),
                 },
             },
         };
     }
-    let mut hl_cterm: Dict = arena_dict(
-        arena,
-        HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t,
+    let mut hl_cterm: Dict = arena_dict(arena, HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t);
+    hlattrs2dict(
+        hl,
+        ::core::ptr::null_mut::<Dict>(),
+        attr,
+        true_0 != 0,
+        true_0 != 0,
     );
-    hlattrs2dict(hl, ::core::ptr::null_mut::<Dict>(), attr, true_0 != 0, true_0 != 0);
     hlattrs2dict(hl, &raw mut hl_cterm, attr, false_0 != 0, true_0 != 0);
     if hl_cterm.size != 0 {
         let c2rust_fresh3 = (*hl).size;
@@ -5444,8 +5384,7 @@ pub unsafe extern "C" fn ns_get_hl_defs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_highlight__name
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut create: Boolean = if (*opts).is_set__get_highlight_
-            as ::core::ffi::c_ulonglong
+        let mut create: Boolean = if (*opts).is_set__get_highlight_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_highlight__create
             != 0 as ::core::ffi::c_ulonglong
         {
@@ -5481,13 +5420,16 @@ pub unsafe extern "C" fn ns_get_hl_defs(
             hlgroup2dict(
                 &raw mut attrs_0,
                 ns_id,
-                if link as ::core::ffi::c_int != 0 { id } else { syn_get_final_id(id) },
+                if link as ::core::ffi::c_int != 0 {
+                    id
+                } else {
+                    syn_get_final_id(id)
+                },
                 arena,
             );
             return attrs_0;
         }
-    } else if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int
-    {
+    } else if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
         rv = arena_dict(arena, highlight_ga.ga_len as size_t);
         let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
         while i <= highlight_ga.ga_len {
@@ -5497,15 +5439,14 @@ pub unsafe extern "C" fn ns_get_hl_defs(
                 rv.size = rv.size.wrapping_add(1);
                 *rv.items.offset(c2rust_fresh0 as isize) = key_value_pair {
                     key: cstr_as_string(
-                        (*(highlight_ga.ga_data as *mut HlGroup)
-                            .offset(
-                                ((if link as ::core::ffi::c_int != 0 {
-                                    i
-                                } else {
-                                    syn_get_final_id(i)
-                                }) - 1 as ::core::ffi::c_int) as isize,
-                            ))
-                            .sg_name,
+                        (*(highlight_ga.ga_data as *mut HlGroup).offset(
+                            ((if link as ::core::ffi::c_int != 0 {
+                                i
+                            } else {
+                                syn_get_final_id(i)
+                            }) - 1 as ::core::ffi::c_int) as isize,
+                        ))
+                        .sg_name,
                     ),
                     value: object {
                         type_0: kObjectTypeDict,
@@ -5554,10 +5495,9 @@ unsafe extern "C" fn highlight_list_arg(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while hl_attr_table[i as usize] != 0 as ::core::ffi::c_int {
             if hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0
-                && iarg & HL_UNDERLINE_MASK as ::core::ffi::c_int
-                    == hl_attr_table[i as usize]
-                || hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int
-                    == 0 && iarg & hl_attr_table[i as usize] != 0
+                && iarg & HL_UNDERLINE_MASK as ::core::ffi::c_int == hl_attr_table[i as usize]
+                || hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0
+                    && iarg & hl_attr_table[i as usize] != 0
             {
                 if buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != NUL {
                     xstrlcat(
@@ -5571,9 +5511,7 @@ unsafe extern "C" fn highlight_list_arg(
                     hl_name_table[i as usize] as *const ::core::ffi::c_char,
                     100 as size_t,
                 );
-                if hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int
-                    == 0
-                {
+                if hl_attr_table[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0 {
                     iarg &= !hl_attr_table[i as usize];
                 }
             }
@@ -5613,11 +5551,11 @@ pub unsafe extern "C" fn highlight_has_attr(
     if modec == 'g' as ::core::ffi::c_int {
         attr = (*(highlight_ga.ga_data as *mut HlGroup)
             .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_gui;
+        .sg_gui;
     } else {
         attr = (*(highlight_ga.ga_data as *mut HlGroup)
             .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_cterm;
+        .sg_cterm;
     }
     if flag & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
         let mut ul: ::core::ffi::c_int = attr & HL_UNDERLINE_MASK as ::core::ffi::c_int;
@@ -5631,7 +5569,7 @@ pub unsafe extern "C" fn highlight_has_attr(
             b"1\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             ::core::ptr::null::<::core::ffi::c_char>()
-        }
+        };
     };
 }
 #[no_mangle]
@@ -5733,8 +5671,8 @@ pub unsafe extern "C" fn highlight_color(
         }) == 'p' as ::core::ffi::c_int
     {
         sp = true_0 != 0;
-    } else if !((if (*what.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
+    } else if !((if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+        < 'A' as ::core::ffi::c_int
         || *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             > 'Z' as ::core::ffi::c_int
     {
@@ -5754,25 +5692,26 @@ pub unsafe extern "C" fn highlight_color(
                 + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
         }) == 'g' as ::core::ffi::c_int)
     {
-        return ::core::ptr::null::<::core::ffi::c_char>()
+        return ::core::ptr::null::<::core::ffi::c_char>();
     }
     let mut n: ::core::ffi::c_int = 0;
     if modec == 'g' as ::core::ffi::c_int {
         if *what.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '#' as ::core::ffi::c_int && ui_rgb_attached() as ::core::ffi::c_int != 0
+            == '#' as ::core::ffi::c_int
+            && ui_rgb_attached() as ::core::ffi::c_int != 0
         {
             if fg {
                 n = (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_fg as ::core::ffi::c_int;
+                .sg_rgb_fg as ::core::ffi::c_int;
             } else if sp {
                 n = (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_sp as ::core::ffi::c_int;
+                .sg_rgb_sp as ::core::ffi::c_int;
             } else {
                 n = (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_bg as ::core::ffi::c_int;
+                .sg_rgb_bg as ::core::ffi::c_int;
             }
             if n < 0 as ::core::ffi::c_int || n > 0xffffff as ::core::ffi::c_int {
                 return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5789,32 +5728,32 @@ pub unsafe extern "C" fn highlight_color(
             return coloridx_to_name(
                 (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_fg_idx,
+                .sg_rgb_fg_idx,
                 (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_fg as ::core::ffi::c_int,
+                .sg_rgb_fg as ::core::ffi::c_int,
                 &raw mut name as *mut ::core::ffi::c_char,
-            )
+            );
         } else if sp {
             return coloridx_to_name(
                 (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_sp_idx,
+                .sg_rgb_sp_idx,
                 (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_sp as ::core::ffi::c_int,
+                .sg_rgb_sp as ::core::ffi::c_int,
                 &raw mut name as *mut ::core::ffi::c_char,
-            )
+            );
         } else {
             return coloridx_to_name(
                 (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_bg_idx,
+                .sg_rgb_bg_idx,
                 (*(highlight_ga.ga_data as *mut HlGroup)
                     .offset((id - 1 as ::core::ffi::c_int) as isize))
-                    .sg_rgb_bg as ::core::ffi::c_int,
+                .sg_rgb_bg as ::core::ffi::c_int,
                 &raw mut name as *mut ::core::ffi::c_char,
-            )
+            );
         }
     }
     if font as ::core::ffi::c_int != 0 || sp as ::core::ffi::c_int != 0 {
@@ -5824,11 +5763,13 @@ pub unsafe extern "C" fn highlight_color(
         if fg {
             n = (*(highlight_ga.ga_data as *mut HlGroup)
                 .offset((id - 1 as ::core::ffi::c_int) as isize))
-                .sg_cterm_fg - 1 as ::core::ffi::c_int;
+            .sg_cterm_fg
+                - 1 as ::core::ffi::c_int;
         } else {
             n = (*(highlight_ga.ga_data as *mut HlGroup)
                 .offset((id - 1 as ::core::ffi::c_int) as isize))
-                .sg_cterm_bg - 1 as ::core::ffi::c_int;
+            .sg_cterm_bg
+                - 1 as ::core::ffi::c_int;
         }
         if n < 0 as ::core::ffi::c_int {
             return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5864,14 +5805,13 @@ pub unsafe extern "C" fn syn_list_header(
         name_col = msg_outtrans(
             (*(highlight_ga.ga_data as *mut HlGroup)
                 .offset((id - 1 as ::core::ffi::c_int) as isize))
-                .sg_name,
+            .sg_name,
             0 as ::core::ffi::c_int,
             false_0 != 0,
         );
         msg_col = name_col;
         endcol = 15 as ::core::ffi::c_int;
-    } else if (ui_has(kUIMessages) as ::core::ffi::c_int != 0 || msg_silent != 0)
-        && !force_newline
+    } else if (ui_has(kUIMessages) as ::core::ffi::c_int != 0 || msg_silent != 0) && !force_newline
     {
         msg_putchar(' ' as ::core::ffi::c_int);
         adjust = false_0 != 0;
@@ -5895,15 +5835,18 @@ pub unsafe extern "C" fn syn_list_header(
         if endcol == Columns - 1 as ::core::ffi::c_int && endcol <= name_col {
             msg_putchar(' ' as ::core::ffi::c_int);
         }
-        msg_puts_hl(b"xxx\0".as_ptr() as *const ::core::ffi::c_char, id, false_0 != 0);
+        msg_puts_hl(
+            b"xxx\0".as_ptr() as *const ::core::ffi::c_char,
+            id,
+            false_0 != 0,
+        );
         msg_putchar(' ' as ::core::ffi::c_int);
     }
     return newline;
 }
 unsafe extern "C" fn set_hl_attr(mut idx: ::core::ffi::c_int) {
     let mut at_en: HlAttrs = HLATTRS_INIT;
-    let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
-        .offset(idx as isize);
+    let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
     at_en.cterm_ae_attr = (*sgp).sg_cterm as int32_t;
     at_en.cterm_fg_color = (*sgp).sg_cterm_fg as int16_t;
     at_en.cterm_bg_color = (*sgp).sg_cterm_bg as int16_t;
@@ -5934,9 +5877,7 @@ unsafe extern "C" fn set_hl_attr(mut idx: ::core::ffi::c_int) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn syn_name2id(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn syn_name2id(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '@' as ::core::ffi::c_int
     {
@@ -5961,9 +5902,7 @@ pub unsafe extern "C" fn syn_name2id_len(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn syn_name2attr(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn syn_name2attr(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut id: ::core::ffi::c_int = syn_name2id(name);
     if id != 0 as ::core::ffi::c_int {
         return syn_id2attr(id);
@@ -5977,15 +5916,13 @@ pub unsafe extern "C" fn highlight_exists(
     return (syn_name2id(name) > 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn syn_id2name(
-    mut id: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn syn_id2name(mut id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     if id <= 0 as ::core::ffi::c_int || id > highlight_ga.ga_len {
         return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     return (*(highlight_ga.ga_data as *mut HlGroup)
         .offset((id - 1 as ::core::ffi::c_int) as isize))
-        .sg_name;
+    .sg_name;
 }
 #[no_mangle]
 pub unsafe extern "C" fn syn_check_group(
@@ -5993,11 +5930,9 @@ pub unsafe extern "C" fn syn_check_group(
     mut len: size_t,
 ) -> ::core::ffi::c_int {
     if len > MAX_SYN_NAME as size_t {
-        emsg(
-            gettext(
-                &raw const e_highlight_group_name_too_long as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_highlight_group_name_too_long as *const ::core::ffi::c_char,
+        ));
         return 0 as ::core::ffi::c_int;
     }
     let mut id: ::core::ffi::c_int = syn_name2id_len(name, len);
@@ -6012,31 +5947,27 @@ unsafe extern "C" fn syn_add_group(
 ) -> ::core::ffi::c_int {
     let mut i: size_t = 0 as size_t;
     while i < len {
-        let mut c: ::core::ffi::c_int = *name.offset(i as isize) as uint8_t
-            as ::core::ffi::c_int;
+        let mut c: ::core::ffi::c_int = *name.offset(i as isize) as uint8_t as ::core::ffi::c_int;
         if !vim_isprintc(c) {
-            emsg(
-                gettext(
-                    b"E669: Unprintable character in group name\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E669: Unprintable character in group name\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            ));
             return 0 as ::core::ffi::c_int;
         } else if !(c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                 && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
             || ascii_isdigit(c) as ::core::ffi::c_int != 0)
-            && c != '_' as ::core::ffi::c_int && c != '.' as ::core::ffi::c_int
-            && c != '@' as ::core::ffi::c_int && c != '-' as ::core::ffi::c_int
+            && c != '_' as ::core::ffi::c_int
+            && c != '.' as ::core::ffi::c_int
+            && c != '@' as ::core::ffi::c_int
+            && c != '-' as ::core::ffi::c_int
         {
             msg_source(HLF_W as ::core::ffi::c_int);
-            emsg(
-                gettext(
-                    &raw const e_highlight_group_name_invalid_char
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                &raw const e_highlight_group_name_invalid_char as *const ::core::ffi::c_char,
+            ));
             return 0 as ::core::ffi::c_int;
         }
         i = i.wrapping_add(1);
@@ -6046,34 +5977,26 @@ unsafe extern "C" fn syn_add_group(
         && *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '@' as ::core::ffi::c_int
     {
-        let mut delim: *mut ::core::ffi::c_char = xmemrchr(
-            name as *const ::core::ffi::c_void,
-            '.' as uint8_t,
-            len,
-        ) as *mut ::core::ffi::c_char;
+        let mut delim: *mut ::core::ffi::c_char =
+            xmemrchr(name as *const ::core::ffi::c_void, '.' as uint8_t, len)
+                as *mut ::core::ffi::c_char;
         if !delim.is_null() {
             scoped_parent = syn_check_group(name, delim.offset_from(name) as size_t);
         }
     }
     if highlight_ga.ga_data.is_null() {
-        highlight_ga.ga_itemsize = ::core::mem::size_of::<HlGroup>()
-            as ::core::ffi::c_int;
+        highlight_ga.ga_itemsize = ::core::mem::size_of::<HlGroup>() as ::core::ffi::c_int;
         ga_set_growsize(&raw mut highlight_ga, 10 as ::core::ffi::c_int);
         ga_grow(&raw mut highlight_ga, 300 as ::core::ffi::c_int);
     }
     if highlight_ga.ga_len >= MAX_HL_ID as ::core::ffi::c_int {
-        emsg(
-            gettext(
-                b"E849: Too many highlight and syntax groups\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E849: Too many highlight and syntax groups\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
         return 0 as ::core::ffi::c_int;
     }
-    let mut hlgp: *mut HlGroup = ga_append_via_ptr(
-        &raw mut highlight_ga,
-        ::core::mem::size_of::<HlGroup>(),
-    ) as *mut HlGroup;
+    let mut hlgp: *mut HlGroup =
+        ga_append_via_ptr(&raw mut highlight_ga, ::core::mem::size_of::<HlGroup>()) as *mut HlGroup;
     memset(
         hlgp as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -6096,9 +6019,7 @@ unsafe extern "C" fn syn_add_group(
     return id;
 }
 #[no_mangle]
-pub unsafe extern "C" fn syn_id2attr(
-    mut hl_id: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn syn_id2attr(mut hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut optional: bool = false_0 != 0;
     return syn_ns_id2attr(-1 as ::core::ffi::c_int, hl_id, &raw mut optional);
 }
@@ -6111,14 +6032,10 @@ pub unsafe extern "C" fn syn_ns_id2attr(
     if syn_ns_get_final_id(&raw mut ns_id, &raw mut hl_id) {
         *optional = false_0 != 0;
     }
-    let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
-        .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
-    let mut attr: ::core::ffi::c_int = ns_get_hl(
-        &raw mut ns_id,
-        hl_id,
-        false_0 != 0,
-        (*sgp).sg_set != 0,
-    );
+    let mut sgp: *mut HlGroup =
+        (highlight_ga.ga_data as *mut HlGroup).offset((hl_id - 1 as ::core::ffi::c_int) as isize);
+    let mut attr: ::core::ffi::c_int =
+        ns_get_hl(&raw mut ns_id, hl_id, false_0 != 0, (*sgp).sg_set != 0);
     if attr >= 0 as ::core::ffi::c_int
         || *optional as ::core::ffi::c_int != 0 && ns_id > 0 as ::core::ffi::c_int
     {
@@ -6127,9 +6044,7 @@ pub unsafe extern "C" fn syn_ns_id2attr(
     return (*sgp).sg_attr;
 }
 #[no_mangle]
-pub unsafe extern "C" fn syn_get_final_id(
-    mut hl_id: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn syn_get_final_id(mut hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut ns_id: ::core::ffi::c_int = (*curwin).w_ns_hl_active;
     syn_ns_get_final_id(&raw mut ns_id, &raw mut hl_id);
     return hl_id;
@@ -6153,20 +6068,15 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
         }
         let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
             .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
-        let mut check: ::core::ffi::c_int = ns_get_hl(
-            ns_id as *mut NS,
-            hl_id,
-            true_0 != 0,
-            (*sgp).sg_set != 0,
-        );
+        let mut check: ::core::ffi::c_int =
+            ns_get_hl(ns_id as *mut NS, hl_id, true_0 != 0, (*sgp).sg_set != 0);
         if check == 0 as ::core::ffi::c_int {
             *hl_idp = hl_id;
             return true_0 != 0;
         } else if check > 0 as ::core::ffi::c_int {
             used = true_0 != 0;
             hl_id = check;
-        } else if (*sgp).sg_link > 0 as ::core::ffi::c_int
-            && (*sgp).sg_link <= highlight_ga.ga_len
+        } else if (*sgp).sg_link > 0 as ::core::ffi::c_int && (*sgp).sg_link <= highlight_ga.ga_len
         {
             hl_id = (*sgp).sg_link;
         } else {
@@ -6185,8 +6095,7 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
 pub unsafe extern "C" fn highlight_attr_set_all() {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while idx < highlight_ga.ga_len {
-        let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup)
-            .offset(idx as isize);
+        let mut sgp: *mut HlGroup = (highlight_ga.ga_data as *mut HlGroup).offset(idx as isize);
         if (*sgp).sg_rgb_bg_idx == kColorIdxFg as ::core::ffi::c_int {
             (*sgp).sg_rgb_bg = normal_fg;
         } else if (*sgp).sg_rgb_bg_idx == kColorIdxBg as ::core::ffi::c_int {
@@ -6227,52 +6136,46 @@ unsafe extern "C" fn combine_stl_hlt(
     } else {
         memmove(
             hlt.offset((hlcnt + i) as isize) as *mut ::core::ffi::c_void,
-            hlt.offset((id_alt - 1 as ::core::ffi::c_int) as isize)
-                as *const ::core::ffi::c_void,
+            hlt.offset((id_alt - 1 as ::core::ffi::c_int) as isize) as *const ::core::ffi::c_void,
             ::core::mem::size_of::<HlGroup>(),
         );
     }
     (*hlt.offset((hlcnt + i) as isize)).sg_link = 0 as ::core::ffi::c_int;
-    (*hlt.offset((hlcnt + i) as isize)).sg_cterm
-        ^= (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm
+    (*hlt.offset((hlcnt + i) as isize)).sg_cterm ^=
+        (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm
             ^ (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_cterm;
     if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_fg
         != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_cterm_fg
     {
-        (*hlt.offset((hlcnt + i) as isize)).sg_cterm_fg = (*hlt
-            .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_cterm_fg;
+        (*hlt.offset((hlcnt + i) as isize)).sg_cterm_fg =
+            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_fg;
     }
     if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_bg
         != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_cterm_bg
     {
-        (*hlt.offset((hlcnt + i) as isize)).sg_cterm_bg = (*hlt
-            .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_cterm_bg;
+        (*hlt.offset((hlcnt + i) as isize)).sg_cterm_bg =
+            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_cterm_bg;
     }
-    (*hlt.offset((hlcnt + i) as isize)).sg_gui
-        ^= (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_gui
+    (*hlt.offset((hlcnt + i) as isize)).sg_gui ^=
+        (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_gui
             ^ (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_gui;
     if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_fg
         != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_rgb_fg
     {
-        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_fg = (*hlt
-            .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_rgb_fg;
+        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_fg =
+            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_fg;
     }
     if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_bg
         != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_rgb_bg
     {
-        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_bg = (*hlt
-            .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_rgb_bg;
+        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_bg =
+            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_bg;
     }
     if (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp
         != (*hlt.offset((id_S - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp
     {
-        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_sp = (*hlt
-            .offset((id - 1 as ::core::ffi::c_int) as isize))
-            .sg_rgb_sp;
+        (*hlt.offset((hlcnt + i) as isize)).sg_rgb_sp =
+            (*hlt.offset((id - 1 as ::core::ffi::c_int) as isize)).sg_rgb_sp;
     }
     highlight_ga.ga_len = hlcnt + i + 1 as ::core::ffi::c_int;
     set_hl_attr(hlcnt + i);
@@ -6288,12 +6191,8 @@ pub unsafe extern "C" fn highlight_changed() {
     let mut hlf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while hlf < HLF_COUNT as ::core::ffi::c_int {
         let mut id: ::core::ffi::c_int = syn_check_group(
-            *(&raw mut hlf_names as *mut *const ::core::ffi::c_char)
-                .offset(hlf as isize),
-            strlen(
-                *(&raw mut hlf_names as *mut *const ::core::ffi::c_char)
-                    .offset(hlf as isize),
-            ),
+            *(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(hlf as isize),
+            strlen(*(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(hlf as isize)),
         );
         if id == 0 as ::core::ffi::c_int {
             abort();
@@ -6320,8 +6219,7 @@ pub unsafe extern "C" fn highlight_changed() {
             }
             ui_call_hl_group_set(
                 cstr_as_string(
-                    *(&raw mut hlf_names as *mut *const ::core::ffi::c_char)
-                        .offset(hlf as isize),
+                    *(&raw mut hlf_names as *mut *const ::core::ffi::c_char).offset(hlf as isize),
                 ),
                 highlight_attr[hlf as usize] as Integer,
             );
@@ -6349,9 +6247,7 @@ pub unsafe extern "C" fn highlight_changed() {
             b"User%d\0".as_ptr() as *const ::core::ffi::c_char,
             i + 1 as ::core::ffi::c_int,
         );
-        let mut id_0: ::core::ffi::c_int = syn_name2id(
-            &raw mut userhl as *mut ::core::ffi::c_char,
-        );
+        let mut id_0: ::core::ffi::c_int = syn_name2id(&raw mut userhl as *mut ::core::ffi::c_char);
         if id_0 == 0 as ::core::ffi::c_int {
             highlight_user[i as usize] = 0 as ::core::ffi::c_int;
             highlight_stlnc[i as usize] = 0 as ::core::ffi::c_int;
@@ -6448,12 +6344,9 @@ unsafe extern "C" fn highlight_list() {
             break;
         }
         highlight_list_two(99 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-    };
+    }
 }
-unsafe extern "C" fn highlight_list_two(
-    mut cnt: ::core::ffi::c_int,
-    mut id: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn highlight_list_two(mut cnt: ::core::ffi::c_int, mut id: ::core::ffi::c_int) {
     msg_puts_hl(
         (b"N \x08I \x08!  \x08\0".as_ptr() as *const ::core::ffi::c_char)
             .offset((cnt / 11 as ::core::ffi::c_int) as isize),
@@ -6487,4275 +6380,4336 @@ pub unsafe extern "C" fn get_highlight_name_ext(
     if idx < 0 as ::core::ffi::c_int {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    if skip_cleared as ::core::ffi::c_int != 0 && idx < highlight_ga.ga_len
+    if skip_cleared as ::core::ffi::c_int != 0
+        && idx < highlight_ga.ga_len
         && (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_cleared
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         return b"\0".as_ptr() as *const ::core::ffi::c_char;
     }
     if idx == highlight_ga.ga_len && include_none != 0 as ::core::ffi::c_int {
-        return b"none\0".as_ptr() as *const ::core::ffi::c_char
+        return b"none\0".as_ptr() as *const ::core::ffi::c_char;
     } else if idx == highlight_ga.ga_len + include_none
         && include_default != 0 as ::core::ffi::c_int
     {
-        return b"default\0".as_ptr() as *const ::core::ffi::c_char
+        return b"default\0".as_ptr() as *const ::core::ffi::c_char;
     } else if idx == highlight_ga.ga_len + include_none + include_default
         && include_link != 0 as ::core::ffi::c_int
     {
-        return b"link\0".as_ptr() as *const ::core::ffi::c_char
-    } else if idx
-        == highlight_ga.ga_len + include_none + include_default + 1 as ::core::ffi::c_int
+        return b"link\0".as_ptr() as *const ::core::ffi::c_char;
+    } else if idx == highlight_ga.ga_len + include_none + include_default + 1 as ::core::ffi::c_int
         && include_link != 0 as ::core::ffi::c_int
     {
-        return b"clear\0".as_ptr() as *const ::core::ffi::c_char
+        return b"clear\0".as_ptr() as *const ::core::ffi::c_char;
     } else if idx >= highlight_ga.ga_len {
-        return ::core::ptr::null::<::core::ffi::c_char>()
+        return ::core::ptr::null::<::core::ffi::c_char>();
     }
     return (*(highlight_ga.ga_data as *mut HlGroup).offset(idx as isize)).sg_name;
 }
 #[no_mangle]
 pub static mut color_name_table: [color_name_table_T; 708] = [
     color_name_table_T {
-        name: b"AliceBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"AliceBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"AntiqueWhite\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"AntiqueWhite\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int | 0xd7 as RgbValue,
+            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd7 as RgbValue,
     },
     color_name_table_T {
-        name: b"AntiqueWhite1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"AntiqueWhite1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xef as RgbValue) << 8 as ::core::ffi::c_int | 0xdb as RgbValue,
+            | (0xef as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdb as RgbValue,
     },
     color_name_table_T {
-        name: b"AntiqueWhite2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"AntiqueWhite2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdf as RgbValue) << 8 as ::core::ffi::c_int | 0xcc as RgbValue,
+            | (0xdf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcc as RgbValue,
     },
     color_name_table_T {
-        name: b"AntiqueWhite3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"AntiqueWhite3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int | 0xb0 as RgbValue,
+            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb0 as RgbValue,
     },
     color_name_table_T {
-        name: b"AntiqueWhite4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"AntiqueWhite4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int | 0x78 as RgbValue,
+            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x78 as RgbValue,
     },
     color_name_table_T {
-        name: b"Aqua\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Aqua\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Aquamarine\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Aquamarine\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xd4 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Aquamarine1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Aquamarine1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xd4 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Aquamarine2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Aquamarine2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x76 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xc6 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Aquamarine3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Aquamarine3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xaa as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xaa as RgbValue,
     },
     color_name_table_T {
-        name: b"Aquamarine4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Aquamarine4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x45 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x74 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x74 as RgbValue,
     },
     color_name_table_T {
-        name: b"Azure\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Azure\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Azure1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Azure1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Azure2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Azure2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Azure3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Azure3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Azure4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Azure4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x83 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"Beige\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Beige\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xdc as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdc as RgbValue,
     },
     color_name_table_T {
-        name: b"Bisque\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Bisque\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int | 0xc4 as RgbValue,
+            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Bisque1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Bisque1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int | 0xc4 as RgbValue,
+            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Bisque2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Bisque2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd5 as RgbValue) << 8 as ::core::ffi::c_int | 0xb7 as RgbValue,
+            | (0xd5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb7 as RgbValue,
     },
     color_name_table_T {
-        name: b"Bisque3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Bisque3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb7 as RgbValue) << 8 as ::core::ffi::c_int | 0x9e as RgbValue,
+            | (0xb7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9e as RgbValue,
     },
     color_name_table_T {
-        name: b"Bisque4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Bisque4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int | 0x6b as RgbValue,
+            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6b as RgbValue,
     },
     color_name_table_T {
-        name: b"Black\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Black\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
         name: b"BlanchedAlmond\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Blue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Blue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Blue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Blue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Blue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Blue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Blue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Blue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Blue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Blue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"BlueViolet\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BlueViolet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2b as RgbValue) << 8 as ::core::ffi::c_int | 0xe2 as RgbValue,
+            | (0x2b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe2 as RgbValue,
     },
     color_name_table_T {
-        name: b"Brown\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Brown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2a as RgbValue) << 8 as ::core::ffi::c_int | 0x2a as RgbValue,
+            | (0x2a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2a as RgbValue,
     },
     color_name_table_T {
-        name: b"Brown1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Brown1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int | 0x40 as RgbValue,
+            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x40 as RgbValue,
     },
     color_name_table_T {
-        name: b"Brown2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Brown2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3b as RgbValue) << 8 as ::core::ffi::c_int | 0x3b as RgbValue,
+            | (0x3b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3b as RgbValue,
     },
     color_name_table_T {
-        name: b"Brown3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Brown3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int | 0x33 as RgbValue,
+            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x33 as RgbValue,
     },
     color_name_table_T {
-        name: b"Brown4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Brown4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x23 as RgbValue) << 8 as ::core::ffi::c_int | 0x23 as RgbValue,
+            | (0x23 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x23 as RgbValue,
     },
     color_name_table_T {
-        name: b"BurlyWood\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BurlyWood\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xde as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int | 0x87 as RgbValue,
+            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x87 as RgbValue,
     },
     color_name_table_T {
-        name: b"Burlywood1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Burlywood1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int | 0x9b as RgbValue,
+            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9b as RgbValue,
     },
     color_name_table_T {
-        name: b"Burlywood2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Burlywood2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int | 0x91 as RgbValue,
+            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x91 as RgbValue,
     },
     color_name_table_T {
-        name: b"Burlywood3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Burlywood3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xaa as RgbValue) << 8 as ::core::ffi::c_int | 0x7d as RgbValue,
+            | (0xaa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7d as RgbValue,
     },
     color_name_table_T {
-        name: b"Burlywood4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Burlywood4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int | 0x55 as RgbValue,
+            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x55 as RgbValue,
     },
     color_name_table_T {
-        name: b"CadetBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CadetBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int | 0xa0 as RgbValue,
+            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa0 as RgbValue,
     },
     color_name_table_T {
-        name: b"CadetBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CadetBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x98 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"CadetBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CadetBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"CadetBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CadetBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"CadetBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CadetBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x53 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"ChartReuse\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ChartReuse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chartreuse1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chartreuse1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chartreuse2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chartreuse2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x76 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chartreuse3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chartreuse3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chartreuse4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chartreuse4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x45 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chocolate\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chocolate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x1e as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1e as RgbValue,
     },
     color_name_table_T {
-        name: b"Chocolate1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chocolate1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int | 0x24 as RgbValue,
+            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x24 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chocolate2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chocolate2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x76 as RgbValue) << 8 as ::core::ffi::c_int | 0x21 as RgbValue,
+            | (0x76 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x21 as RgbValue,
     },
     color_name_table_T {
-        name: b"Chocolate3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chocolate3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int | 0x1d as RgbValue,
+            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1d as RgbValue,
     },
     color_name_table_T {
-        name: b"Chocolate4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Chocolate4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0x13 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x13 as RgbValue,
     },
     color_name_table_T {
-        name: b"Coral\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Coral\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int | 0x50 as RgbValue,
+            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x50 as RgbValue,
     },
     color_name_table_T {
-        name: b"Coral1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Coral1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x72 as RgbValue) << 8 as ::core::ffi::c_int | 0x56 as RgbValue,
+            | (0x72 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x56 as RgbValue,
     },
     color_name_table_T {
-        name: b"Coral2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Coral2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6a as RgbValue) << 8 as ::core::ffi::c_int | 0x50 as RgbValue,
+            | (0x6a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x50 as RgbValue,
     },
     color_name_table_T {
-        name: b"Coral3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Coral3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5b as RgbValue) << 8 as ::core::ffi::c_int | 0x45 as RgbValue,
+            | (0x5b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x45 as RgbValue,
     },
     color_name_table_T {
-        name: b"Coral4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Coral4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3e as RgbValue) << 8 as ::core::ffi::c_int | 0x2f as RgbValue,
+            | (0x3e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2f as RgbValue,
     },
     color_name_table_T {
         name: b"CornFlowerBlue\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x64 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x95 as RgbValue) << 8 as ::core::ffi::c_int | 0xed as RgbValue,
+            | (0x95 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xed as RgbValue,
     },
     color_name_table_T {
-        name: b"Cornsilk\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cornsilk\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int | 0xdc as RgbValue,
+            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdc as RgbValue,
     },
     color_name_table_T {
-        name: b"Cornsilk1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cornsilk1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int | 0xdc as RgbValue,
+            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdc as RgbValue,
     },
     color_name_table_T {
-        name: b"Cornsilk2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cornsilk2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Cornsilk3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cornsilk3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc8 as RgbValue) << 8 as ::core::ffi::c_int | 0xb1 as RgbValue,
+            | (0xc8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Cornsilk4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cornsilk4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x88 as RgbValue) << 8 as ::core::ffi::c_int | 0x78 as RgbValue,
+            | (0x88 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x78 as RgbValue,
     },
     color_name_table_T {
-        name: b"Crimson\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Crimson\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xdc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int | 0x3c as RgbValue,
+            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3c as RgbValue,
     },
     color_name_table_T {
-        name: b"Cyan\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cyan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Cyan1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cyan1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Cyan2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cyan2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Cyan3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cyan3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Cyan4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Cyan4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkCyan\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkCyan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkGoldenrod\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkGoldenrod\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int | 0xb as RgbValue,
+            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb as RgbValue,
     },
     color_name_table_T {
         name: b"DarkGoldenrod1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb9 as RgbValue) << 8 as ::core::ffi::c_int | 0xf as RgbValue,
+            | (0xb9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf as RgbValue,
     },
     color_name_table_T {
         name: b"DarkGoldenrod2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xad as RgbValue) << 8 as ::core::ffi::c_int | 0xe as RgbValue,
+            | (0xad as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe as RgbValue,
     },
     color_name_table_T {
         name: b"DarkGoldenrod3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x95 as RgbValue) << 8 as ::core::ffi::c_int | 0xc as RgbValue,
+            | (0x95 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc as RgbValue,
     },
     color_name_table_T {
         name: b"DarkGoldenrod4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x65 as RgbValue) << 8 as ::core::ffi::c_int | 0x8 as RgbValue,
+            | (0x65 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkGray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkGray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa9 as RgbValue) << 8 as ::core::ffi::c_int | 0xa9 as RgbValue,
+            | (0xa9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa9 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x64 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x64 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkGrey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkGrey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa9 as RgbValue) << 8 as ::core::ffi::c_int | 0xa9 as RgbValue,
+            | (0xa9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa9 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkKhaki\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkKhaki\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb7 as RgbValue) << 8 as ::core::ffi::c_int | 0x6b as RgbValue,
+            | (0xb7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkMagenta\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkMagenta\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
         name: b"DarkOliveGreen\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x55 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6b as RgbValue) << 8 as ::core::ffi::c_int | 0x2f as RgbValue,
+            | (0x6b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2f as RgbValue,
     },
     color_name_table_T {
         name: b"DarkOliveGreen1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xca as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x70 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x70 as RgbValue,
     },
     color_name_table_T {
         name: b"DarkOliveGreen2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xbc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0x68 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x68 as RgbValue,
     },
     color_name_table_T {
         name: b"DarkOliveGreen3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xa2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x5a as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5a as RgbValue,
     },
     color_name_table_T {
         name: b"DarkOliveGreen4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x6e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x3d as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3d as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrange\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrange\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrange1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrange1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrange2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrange2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x76 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x76 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrange3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrange3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrange4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrange4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrchid\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrchid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x99 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x32 as RgbValue) << 8 as ::core::ffi::c_int | 0xcc as RgbValue,
+            | (0x32 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcc as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrchid1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrchid1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3e as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x3e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrchid2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrchid2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrchid3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrchid3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x32 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x32 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkOrchid4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkOrchid4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x68 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x22 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x22 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSalmon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSalmon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int | 0x7a as RgbValue,
+            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7a as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSeaGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSeaGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbc as RgbValue) << 8 as ::core::ffi::c_int | 0x8f as RgbValue,
+            | (0xbc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8f as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSeaGreen1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSeaGreen1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xc1 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc1 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSeaGreen2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSeaGreen2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xb4 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb4 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSeaGreen3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSeaGreen3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x9b as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSeaGreen4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSeaGreen4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSlateBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSlateBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x48 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3d as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x3d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSlateGray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSlateGray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int | 0x4f as RgbValue,
+            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4f as RgbValue,
     },
     color_name_table_T {
         name: b"DarkSlateGray1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x97 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
         name: b"DarkSlateGray2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x8d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
         name: b"DarkSlateGray3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x79 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
         name: b"DarkSlateGray4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x52 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkSlateGrey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkSlateGrey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int | 0x4f as RgbValue,
+            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4f as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkTurquoise\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkTurquoise\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xce as RgbValue) << 8 as ::core::ffi::c_int | 0xd1 as RgbValue,
+            | (0xce as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd1 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkViolet\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkViolet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x94 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xd3 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd3 as RgbValue,
     },
     color_name_table_T {
-        name: b"DarkYellow\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DarkYellow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepPink\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepPink\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int | 0x93 as RgbValue,
+            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x93 as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepPink1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepPink1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int | 0x93 as RgbValue,
+            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x93 as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepPink2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepPink2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x12 as RgbValue) << 8 as ::core::ffi::c_int | 0x89 as RgbValue,
+            | (0x12 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x89 as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepPink3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepPink3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x10 as RgbValue) << 8 as ::core::ffi::c_int | 0x76 as RgbValue,
+            | (0x10 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x76 as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepPink4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepPink4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa as RgbValue) << 8 as ::core::ffi::c_int | 0x50 as RgbValue,
+            | (0xa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x50 as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepSkyBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepSkyBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepSkyBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepSkyBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepSkyBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepSkyBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb2 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xb2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepSkyBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepSkyBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9a as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x9a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"DeepSkyBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DeepSkyBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"DimGray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DimGray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"DimGrey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DimGrey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"DodgerBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DodgerBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x90 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x90 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"DodgerBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DodgerBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x90 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x90 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"DodgerBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DodgerBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"DodgerBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DodgerBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x18 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x74 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x74 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"DodgerBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DodgerBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x10 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4e as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x4e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"Firebrick\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Firebrick\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x22 as RgbValue) << 8 as ::core::ffi::c_int | 0x22 as RgbValue,
+            | (0x22 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x22 as RgbValue,
     },
     color_name_table_T {
-        name: b"Firebrick1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Firebrick1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int | 0x30 as RgbValue,
+            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x30 as RgbValue,
     },
     color_name_table_T {
-        name: b"Firebrick2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Firebrick2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2c as RgbValue) << 8 as ::core::ffi::c_int | 0x2c as RgbValue,
+            | (0x2c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2c as RgbValue,
     },
     color_name_table_T {
-        name: b"Firebrick3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Firebrick3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int | 0x26 as RgbValue,
+            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x26 as RgbValue,
     },
     color_name_table_T {
-        name: b"Firebrick4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Firebrick4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int | 0x1a as RgbValue,
+            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1a as RgbValue,
     },
     color_name_table_T {
-        name: b"FloralWhite\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FloralWhite\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"ForestGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ForestGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x22 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x22 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x22 as RgbValue,
     },
     color_name_table_T {
-        name: b"Fuchsia\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Fuchsia\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Gainsboro\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gainsboro\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xdc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdc as RgbValue) << 8 as ::core::ffi::c_int | 0xdc as RgbValue,
+            | (0xdc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdc as RgbValue,
     },
     color_name_table_T {
-        name: b"GhostWhite\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"GhostWhite\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Gold\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd7 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xd7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gold1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gold1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd7 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xd7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gold2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gold2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gold3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gold3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xad as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xad as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gold4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gold4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x75 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x75 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Goldenrod\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Goldenrod\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xda as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int | 0x20 as RgbValue,
+            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x20 as RgbValue,
     },
     color_name_table_T {
-        name: b"Goldenrod1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Goldenrod1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc1 as RgbValue) << 8 as ::core::ffi::c_int | 0x25 as RgbValue,
+            | (0xc1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x25 as RgbValue,
     },
     color_name_table_T {
-        name: b"Goldenrod2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Goldenrod2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb4 as RgbValue) << 8 as ::core::ffi::c_int | 0x22 as RgbValue,
+            | (0xb4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x22 as RgbValue,
     },
     color_name_table_T {
-        name: b"Goldenrod3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Goldenrod3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9b as RgbValue) << 8 as ::core::ffi::c_int | 0x1d as RgbValue,
+            | (0x9b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1d as RgbValue,
     },
     color_name_table_T {
-        name: b"Goldenrod4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Goldenrod4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x14 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x14 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray0\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray0\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3 as RgbValue) << 8 as ::core::ffi::c_int | 0x3 as RgbValue,
+            | (0x3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray10\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray10\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int | 0x1a as RgbValue,
+            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1a as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray100\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray100\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray11\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray11\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1c as RgbValue) << 8 as ::core::ffi::c_int | 0x1c as RgbValue,
+            | (0x1c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1c as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray12\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray12\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1f as RgbValue) << 8 as ::core::ffi::c_int | 0x1f as RgbValue,
+            | (0x1f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1f as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray13\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray13\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x21 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x21 as RgbValue) << 8 as ::core::ffi::c_int | 0x21 as RgbValue,
+            | (0x21 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x21 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray14\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray14\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x24 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x24 as RgbValue) << 8 as ::core::ffi::c_int | 0x24 as RgbValue,
+            | (0x24 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x24 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray15\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray15\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x26 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int | 0x26 as RgbValue,
+            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x26 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray16\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray16\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x29 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x29 as RgbValue) << 8 as ::core::ffi::c_int | 0x29 as RgbValue,
+            | (0x29 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x29 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray17\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray17\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2b as RgbValue) << 8 as ::core::ffi::c_int | 0x2b as RgbValue,
+            | (0x2b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2b as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray18\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray18\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int | 0x2e as RgbValue,
+            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2e as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray19\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray19\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x30 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int | 0x30 as RgbValue,
+            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x30 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5 as RgbValue) << 8 as ::core::ffi::c_int | 0x5 as RgbValue,
+            | (0x5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray20\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray20\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x33 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int | 0x33 as RgbValue,
+            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x33 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray21\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray21\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x36 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x36 as RgbValue) << 8 as ::core::ffi::c_int | 0x36 as RgbValue,
+            | (0x36 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x36 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray22\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray22\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x38 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x38 as RgbValue) << 8 as ::core::ffi::c_int | 0x38 as RgbValue,
+            | (0x38 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x38 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray23\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray23\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3b as RgbValue) << 8 as ::core::ffi::c_int | 0x3b as RgbValue,
+            | (0x3b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3b as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray24\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray24\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3d as RgbValue) << 8 as ::core::ffi::c_int | 0x3d as RgbValue,
+            | (0x3d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3d as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray25\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray25\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x40 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int | 0x40 as RgbValue,
+            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x40 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray26\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray26\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x42 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x42 as RgbValue) << 8 as ::core::ffi::c_int | 0x42 as RgbValue,
+            | (0x42 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x42 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray27\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray27\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x45 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0x45 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x45 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray28\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray28\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x47 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int | 0x47 as RgbValue,
+            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x47 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray29\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray29\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4a as RgbValue) << 8 as ::core::ffi::c_int | 0x4a as RgbValue,
+            | (0x4a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4a as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int | 0x8 as RgbValue,
+            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray30\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray30\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4d as RgbValue) << 8 as ::core::ffi::c_int | 0x4d as RgbValue,
+            | (0x4d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4d as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray31\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray31\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int | 0x4f as RgbValue,
+            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4f as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray32\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray32\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x52 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int | 0x52 as RgbValue,
+            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x52 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray33\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray33\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x54 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x54 as RgbValue) << 8 as ::core::ffi::c_int | 0x54 as RgbValue,
+            | (0x54 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x54 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray34\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray34\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x57 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x57 as RgbValue) << 8 as ::core::ffi::c_int | 0x57 as RgbValue,
+            | (0x57 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x57 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray35\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray35\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x59 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x59 as RgbValue) << 8 as ::core::ffi::c_int | 0x59 as RgbValue,
+            | (0x59 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x59 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray36\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray36\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int | 0x5c as RgbValue,
+            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5c as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray37\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray37\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5e as RgbValue) << 8 as ::core::ffi::c_int | 0x5e as RgbValue,
+            | (0x5e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5e as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray38\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray38\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x61 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x61 as RgbValue) << 8 as ::core::ffi::c_int | 0x61 as RgbValue,
+            | (0x61 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x61 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray39\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray39\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x63 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int | 0x63 as RgbValue,
+            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x63 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa as RgbValue) << 8 as ::core::ffi::c_int | 0xa as RgbValue,
+            | (0xa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray40\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray40\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int | 0x66 as RgbValue,
+            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x66 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray41\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray41\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray42\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray42\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6b as RgbValue) << 8 as ::core::ffi::c_int | 0x6b as RgbValue,
+            | (0x6b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6b as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray43\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray43\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int | 0x6e as RgbValue,
+            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6e as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray44\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray44\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x70 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0x70 as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x70 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray45\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray45\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x73 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int | 0x73 as RgbValue,
+            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x73 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray46\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray46\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x75 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x75 as RgbValue) << 8 as ::core::ffi::c_int | 0x75 as RgbValue,
+            | (0x75 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x75 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray47\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray47\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x78 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x78 as RgbValue) << 8 as ::core::ffi::c_int | 0x78 as RgbValue,
+            | (0x78 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x78 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray48\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray48\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7a as RgbValue) << 8 as ::core::ffi::c_int | 0x7a as RgbValue,
+            | (0x7a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7a as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray49\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray49\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int | 0x7d as RgbValue,
+            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7d as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray5\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray5\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd as RgbValue) << 8 as ::core::ffi::c_int | 0xd as RgbValue,
+            | (0xd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray50\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray50\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int | 0x7f as RgbValue,
+            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7f as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray51\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray51\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x82 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0x82 as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x82 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray52\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray52\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x85 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int | 0x85 as RgbValue,
+            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x85 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray53\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray53\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x87 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x87 as RgbValue) << 8 as ::core::ffi::c_int | 0x87 as RgbValue,
+            | (0x87 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x87 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray54\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray54\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8a as RgbValue) << 8 as ::core::ffi::c_int | 0x8a as RgbValue,
+            | (0x8a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8a as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray55\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray55\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int | 0x8c as RgbValue,
+            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8c as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray56\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray56\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8f as RgbValue) << 8 as ::core::ffi::c_int | 0x8f as RgbValue,
+            | (0x8f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8f as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray57\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray57\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x91 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x91 as RgbValue) << 8 as ::core::ffi::c_int | 0x91 as RgbValue,
+            | (0x91 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x91 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray58\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray58\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x94 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x94 as RgbValue) << 8 as ::core::ffi::c_int | 0x94 as RgbValue,
+            | (0x94 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x94 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray59\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray59\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x96 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int | 0x96 as RgbValue,
+            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x96 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray6\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray6\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf as RgbValue) << 8 as ::core::ffi::c_int | 0xf as RgbValue,
+            | (0xf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray60\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray60\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x99 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x99 as RgbValue) << 8 as ::core::ffi::c_int | 0x99 as RgbValue,
+            | (0x99 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x99 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray61\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray61\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9c as RgbValue) << 8 as ::core::ffi::c_int | 0x9c as RgbValue,
+            | (0x9c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9c as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray62\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray62\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int | 0x9e as RgbValue,
+            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9e as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray63\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray63\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa1 as RgbValue) << 8 as ::core::ffi::c_int | 0xa1 as RgbValue,
+            | (0xa1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray64\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray64\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa3 as RgbValue) << 8 as ::core::ffi::c_int | 0xa3 as RgbValue,
+            | (0xa3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray65\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray65\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa6 as RgbValue) << 8 as ::core::ffi::c_int | 0xa6 as RgbValue,
+            | (0xa6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray66\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray66\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa8 as RgbValue) << 8 as ::core::ffi::c_int | 0xa8 as RgbValue,
+            | (0xa8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray67\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray67\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xab as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xab as RgbValue) << 8 as ::core::ffi::c_int | 0xab as RgbValue,
+            | (0xab as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xab as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray68\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray68\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xad as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xad as RgbValue) << 8 as ::core::ffi::c_int | 0xad as RgbValue,
+            | (0xad as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xad as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray69\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray69\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb0 as RgbValue) << 8 as ::core::ffi::c_int | 0xb0 as RgbValue,
+            | (0xb0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray7\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray7\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x12 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x12 as RgbValue) << 8 as ::core::ffi::c_int | 0x12 as RgbValue,
+            | (0x12 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x12 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray70\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray70\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int | 0xb3 as RgbValue,
+            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray71\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray71\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int | 0xb5 as RgbValue,
+            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray72\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray72\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int | 0xb8 as RgbValue,
+            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray73\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray73\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xba as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xba as RgbValue) << 8 as ::core::ffi::c_int | 0xba as RgbValue,
+            | (0xba as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xba as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray74\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray74\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbd as RgbValue) << 8 as ::core::ffi::c_int | 0xbd as RgbValue,
+            | (0xbd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbd as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray75\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray75\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int | 0xbf as RgbValue,
+            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbf as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray76\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray76\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc2 as RgbValue) << 8 as ::core::ffi::c_int | 0xc2 as RgbValue,
+            | (0xc2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc2 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray77\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray77\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc4 as RgbValue) << 8 as ::core::ffi::c_int | 0xc4 as RgbValue,
+            | (0xc4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray78\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray78\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc7 as RgbValue) << 8 as ::core::ffi::c_int | 0xc7 as RgbValue,
+            | (0xc7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc7 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray79\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray79\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int | 0xc9 as RgbValue,
+            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray8\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray8\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x14 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int | 0x14 as RgbValue,
+            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x14 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray80\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray80\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcc as RgbValue) << 8 as ::core::ffi::c_int | 0xcc as RgbValue,
+            | (0xcc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcc as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray81\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray81\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcf as RgbValue) << 8 as ::core::ffi::c_int | 0xcf as RgbValue,
+            | (0xcf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcf as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray82\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray82\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd1 as RgbValue) << 8 as ::core::ffi::c_int | 0xd1 as RgbValue,
+            | (0xd1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray83\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray83\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd4 as RgbValue) << 8 as ::core::ffi::c_int | 0xd4 as RgbValue,
+            | (0xd4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray84\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray84\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd6 as RgbValue) << 8 as ::core::ffi::c_int | 0xd6 as RgbValue,
+            | (0xd6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray85\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray85\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd9 as RgbValue) << 8 as ::core::ffi::c_int | 0xd9 as RgbValue,
+            | (0xd9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray86\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray86\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xdb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdb as RgbValue) << 8 as ::core::ffi::c_int | 0xdb as RgbValue,
+            | (0xdb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdb as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray87\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray87\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xde as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xde as RgbValue) << 8 as ::core::ffi::c_int | 0xde as RgbValue,
+            | (0xde as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xde as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray88\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray88\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int | 0xe0 as RgbValue,
+            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray89\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray89\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe3 as RgbValue) << 8 as ::core::ffi::c_int | 0xe3 as RgbValue,
+            | (0xe3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray9\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray9\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x17 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x17 as RgbValue) << 8 as ::core::ffi::c_int | 0x17 as RgbValue,
+            | (0x17 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x17 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray90\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray90\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int | 0xe5 as RgbValue,
+            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray91\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray91\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int | 0xe8 as RgbValue,
+            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray92\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray92\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xeb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int | 0xeb as RgbValue,
+            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xeb as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray93\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray93\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xed as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xed as RgbValue) << 8 as ::core::ffi::c_int | 0xed as RgbValue,
+            | (0xed as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xed as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray94\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray94\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray95\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray95\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf2 as RgbValue) << 8 as ::core::ffi::c_int | 0xf2 as RgbValue,
+            | (0xf2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf2 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray96\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray96\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xf5 as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray97\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray97\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf7 as RgbValue) << 8 as ::core::ffi::c_int | 0xf7 as RgbValue,
+            | (0xf7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf7 as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray98\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray98\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"Gray99\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Gray99\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfc as RgbValue) << 8 as ::core::ffi::c_int | 0xfc as RgbValue,
+            | (0xfc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfc as RgbValue,
     },
     color_name_table_T {
-        name: b"Green\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Green\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Green1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Green1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Green2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Green2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Green3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Green3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Green4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Green4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"GreenYellow\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"GreenYellow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xad as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x2f as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2f as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey0\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey0\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3 as RgbValue) << 8 as ::core::ffi::c_int | 0x3 as RgbValue,
+            | (0x3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey10\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey10\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int | 0x1a as RgbValue,
+            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1a as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey100\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey100\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey11\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey11\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1c as RgbValue) << 8 as ::core::ffi::c_int | 0x1c as RgbValue,
+            | (0x1c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1c as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey12\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey12\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x1f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1f as RgbValue) << 8 as ::core::ffi::c_int | 0x1f as RgbValue,
+            | (0x1f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1f as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey13\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey13\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x21 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x21 as RgbValue) << 8 as ::core::ffi::c_int | 0x21 as RgbValue,
+            | (0x21 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x21 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey14\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey14\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x24 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x24 as RgbValue) << 8 as ::core::ffi::c_int | 0x24 as RgbValue,
+            | (0x24 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x24 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey15\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey15\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x26 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int | 0x26 as RgbValue,
+            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x26 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey16\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey16\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x29 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x29 as RgbValue) << 8 as ::core::ffi::c_int | 0x29 as RgbValue,
+            | (0x29 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x29 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey17\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey17\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2b as RgbValue) << 8 as ::core::ffi::c_int | 0x2b as RgbValue,
+            | (0x2b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2b as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey18\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey18\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int | 0x2e as RgbValue,
+            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2e as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey19\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey19\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x30 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int | 0x30 as RgbValue,
+            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x30 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5 as RgbValue) << 8 as ::core::ffi::c_int | 0x5 as RgbValue,
+            | (0x5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey20\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey20\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x33 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int | 0x33 as RgbValue,
+            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x33 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey21\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey21\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x36 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x36 as RgbValue) << 8 as ::core::ffi::c_int | 0x36 as RgbValue,
+            | (0x36 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x36 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey22\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey22\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x38 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x38 as RgbValue) << 8 as ::core::ffi::c_int | 0x38 as RgbValue,
+            | (0x38 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x38 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey23\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey23\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3b as RgbValue) << 8 as ::core::ffi::c_int | 0x3b as RgbValue,
+            | (0x3b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3b as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey24\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey24\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3d as RgbValue) << 8 as ::core::ffi::c_int | 0x3d as RgbValue,
+            | (0x3d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3d as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey25\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey25\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x40 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int | 0x40 as RgbValue,
+            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x40 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey26\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey26\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x42 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x42 as RgbValue) << 8 as ::core::ffi::c_int | 0x42 as RgbValue,
+            | (0x42 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x42 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey27\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey27\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x45 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0x45 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x45 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey28\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey28\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x47 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int | 0x47 as RgbValue,
+            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x47 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey29\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey29\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4a as RgbValue) << 8 as ::core::ffi::c_int | 0x4a as RgbValue,
+            | (0x4a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4a as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int | 0x8 as RgbValue,
+            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey30\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey30\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4d as RgbValue) << 8 as ::core::ffi::c_int | 0x4d as RgbValue,
+            | (0x4d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4d as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey31\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey31\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int | 0x4f as RgbValue,
+            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4f as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey32\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey32\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x52 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int | 0x52 as RgbValue,
+            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x52 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey33\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey33\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x54 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x54 as RgbValue) << 8 as ::core::ffi::c_int | 0x54 as RgbValue,
+            | (0x54 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x54 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey34\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey34\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x57 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x57 as RgbValue) << 8 as ::core::ffi::c_int | 0x57 as RgbValue,
+            | (0x57 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x57 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey35\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey35\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x59 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x59 as RgbValue) << 8 as ::core::ffi::c_int | 0x59 as RgbValue,
+            | (0x59 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x59 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey36\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey36\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int | 0x5c as RgbValue,
+            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5c as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey37\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey37\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5e as RgbValue) << 8 as ::core::ffi::c_int | 0x5e as RgbValue,
+            | (0x5e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5e as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey38\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey38\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x61 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x61 as RgbValue) << 8 as ::core::ffi::c_int | 0x61 as RgbValue,
+            | (0x61 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x61 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey39\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey39\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x63 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int | 0x63 as RgbValue,
+            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x63 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa as RgbValue) << 8 as ::core::ffi::c_int | 0xa as RgbValue,
+            | (0xa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey40\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey40\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int | 0x66 as RgbValue,
+            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x66 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey41\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey41\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey42\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey42\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6b as RgbValue) << 8 as ::core::ffi::c_int | 0x6b as RgbValue,
+            | (0x6b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6b as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey43\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey43\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int | 0x6e as RgbValue,
+            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6e as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey44\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey44\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x70 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0x70 as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x70 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey45\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey45\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x73 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int | 0x73 as RgbValue,
+            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x73 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey46\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey46\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x75 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x75 as RgbValue) << 8 as ::core::ffi::c_int | 0x75 as RgbValue,
+            | (0x75 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x75 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey47\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey47\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x78 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x78 as RgbValue) << 8 as ::core::ffi::c_int | 0x78 as RgbValue,
+            | (0x78 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x78 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey48\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey48\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7a as RgbValue) << 8 as ::core::ffi::c_int | 0x7a as RgbValue,
+            | (0x7a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7a as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey49\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey49\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int | 0x7d as RgbValue,
+            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7d as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey5\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey5\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd as RgbValue) << 8 as ::core::ffi::c_int | 0xd as RgbValue,
+            | (0xd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey50\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey50\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int | 0x7f as RgbValue,
+            | (0x7f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7f as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey51\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey51\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x82 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0x82 as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x82 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey52\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey52\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x85 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int | 0x85 as RgbValue,
+            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x85 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey53\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey53\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x87 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x87 as RgbValue) << 8 as ::core::ffi::c_int | 0x87 as RgbValue,
+            | (0x87 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x87 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey54\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey54\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8a as RgbValue) << 8 as ::core::ffi::c_int | 0x8a as RgbValue,
+            | (0x8a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8a as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey55\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey55\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int | 0x8c as RgbValue,
+            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8c as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey56\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey56\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8f as RgbValue) << 8 as ::core::ffi::c_int | 0x8f as RgbValue,
+            | (0x8f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8f as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey57\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey57\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x91 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x91 as RgbValue) << 8 as ::core::ffi::c_int | 0x91 as RgbValue,
+            | (0x91 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x91 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey58\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey58\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x94 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x94 as RgbValue) << 8 as ::core::ffi::c_int | 0x94 as RgbValue,
+            | (0x94 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x94 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey59\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey59\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x96 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int | 0x96 as RgbValue,
+            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x96 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey6\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey6\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf as RgbValue) << 8 as ::core::ffi::c_int | 0xf as RgbValue,
+            | (0xf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey60\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey60\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x99 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x99 as RgbValue) << 8 as ::core::ffi::c_int | 0x99 as RgbValue,
+            | (0x99 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x99 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey61\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey61\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9c as RgbValue) << 8 as ::core::ffi::c_int | 0x9c as RgbValue,
+            | (0x9c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9c as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey62\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey62\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int | 0x9e as RgbValue,
+            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9e as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey63\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey63\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa1 as RgbValue) << 8 as ::core::ffi::c_int | 0xa1 as RgbValue,
+            | (0xa1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey64\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey64\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa3 as RgbValue) << 8 as ::core::ffi::c_int | 0xa3 as RgbValue,
+            | (0xa3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey65\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey65\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa6 as RgbValue) << 8 as ::core::ffi::c_int | 0xa6 as RgbValue,
+            | (0xa6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey66\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey66\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa8 as RgbValue) << 8 as ::core::ffi::c_int | 0xa8 as RgbValue,
+            | (0xa8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey67\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey67\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xab as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xab as RgbValue) << 8 as ::core::ffi::c_int | 0xab as RgbValue,
+            | (0xab as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xab as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey68\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey68\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xad as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xad as RgbValue) << 8 as ::core::ffi::c_int | 0xad as RgbValue,
+            | (0xad as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xad as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey69\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey69\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb0 as RgbValue) << 8 as ::core::ffi::c_int | 0xb0 as RgbValue,
+            | (0xb0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey7\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey7\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x12 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x12 as RgbValue) << 8 as ::core::ffi::c_int | 0x12 as RgbValue,
+            | (0x12 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x12 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey70\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey70\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int | 0xb3 as RgbValue,
+            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey71\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey71\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int | 0xb5 as RgbValue,
+            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey72\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey72\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int | 0xb8 as RgbValue,
+            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey73\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey73\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xba as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xba as RgbValue) << 8 as ::core::ffi::c_int | 0xba as RgbValue,
+            | (0xba as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xba as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey74\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey74\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbd as RgbValue) << 8 as ::core::ffi::c_int | 0xbd as RgbValue,
+            | (0xbd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbd as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey75\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey75\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int | 0xbf as RgbValue,
+            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbf as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey76\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey76\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc2 as RgbValue) << 8 as ::core::ffi::c_int | 0xc2 as RgbValue,
+            | (0xc2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc2 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey77\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey77\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc4 as RgbValue) << 8 as ::core::ffi::c_int | 0xc4 as RgbValue,
+            | (0xc4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey78\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey78\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc7 as RgbValue) << 8 as ::core::ffi::c_int | 0xc7 as RgbValue,
+            | (0xc7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc7 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey79\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey79\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int | 0xc9 as RgbValue,
+            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey8\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey8\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x14 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int | 0x14 as RgbValue,
+            | (0x14 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x14 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey80\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey80\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcc as RgbValue) << 8 as ::core::ffi::c_int | 0xcc as RgbValue,
+            | (0xcc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcc as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey81\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey81\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcf as RgbValue) << 8 as ::core::ffi::c_int | 0xcf as RgbValue,
+            | (0xcf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcf as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey82\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey82\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd1 as RgbValue) << 8 as ::core::ffi::c_int | 0xd1 as RgbValue,
+            | (0xd1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey83\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey83\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd4 as RgbValue) << 8 as ::core::ffi::c_int | 0xd4 as RgbValue,
+            | (0xd4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd4 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey84\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey84\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd6 as RgbValue) << 8 as ::core::ffi::c_int | 0xd6 as RgbValue,
+            | (0xd6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey85\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey85\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd9 as RgbValue) << 8 as ::core::ffi::c_int | 0xd9 as RgbValue,
+            | (0xd9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey86\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey86\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xdb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdb as RgbValue) << 8 as ::core::ffi::c_int | 0xdb as RgbValue,
+            | (0xdb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdb as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey87\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey87\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xde as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xde as RgbValue) << 8 as ::core::ffi::c_int | 0xde as RgbValue,
+            | (0xde as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xde as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey88\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey88\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int | 0xe0 as RgbValue,
+            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey89\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey89\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe3 as RgbValue) << 8 as ::core::ffi::c_int | 0xe3 as RgbValue,
+            | (0xe3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey9\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey9\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x17 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x17 as RgbValue) << 8 as ::core::ffi::c_int | 0x17 as RgbValue,
+            | (0x17 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x17 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey90\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey90\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int | 0xe5 as RgbValue,
+            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey91\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey91\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int | 0xe8 as RgbValue,
+            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey92\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey92\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xeb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int | 0xeb as RgbValue,
+            | (0xeb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xeb as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey93\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey93\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xed as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xed as RgbValue) << 8 as ::core::ffi::c_int | 0xed as RgbValue,
+            | (0xed as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xed as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey94\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey94\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey95\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey95\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf2 as RgbValue) << 8 as ::core::ffi::c_int | 0xf2 as RgbValue,
+            | (0xf2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf2 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey96\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey96\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xf5 as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey97\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey97\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf7 as RgbValue) << 8 as ::core::ffi::c_int | 0xf7 as RgbValue,
+            | (0xf7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf7 as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey98\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey98\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"Grey99\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Grey99\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfc as RgbValue) << 8 as ::core::ffi::c_int | 0xfc as RgbValue,
+            | (0xfc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfc as RgbValue,
     },
     color_name_table_T {
-        name: b"Honeydew\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Honeydew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Honeydew1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Honeydew1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Honeydew2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Honeydew2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xe0 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Honeydew3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Honeydew3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xc1 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Honeydew4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Honeydew4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x83 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x83 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x83 as RgbValue,
     },
     color_name_table_T {
-        name: b"HotPink\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"HotPink\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0xb4 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb4 as RgbValue,
     },
     color_name_table_T {
-        name: b"HotPink1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"HotPink1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int | 0xb4 as RgbValue,
+            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb4 as RgbValue,
     },
     color_name_table_T {
-        name: b"HotPink2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"HotPink2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6a as RgbValue) << 8 as ::core::ffi::c_int | 0xa7 as RgbValue,
+            | (0x6a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa7 as RgbValue,
     },
     color_name_table_T {
-        name: b"HotPink3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"HotPink3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x60 as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0x60 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"HotPink4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"HotPink4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int | 0x62 as RgbValue,
+            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x62 as RgbValue,
     },
     color_name_table_T {
-        name: b"IndianRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"IndianRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int | 0x5c as RgbValue,
+            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5c as RgbValue,
     },
     color_name_table_T {
-        name: b"IndianRed1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"IndianRed1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6a as RgbValue) << 8 as ::core::ffi::c_int | 0x6a as RgbValue,
+            | (0x6a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6a as RgbValue,
     },
     color_name_table_T {
-        name: b"IndianRed2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"IndianRed2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int | 0x63 as RgbValue,
+            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x63 as RgbValue,
     },
     color_name_table_T {
-        name: b"IndianRed3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"IndianRed3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x55 as RgbValue) << 8 as ::core::ffi::c_int | 0x55 as RgbValue,
+            | (0x55 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x55 as RgbValue,
     },
     color_name_table_T {
-        name: b"IndianRed4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"IndianRed4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int | 0x3a as RgbValue,
+            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3a as RgbValue,
     },
     color_name_table_T {
-        name: b"Indigo\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Indigo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x82 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x82 as RgbValue,
     },
     color_name_table_T {
-        name: b"Ivory\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Ivory\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Ivory1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Ivory1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Ivory2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Ivory2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xe0 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Ivory3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Ivory3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xc1 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc1 as RgbValue,
     },
     color_name_table_T {
-        name: b"Ivory4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Ivory4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x83 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x83 as RgbValue,
     },
     color_name_table_T {
-        name: b"Khaki\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Khaki\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe6 as RgbValue) << 8 as ::core::ffi::c_int | 0x8c as RgbValue,
+            | (0xe6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8c as RgbValue,
     },
     color_name_table_T {
-        name: b"Khaki1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Khaki1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf6 as RgbValue) << 8 as ::core::ffi::c_int | 0x8f as RgbValue,
+            | (0xf6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8f as RgbValue,
     },
     color_name_table_T {
-        name: b"Khaki2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Khaki2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe6 as RgbValue) << 8 as ::core::ffi::c_int | 0x85 as RgbValue,
+            | (0xe6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x85 as RgbValue,
     },
     color_name_table_T {
-        name: b"Khaki3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Khaki3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc6 as RgbValue) << 8 as ::core::ffi::c_int | 0x73 as RgbValue,
+            | (0xc6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x73 as RgbValue,
     },
     color_name_table_T {
-        name: b"Khaki4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Khaki4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int | 0x4e as RgbValue,
+            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4e as RgbValue,
     },
     color_name_table_T {
-        name: b"Lavender\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Lavender\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe6 as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xe6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"LavenderBlush\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LavenderBlush\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int | 0xf5 as RgbValue,
+            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf5 as RgbValue,
     },
     color_name_table_T {
         name: b"LavenderBlush1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int | 0xf5 as RgbValue,
+            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf5 as RgbValue,
     },
     color_name_table_T {
         name: b"LavenderBlush2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int | 0xe5 as RgbValue,
+            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe5 as RgbValue,
     },
     color_name_table_T {
         name: b"LavenderBlush3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc1 as RgbValue) << 8 as ::core::ffi::c_int | 0xc5 as RgbValue,
+            | (0xc1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc5 as RgbValue,
     },
     color_name_table_T {
         name: b"LavenderBlush4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int | 0x86 as RgbValue,
+            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x86 as RgbValue,
     },
     color_name_table_T {
-        name: b"LawnGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LawnGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfc as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xfc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"LemonChiffon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LemonChiffon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"LemonChiffon1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LemonChiffon1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"LemonChiffon2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LemonChiffon2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe9 as RgbValue) << 8 as ::core::ffi::c_int | 0xbf as RgbValue,
+            | (0xe9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbf as RgbValue,
     },
     color_name_table_T {
-        name: b"LemonChiffon3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LemonChiffon3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int | 0xa5 as RgbValue,
+            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa5 as RgbValue,
     },
     color_name_table_T {
-        name: b"LemonChiffon4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LemonChiffon4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x89 as RgbValue) << 8 as ::core::ffi::c_int | 0x70 as RgbValue,
+            | (0x89 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x70 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xad as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd8 as RgbValue) << 8 as ::core::ffi::c_int | 0xe6 as RgbValue,
+            | (0xd8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe6 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xef as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xef as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"LightBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdf as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xdf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"LightBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"LightBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x68 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"LightCoral\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightCoral\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightCyan\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightCyan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"LightCyan1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightCyan1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"LightCyan2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightCyan2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"LightCyan3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightCyan3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"LightCyan4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightCyan4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
         name: b"LightGoldenrod\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdd as RgbValue) << 8 as ::core::ffi::c_int | 0x82 as RgbValue,
+            | (0xdd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x82 as RgbValue,
     },
     color_name_table_T {
         name: b"LightGoldenrod1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xec as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0xec as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
         name: b"LightGoldenrod2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdc as RgbValue) << 8 as ::core::ffi::c_int | 0x82 as RgbValue,
+            | (0xdc as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x82 as RgbValue,
     },
     color_name_table_T {
         name: b"LightGoldenrod3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbe as RgbValue) << 8 as ::core::ffi::c_int | 0x70 as RgbValue,
+            | (0xbe as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x70 as RgbValue,
     },
     color_name_table_T {
         name: b"LightGoldenrod4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x81 as RgbValue) << 8 as ::core::ffi::c_int | 0x4c as RgbValue,
+            | (0x81 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4c as RgbValue,
     },
     color_name_table_T {
         name: b"LightGoldenrodYellow\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xfa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xd2 as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd2 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightGray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightGray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int | 0xd3 as RgbValue,
+            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd3 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x90 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightGrey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightGrey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int | 0xd3 as RgbValue,
+            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd3 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightMagenta\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightMagenta\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"LightPink\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightPink\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb6 as RgbValue) << 8 as ::core::ffi::c_int | 0xc1 as RgbValue,
+            | (0xb6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc1 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightPink1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightPink1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xae as RgbValue) << 8 as ::core::ffi::c_int | 0xb9 as RgbValue,
+            | (0xae as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb9 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightPink2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightPink2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa2 as RgbValue) << 8 as ::core::ffi::c_int | 0xad as RgbValue,
+            | (0xa2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xad as RgbValue,
     },
     color_name_table_T {
-        name: b"LightPink3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightPink3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int | 0x95 as RgbValue,
+            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x95 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightPink4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightPink4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5f as RgbValue) << 8 as ::core::ffi::c_int | 0x65 as RgbValue,
+            | (0x5f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x65 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int | 0xbb as RgbValue,
+            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbb as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSalmon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSalmon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa0 as RgbValue) << 8 as ::core::ffi::c_int | 0x7a as RgbValue,
+            | (0xa0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7a as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSalmon1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSalmon1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa0 as RgbValue) << 8 as ::core::ffi::c_int | 0x7a as RgbValue,
+            | (0xa0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7a as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSalmon2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSalmon2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x95 as RgbValue) << 8 as ::core::ffi::c_int | 0x72 as RgbValue,
+            | (0x95 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x72 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSalmon3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSalmon3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x81 as RgbValue) << 8 as ::core::ffi::c_int | 0x62 as RgbValue,
+            | (0x81 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x62 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSalmon4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSalmon4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x57 as RgbValue) << 8 as ::core::ffi::c_int | 0x42 as RgbValue,
+            | (0x57 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x42 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSeaGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSeaGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x20 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb2 as RgbValue) << 8 as ::core::ffi::c_int | 0xaa as RgbValue,
+            | (0xb2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xaa as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSkyBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSkyBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x87 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xce as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xce as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSkyBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSkyBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSkyBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSkyBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSkyBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSkyBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb6 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xb6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"LightSkyBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightSkyBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x60 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
         name: b"LightSlateBlue\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x84 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
         name: b"LightSlateGray\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x77 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x88 as RgbValue) << 8 as ::core::ffi::c_int | 0x99 as RgbValue,
+            | (0x88 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x99 as RgbValue,
     },
     color_name_table_T {
         name: b"LightSlateGrey\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x77 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x88 as RgbValue) << 8 as ::core::ffi::c_int | 0x99 as RgbValue,
+            | (0x88 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x99 as RgbValue,
     },
     color_name_table_T {
         name: b"LightSteelBlue\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xb0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc4 as RgbValue) << 8 as ::core::ffi::c_int | 0xde as RgbValue,
+            | (0xc4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xde as RgbValue,
     },
     color_name_table_T {
         name: b"LightSteelBlue1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xca as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe1 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xe1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
         name: b"LightSteelBlue2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xbc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd2 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xd2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
         name: b"LightSteelBlue3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xa2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
         name: b"LightSteelBlue4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x6e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"LightYellow\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightYellow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xe0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe0 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightYellow1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightYellow1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xe0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe0 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightYellow2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightYellow2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xd1 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd1 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightYellow3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightYellow3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xb4 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb4 as RgbValue,
     },
     color_name_table_T {
-        name: b"LightYellow4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LightYellow4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x7a as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7a as RgbValue,
     },
     color_name_table_T {
-        name: b"Lime\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Lime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"LimeGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LimeGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x32 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x32 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x32 as RgbValue,
     },
     color_name_table_T {
-        name: b"Linen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Linen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int | 0xe6 as RgbValue,
+            | (0xf0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Magenta\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Magenta\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Magenta1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Magenta1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Magenta2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Magenta2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Magenta3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Magenta3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Magenta4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Magenta4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"Maroon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Maroon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Maroon1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Maroon1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x34 as RgbValue) << 8 as ::core::ffi::c_int | 0xb3 as RgbValue,
+            | (0x34 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Maroon2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Maroon2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int | 0xa7 as RgbValue,
+            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa7 as RgbValue,
     },
     color_name_table_T {
-        name: b"Maroon3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Maroon3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x29 as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0x29 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"Maroon4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Maroon4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1c as RgbValue) << 8 as ::core::ffi::c_int | 0x62 as RgbValue,
+            | (0x1c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x62 as RgbValue,
     },
     color_name_table_T {
         name: b"MediumAquamarine\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xaa as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xaa as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumOrchid\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumOrchid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xba as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x55 as RgbValue) << 8 as ::core::ffi::c_int | 0xd3 as RgbValue,
+            | (0x55 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd3 as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumOrchid1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumOrchid1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumOrchid2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumOrchid2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd1 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5f as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x5f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumOrchid3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumOrchid3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumOrchid4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumOrchid4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x37 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x37 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumPurple\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumPurple\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x93 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0xdb as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdb as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumPurple1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumPurple1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xab as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumPurple2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumPurple2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumPurple3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumPurple3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x89 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"MediumPurple4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MediumPurple4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
         name: b"MediumSeaGreen\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x3c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int | 0x71 as RgbValue,
+            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x71 as RgbValue,
     },
     color_name_table_T {
         name: b"MediumSlateBlue\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x7b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
         name: b"MediumSpringGreen\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0x9a as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9a as RgbValue,
     },
     color_name_table_T {
         name: b"MediumTurquoise\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x48 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd1 as RgbValue) << 8 as ::core::ffi::c_int | 0xcc as RgbValue,
+            | (0xd1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcc as RgbValue,
     },
     color_name_table_T {
         name: b"MediumVioletRed\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xc7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x15 as RgbValue) << 8 as ::core::ffi::c_int | 0x85 as RgbValue,
+            | (0x15 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x85 as RgbValue,
     },
     color_name_table_T {
-        name: b"MidnightBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MidnightBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x19 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x19 as RgbValue) << 8 as ::core::ffi::c_int | 0x70 as RgbValue,
+            | (0x19 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x70 as RgbValue,
     },
     color_name_table_T {
-        name: b"MintCream\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MintCream\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"MistyRose\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MistyRose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int | 0xe1 as RgbValue,
+            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe1 as RgbValue,
     },
     color_name_table_T {
-        name: b"MistyRose1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MistyRose1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int | 0xe1 as RgbValue,
+            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe1 as RgbValue,
     },
     color_name_table_T {
-        name: b"MistyRose2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MistyRose2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd5 as RgbValue) << 8 as ::core::ffi::c_int | 0xd2 as RgbValue,
+            | (0xd5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd2 as RgbValue,
     },
     color_name_table_T {
-        name: b"MistyRose3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MistyRose3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb7 as RgbValue) << 8 as ::core::ffi::c_int | 0xb5 as RgbValue,
+            | (0xb7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb5 as RgbValue,
     },
     color_name_table_T {
-        name: b"MistyRose4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MistyRose4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int | 0x7b as RgbValue,
+            | (0x7d as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7b as RgbValue,
     },
     color_name_table_T {
-        name: b"Moccasin\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Moccasin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int | 0xb5 as RgbValue,
+            | (0xe4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb5 as RgbValue,
     },
     color_name_table_T {
-        name: b"NavajoWhite\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NavajoWhite\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xde as RgbValue) << 8 as ::core::ffi::c_int | 0xad as RgbValue,
+            | (0xde as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xad as RgbValue,
     },
     color_name_table_T {
-        name: b"NavajoWhite1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NavajoWhite1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xde as RgbValue) << 8 as ::core::ffi::c_int | 0xad as RgbValue,
+            | (0xde as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xad as RgbValue,
     },
     color_name_table_T {
-        name: b"NavajoWhite2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NavajoWhite2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcf as RgbValue) << 8 as ::core::ffi::c_int | 0xa1 as RgbValue,
+            | (0xcf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa1 as RgbValue,
     },
     color_name_table_T {
-        name: b"NavajoWhite3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NavajoWhite3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0xb3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"NavajoWhite4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NavajoWhite4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int | 0x5e as RgbValue,
+            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5e as RgbValue,
     },
     color_name_table_T {
-        name: b"Navy\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Navy\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"NavyBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NavyBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4c as RgbValue) << 8 as ::core::ffi::c_int | 0x73 as RgbValue,
+            | (0x4c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x73 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkCyan\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkCyan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int | 0x73 as RgbValue,
+            | (0x73 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x73 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGray1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGray1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int | 0xd as RgbValue,
+            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGray2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGray2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x14 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x16 as RgbValue) << 8 as ::core::ffi::c_int | 0x1b as RgbValue,
+            | (0x16 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1b as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGray3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGray3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int | 0x33 as RgbValue,
+            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x33 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGray4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGray4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int | 0x58 as RgbValue,
+            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x58 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x55 as RgbValue) << 8 as ::core::ffi::c_int | 0x23 as RgbValue,
+            | (0x55 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x23 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGrey1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGrey1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int | 0xd as RgbValue,
+            | (0x8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGrey2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGrey2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x14 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x16 as RgbValue) << 8 as ::core::ffi::c_int | 0x1b as RgbValue,
+            | (0x16 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x1b as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGrey3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGrey3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int | 0x33 as RgbValue,
+            | (0x2e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x33 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkGrey4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkGrey4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int | 0x58 as RgbValue,
+            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x58 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimDarkMagenta\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x47 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x45 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x45 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimDarkRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimDarkRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x59 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x8 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimDarkYellow\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x6b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x53 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x53 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimLightBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimLightBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xdb as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xdb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimLightCyan\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimLightCyan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int | 0xf7 as RgbValue,
+            | (0xf8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf7 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGray1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf1 as RgbValue) << 8 as ::core::ffi::c_int | 0xf8 as RgbValue,
+            | (0xf1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf8 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGray2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int | 0xea as RgbValue,
+            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xea as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGray3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xc4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc6 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xc6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGray4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x9b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int | 0xa4 as RgbValue,
+            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa4 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGreen\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xb3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf6 as RgbValue) << 8 as ::core::ffi::c_int | 0xc0 as RgbValue,
+            | (0xf6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc0 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGrey1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf1 as RgbValue) << 8 as ::core::ffi::c_int | 0xf8 as RgbValue,
+            | (0xf1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf8 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGrey2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xe0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int | 0xea as RgbValue,
+            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xea as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGrey3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xc4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc6 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xc6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightGrey4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x9b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int | 0xa4 as RgbValue,
+            | (0x9e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xa4 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightMagenta\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xca as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xca as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"NvimLightRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"NvimLightRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int | 0xb9 as RgbValue,
+            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb9 as RgbValue,
     },
     color_name_table_T {
         name: b"NvimLightYellow\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xfc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int | 0x94 as RgbValue,
+            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x94 as RgbValue,
     },
     color_name_table_T {
-        name: b"OldLace\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OldLace\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xe6 as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Olive\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Olive\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"OliveDrab\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OliveDrab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8e as RgbValue) << 8 as ::core::ffi::c_int | 0x23 as RgbValue,
+            | (0x8e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x23 as RgbValue,
     },
     color_name_table_T {
-        name: b"OliveDrab1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OliveDrab1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x3e as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3e as RgbValue,
     },
     color_name_table_T {
-        name: b"OliveDrab2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OliveDrab2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb3 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0x3a as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3a as RgbValue,
     },
     color_name_table_T {
-        name: b"OliveDrab3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OliveDrab3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x32 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x32 as RgbValue,
     },
     color_name_table_T {
-        name: b"OliveDrab4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OliveDrab4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x22 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x22 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orange\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orange\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orange1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orange1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orange2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orange2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9a as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x9a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orange3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orange3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orange4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orange4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5a as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x5a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"OrangeRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OrangeRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"OrangeRed1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OrangeRed1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"OrangeRed2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OrangeRed2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"OrangeRed3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OrangeRed3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x37 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x37 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"OrangeRed4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OrangeRed4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x25 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x25 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orchid\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orchid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xda as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0xd6 as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orchid1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orchid1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0x83 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"Orchid2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orchid2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7a as RgbValue) << 8 as ::core::ffi::c_int | 0xe9 as RgbValue,
+            | (0x7a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orchid3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orchid3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0xc9 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Orchid4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Orchid4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int | 0x89 as RgbValue,
+            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x89 as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleGoldenrod\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleGoldenrod\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int | 0xaa as RgbValue,
+            | (0xe8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xaa as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x98 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfb as RgbValue) << 8 as ::core::ffi::c_int | 0x98 as RgbValue,
+            | (0xfb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x98 as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleGreen1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleGreen1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x9a as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9a as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleGreen2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleGreen2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x90 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleGreen3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleGreen3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x7c as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7c as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleGreen4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleGreen4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x54 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x54 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x54 as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleTurquoise\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleTurquoise\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xaf as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
         name: b"PaleTurquoise1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xbb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
         name: b"PaleTurquoise2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xae as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
         name: b"PaleTurquoise3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x96 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
         name: b"PaleTurquoise4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"PaleVioletRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PaleVioletRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xdb as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0x93 as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x93 as RgbValue,
     },
     color_name_table_T {
         name: b"PaleVioletRed1\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0xab as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xab as RgbValue,
     },
     color_name_table_T {
         name: b"PaleVioletRed2\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int | 0x9f as RgbValue,
+            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9f as RgbValue,
     },
     color_name_table_T {
         name: b"PaleVioletRed3\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int | 0x89 as RgbValue,
+            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x89 as RgbValue,
     },
     color_name_table_T {
         name: b"PaleVioletRed4\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int | 0x5d as RgbValue,
+            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x5d as RgbValue,
     },
     color_name_table_T {
-        name: b"PapayaWhip\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PapayaWhip\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xef as RgbValue) << 8 as ::core::ffi::c_int | 0xd5 as RgbValue,
+            | (0xef as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd5 as RgbValue,
     },
     color_name_table_T {
-        name: b"PeachPuff\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PeachPuff\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xda as RgbValue) << 8 as ::core::ffi::c_int | 0xb9 as RgbValue,
+            | (0xda as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb9 as RgbValue,
     },
     color_name_table_T {
-        name: b"PeachPuff1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PeachPuff1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xda as RgbValue) << 8 as ::core::ffi::c_int | 0xb9 as RgbValue,
+            | (0xda as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb9 as RgbValue,
     },
     color_name_table_T {
-        name: b"PeachPuff2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PeachPuff2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcb as RgbValue) << 8 as ::core::ffi::c_int | 0xad as RgbValue,
+            | (0xcb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xad as RgbValue,
     },
     color_name_table_T {
-        name: b"PeachPuff3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PeachPuff3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xaf as RgbValue) << 8 as ::core::ffi::c_int | 0x95 as RgbValue,
+            | (0xaf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x95 as RgbValue,
     },
     color_name_table_T {
-        name: b"PeachPuff4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PeachPuff4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x77 as RgbValue) << 8 as ::core::ffi::c_int | 0x65 as RgbValue,
+            | (0x77 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x65 as RgbValue,
     },
     color_name_table_T {
-        name: b"Peru\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Peru\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int | 0x3f as RgbValue,
+            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3f as RgbValue,
     },
     color_name_table_T {
-        name: b"Pink\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Pink\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int | 0xcb as RgbValue,
+            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcb as RgbValue,
     },
     color_name_table_T {
-        name: b"Pink1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Pink1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int | 0xc5 as RgbValue,
+            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc5 as RgbValue,
     },
     color_name_table_T {
-        name: b"Pink2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Pink2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa9 as RgbValue) << 8 as ::core::ffi::c_int | 0xb8 as RgbValue,
+            | (0xa9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Pink3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Pink3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x91 as RgbValue) << 8 as ::core::ffi::c_int | 0x9e as RgbValue,
+            | (0x91 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9e as RgbValue,
     },
     color_name_table_T {
-        name: b"Pink4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Pink4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int | 0x6c as RgbValue,
+            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x6c as RgbValue,
     },
     color_name_table_T {
-        name: b"Plum\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Plum\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xdd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa0 as RgbValue) << 8 as ::core::ffi::c_int | 0xdd as RgbValue,
+            | (0xa0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xdd as RgbValue,
     },
     color_name_table_T {
-        name: b"Plum1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Plum1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xbb as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Plum2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Plum2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xae as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xae as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Plum3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Plum3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x96 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Plum4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Plum4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x66 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"PowderBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PowderBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int | 0xe6 as RgbValue,
+            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe6 as RgbValue,
     },
     color_name_table_T {
-        name: b"Purple\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Purple\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"Purple1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Purple1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Purple2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Purple2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x91 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x2c as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x2c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Purple3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Purple3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7d as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x26 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Purple4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Purple4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x55 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x1a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"RebeccaPurple\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RebeccaPurple\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x66 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int | 0x99 as RgbValue,
+            | (0x33 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x99 as RgbValue,
     },
     color_name_table_T {
-        name: b"Red\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Red\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Red1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Red1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Red2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Red2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Red3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Red3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Red4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Red4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"RosyBrown\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RosyBrown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbc as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8f as RgbValue) << 8 as ::core::ffi::c_int | 0x8f as RgbValue,
+            | (0x8f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8f as RgbValue,
     },
     color_name_table_T {
-        name: b"RosyBrown1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RosyBrown1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc1 as RgbValue) << 8 as ::core::ffi::c_int | 0xc1 as RgbValue,
+            | (0xc1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc1 as RgbValue,
     },
     color_name_table_T {
-        name: b"RosyBrown2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RosyBrown2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb4 as RgbValue) << 8 as ::core::ffi::c_int | 0xb4 as RgbValue,
+            | (0xb4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb4 as RgbValue,
     },
     color_name_table_T {
-        name: b"RosyBrown3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RosyBrown3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9b as RgbValue) << 8 as ::core::ffi::c_int | 0x9b as RgbValue,
+            | (0x9b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9b as RgbValue,
     },
     color_name_table_T {
-        name: b"RosyBrown4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RosyBrown4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"RoyalBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RoyalBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x41 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int | 0xe1 as RgbValue,
+            | (0x69 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe1 as RgbValue,
     },
     color_name_table_T {
-        name: b"RoyalBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RoyalBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x48 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x76 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x76 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"RoyalBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RoyalBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x43 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x6e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"RoyalBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RoyalBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x3a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5f as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x5f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"RoyalBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RoyalBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x27 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x40 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"SaddleBrown\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SaddleBrown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int | 0x13 as RgbValue,
+            | (0x45 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x13 as RgbValue,
     },
     color_name_table_T {
-        name: b"Salmon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Salmon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xfa as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x72 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x72 as RgbValue,
     },
     color_name_table_T {
-        name: b"Salmon1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Salmon1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int | 0x69 as RgbValue,
+            | (0x8c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x69 as RgbValue,
     },
     color_name_table_T {
-        name: b"Salmon2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Salmon2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0x62 as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x62 as RgbValue,
     },
     color_name_table_T {
-        name: b"Salmon3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Salmon3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0x54 as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x54 as RgbValue,
     },
     color_name_table_T {
-        name: b"Salmon4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Salmon4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4c as RgbValue) << 8 as ::core::ffi::c_int | 0x39 as RgbValue,
+            | (0x4c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x39 as RgbValue,
     },
     color_name_table_T {
-        name: b"SandyBrown\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SandyBrown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf4 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa4 as RgbValue) << 8 as ::core::ffi::c_int | 0x60 as RgbValue,
+            | (0xa4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x60 as RgbValue,
     },
     color_name_table_T {
-        name: b"SeaGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SeaGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x57 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x57 as RgbValue,
     },
     color_name_table_T {
-        name: b"SeaGreen1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SeaGreen1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x54 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x9f as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x9f as RgbValue,
     },
     color_name_table_T {
-        name: b"SeaGreen2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SeaGreen2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0x94 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x94 as RgbValue,
     },
     color_name_table_T {
-        name: b"SeaGreen3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SeaGreen3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x43 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"SeaGreen4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SeaGreen4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x2e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x57 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x57 as RgbValue,
     },
     color_name_table_T {
-        name: b"SeaShell\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SeaShell\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Seashell1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Seashell1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Seashell2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Seashell2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int | 0xde as RgbValue,
+            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xde as RgbValue,
     },
     color_name_table_T {
-        name: b"Seashell3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Seashell3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int | 0xbf as RgbValue,
+            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbf as RgbValue,
     },
     color_name_table_T {
-        name: b"Seashell4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Seashell4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int | 0x82 as RgbValue,
+            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x82 as RgbValue,
     },
     color_name_table_T {
-        name: b"Sienna\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Sienna\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int | 0x2d as RgbValue,
+            | (0x52 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2d as RgbValue,
     },
     color_name_table_T {
-        name: b"Sienna1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Sienna1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0x47 as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x47 as RgbValue,
     },
     color_name_table_T {
-        name: b"Sienna2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Sienna2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int | 0x42 as RgbValue,
+            | (0x79 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x42 as RgbValue,
     },
     color_name_table_T {
-        name: b"Sienna3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Sienna3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int | 0x39 as RgbValue,
+            | (0x68 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x39 as RgbValue,
     },
     color_name_table_T {
-        name: b"Sienna4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Sienna4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int | 0x26 as RgbValue,
+            | (0x47 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x26 as RgbValue,
     },
     color_name_table_T {
-        name: b"Silver\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Silver\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int | 0xc0 as RgbValue,
+            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc0 as RgbValue,
     },
     color_name_table_T {
-        name: b"SkyBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SkyBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x87 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xce as RgbValue) << 8 as ::core::ffi::c_int | 0xeb as RgbValue,
+            | (0xce as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xeb as RgbValue,
     },
     color_name_table_T {
-        name: b"SkyBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SkyBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x87 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xce as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xce as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"SkyBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SkyBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7e as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xc0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"SkyBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SkyBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa6 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xa6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"SkyBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SkyBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x70 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5a as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x5a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x83 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x6f as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0x6f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x7a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x67 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x67 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x69 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x59 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x59 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x47 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3c as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x3c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateGray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateGray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x70 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateGray1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateGray1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xc6 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xe2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateGray2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateGray2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb9 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xd3 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateGray3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateGray3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb6 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xb6 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateGray4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateGray4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x6c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"SlateGrey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SlateGrey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x70 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"Snow\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Snow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"Snow1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Snow1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int | 0xfa as RgbValue,
+            | (0xfa as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xfa as RgbValue,
     },
     color_name_table_T {
-        name: b"Snow2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Snow2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe9 as RgbValue) << 8 as ::core::ffi::c_int | 0xe9 as RgbValue,
+            | (0xe9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xe9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Snow3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Snow3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int | 0xc9 as RgbValue,
+            | (0xc9 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xc9 as RgbValue,
     },
     color_name_table_T {
-        name: b"Snow4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Snow4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x89 as RgbValue) << 8 as ::core::ffi::c_int | 0x89 as RgbValue,
+            | (0x89 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x89 as RgbValue,
     },
     color_name_table_T {
-        name: b"SpringGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SpringGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x7f as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7f as RgbValue,
     },
     color_name_table_T {
-        name: b"SpringGreen1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SpringGreen1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0x7f as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x7f as RgbValue,
     },
     color_name_table_T {
-        name: b"SpringGreen2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SpringGreen2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0x76 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x76 as RgbValue,
     },
     color_name_table_T {
-        name: b"SpringGreen3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SpringGreen3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x66 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x66 as RgbValue,
     },
     color_name_table_T {
-        name: b"SpringGreen4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SpringGreen4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0x45 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x45 as RgbValue,
     },
     color_name_table_T {
-        name: b"SteelBlue\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SteelBlue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x46 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0xb4 as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb4 as RgbValue,
     },
     color_name_table_T {
-        name: b"SteelBlue1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SteelBlue1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x63 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xb8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"SteelBlue2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SteelBlue2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x5c as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xac as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xac as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"SteelBlue3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SteelBlue3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x4f as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x94 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0x94 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"SteelBlue4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SteelBlue4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x36 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x64 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x64 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"Tan\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd2 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb4 as RgbValue) << 8 as ::core::ffi::c_int | 0x8c as RgbValue,
+            | (0xb4 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8c as RgbValue,
     },
     color_name_table_T {
-        name: b"Tan1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tan1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int | 0x4f as RgbValue,
+            | (0xa5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x4f as RgbValue,
     },
     color_name_table_T {
-        name: b"Tan2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tan2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x9a as RgbValue) << 8 as ::core::ffi::c_int | 0x49 as RgbValue,
+            | (0x9a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x49 as RgbValue,
     },
     color_name_table_T {
-        name: b"Tan3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tan3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int | 0x3f as RgbValue,
+            | (0x85 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x3f as RgbValue,
     },
     color_name_table_T {
-        name: b"Tan4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tan4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5a as RgbValue) << 8 as ::core::ffi::c_int | 0x2b as RgbValue,
+            | (0x5a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x2b as RgbValue,
     },
     color_name_table_T {
-        name: b"Teal\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Teal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"Thistle\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Thistle\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd8 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int | 0xd8 as RgbValue,
+            | (0xbf as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd8 as RgbValue,
     },
     color_name_table_T {
-        name: b"Thistle1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Thistle1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe1 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xe1 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Thistle2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Thistle2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd2 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xd2 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Thistle3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Thistle3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xb5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Thistle4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Thistle4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x7b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"Tomato\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tomato\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int | 0x47 as RgbValue,
+            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x47 as RgbValue,
     },
     color_name_table_T {
-        name: b"Tomato1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tomato1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int | 0x47 as RgbValue,
+            | (0x63 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x47 as RgbValue,
     },
     color_name_table_T {
-        name: b"Tomato2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tomato2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int | 0x42 as RgbValue,
+            | (0x5c as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x42 as RgbValue,
     },
     color_name_table_T {
-        name: b"Tomato3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tomato3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int | 0x39 as RgbValue,
+            | (0x4f as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x39 as RgbValue,
     },
     color_name_table_T {
-        name: b"Tomato4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Tomato4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x36 as RgbValue) << 8 as ::core::ffi::c_int | 0x26 as RgbValue,
+            | (0x36 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x26 as RgbValue,
     },
     color_name_table_T {
-        name: b"Turquoise\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Turquoise\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x40 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int | 0xd0 as RgbValue,
+            | (0xe0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xd0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Turquoise1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Turquoise1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"Turquoise2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Turquoise2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0xe5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"Turquoise3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Turquoise3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int | 0xcd as RgbValue,
+            | (0xc5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xcd as RgbValue,
     },
     color_name_table_T {
-        name: b"Turquoise4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Turquoise4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int | 0x8b as RgbValue,
+            | (0x86 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8b as RgbValue,
     },
     color_name_table_T {
-        name: b"Violet\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Violet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int | 0xee as RgbValue,
+            | (0x82 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xee as RgbValue,
     },
     color_name_table_T {
-        name: b"VioletRed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VioletRed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xd0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x20 as RgbValue) << 8 as ::core::ffi::c_int | 0x90 as RgbValue,
+            | (0x20 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x90 as RgbValue,
     },
     color_name_table_T {
-        name: b"VioletRed1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VioletRed1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3e as RgbValue) << 8 as ::core::ffi::c_int | 0x96 as RgbValue,
+            | (0x3e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x96 as RgbValue,
     },
     color_name_table_T {
-        name: b"VioletRed2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VioletRed2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int | 0x8c as RgbValue,
+            | (0x3a as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x8c as RgbValue,
     },
     color_name_table_T {
-        name: b"VioletRed3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VioletRed3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x32 as RgbValue) << 8 as ::core::ffi::c_int | 0x78 as RgbValue,
+            | (0x32 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x78 as RgbValue,
     },
     color_name_table_T {
-        name: b"VioletRed4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VioletRed4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x22 as RgbValue) << 8 as ::core::ffi::c_int | 0x52 as RgbValue,
+            | (0x22 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x52 as RgbValue,
     },
     color_name_table_T {
-        name: b"WebGray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WebGray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"WebGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WebGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"WebGrey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WebGrey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0x80 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"WebMaroon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WebMaroon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"WebPurple\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WebPurple\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x80 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0 as RgbValue) << 8 as ::core::ffi::c_int | 0x80 as RgbValue,
+            | (0 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x80 as RgbValue,
     },
     color_name_table_T {
-        name: b"Wheat\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Wheat\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xde as RgbValue) << 8 as ::core::ffi::c_int | 0xb3 as RgbValue,
+            | (0xde as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xb3 as RgbValue,
     },
     color_name_table_T {
-        name: b"Wheat1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Wheat1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xe7 as RgbValue) << 8 as ::core::ffi::c_int | 0xba as RgbValue,
+            | (0xe7 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xba as RgbValue,
     },
     color_name_table_T {
-        name: b"Wheat2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Wheat2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xd8 as RgbValue) << 8 as ::core::ffi::c_int | 0xae as RgbValue,
+            | (0xd8 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xae as RgbValue,
     },
     color_name_table_T {
-        name: b"Wheat3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Wheat3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xba as RgbValue) << 8 as ::core::ffi::c_int | 0x96 as RgbValue,
+            | (0xba as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x96 as RgbValue,
     },
     color_name_table_T {
-        name: b"Wheat4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Wheat4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x7e as RgbValue) << 8 as ::core::ffi::c_int | 0x66 as RgbValue,
+            | (0x7e as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x66 as RgbValue,
     },
     color_name_table_T {
-        name: b"White\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"White\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0xff as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xff as RgbValue,
     },
     color_name_table_T {
-        name: b"WhiteSmoke\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WhiteSmoke\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xf5 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int | 0xf5 as RgbValue,
+            | (0xf5 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf5 as RgbValue,
     },
     color_name_table_T {
-        name: b"X11Gray\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"X11Gray\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbe as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbe as RgbValue) << 8 as ::core::ffi::c_int | 0xbe as RgbValue,
+            | (0xbe as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbe as RgbValue,
     },
     color_name_table_T {
-        name: b"X11Green\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"X11Green\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"X11Grey\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"X11Grey\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xbe as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xbe as RgbValue) << 8 as ::core::ffi::c_int | 0xbe as RgbValue,
+            | (0xbe as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xbe as RgbValue,
     },
     color_name_table_T {
-        name: b"X11Maroon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"X11Maroon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xb0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int | 0x60 as RgbValue,
+            | (0x30 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x60 as RgbValue,
     },
     color_name_table_T {
-        name: b"X11Purple\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"X11Purple\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xa0 as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x20 as RgbValue) << 8 as ::core::ffi::c_int | 0xf0 as RgbValue,
+            | (0x20 as RgbValue) << 8 as ::core::ffi::c_int
+            | 0xf0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Yellow\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Yellow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Yellow1\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Yellow1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xff as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xff as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xff as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Yellow2\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Yellow2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xee as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xee as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xee as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Yellow3\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Yellow3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0xcd as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"Yellow4\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Yellow4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x8b as RgbValue) << 16 as ::core::ffi::c_int
-            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int | 0 as RgbValue,
+            | (0x8b as RgbValue) << 8 as ::core::ffi::c_int
+            | 0 as RgbValue,
     },
     color_name_table_T {
-        name: b"YellowGreen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"YellowGreen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         color: (0x9a as RgbValue) << 16 as ::core::ffi::c_int
-            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int | 0x32 as RgbValue,
+            | (0xcd as RgbValue) << 8 as ::core::ffi::c_int
+            | 0x32 as RgbValue,
     },
     color_name_table_T {
         name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -10769,48 +10723,30 @@ pub unsafe extern "C" fn name_to_color(
 ) -> RgbValue {
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '#' as ::core::ffi::c_int
-        && *(*__ctype_b_loc())
-            .offset(
-                *name.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int as isize,
-            ) as ::core::ffi::c_int
-            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
-        && *(*__ctype_b_loc())
-            .offset(
-                *name.offset(2 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int as isize,
-            ) as ::core::ffi::c_int
-            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
-        && *(*__ctype_b_loc())
-            .offset(
-                *name.offset(3 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int as isize,
-            ) as ::core::ffi::c_int
-            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
-        && *(*__ctype_b_loc())
-            .offset(
-                *name.offset(4 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int as isize,
-            ) as ::core::ffi::c_int
-            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
-        && *(*__ctype_b_loc())
-            .offset(
-                *name.offset(5 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int as isize,
-            ) as ::core::ffi::c_int
-            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
-        && *(*__ctype_b_loc())
-            .offset(
-                *name.offset(6 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int as isize,
-            ) as ::core::ffi::c_int
-            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
+        && *(*__ctype_b_loc()).offset(*name.offset(1 as ::core::ffi::c_int as isize) as uint8_t
+            as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+        && *(*__ctype_b_loc()).offset(*name.offset(2 as ::core::ffi::c_int as isize) as uint8_t
+            as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+        && *(*__ctype_b_loc()).offset(*name.offset(3 as ::core::ffi::c_int as isize) as uint8_t
+            as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+        && *(*__ctype_b_loc()).offset(*name.offset(4 as ::core::ffi::c_int as isize) as uint8_t
+            as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+        && *(*__ctype_b_loc()).offset(*name.offset(5 as ::core::ffi::c_int as isize) as uint8_t
+            as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+        && *(*__ctype_b_loc()).offset(*name.offset(6 as ::core::ffi::c_int as isize) as uint8_t
+            as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
         && *name.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
         *idx = kColorIdxHex as ::core::ffi::c_int;
@@ -10825,8 +10761,7 @@ pub unsafe extern "C" fn name_to_color(
     ) == 0
         || strcasecmp(
             name as *mut ::core::ffi::c_char,
-            b"background\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"background\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0
     {
         *idx = kColorIdxBg as ::core::ffi::c_int;
@@ -10837,8 +10772,7 @@ pub unsafe extern "C" fn name_to_color(
     ) == 0
         || strcasecmp(
             name as *mut ::core::ffi::c_char,
-            b"foreground\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"foreground\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0
     {
         *idx = kColorIdxFg as ::core::ffi::c_int;
@@ -10849,8 +10783,8 @@ pub unsafe extern "C" fn name_to_color(
         .wrapping_div(::core::mem::size_of::<color_name_table_T>())
         .wrapping_div(
             (::core::mem::size_of::<[color_name_table_T; 708]>()
-                .wrapping_rem(::core::mem::size_of::<color_name_table_T>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<color_name_table_T>())
+                == 0) as ::core::ffi::c_int as usize,
         )
         .wrapping_sub(1 as usize) as ::core::ffi::c_int;
     while lo < hi {
@@ -10903,21 +10837,19 @@ pub unsafe extern "C" fn name_to_ctermcolor(
     mut name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0;
-    let mut off: ::core::ffi::c_int = if (*name as ::core::ffi::c_int)
-        < 'a' as ::core::ffi::c_int
+    let mut off: ::core::ffi::c_int = if (*name as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
         || *name as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
     {
         *name as ::core::ffi::c_int
     } else {
-        *name as ::core::ffi::c_int
-            - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
+        *name as ::core::ffi::c_int - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
     };
     i = ::core::mem::size_of::<[*mut ::core::ffi::c_char; 28]>()
         .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
         .wrapping_div(
             (::core::mem::size_of::<[*mut ::core::ffi::c_char; 28]>()
-                .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as ::core::ffi::c_int;
     loop {
         i -= 1;
@@ -10928,8 +10860,7 @@ pub unsafe extern "C" fn name_to_ctermcolor(
             == *color_names[i as usize].offset(0 as ::core::ffi::c_int as isize)
                 as ::core::ffi::c_int
             && strcasecmp(
-                name.offset(1 as ::core::ffi::c_int as isize)
-                    as *mut ::core::ffi::c_char,
+                name.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char,
                 color_names[i as usize].offset(1 as ::core::ffi::c_int as isize),
             ) == 0 as ::core::ffi::c_int
         {

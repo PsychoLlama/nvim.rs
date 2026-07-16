@@ -48,10 +48,7 @@ extern "C" {
         size: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn transchar(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
     fn vim_str2nr(
@@ -242,14 +239,11 @@ pub const MOUSE_MIDDLE: C2Rust_Unnamed_2 = 1;
 pub const MOUSE_LEFT: C2Rust_Unnamed_2 = 0;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 53] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 53],
-        [::core::ffi::c_char; 53],
-    >(*b"unsigned int special_to_buf(int, int, _Bool, char *)\0")
+    ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
+        *b"unsigned int special_to_buf(int, int, _Bool, char *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 static mut mod_mask_table: [modmasktable; 10] = [
     modmasktable {
@@ -793,18 +787,14 @@ static mut mouse_table: [mousetable; 18] = [
     },
 ];
 #[no_mangle]
-pub unsafe extern "C" fn name_to_mod_mask(
-    mut c: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn name_to_mod_mask(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     c = if c < 'a' as ::core::ffi::c_int || c > 'z' as ::core::ffi::c_int {
         c
     } else {
         c - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
     };
     let mut i: size_t = 0 as size_t;
-    while mod_mask_table[i as usize].mod_mask as ::core::ffi::c_int
-        != 0 as ::core::ffi::c_int
-    {
+    while mod_mask_table[i as usize].mod_mask as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
         if c == mod_mask_table[i as usize].name as uint8_t as ::core::ffi::c_int {
             return mod_mask_table[i as usize].mod_flag as ::core::ffi::c_int;
         }
@@ -825,23 +815,21 @@ pub unsafe extern "C" fn simplify_key(
         return K_S_TAB;
     }
     let key0: ::core::ffi::c_int = -key & 0xff as ::core::ffi::c_int;
-    let key1: ::core::ffi::c_int = (-key as ::core::ffi::c_uint
-        >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int;
+    let key1: ::core::ffi::c_int = (-key as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
+        & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while modifier_keys_table[i as usize] as ::core::ffi::c_int != NUL {
-        if key0
-            == modifier_keys_table[(i + 3 as ::core::ffi::c_int) as usize]
-                as ::core::ffi::c_int
+        if key0 == modifier_keys_table[(i + 3 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
             && key1
-                == modifier_keys_table[(i + 4 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
+                == modifier_keys_table[(i + 4 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
             && *modifiers & modifier_keys_table[i as usize] as ::core::ffi::c_int != 0
         {
             *modifiers &= !(modifier_keys_table[i as usize] as ::core::ffi::c_int);
             return -(modifier_keys_table[(i + 1 as ::core::ffi::c_int) as usize]
                 as ::core::ffi::c_int
                 + ((modifier_keys_table[(i + 2 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+                    as ::core::ffi::c_int)
+                    << 8 as ::core::ffi::c_int));
         }
         i += MOD_KEYS_ENTRY_SIZE;
     }
@@ -891,17 +879,14 @@ pub unsafe extern "C" fn get_special_key_name(
     string[0 as ::core::ffi::c_int as usize] = '<' as ::core::ffi::c_char;
     let mut idx: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     if c < 0 as ::core::ffi::c_int && -c & 0xff as ::core::ffi::c_int == KS_KEY {
-        c = (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
-            & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int;
+        c = (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
+            as ::core::ffi::c_int;
     }
     if c < 0 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while modifier_keys_table[i as usize] as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_int
-        {
+        while modifier_keys_table[i as usize] as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
             if -c & 0xff as ::core::ffi::c_int
-                == modifier_keys_table[(i + 1 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
+                == modifier_keys_table[(i + 1 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
                 && (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
                     & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int
                     == modifier_keys_table[(i + 2 as ::core::ffi::c_int) as usize]
@@ -911,7 +896,8 @@ pub unsafe extern "C" fn get_special_key_name(
                 c = -(modifier_keys_table[(i + 3 as ::core::ffi::c_int) as usize]
                     as ::core::ffi::c_int
                     + ((modifier_keys_table[(i + 4 as ::core::ffi::c_int) as usize]
-                        as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+                        as ::core::ffi::c_int)
+                        << 8 as ::core::ffi::c_int));
                 break;
             } else {
                 i += MOD_KEYS_ENTRY_SIZE;
@@ -921,25 +907,21 @@ pub unsafe extern "C" fn get_special_key_name(
     let mut table_idx: ::core::ffi::c_int = find_special_key_in_table(c);
     if c > 0 as ::core::ffi::c_int && utf_char2len(c) == 1 as ::core::ffi::c_int {
         if table_idx < 0 as ::core::ffi::c_int
-            && (!vim_isprintc(c)
-                || c & 0x7f as ::core::ffi::c_int == ' ' as ::core::ffi::c_int)
+            && (!vim_isprintc(c) || c & 0x7f as ::core::ffi::c_int == ' ' as ::core::ffi::c_int)
             && c & 0x80 as ::core::ffi::c_int != 0
         {
             c &= 0x7f as ::core::ffi::c_int;
             modifiers |= MOD_MASK_ALT;
             table_idx = find_special_key_in_table(c);
         }
-        if table_idx < 0 as ::core::ffi::c_int && !vim_isprintc(c)
-            && c < ' ' as ::core::ffi::c_int
+        if table_idx < 0 as ::core::ffi::c_int && !vim_isprintc(c) && c < ' ' as ::core::ffi::c_int
         {
             c += '@' as ::core::ffi::c_int;
             modifiers |= MOD_MASK_CTRL;
         }
     }
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while mod_mask_table[i_0 as usize].name as ::core::ffi::c_int
-        != 'A' as ::core::ffi::c_int
-    {
+    while mod_mask_table[i_0 as usize].name as ::core::ffi::c_int != 'A' as ::core::ffi::c_int {
         if modifiers & mod_mask_table[i_0 as usize].mod_mask as ::core::ffi::c_int
             == mod_mask_table[i_0 as usize].mod_flag as ::core::ffi::c_int
         {
@@ -962,28 +944,24 @@ pub unsafe extern "C" fn get_special_key_name(
             string[c2rust_fresh3 as usize] = '_' as ::core::ffi::c_char;
             let c2rust_fresh4 = idx;
             idx = idx + 1;
-            string[c2rust_fresh4 as usize] = (-c & 0xff as ::core::ffi::c_int) as uint8_t
-                as ::core::ffi::c_char;
+            string[c2rust_fresh4 as usize] =
+                (-c & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
             let c2rust_fresh5 = idx;
             idx = idx + 1;
-            string[c2rust_fresh5 as usize] = (-c as ::core::ffi::c_uint
-                >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint) as uint8_t
-                as ::core::ffi::c_char;
+            string[c2rust_fresh5 as usize] = (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
+                & 0xff as ::core::ffi::c_uint)
+                as uint8_t as ::core::ffi::c_char;
         } else {
             let mut len: ::core::ffi::c_int = utf_char2len(c);
-            if len == 1 as ::core::ffi::c_int
-                && vim_isprintc(c) as ::core::ffi::c_int != 0
-            {
+            if len == 1 as ::core::ffi::c_int && vim_isprintc(c) as ::core::ffi::c_int != 0 {
                 let c2rust_fresh6 = idx;
                 idx = idx + 1;
                 string[c2rust_fresh6 as usize] = c as uint8_t as ::core::ffi::c_char;
             } else if len > 1 as ::core::ffi::c_int {
-                idx
-                    += utf_char2bytes(
-                        c,
-                        (&raw mut string as *mut ::core::ffi::c_char)
-                            .offset(idx as isize),
-                    );
+                idx += utf_char2bytes(
+                    c,
+                    (&raw mut string as *mut ::core::ffi::c_char).offset(idx as isize),
+                );
             } else {
                 let mut s: *mut ::core::ffi::c_char = transchar(c);
                 while *s != 0 {
@@ -999,10 +977,8 @@ pub unsafe extern "C" fn get_special_key_name(
         let mut s_0: *const String_0 = &raw const (*(&raw const key_names_table
             as *const key_name_entry)
             .offset(table_idx as isize))
-            .name;
-        if (*s_0).size as ::core::ffi::c_int + idx + 2 as ::core::ffi::c_int
-            <= MAX_KEY_NAME_LEN
-        {
+        .name;
+        if (*s_0).size as ::core::ffi::c_int + idx + 2 as ::core::ffi::c_int <= MAX_KEY_NAME_LEN {
             strcpy(
                 (&raw mut string as *mut ::core::ffi::c_char).offset(idx as isize),
                 (*s_0).data,
@@ -1026,13 +1002,8 @@ pub unsafe extern "C" fn trans_special(
     did_simplify: *mut bool,
 ) -> ::core::ffi::c_uint {
     let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut key: ::core::ffi::c_int = find_special_key(
-        srcp,
-        src_len,
-        &raw mut modifiers,
-        flags,
-        did_simplify,
-    );
+    let mut key: ::core::ffi::c_int =
+        find_special_key(srcp, src_len, &raw mut modifiers, flags, did_simplify);
     if key == 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_uint;
     }
@@ -1049,48 +1020,42 @@ pub unsafe extern "C" fn special_to_buf(
     if modifiers != 0 as ::core::ffi::c_int {
         let c2rust_fresh10 = dlen;
         dlen = dlen.wrapping_add(1);
-        *dst.offset(c2rust_fresh10 as isize) = K_SPECIAL as uint8_t
-            as ::core::ffi::c_char;
+        *dst.offset(c2rust_fresh10 as isize) = K_SPECIAL as uint8_t as ::core::ffi::c_char;
         let c2rust_fresh11 = dlen;
         dlen = dlen.wrapping_add(1);
-        *dst.offset(c2rust_fresh11 as isize) = KS_MODIFIER as uint8_t
-            as ::core::ffi::c_char;
+        *dst.offset(c2rust_fresh11 as isize) = KS_MODIFIER as uint8_t as ::core::ffi::c_char;
         let c2rust_fresh12 = dlen;
         dlen = dlen.wrapping_add(1);
-        *dst.offset(c2rust_fresh12 as isize) = modifiers as uint8_t
-            as ::core::ffi::c_char;
+        *dst.offset(c2rust_fresh12 as isize) = modifiers as uint8_t as ::core::ffi::c_char;
     }
     if key < 0 as ::core::ffi::c_int {
         let c2rust_fresh13 = dlen;
         dlen = dlen.wrapping_add(1);
-        *dst.offset(c2rust_fresh13 as isize) = K_SPECIAL as uint8_t
-            as ::core::ffi::c_char;
+        *dst.offset(c2rust_fresh13 as isize) = K_SPECIAL as uint8_t as ::core::ffi::c_char;
         let c2rust_fresh14 = dlen;
         dlen = dlen.wrapping_add(1);
-        *dst.offset(c2rust_fresh14 as isize) = (-key & 0xff as ::core::ffi::c_int)
-            as uint8_t as ::core::ffi::c_char;
+        *dst.offset(c2rust_fresh14 as isize) =
+            (-key & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
         let c2rust_fresh15 = dlen;
         dlen = dlen.wrapping_add(1);
-        *dst.offset(c2rust_fresh15 as isize) = (-key as ::core::ffi::c_uint
-            >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint) as uint8_t
-            as ::core::ffi::c_char;
+        *dst.offset(c2rust_fresh15 as isize) =
+            (-key as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
+                as uint8_t as ::core::ffi::c_char;
     } else if escape_ks {
-        let mut after: *mut ::core::ffi::c_char = add_char2buf(
-            key,
-            dst.offset(dlen as isize),
-        );
+        let mut after: *mut ::core::ffi::c_char = add_char2buf(key, dst.offset(dlen as isize));
         '_c2rust_label: {
             if after >= dst
                 && after.offset_from(dst) as uintmax_t
                     <= (2147483647 as ::core::ffi::c_int as ::core::ffi::c_uint)
                         .wrapping_mul(2 as ::core::ffi::c_uint)
                         .wrapping_add(1 as ::core::ffi::c_uint) as uintmax_t
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"after >= dst && (uintmax_t)(after - dst) <= UINT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/keycodes.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/keycodes.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     399 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -1099,9 +1064,7 @@ pub unsafe extern "C" fn special_to_buf(
         dlen = after.offset_from(dst) as ::core::ffi::c_uint;
     } else {
         dlen = dlen
-            .wrapping_add(
-                utf_char2bytes(key, dst.offset(dlen as isize)) as ::core::ffi::c_uint,
-            );
+            .wrapping_add(utf_char2bytes(key, dst.offset(dlen as isize)) as ::core::ffi::c_uint);
     }
     return dlen;
 }
@@ -1149,10 +1112,10 @@ pub unsafe extern "C" fn find_special_key(
                 );
                 if end.offset_from(bp) > l as isize
                     && !(in_string as ::core::ffi::c_int != 0
-                        && *bp.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '"' as ::core::ffi::c_int)
-                    && *bp.offset((l + 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_int == '>' as ::core::ffi::c_int
+                        && *bp.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '"' as ::core::ffi::c_int)
+                    && *bp.offset((l + 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+                        == '>' as ::core::ffi::c_int
                 {
                     bp = bp.offset(l as isize);
                 } else if end.offset_from(bp) > 2 as isize
@@ -1178,8 +1141,7 @@ pub unsafe extern "C" fn find_special_key(
         } else if end.offset_from(bp) > 4 as isize
             && strncasecmp(
                 bp as *mut ::core::ffi::c_char,
-                b"char-\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"char-\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 5 as ::core::ffi::c_int as size_t,
             ) == 0 as ::core::ffi::c_int
         {
@@ -1205,15 +1167,14 @@ pub unsafe extern "C" fn find_special_key(
     }
     if bp <= end && *bp as ::core::ffi::c_int == '>' as ::core::ffi::c_int {
         let mut key: ::core::ffi::c_int = 0;
-        let mut end_of_name: *const ::core::ffi::c_char = bp
-            .offset(1 as ::core::ffi::c_int as isize);
+        let mut end_of_name: *const ::core::ffi::c_char =
+            bp.offset(1 as ::core::ffi::c_int as isize);
         let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         bp = src.offset(1 as ::core::ffi::c_int as isize);
         while bp < last_dash {
             if *bp as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
-                let mut bit: ::core::ffi::c_int = name_to_mod_mask(
-                    *bp as uint8_t as ::core::ffi::c_int,
-                );
+                let mut bit: ::core::ffi::c_int =
+                    name_to_mod_mask(*bp as uint8_t as ::core::ffi::c_int);
                 if bit == 0 as ::core::ffi::c_int {
                     break;
                 }
@@ -1223,16 +1184,14 @@ pub unsafe extern "C" fn find_special_key(
         }
         if bp >= last_dash {
             if strncasecmp(
-                last_dash.offset(1 as ::core::ffi::c_int as isize)
-                    as *mut ::core::ffi::c_char,
-                b"char-\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                last_dash.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char,
+                b"char-\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 5 as ::core::ffi::c_int as size_t,
             ) == 0 as ::core::ffi::c_int
                 && ascii_isdigit(
-                    *last_dash.offset(6 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
+                    *last_dash.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                ) as ::core::ffi::c_int
+                    != 0
             {
                 vim_str2nr(
                     last_dash.offset(6 as ::core::ffi::c_int as isize),
@@ -1253,10 +1212,10 @@ pub unsafe extern "C" fn find_special_key(
             } else {
                 let mut off: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
                 if in_string as ::core::ffi::c_int != 0
-                    && *last_dash.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                    && *last_dash.offset(2 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '"' as ::core::ffi::c_int
+                    && *last_dash.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '\\' as ::core::ffi::c_int
+                    && *last_dash.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '"' as ::core::ffi::c_int
                 {
                     l = 2 as ::core::ffi::c_int;
                     off = l;
@@ -1265,7 +1224,8 @@ pub unsafe extern "C" fn find_special_key(
                 }
                 if modifiers != 0 as ::core::ffi::c_int
                     && *last_dash.offset((l + 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_int == '>' as ::core::ffi::c_int
+                        as ::core::ffi::c_int
+                        == '>' as ::core::ffi::c_int
                 {
                     key = utf_ptr2char(last_dash.offset(off as isize));
                 } else {
@@ -1283,8 +1243,7 @@ pub unsafe extern "C" fn find_special_key(
                     } else if key == K_DEL
                         || key
                             == -(253 as ::core::ffi::c_int
-                                + ((KE_KDEL as ::core::ffi::c_int)
-                                    << 8 as ::core::ffi::c_int))
+                                + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
                     {
                         key = DEL;
                     }
@@ -1339,7 +1298,8 @@ unsafe extern "C" fn extract_modifiers(
             key - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
         };
     }
-    if simplify as ::core::ffi::c_int != 0 && modifiers & MOD_MASK_CTRL != 0
+    if simplify as ::core::ffi::c_int != 0
+        && modifiers & MOD_MASK_CTRL != 0
         && (key >= '?' as ::core::ffi::c_int && key <= '_' as ::core::ffi::c_int
             || (key as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
                 && key as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -1367,14 +1327,13 @@ pub unsafe extern "C" fn find_special_key_in_table(
     mut c: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i
-        < ::core::mem::size_of::<[key_name_entry; 187]>()
-            .wrapping_div(::core::mem::size_of::<key_name_entry>())
-            .wrapping_div(
-                (::core::mem::size_of::<[key_name_entry; 187]>()
-                    .wrapping_rem(::core::mem::size_of::<key_name_entry>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) as ::core::ffi::c_int
+    while i < ::core::mem::size_of::<[key_name_entry; 187]>()
+        .wrapping_div(::core::mem::size_of::<key_name_entry>())
+        .wrapping_div(
+            (::core::mem::size_of::<[key_name_entry; 187]>()
+                .wrapping_rem(::core::mem::size_of::<key_name_entry>())
+                == 0) as ::core::ffi::c_int as usize,
+        ) as ::core::ffi::c_int
     {
         if c == key_names_table[i as usize].key && !key_names_table[i as usize].is_alt {
             return i;
@@ -1394,19 +1353,16 @@ pub unsafe extern "C" fn get_special_key_code(
         && *name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         && *name.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
     {
-        return -(*name.offset(2 as ::core::ffi::c_int as isize) as uint8_t
-            as ::core::ffi::c_int
-            + ((*name.offset(3 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+        return -(*name.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+            + ((*name.offset(3 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int)
+                << 8 as ::core::ffi::c_int));
     }
     let mut name_end: *const ::core::ffi::c_char = name;
     while ascii_isident(*name_end as ::core::ffi::c_int) {
         name_end = name_end.offset(1);
     }
-    let mut idx: ::core::ffi::c_int = get_special_key_code_hash(
-        name,
-        name_end.offset_from(name) as size_t,
-    );
+    let mut idx: ::core::ffi::c_int =
+        get_special_key_code_hash(name, name_end.offset_from(name) as size_t);
     return if idx >= 0 as ::core::ffi::c_int {
         key_names_table[idx as usize].key
     } else {
@@ -1474,8 +1430,7 @@ pub unsafe extern "C" fn replace_termcodes(
             if end.offset_from(src) >= 4 as isize
                 && strncasecmp(
                     src as *mut ::core::ffi::c_char,
-                    b"<SID>\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"<SID>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     5 as ::core::ffi::c_int as size_t,
                 ) == 0 as ::core::ffi::c_int
             {
@@ -1493,16 +1448,14 @@ pub unsafe extern "C" fn replace_termcodes(
                     src = src.offset(5 as ::core::ffi::c_int as isize);
                     let c2rust_fresh20 = dlen;
                     dlen = dlen.wrapping_add(1);
-                    *result.offset(c2rust_fresh20 as isize) = K_SPECIAL
-                        as ::core::ffi::c_char;
+                    *result.offset(c2rust_fresh20 as isize) = K_SPECIAL as ::core::ffi::c_char;
                     let c2rust_fresh21 = dlen;
                     dlen = dlen.wrapping_add(1);
-                    *result.offset(c2rust_fresh21 as isize) = KS_EXTRA
-                        as ::core::ffi::c_char;
+                    *result.offset(c2rust_fresh21 as isize) = KS_EXTRA as ::core::ffi::c_char;
                     let c2rust_fresh22 = dlen;
                     dlen = dlen.wrapping_add(1);
-                    *result.offset(c2rust_fresh22 as isize) = KE_SNR
-                        as ::core::ffi::c_int as ::core::ffi::c_char;
+                    *result.offset(c2rust_fresh22 as isize) =
+                        KE_SNR as ::core::ffi::c_int as ::core::ffi::c_char;
                     snprintf(
                         result.offset(dlen as isize),
                         buf_len.wrapping_sub(dlen),
@@ -1535,12 +1488,8 @@ pub unsafe extern "C" fn replace_termcodes(
             }
         }
         if do_special {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
-            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut len: ::core::ffi::c_int = 0;
             if end.offset_from(src) >= 7 as isize
                 && strncasecmp(
@@ -1551,9 +1500,7 @@ pub unsafe extern "C" fn replace_termcodes(
                 ) == 0 as ::core::ffi::c_int
             {
                 len = 8 as ::core::ffi::c_int;
-                p = get_var_value(
-                    b"g:mapleader\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                p = get_var_value(b"g:mapleader\0".as_ptr() as *const ::core::ffi::c_char);
             } else if end.offset_from(src) >= 12 as isize
                 && strncasecmp(
                     src as *mut ::core::ffi::c_char,
@@ -1563,20 +1510,17 @@ pub unsafe extern "C" fn replace_termcodes(
                 ) == 0 as ::core::ffi::c_int
             {
                 len = 13 as ::core::ffi::c_int;
-                p = get_var_value(
-                    b"g:maplocalleader\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                p = get_var_value(b"g:maplocalleader\0".as_ptr() as *const ::core::ffi::c_char);
             } else {
                 len = 0 as ::core::ffi::c_int;
                 p = ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
             if len != 0 as ::core::ffi::c_int {
-                if p.is_null() || *p as ::core::ffi::c_int == NUL
-                    || strlen(p)
-                        > (8 as ::core::ffi::c_int * 6 as ::core::ffi::c_int) as size_t
+                if p.is_null()
+                    || *p as ::core::ffi::c_int == NUL
+                    || strlen(p) > (8 as ::core::ffi::c_int * 6 as ::core::ffi::c_int) as size_t
                 {
-                    s = b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                    s = b"\\\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     s = p;
                 }
@@ -1611,21 +1555,17 @@ pub unsafe extern "C" fn replace_termcodes(
             end.offset_from(src) as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
         ) as ssize_t;
         while i > 0 as ssize_t {
-            if *src as ::core::ffi::c_int
-                == K_SPECIAL as ::core::ffi::c_char as ::core::ffi::c_int
+            if *src as ::core::ffi::c_int == K_SPECIAL as ::core::ffi::c_char as ::core::ffi::c_int
             {
                 let c2rust_fresh27 = dlen;
                 dlen = dlen.wrapping_add(1);
-                *result.offset(c2rust_fresh27 as isize) = K_SPECIAL
-                    as ::core::ffi::c_char;
+                *result.offset(c2rust_fresh27 as isize) = K_SPECIAL as ::core::ffi::c_char;
                 let c2rust_fresh28 = dlen;
                 dlen = dlen.wrapping_add(1);
-                *result.offset(c2rust_fresh28 as isize) = KS_SPECIAL
-                    as ::core::ffi::c_char;
+                *result.offset(c2rust_fresh28 as isize) = KS_SPECIAL as ::core::ffi::c_char;
                 let c2rust_fresh29 = dlen;
                 dlen = dlen.wrapping_add(1);
-                *result.offset(c2rust_fresh29 as isize) = KE_FILLER
-                    as ::core::ffi::c_char;
+                *result.offset(c2rust_fresh29 as isize) = KE_FILLER as ::core::ffi::c_char;
             } else {
                 let c2rust_fresh30 = dlen;
                 dlen = dlen.wrapping_add(1);
@@ -1650,10 +1590,7 @@ pub unsafe extern "C" fn add_char2buf(
     mut s: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut temp: [::core::ffi::c_char; 22] = [0; 22];
-    let len: ::core::ffi::c_int = utf_char2bytes(
-        c,
-        &raw mut temp as *mut ::core::ffi::c_char,
-    );
+    let len: ::core::ffi::c_int = utf_char2bytes(c, &raw mut temp as *mut ::core::ffi::c_char);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < len {
         c = temp[i as usize] as uint8_t as ::core::ffi::c_int;
@@ -1681,13 +1618,14 @@ pub unsafe extern "C" fn vim_strsave_escape_ks(
     mut p: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut res: *mut ::core::ffi::c_char = xmalloc(
-        strlen(p).wrapping_mul(4 as size_t).wrapping_add(1 as size_t),
+        strlen(p)
+            .wrapping_mul(4 as size_t)
+            .wrapping_add(1 as size_t),
     ) as *mut ::core::ffi::c_char;
     let mut d: *mut ::core::ffi::c_char = res;
     let mut s: *mut ::core::ffi::c_char = p;
     while *s as ::core::ffi::c_int != NUL {
-        if *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-            == K_SPECIAL
+        if *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int == K_SPECIAL
             && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         {
@@ -1720,10 +1658,8 @@ pub unsafe extern "C" fn vim_unescape_ks(mut p: *mut ::core::ffi::c_char) {
     let mut d: *mut uint8_t = p as *mut uint8_t;
     while *s as ::core::ffi::c_int != NUL {
         if *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == K_SPECIAL
-            && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KS_SPECIAL
-            && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KE_FILLER
+            && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KS_SPECIAL
+            && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KE_FILLER
         {
             let c2rust_fresh37 = d;
             d = d.offset(1);
@@ -1745,226 +1681,226 @@ pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const KS_KEY: ::core::ffi::c_int = 242 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KUP: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KDOWN: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_LEFT: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KLEFT: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_RIGHT: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KRIGHT: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_TAB: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F1: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F2: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F3: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F4: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F5: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F6: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F7: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F8: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F9: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('9' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F10: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + ((';' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F11: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F12: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F13: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F14: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F15: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F16: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F17: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F18: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F19: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('9' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F20: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F21: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F22: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('C' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F23: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F24: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('E' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F25: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('F' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F26: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('G' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F27: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('H' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F28: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F29: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('J' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F30: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('K' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F31: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('L' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F32: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('M' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F33: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F34: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('O' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F35: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F36: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('Q' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F37: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('R' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F38: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('S' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F39: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('T' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F40: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('U' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F41: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('V' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F42: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('W' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F43: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F44: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('Y' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F45: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('Z' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F46: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('a' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F47: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F48: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('c' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F49: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F50: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('e' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F51: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('f' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F52: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('g' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F53: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('h' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F54: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F55: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('j' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F56: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('k' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F57: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F58: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('m' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F59: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('n' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F60: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('o' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F61: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('p' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F62: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('q' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F63: ::core::ffi::c_int = -('F' as ::core::ffi::c_int
-    + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_UP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KUP: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KDOWN: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_LEFT: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KLEFT: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_RIGHT: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KRIGHT: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_TAB: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F1: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F2: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F3: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F4: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F5: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F6: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F7: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F8: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F9: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('9' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F10: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + ((';' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F11: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F12: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F13: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F14: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F15: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F16: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F17: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F18: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F19: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('9' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F20: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F21: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F22: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('C' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F23: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F24: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('E' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F25: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('F' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F26: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('G' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F27: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('H' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F28: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F29: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('J' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F30: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('K' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F31: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('L' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F32: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('M' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F33: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F34: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('O' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F35: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F36: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('Q' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F37: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('R' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F38: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('S' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F39: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('T' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F40: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('U' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F41: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('V' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F42: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('W' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F43: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F44: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('Y' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F45: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('Z' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F46: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('a' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F47: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F48: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('c' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F49: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F50: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('e' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F51: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('f' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F52: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('g' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F53: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('h' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F54: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F55: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('j' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F56: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('k' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F57: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F58: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('m' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F59: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('n' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F60: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('o' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F61: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('p' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F62: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('q' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F63: ::core::ffi::c_int =
+    -('F' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_S_XF1: ::core::ffi::c_int = -18429;
 pub const K_S_XF2: ::core::ffi::c_int = -18685;
 pub const K_S_XF3: ::core::ffi::c_int = -18941;
 pub const K_S_XF4: ::core::ffi::c_int = -19197;
-pub const K_HELP: ::core::ffi::c_int = -('%' as ::core::ffi::c_int
-    + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UNDO: ::core::ffi::c_int = -('&' as ::core::ffi::c_int
-    + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_FIND: ::core::ffi::c_int = -('@' as ::core::ffi::c_int
-    + (('0' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KSELECT: ::core::ffi::c_int = -('*' as ::core::ffi::c_int
-    + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_BS: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_INS: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DEL: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_HOME: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('h' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KHOME: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_END: ::core::ffi::c_int = -('@' as ::core::ffi::c_int
-    + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KEND: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEUP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEDOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEUP: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEDOWN: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KORIGIN: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPLUS: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KMINUS: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KDIVIDE: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KMULTIPLY: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('9' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPOINT: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K0: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('C' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K1: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K2: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('E' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K3: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('F' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K4: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('G' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K5: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('H' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K6: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K7: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('J' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K8: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('K' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K9: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('L' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KCOMMA: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('M' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KEQUAL: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_MOUSE: ::core::ffi::c_int = -(251 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_HELP: ::core::ffi::c_int =
+    -('%' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_UNDO: ::core::ffi::c_int =
+    -('&' as ::core::ffi::c_int + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_FIND: ::core::ffi::c_int =
+    -('@' as ::core::ffi::c_int + (('0' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KSELECT: ::core::ffi::c_int =
+    -('*' as ::core::ffi::c_int + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_BS: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_INS: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DEL: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_HOME: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('h' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KHOME: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_END: ::core::ffi::c_int =
+    -('@' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KEND: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEUP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEDOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEUP: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEDOWN: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KORIGIN: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPLUS: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('6' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KMINUS: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KDIVIDE: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KMULTIPLY: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('9' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KENTER: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPOINT: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K0: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('C' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K1: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K2: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('E' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K3: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('F' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K4: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('G' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K5: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('H' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K6: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K7: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('J' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K8: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('K' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_K9: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('L' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KCOMMA: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('M' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KEQUAL: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_MOUSE: ::core::ffi::c_int =
+    -(251 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
@@ -1973,16 +1909,15 @@ pub const MOD_MASK_2CLICK: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const MOD_MASK_3CLICK: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const MOD_MASK_4CLICK: ::core::ffi::c_int = 0x60 as ::core::ffi::c_int;
 pub const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
-pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK
-    | MOD_MASK_4CLICK;
+pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int =
+    MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 pub const MAX_KEY_NAME_LEN: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 static mut key_names_table: [key_name_entry; 187] = [
     key_name_entry {
         key: K_K0,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k0\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k0\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -1990,8 +1925,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F1,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F1\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -1999,8 +1933,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K1,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k1\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2008,8 +1941,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F2,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F2\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2017,8 +1949,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K2,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k2\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2026,8 +1957,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F3,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F3\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2035,8 +1965,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K3,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k3\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2044,8 +1973,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F4,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F4\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2053,8 +1981,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K4,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k4\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2062,8 +1989,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F5,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F5\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F5\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2071,8 +1997,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K5,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k5\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k5\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2080,8 +2005,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F6,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F6\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F6\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2089,8 +2013,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K6,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k6\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k6\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2098,8 +2021,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F7,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F7\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F7\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2107,8 +2029,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K7,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k7\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k7\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2116,8 +2037,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F8,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F8\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F8\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2125,8 +2045,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K8,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k8\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k8\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2134,8 +2053,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F9,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F9\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F9\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2143,8 +2061,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_K9,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"k9\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"k9\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2152,8 +2069,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: NL,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"LF\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"LF\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2161,8 +2077,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: NL,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"NL\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"NL\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2170,8 +2085,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_UP,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Up\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Up\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2179,8 +2093,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: CAR,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"CR\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"CR\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2188,8 +2101,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_BS,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"BS\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"BS\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2197,8 +2109,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: '<' as ::core::ffi::c_int,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"lt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"lt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 2 as size_t,
         },
     },
@@ -2206,8 +2117,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F10,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F10\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F10\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2215,8 +2125,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F20,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F20\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F20\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2224,8 +2133,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F30,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F30\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F30\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2233,8 +2141,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F40,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F40\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F40\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2242,8 +2149,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F50,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F50\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F50\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2251,8 +2157,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F60,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F60\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F60\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2261,8 +2166,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_KINS as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP0\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP0\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2270,8 +2174,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F11,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F11\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F11\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2279,8 +2182,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F21,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F21\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F21\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2288,8 +2190,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F31,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F31\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F31\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2297,8 +2198,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F41,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F41\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F41\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2306,8 +2206,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F51,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F51\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F51\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2315,8 +2214,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F61,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F61\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F61\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2324,8 +2222,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KEND,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP1\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2334,8 +2231,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XF1 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xF1\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xF1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2343,8 +2239,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F12,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F12\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F12\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2352,8 +2247,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F22,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F22\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F22\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2361,8 +2255,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F32,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F32\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F32\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2370,8 +2263,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F42,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F42\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F42\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2379,8 +2271,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F52,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F52\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F52\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2388,8 +2279,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F62,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F62\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F62\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2397,8 +2287,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KDOWN,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP2\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2407,8 +2296,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XF2 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xF2\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xF2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2416,8 +2304,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F13,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F13\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F13\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2425,8 +2312,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F23,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F23\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F23\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2434,8 +2320,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F33,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F33\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F33\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2443,8 +2328,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F43,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F43\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F43\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2452,8 +2336,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F53,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F53\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F53\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2461,8 +2344,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F63,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F63\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F63\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2470,8 +2352,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPAGEDOWN,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP3\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2480,8 +2361,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XF3 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xF3\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xF3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2489,8 +2369,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F14,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F14\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F14\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2498,8 +2377,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F24,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F24\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F24\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2507,8 +2385,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F34,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F34\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F34\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2516,8 +2393,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F44,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F44\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F44\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2525,8 +2401,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F54,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F54\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F54\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2534,8 +2409,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KLEFT,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP4\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2544,8 +2418,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XF4 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xF4\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xF4\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2553,8 +2426,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F15,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F15\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F15\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2562,8 +2434,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F25,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F25\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F25\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2571,8 +2442,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F35,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F35\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F35\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2580,8 +2450,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F45,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F45\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F45\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2589,8 +2458,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F55,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F55\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F55\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2598,8 +2466,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KORIGIN,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP5\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP5\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2607,8 +2474,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F16,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F16\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F16\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2616,8 +2482,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F26,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F26\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F26\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2625,8 +2490,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F36,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F36\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F36\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2634,8 +2498,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F46,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F46\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F46\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2643,8 +2506,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F56,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F56\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F56\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2652,8 +2514,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KRIGHT,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP6\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP6\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2661,8 +2522,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F17,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F17\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F17\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2670,8 +2530,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F27,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F27\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F27\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2679,8 +2538,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F37,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F37\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F37\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2688,8 +2546,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F47,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F47\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F47\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2697,8 +2554,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F57,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F57\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F57\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2706,8 +2562,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KHOME,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP7\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP7\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2715,8 +2570,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F18,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F18\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F18\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2724,8 +2578,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F28,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F28\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F28\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2733,8 +2586,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F38,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F38\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F38\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2742,8 +2594,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F48,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F48\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F48\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2751,8 +2602,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F58,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F58\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F58\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2760,8 +2610,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KUP,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP8\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP8\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2769,8 +2618,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F19,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F19\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F19\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2778,8 +2626,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F29,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F29\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F29\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2787,8 +2634,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F39,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F39\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F39\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2796,8 +2642,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F49,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F49\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F49\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2805,8 +2650,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_F59,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"F59\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"F59\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2814,8 +2658,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPAGEUP,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KP9\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KP9\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2823,8 +2666,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: TAB,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Tab\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2833,8 +2675,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_TAB as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Tab\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2842,8 +2683,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: ESC,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Esc\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Esc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2852,8 +2692,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Cmd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2861,8 +2700,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_END,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"End\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"End\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2870,8 +2708,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: CSI,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"CSI\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"CSI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2879,8 +2716,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_DEL,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Del\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Del\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2888,8 +2724,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_ZERO,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Nul\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Nul\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2897,8 +2732,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KUP,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kUp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kUp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2907,8 +2741,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xUp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xUp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2916,8 +2749,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: '|' as ::core::ffi::c_int,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Bar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Bar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2926,8 +2758,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_SNR as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"SNR\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"SNR\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2935,8 +2766,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_INS,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"Ins\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Ins\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 3 as size_t,
         },
     },
@@ -2944,8 +2774,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_DOWN,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Down\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Down\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -2954,8 +2783,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_DROP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Drop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Drop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -2963,8 +2791,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_FIND,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Find\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Find\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -2972,8 +2799,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_HELP,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Help\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Help\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -2981,8 +2807,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_HOME,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Home\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Home\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -2991,8 +2816,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kDel\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kDel\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3000,8 +2824,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KEND,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kEnd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kEnd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3009,8 +2832,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_LEFT,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Left\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Left\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3019,8 +2841,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_PLUG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Plug\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Plug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3028,8 +2849,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_UNDO,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Undo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Undo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3038,8 +2858,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XEND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xEnd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xEnd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3048,8 +2867,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_ZEND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"zEnd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"zEnd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 4 as size_t,
         },
     },
@@ -3057,8 +2875,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KDOWN,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kDown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kDown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3067,8 +2884,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xDown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xDown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3076,8 +2892,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KHOME,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kHome\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kHome\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3086,8 +2901,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XHOME as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xHome\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xHome\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3096,8 +2910,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_ZHOME as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"zHome\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"zHome\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3105,8 +2918,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_RIGHT,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Right\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Right\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3114,8 +2926,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KLEFT,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kLeft\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kLeft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3124,8 +2935,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XLEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xLeft\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xLeft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3133,8 +2943,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: CAR,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"Enter\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Enter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3142,8 +2951,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_MOUSE,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Mouse\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Mouse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3151,8 +2959,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KDIVIDE,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPDiv\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPDiv\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3160,8 +2967,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPLUS,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kPlus\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kPlus\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3169,8 +2975,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: ' ' as ::core::ffi::c_int,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Space\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Space\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 5 as size_t,
         },
     },
@@ -3178,8 +2983,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: ESC,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"Escape\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Escape\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3188,8 +2992,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_X1DRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"X1Drag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"X1Drag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3198,8 +3001,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_X2DRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"X2Drag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"X2Drag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3207,8 +3009,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_PAGEUP,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"PageUp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"PageUp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3216,8 +3017,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KMINUS,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kMinus\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kMinus\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3225,8 +3025,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KRIGHT,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kRight\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kRight\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3235,8 +3034,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_XRIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"xRight\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"xRight\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3244,8 +3042,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: '\\' as ::core::ffi::c_int,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Bslash\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Bslash\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3253,8 +3050,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_DEL,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"Delete\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Delete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3262,8 +3058,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KSELECT,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Select\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Select\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3271,8 +3066,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KMULTIPLY,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPMult\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPMult\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3281,8 +3075,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Ignore\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Ignore\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3290,8 +3083,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KENTER,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kEnter\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3299,8 +3091,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KCOMMA,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kComma\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kComma\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3308,8 +3099,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPOINT,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kPoint\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kPoint\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3317,8 +3107,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPLUS,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPPlus\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPPlus\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3326,8 +3115,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KEQUAL,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kEqual\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kEqual\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3335,8 +3123,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_INS,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"Insert\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Insert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3344,8 +3131,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: CAR,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"Return\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"Return\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 6 as size_t,
         },
     },
@@ -3353,8 +3139,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPAGEUP,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kPageUp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kPageUp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3362,8 +3147,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KCOMMA,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPComma\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPComma\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3371,8 +3155,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KENTER,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPEnter\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3380,8 +3163,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KDIVIDE,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kDivide\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kDivide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3389,8 +3171,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KMINUS,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPMinus\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPMinus\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3399,8 +3180,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_X1MOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"X1Mouse\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"X1Mouse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3409,8 +3189,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_X2MOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"X2Mouse\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"X2Mouse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3419,8 +3198,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_KINS as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kInsert\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kInsert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3428,8 +3206,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KORIGIN,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kOrigin\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kOrigin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3438,8 +3215,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"MouseUp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"MouseUp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3447,8 +3223,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: NL,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"NewLine\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"NewLine\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 7 as size_t,
         },
     },
@@ -3456,8 +3231,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KEQUAL,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPEquals\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPEquals\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 8 as size_t,
         },
     },
@@ -3466,8 +3240,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_LEFTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"LeftDrag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"LeftDrag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 8 as size_t,
         },
     },
@@ -3475,8 +3248,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_PAGEDOWN,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"PageDown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"PageDown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 8 as size_t,
         },
     },
@@ -3484,8 +3256,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: NL,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"LineFeed\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"LineFeed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 8 as size_t,
         },
     },
@@ -3494,8 +3265,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"KPPeriod\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"KPPeriod\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 8 as size_t,
         },
     },
@@ -3503,8 +3273,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_BS,
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"BackSpace\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"BackSpace\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3512,8 +3281,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KMULTIPLY,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kMultiply\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kMultiply\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3521,8 +3289,7 @@ static mut key_names_table: [key_name_entry; 187] = [
         key: K_KPAGEDOWN,
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"kPageDown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"kPageDown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3531,8 +3298,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_LEFTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"LeftMouse\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"LeftMouse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3541,8 +3307,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: true_0 != 0,
         name: String_0 {
-            data: b"MouseDown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"MouseDown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3551,8 +3316,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"MouseMove\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"MouseMove\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3561,8 +3325,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_RIGHTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"RightDrag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"RightDrag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3571,8 +3334,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_X1RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"X1Release\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"X1Release\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3581,8 +3343,7 @@ static mut key_names_table: [key_name_entry; 187] = [
             + ((KE_X2RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         is_alt: false_0 != 0,
         name: String_0 {
-            data: b"X2Release\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            data: b"X2Release\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             size: 9 as size_t,
         },
     },
@@ -3714,438 +3475,414 @@ unsafe extern "C" fn get_special_key_code_hash(
     let mut low: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut high: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     match len {
-        2 => {
-            match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                48 => {
-                    low = 0 as ::core::ffi::c_int;
-                    high = 1 as ::core::ffi::c_int;
-                }
-                49 => {
-                    low = 1 as ::core::ffi::c_int;
-                    high = 3 as ::core::ffi::c_int;
-                }
-                50 => {
-                    low = 3 as ::core::ffi::c_int;
-                    high = 5 as ::core::ffi::c_int;
-                }
-                51 => {
-                    low = 5 as ::core::ffi::c_int;
-                    high = 7 as ::core::ffi::c_int;
-                }
-                52 => {
-                    low = 7 as ::core::ffi::c_int;
-                    high = 9 as ::core::ffi::c_int;
-                }
-                53 => {
-                    low = 9 as ::core::ffi::c_int;
-                    high = 11 as ::core::ffi::c_int;
-                }
-                54 => {
-                    low = 11 as ::core::ffi::c_int;
-                    high = 13 as ::core::ffi::c_int;
-                }
-                55 => {
-                    low = 13 as ::core::ffi::c_int;
-                    high = 15 as ::core::ffi::c_int;
-                }
-                56 => {
-                    low = 15 as ::core::ffi::c_int;
-                    high = 17 as ::core::ffi::c_int;
-                }
-                57 => {
-                    low = 17 as ::core::ffi::c_int;
-                    high = 19 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 19 as ::core::ffi::c_int;
-                    high = 20 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 20 as ::core::ffi::c_int;
-                    high = 21 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 21 as ::core::ffi::c_int;
-                    high = 22 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 22 as ::core::ffi::c_int;
-                    high = 23 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 23 as ::core::ffi::c_int;
-                    high = 24 as ::core::ffi::c_int;
-                }
-                84 | 116 => {
-                    low = 24 as ::core::ffi::c_int;
-                    high = 25 as ::core::ffi::c_int;
-                }
-                _ => {}
+        2 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            48 => {
+                low = 0 as ::core::ffi::c_int;
+                high = 1 as ::core::ffi::c_int;
             }
-        }
-        3 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                48 => {
-                    low = 25 as ::core::ffi::c_int;
-                    high = 32 as ::core::ffi::c_int;
-                }
-                49 => {
-                    low = 32 as ::core::ffi::c_int;
-                    high = 40 as ::core::ffi::c_int;
-                }
-                50 => {
-                    low = 40 as ::core::ffi::c_int;
-                    high = 48 as ::core::ffi::c_int;
-                }
-                51 => {
-                    low = 48 as ::core::ffi::c_int;
-                    high = 56 as ::core::ffi::c_int;
-                }
-                52 => {
-                    low = 56 as ::core::ffi::c_int;
-                    high = 63 as ::core::ffi::c_int;
-                }
-                53 => {
-                    low = 63 as ::core::ffi::c_int;
-                    high = 69 as ::core::ffi::c_int;
-                }
-                54 => {
-                    low = 69 as ::core::ffi::c_int;
-                    high = 75 as ::core::ffi::c_int;
-                }
-                55 => {
-                    low = 75 as ::core::ffi::c_int;
-                    high = 81 as ::core::ffi::c_int;
-                }
-                56 => {
-                    low = 81 as ::core::ffi::c_int;
-                    high = 87 as ::core::ffi::c_int;
-                }
-                57 => {
-                    low = 87 as ::core::ffi::c_int;
-                    high = 93 as ::core::ffi::c_int;
-                }
-                66 | 98 => {
-                    low = 93 as ::core::ffi::c_int;
-                    high = 95 as ::core::ffi::c_int;
-                }
-                67 | 99 => {
-                    low = 95 as ::core::ffi::c_int;
-                    high = 96 as ::core::ffi::c_int;
-                }
-                68 | 100 => {
-                    low = 96 as ::core::ffi::c_int;
-                    high = 98 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 98 as ::core::ffi::c_int;
-                    high = 99 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 99 as ::core::ffi::c_int;
-                    high = 101 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 101 as ::core::ffi::c_int;
-                    high = 103 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 103 as ::core::ffi::c_int;
-                    high = 105 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 105 as ::core::ffi::c_int;
-                    high = 106 as ::core::ffi::c_int;
-                }
-                _ => {}
+            49 => {
+                low = 1 as ::core::ffi::c_int;
+                high = 3 as ::core::ffi::c_int;
             }
-        }
-        4 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                68 | 100 => {
-                    low = 106 as ::core::ffi::c_int;
-                    high = 108 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 108 as ::core::ffi::c_int;
-                    high = 109 as ::core::ffi::c_int;
-                }
-                72 | 104 => {
-                    low = 109 as ::core::ffi::c_int;
-                    high = 111 as ::core::ffi::c_int;
-                }
-                75 | 107 => {
-                    low = 111 as ::core::ffi::c_int;
-                    high = 113 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 113 as ::core::ffi::c_int;
-                    high = 114 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 114 as ::core::ffi::c_int;
-                    high = 115 as ::core::ffi::c_int;
-                }
-                85 | 117 => {
-                    low = 115 as ::core::ffi::c_int;
-                    high = 116 as ::core::ffi::c_int;
-                }
-                88 | 120 => {
-                    low = 116 as ::core::ffi::c_int;
-                    high = 117 as ::core::ffi::c_int;
-                }
-                90 | 122 => {
-                    low = 117 as ::core::ffi::c_int;
-                    high = 118 as ::core::ffi::c_int;
-                }
-                _ => {}
+            50 => {
+                low = 3 as ::core::ffi::c_int;
+                high = 5 as ::core::ffi::c_int;
             }
-        }
-        5 => {
-            match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                68 | 100 => {
-                    low = 118 as ::core::ffi::c_int;
-                    high = 120 as ::core::ffi::c_int;
-                }
-                72 | 104 => {
-                    low = 120 as ::core::ffi::c_int;
-                    high = 123 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 123 as ::core::ffi::c_int;
-                    high = 124 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 124 as ::core::ffi::c_int;
-                    high = 126 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 126 as ::core::ffi::c_int;
-                    high = 127 as ::core::ffi::c_int;
-                }
-                79 | 111 => {
-                    low = 127 as ::core::ffi::c_int;
-                    high = 128 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 128 as ::core::ffi::c_int;
-                    high = 131 as ::core::ffi::c_int;
-                }
-                _ => {}
+            51 => {
+                low = 5 as ::core::ffi::c_int;
+                high = 7 as ::core::ffi::c_int;
             }
-        }
-        6 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                67 | 99 => {
-                    low = 131 as ::core::ffi::c_int;
-                    high = 132 as ::core::ffi::c_int;
-                }
-                68 | 100 => {
-                    low = 132 as ::core::ffi::c_int;
-                    high = 134 as ::core::ffi::c_int;
-                }
-                71 | 103 => {
-                    low = 134 as ::core::ffi::c_int;
-                    high = 135 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 135 as ::core::ffi::c_int;
-                    high = 138 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 138 as ::core::ffi::c_int;
-                    high = 141 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 141 as ::core::ffi::c_int;
-                    high = 142 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 142 as ::core::ffi::c_int;
-                    high = 144 as ::core::ffi::c_int;
-                }
-                79 | 111 => {
-                    low = 144 as ::core::ffi::c_int;
-                    high = 146 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 146 as ::core::ffi::c_int;
-                    high = 147 as ::core::ffi::c_int;
-                }
-                81 | 113 => {
-                    low = 147 as ::core::ffi::c_int;
-                    high = 148 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 148 as ::core::ffi::c_int;
-                    high = 149 as ::core::ffi::c_int;
-                }
-                84 | 116 => {
-                    low = 149 as ::core::ffi::c_int;
-                    high = 150 as ::core::ffi::c_int;
-                }
-                _ => {}
+            52 => {
+                low = 7 as ::core::ffi::c_int;
+                high = 9 as ::core::ffi::c_int;
             }
-        }
-        7 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                65 | 97 => {
-                    low = 150 as ::core::ffi::c_int;
-                    high = 151 as ::core::ffi::c_int;
-                }
-                67 | 99 => {
-                    low = 151 as ::core::ffi::c_int;
-                    high = 152 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 152 as ::core::ffi::c_int;
-                    high = 153 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 153 as ::core::ffi::c_int;
-                    high = 154 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 154 as ::core::ffi::c_int;
-                    high = 157 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 157 as ::core::ffi::c_int;
-                    high = 158 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 158 as ::core::ffi::c_int;
-                    high = 159 as ::core::ffi::c_int;
-                }
-                85 | 117 => {
-                    low = 159 as ::core::ffi::c_int;
-                    high = 160 as ::core::ffi::c_int;
-                }
-                87 | 119 => {
-                    low = 160 as ::core::ffi::c_int;
-                    high = 161 as ::core::ffi::c_int;
-                }
-                _ => {}
+            53 => {
+                low = 9 as ::core::ffi::c_int;
+                high = 11 as ::core::ffi::c_int;
             }
-        }
-        8 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                69 | 101 => {
-                    low = 161 as ::core::ffi::c_int;
-                    high = 162 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 162 as ::core::ffi::c_int;
-                    high = 163 as ::core::ffi::c_int;
-                }
-                71 | 103 => {
-                    low = 163 as ::core::ffi::c_int;
-                    high = 164 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 164 as ::core::ffi::c_int;
-                    high = 165 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 165 as ::core::ffi::c_int;
-                    high = 166 as ::core::ffi::c_int;
-                }
-                _ => {}
+            54 => {
+                low = 11 as ::core::ffi::c_int;
+                high = 13 as ::core::ffi::c_int;
             }
-        }
-        9 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                66 | 98 => {
-                    low = 166 as ::core::ffi::c_int;
-                    high = 167 as ::core::ffi::c_int;
-                }
-                75 | 107 => {
-                    low = 167 as ::core::ffi::c_int;
-                    high = 169 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 169 as ::core::ffi::c_int;
-                    high = 170 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 170 as ::core::ffi::c_int;
-                    high = 172 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 172 as ::core::ffi::c_int;
-                    high = 173 as ::core::ffi::c_int;
-                }
-                88 | 120 => {
-                    low = 173 as ::core::ffi::c_int;
-                    high = 175 as ::core::ffi::c_int;
-                }
-                _ => {}
+            55 => {
+                low = 13 as ::core::ffi::c_int;
+                high = 15 as ::core::ffi::c_int;
             }
-        }
-        10 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                77 | 109 => {
-                    low = 175 as ::core::ffi::c_int;
-                    high = 176 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 176 as ::core::ffi::c_int;
-                    high = 177 as ::core::ffi::c_int;
-                }
-                _ => {}
+            56 => {
+                low = 15 as ::core::ffi::c_int;
+                high = 17 as ::core::ffi::c_int;
             }
-        }
-        11 => {
-            match *str.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                76 | 108 => {
-                    low = 177 as ::core::ffi::c_int;
-                    high = 178 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 178 as ::core::ffi::c_int;
-                    high = 179 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 179 as ::core::ffi::c_int;
-                    high = 180 as ::core::ffi::c_int;
-                }
-                _ => {}
+            57 => {
+                low = 17 as ::core::ffi::c_int;
+                high = 19 as ::core::ffi::c_int;
             }
-        }
+            70 | 102 => {
+                low = 19 as ::core::ffi::c_int;
+                high = 20 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 20 as ::core::ffi::c_int;
+                high = 21 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 21 as ::core::ffi::c_int;
+                high = 22 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 22 as ::core::ffi::c_int;
+                high = 23 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 23 as ::core::ffi::c_int;
+                high = 24 as ::core::ffi::c_int;
+            }
+            84 | 116 => {
+                low = 24 as ::core::ffi::c_int;
+                high = 25 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        3 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            48 => {
+                low = 25 as ::core::ffi::c_int;
+                high = 32 as ::core::ffi::c_int;
+            }
+            49 => {
+                low = 32 as ::core::ffi::c_int;
+                high = 40 as ::core::ffi::c_int;
+            }
+            50 => {
+                low = 40 as ::core::ffi::c_int;
+                high = 48 as ::core::ffi::c_int;
+            }
+            51 => {
+                low = 48 as ::core::ffi::c_int;
+                high = 56 as ::core::ffi::c_int;
+            }
+            52 => {
+                low = 56 as ::core::ffi::c_int;
+                high = 63 as ::core::ffi::c_int;
+            }
+            53 => {
+                low = 63 as ::core::ffi::c_int;
+                high = 69 as ::core::ffi::c_int;
+            }
+            54 => {
+                low = 69 as ::core::ffi::c_int;
+                high = 75 as ::core::ffi::c_int;
+            }
+            55 => {
+                low = 75 as ::core::ffi::c_int;
+                high = 81 as ::core::ffi::c_int;
+            }
+            56 => {
+                low = 81 as ::core::ffi::c_int;
+                high = 87 as ::core::ffi::c_int;
+            }
+            57 => {
+                low = 87 as ::core::ffi::c_int;
+                high = 93 as ::core::ffi::c_int;
+            }
+            66 | 98 => {
+                low = 93 as ::core::ffi::c_int;
+                high = 95 as ::core::ffi::c_int;
+            }
+            67 | 99 => {
+                low = 95 as ::core::ffi::c_int;
+                high = 96 as ::core::ffi::c_int;
+            }
+            68 | 100 => {
+                low = 96 as ::core::ffi::c_int;
+                high = 98 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 98 as ::core::ffi::c_int;
+                high = 99 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 99 as ::core::ffi::c_int;
+                high = 101 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 101 as ::core::ffi::c_int;
+                high = 103 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 103 as ::core::ffi::c_int;
+                high = 105 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 105 as ::core::ffi::c_int;
+                high = 106 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        4 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            68 | 100 => {
+                low = 106 as ::core::ffi::c_int;
+                high = 108 as ::core::ffi::c_int;
+            }
+            70 | 102 => {
+                low = 108 as ::core::ffi::c_int;
+                high = 109 as ::core::ffi::c_int;
+            }
+            72 | 104 => {
+                low = 109 as ::core::ffi::c_int;
+                high = 111 as ::core::ffi::c_int;
+            }
+            75 | 107 => {
+                low = 111 as ::core::ffi::c_int;
+                high = 113 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 113 as ::core::ffi::c_int;
+                high = 114 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 114 as ::core::ffi::c_int;
+                high = 115 as ::core::ffi::c_int;
+            }
+            85 | 117 => {
+                low = 115 as ::core::ffi::c_int;
+                high = 116 as ::core::ffi::c_int;
+            }
+            88 | 120 => {
+                low = 116 as ::core::ffi::c_int;
+                high = 117 as ::core::ffi::c_int;
+            }
+            90 | 122 => {
+                low = 117 as ::core::ffi::c_int;
+                high = 118 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        5 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            68 | 100 => {
+                low = 118 as ::core::ffi::c_int;
+                high = 120 as ::core::ffi::c_int;
+            }
+            72 | 104 => {
+                low = 120 as ::core::ffi::c_int;
+                high = 123 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 123 as ::core::ffi::c_int;
+                high = 124 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 124 as ::core::ffi::c_int;
+                high = 126 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 126 as ::core::ffi::c_int;
+                high = 127 as ::core::ffi::c_int;
+            }
+            79 | 111 => {
+                low = 127 as ::core::ffi::c_int;
+                high = 128 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 128 as ::core::ffi::c_int;
+                high = 131 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        6 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            67 | 99 => {
+                low = 131 as ::core::ffi::c_int;
+                high = 132 as ::core::ffi::c_int;
+            }
+            68 | 100 => {
+                low = 132 as ::core::ffi::c_int;
+                high = 134 as ::core::ffi::c_int;
+            }
+            71 | 103 => {
+                low = 134 as ::core::ffi::c_int;
+                high = 135 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 135 as ::core::ffi::c_int;
+                high = 138 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 138 as ::core::ffi::c_int;
+                high = 141 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 141 as ::core::ffi::c_int;
+                high = 142 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 142 as ::core::ffi::c_int;
+                high = 144 as ::core::ffi::c_int;
+            }
+            79 | 111 => {
+                low = 144 as ::core::ffi::c_int;
+                high = 146 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 146 as ::core::ffi::c_int;
+                high = 147 as ::core::ffi::c_int;
+            }
+            81 | 113 => {
+                low = 147 as ::core::ffi::c_int;
+                high = 148 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 148 as ::core::ffi::c_int;
+                high = 149 as ::core::ffi::c_int;
+            }
+            84 | 116 => {
+                low = 149 as ::core::ffi::c_int;
+                high = 150 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        7 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            65 | 97 => {
+                low = 150 as ::core::ffi::c_int;
+                high = 151 as ::core::ffi::c_int;
+            }
+            67 | 99 => {
+                low = 151 as ::core::ffi::c_int;
+                high = 152 as ::core::ffi::c_int;
+            }
+            69 | 101 => {
+                low = 152 as ::core::ffi::c_int;
+                high = 153 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 153 as ::core::ffi::c_int;
+                high = 154 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 154 as ::core::ffi::c_int;
+                high = 157 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 157 as ::core::ffi::c_int;
+                high = 158 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 158 as ::core::ffi::c_int;
+                high = 159 as ::core::ffi::c_int;
+            }
+            85 | 117 => {
+                low = 159 as ::core::ffi::c_int;
+                high = 160 as ::core::ffi::c_int;
+            }
+            87 | 119 => {
+                low = 160 as ::core::ffi::c_int;
+                high = 161 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        8 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            69 | 101 => {
+                low = 161 as ::core::ffi::c_int;
+                high = 162 as ::core::ffi::c_int;
+            }
+            70 | 102 => {
+                low = 162 as ::core::ffi::c_int;
+                high = 163 as ::core::ffi::c_int;
+            }
+            71 | 103 => {
+                low = 163 as ::core::ffi::c_int;
+                high = 164 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 164 as ::core::ffi::c_int;
+                high = 165 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 165 as ::core::ffi::c_int;
+                high = 166 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        9 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            66 | 98 => {
+                low = 166 as ::core::ffi::c_int;
+                high = 167 as ::core::ffi::c_int;
+            }
+            75 | 107 => {
+                low = 167 as ::core::ffi::c_int;
+                high = 169 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 169 as ::core::ffi::c_int;
+                high = 170 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 170 as ::core::ffi::c_int;
+                high = 172 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 172 as ::core::ffi::c_int;
+                high = 173 as ::core::ffi::c_int;
+            }
+            88 | 120 => {
+                low = 173 as ::core::ffi::c_int;
+                high = 175 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        10 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            77 | 109 => {
+                low = 175 as ::core::ffi::c_int;
+                high = 176 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 176 as ::core::ffi::c_int;
+                high = 177 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        11 => match *str.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            76 | 108 => {
+                low = 177 as ::core::ffi::c_int;
+                high = 178 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 178 as ::core::ffi::c_int;
+                high = 179 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 179 as ::core::ffi::c_int;
+                high = 180 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
         12 => {
             low = 180 as ::core::ffi::c_int;
             high = 181 as ::core::ffi::c_int;
         }
-        13 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                76 | 108 => {
-                    low = 181 as ::core::ffi::c_int;
-                    high = 182 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 182 as ::core::ffi::c_int;
-                    high = 183 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 183 as ::core::ffi::c_int;
-                    high = 184 as ::core::ffi::c_int;
-                }
-                _ => {}
+        13 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            76 | 108 => {
+                low = 181 as ::core::ffi::c_int;
+                high = 182 as ::core::ffi::c_int;
             }
-        }
-        15 => {
-            match *str.offset(11 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                68 | 100 => {
-                    low = 184 as ::core::ffi::c_int;
-                    high = 185 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 185 as ::core::ffi::c_int;
-                    high = 186 as ::core::ffi::c_int;
-                }
-                _ => {}
+            77 | 109 => {
+                low = 182 as ::core::ffi::c_int;
+                high = 183 as ::core::ffi::c_int;
             }
-        }
+            83 | 115 => {
+                low = 183 as ::core::ffi::c_int;
+                high = 184 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        15 => match *str.offset(11 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            68 | 100 => {
+                low = 184 as ::core::ffi::c_int;
+                high = 185 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 185 as ::core::ffi::c_int;
+                high = 186 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
         16 => {
             low = 186 as ::core::ffi::c_int;
             high = 187 as ::core::ffi::c_int;
@@ -4180,7 +3917,8 @@ unsafe extern "C" fn ascii_isident(mut c: ::core::ffi::c_int) -> bool {
         && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
         || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
             && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-        || ascii_isdigit(c) as ::core::ffi::c_int != 0 || c == '_' as ::core::ffi::c_int;
+        || ascii_isdigit(c) as ::core::ffi::c_int != 0
+        || c == '_' as ::core::ffi::c_int;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

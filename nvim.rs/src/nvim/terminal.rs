@@ -39,15 +39,9 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
     fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
@@ -136,11 +130,7 @@ extern "C" {
     ) -> typval_T;
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
     fn tv_dict_add_nr(
         d: *mut dict_T,
@@ -150,15 +140,8 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn tv_dict_set_keys_readonly(dict: *mut dict_T);
     fn get_globvar_dict() -> *mut dict_T;
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
-    fn multiqueue_new(
-        on_put: PutCallback,
-        data: *mut ::core::ffi::c_void,
-    ) -> *mut MultiQueue;
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
+    fn multiqueue_new(on_put: PutCallback, data: *mut ::core::ffi::c_void) -> *mut MultiQueue;
     fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
     fn multiqueue_free(self_0: *mut MultiQueue);
     fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
@@ -227,19 +210,13 @@ extern "C" {
     fn schar_get_adv(buf_out: *mut *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     static mut p_bg: *mut ::core::ffi::c_char;
     static mut tpf_flags: ::core::ffi::c_uint;
-    fn hl_add_url(
-        attr: ::core::ffi::c_int,
-        url: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn hl_add_url(attr: ::core::ffi::c_int, url: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn hl_get_term_attr(aep: *mut HlAttrs) -> ::core::ffi::c_int;
     fn hl_combine_attr(
         char_attr: ::core::ffi::c_int,
         prim_attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn name_to_color(
-        name: *const ::core::ffi::c_char,
-        idx: *mut ::core::ffi::c_int,
-    ) -> RgbValue;
+    fn name_to_color(name: *const ::core::ffi::c_char, idx: *mut ::core::ffi::c_int) -> RgbValue;
     static mut main_loop: Loop;
     fn mark_adjust_buf(
         buf: *mut buf_T,
@@ -268,11 +245,7 @@ extern "C" {
         copy: bool,
         noalloc: bool,
     ) -> ::core::ffi::c_int;
-    fn ml_delete_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        message: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> ::core::ffi::c_int;
     fn do_mousescroll(cap: *mut cmdarg_T);
     fn mouse_find_win_inner(
         gridp: *mut ::core::ffi::c_int,
@@ -308,11 +281,7 @@ extern "C" {
     fn vterm_keyboard_key(vt: *mut VTerm, key: VTermKey, mod_0: VTermModifier);
     fn vterm_keyboard_start_paste(vt: *mut VTerm);
     fn vterm_keyboard_end_paste(vt: *mut VTerm);
-    fn vterm_input_write(
-        vt: *mut VTerm,
-        bytes: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> size_t;
+    fn vterm_input_write(vt: *mut VTerm, bytes: *const ::core::ffi::c_char, len: size_t) -> size_t;
     fn vterm_mouse_move(
         vt: *mut VTerm,
         row: ::core::ffi::c_int,
@@ -345,10 +314,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn vterm_obtain_screen(vt: *mut VTerm) -> *mut VTermScreen;
     fn vterm_screen_enable_reflow(screen: *mut VTermScreen, reflow: bool);
-    fn vterm_screen_enable_altscreen(
-        screen: *mut VTermScreen,
-        altscreen: ::core::ffi::c_int,
-    );
+    fn vterm_screen_enable_altscreen(screen: *mut VTermScreen, altscreen: ::core::ffi::c_int);
     fn vterm_screen_set_callbacks(
         screen: *mut VTermScreen,
         callbacks: *const VTermScreenCallbacks,
@@ -368,11 +334,7 @@ extern "C" {
         rowsp: *mut ::core::ffi::c_int,
         colsp: *mut ::core::ffi::c_int,
     );
-    fn vterm_set_size(
-        vt: *mut VTerm,
-        rows: ::core::ffi::c_int,
-        cols: ::core::ffi::c_int,
-    );
+    fn vterm_set_size(vt: *mut VTerm, rows: ::core::ffi::c_int, cols: ::core::ffi::c_int);
     fn vterm_set_utf8(vt: *mut VTerm, is_utf8: ::core::ffi::c_int);
     fn vterm_output_set_callback(
         vt: *mut VTerm,
@@ -1120,7 +1082,8 @@ pub struct VTermScreenCellAttrs {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -1169,7 +1132,8 @@ pub struct ScreenPen {
     #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
     #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -1196,15 +1160,10 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
-    pub damage: Option<
-        unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub damage:
+        Option<unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub movecursor: Option<
         unsafe extern "C" fn(
@@ -1221,9 +1180,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -1231,9 +1188,8 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub sb_pushline: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -1248,9 +1204,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1302,25 +1256,15 @@ pub struct TerminalOptions {
     pub close_cb: terminal_close_cb,
     pub force_crlf: bool,
 }
-pub type terminal_close_cb = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
-pub type terminal_resume_cb = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
-pub type terminal_resize_cb = Option<
-    unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> (),
->;
+pub type terminal_close_cb = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
+pub type terminal_resume_cb = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
+pub type terminal_resize_cb =
+    Option<unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> ()>;
 pub type terminal_write_cb = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_char,
-        size_t,
-        *mut ::core::ffi::c_void,
-    ) -> (),
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> (),
 >;
-pub type terminal_read_pause_cb = Option<
-    unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> (),
->;
+pub type terminal_read_pause_cb =
+    Option<unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_7 {
@@ -2528,9 +2472,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2557,9 +2500,7 @@ pub struct C2Rust_Unnamed_18 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_19 {
@@ -2654,12 +2595,10 @@ pub struct proc {
     pub events: *mut MultiQueue,
 }
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2712,12 +2651,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -2744,9 +2681,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2757,9 +2693,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -2784,15 +2719,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_26 {
@@ -4219,18 +4149,15 @@ pub struct aco_save_T {
     pub save_VIsual_active: bool,
     pub save_prompt_insert: ::core::ffi::c_int,
 }
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
     pub handler: argv_callback,
     pub argv: [*mut ::core::ffi::c_void; 10],
 }
-pub type PutCallback = Option<
-    unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> (),
->;
+pub type PutCallback =
+    Option<unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct time_watcher {
@@ -4241,9 +4168,7 @@ pub struct time_watcher {
     pub events: *mut MultiQueue,
     pub blockable: bool,
 }
-pub type time_cb = Option<
-    unsafe extern "C" fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> (),
->;
+pub type time_cb = Option<unsafe extern "C" fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> ()>;
 pub type TimeWatcher = time_watcher;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_int;
 pub const AUGROUP_DELETED: C2Rust_Unnamed_35 = -4;
@@ -4429,13 +4354,10 @@ pub struct vim_state {
     pub check: state_check_callback,
     pub execute: state_execute_callback,
 }
-pub type state_execute_callback = Option<
-    unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
->;
+pub type state_execute_callback =
+    Option<unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int>;
 pub type VimState = vim_state;
-pub type state_check_callback = Option<
-    unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
->;
+pub type state_check_callback = Option<unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int>;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
 pub const MODE_SHOWMATCH: C2Rust_Unnamed_39 = 24592;
 pub const MODE_EXTERNCMD: C2Rust_Unnamed_39 = 20480;
@@ -4659,10 +4581,7 @@ pub struct VTermSelectionCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub query: Option<
-        unsafe extern "C" fn(
-            VTermSelectionMask,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermSelectionMask, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
@@ -4671,17 +4590,13 @@ pub const VTERM_SELECTION_SELECT: VTermSelectionMask = 8;
 pub const VTERM_SELECTION_SECONDARY: VTermSelectionMask = 4;
 pub const VTERM_SELECTION_PRIMARY: VTermSelectionMask = 2;
 pub const VTERM_SELECTION_CLIPBOARD: VTermSelectionMask = 1;
-pub type VTermOutputCallback = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    size_t,
-    *mut ::core::ffi::c_void,
-) -> ();
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub csi: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -4708,22 +4623,13 @@ pub struct VTermStateFallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermValueType = ::core::ffi::c_uint;
@@ -4826,12 +4732,8 @@ pub type C2Rust_Unnamed_46 = ::core::ffi::c_uint;
 pub const VTERM_COLOR_DEFAULT_MASK: C2Rust_Unnamed_46 = 6;
 pub type C2Rust_Unnamed_47 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 static mut value_init_ptr_t: ptr_t = NULL;
 pub const MAPHASH_INIT: MapHash = MapHash {
@@ -4929,10 +4831,7 @@ static mut refresh_pending: bool = false_0 != 0;
 static mut vterm_screen_callbacks: VTermScreenCallbacks = VTermScreenCallbacks {
     damage: Some(
         term_damage
-            as unsafe extern "C" fn(
-                VTermRect,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
+            as unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
     moverect: Some(
         term_moverect
@@ -4959,16 +4858,11 @@ static mut vterm_screen_callbacks: VTermScreenCallbacks = VTermScreenCallbacks {
                 *mut ::core::ffi::c_void,
             ) -> ::core::ffi::c_int,
     ),
-    bell: Some(
-        term_bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
+    bell: Some(term_bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int),
     resize: None,
     theme: Some(
         term_theme
-            as unsafe extern "C" fn(
-                *mut bool,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
+            as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
     sb_pushline: Some(
         term_sb_push
@@ -4987,8 +4881,7 @@ static mut vterm_screen_callbacks: VTermScreenCallbacks = VTermScreenCallbacks {
             ) -> ::core::ffi::c_int,
     ),
     sb_clear: Some(
-        term_sb_clear
-            as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+        term_sb_clear as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
 };
 static mut vterm_selection_callbacks: VTermSelectionCallbacks = VTermSelectionCallbacks {
@@ -5004,27 +4897,24 @@ static mut vterm_selection_callbacks: VTermSelectionCallbacks = VTermSelectionCa
 };
 static mut invalidated_terminals: Set_ptr_t = SET_INIT;
 unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as handle_T;
-    let mut sequence: *mut ::core::ffi::c_char = *argv
-        .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
-    let mut sequence_length: size_t = (*argv.offset(2 as ::core::ffi::c_int as isize))
-        .expose_addr() as size_t;
-    let mut pending_send: *mut StringBuilder = *argv
-        .offset(3 as ::core::ffi::c_int as isize) as *mut StringBuilder;
-    let mut row: ::core::ffi::c_int = (*argv.offset(4 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as ::core::ffi::c_int;
-    let mut col: ::core::ffi::c_int = (*argv.offset(5 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as ::core::ffi::c_int;
-    let mut sb_deleted: size_t = (*argv.offset(6 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as size_t;
-    let mut terminator: VTermTerminator = (*argv
-        .offset(7 as ::core::ffi::c_int as isize))
+    let mut buf_handle: handle_T =
+        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
+    let mut sequence: *mut ::core::ffi::c_char =
+        *argv.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
+    let mut sequence_length: size_t =
+        (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_addr() as size_t;
+    let mut pending_send: *mut StringBuilder =
+        *argv.offset(3 as ::core::ffi::c_int as isize) as *mut StringBuilder;
+    let mut row: ::core::ffi::c_int = (*argv.offset(4 as ::core::ffi::c_int as isize)).expose_addr()
+        as intptr_t as ::core::ffi::c_int;
+    let mut col: ::core::ffi::c_int = (*argv.offset(5 as ::core::ffi::c_int as isize)).expose_addr()
+        as intptr_t as ::core::ffi::c_int;
+    let mut sb_deleted: size_t =
+        (*argv.offset(6 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as size_t;
+    let mut terminator: VTermTerminator = (*argv.offset(7 as ::core::ffi::c_int as isize))
         .expose_addr() as intptr_t as VTermTerminator;
-    let mut buf: *mut buf_T = map_get_int_ptr_t(
-        &raw mut buffer_handles,
-        buf_handle as ::core::ffi::c_int,
-    ) as *mut buf_T;
+    let mut buf: *mut buf_T =
+        map_get_int_ptr_t(&raw mut buffer_handles, buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if buf.is_null() || (*buf).terminal.is_null() {
         xfree(sequence as *mut ::core::ffi::c_void);
         xfree((*pending_send).items as *mut ::core::ffi::c_void);
@@ -5040,8 +4930,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
             (*term).pending.events,
             Event {
                 handler: Some(
-                    emit_termrequest
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    emit_termrequest as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     *argv.offset(0 as ::core::ffi::c_int as isize),
@@ -5076,8 +4965,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
     *cursor.items.offset(c2rust_fresh0 as isize) = object {
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed {
-            integer: row as int64_t
-                - (*term).sb_deleted.wrapping_sub(sb_deleted) as int64_t,
+            integer: row as int64_t - (*term).sb_deleted.wrapping_sub(sb_deleted) as int64_t,
         },
     };
     let c2rust_fresh1 = cursor.size;
@@ -5197,8 +5085,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
     }
 }
 unsafe extern "C" fn schedule_termrequest(mut term: *mut Terminal) {
-    (*term).pending.send = xmalloc(::core::mem::size_of::<StringBuilder>())
-        as *mut StringBuilder;
+    (*term).pending.send = xmalloc(::core::mem::size_of::<StringBuilder>()) as *mut StringBuilder;
     (*(*term).pending.send).capacity = 0 as size_t;
     (*(*term).pending.send).size = (*(*term).pending.send).capacity;
     (*(*term).pending.send).items = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5207,33 +5094,32 @@ unsafe extern "C" fn schedule_termrequest(mut term: *mut Terminal) {
         main_loop.events,
         Event {
             handler: Some(
-                emit_termrequest
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                emit_termrequest as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
-                ::core::ptr::from_exposed_addr_mut::<
-                    ::core::ffi::c_void,
-                >((*term).buf_handle as intptr_t as usize),
+                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    (*term).buf_handle as intptr_t as usize,
+                ),
                 xmemdup(
                     (*term).termrequest_buffer.items as *const ::core::ffi::c_void,
                     (*term).termrequest_buffer.size,
                 ),
-                ::core::ptr::from_exposed_addr_mut::<
-                    ::core::ffi::c_void,
-                >((*term).termrequest_buffer.size as intptr_t as usize),
+                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    (*term).termrequest_buffer.size as intptr_t as usize,
+                ),
                 (*term).pending.send as *mut ::core::ffi::c_void,
-                ::core::ptr::from_exposed_addr_mut::<
-                    ::core::ffi::c_void,
-                >(line as intptr_t as usize),
-                ::core::ptr::from_exposed_addr_mut::<
-                    ::core::ffi::c_void,
-                >((*term).cursor.col as intptr_t as usize),
-                ::core::ptr::from_exposed_addr_mut::<
-                    ::core::ffi::c_void,
-                >((*term).sb_deleted as intptr_t as usize),
-                ::core::ptr::from_exposed_addr_mut::<
-                    ::core::ffi::c_void,
-                >((*term).termrequest_terminator as intptr_t as usize),
+                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    line as intptr_t as usize,
+                ),
+                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    (*term).cursor.col as intptr_t as usize,
+                ),
+                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    (*term).sb_deleted as intptr_t as usize,
+                ),
+                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                    (*term).termrequest_terminator as intptr_t as usize,
+                ),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
             ],
@@ -5268,8 +5154,7 @@ unsafe extern "C" fn on_osc(
     mut user: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut term: *mut Terminal = user as *mut Terminal;
-    if frag.str.is_null() || frag.len() as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-    {
+    if frag.str.is_null() || frag.len() as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     if command != 8 as ::core::ffi::c_int && !has_event(EVENT_TERMREQUEST) {
@@ -5287,28 +5172,22 @@ unsafe extern "C" fn on_osc(
         if (*term).termrequest_buffer.capacity
             < (*term).termrequest_buffer.size.wrapping_add(frag.len())
         {
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .size
-                .wrapping_add(frag.len());
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .capacity
-                .wrapping_sub(1);
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .capacity
-                .wrapping_add(1);
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.size.wrapping_add(frag.len());
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.capacity.wrapping_sub(1);
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.capacity.wrapping_add(1);
             (*term).termrequest_buffer.capacity = (*term).termrequest_buffer.capacity;
             (*term).termrequest_buffer.items = xrealloc(
                 (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
@@ -5317,12 +5196,12 @@ unsafe extern "C" fn on_osc(
             ) as *mut ::core::ffi::c_char;
         }
         '_c2rust_label: {
-            if !(*term).termrequest_buffer.items.is_null() {} else {
+            if !(*term).termrequest_buffer.items.is_null() {
+            } else {
                 __assert_fail(
-                    b"(term->termrequest_buffer).items\0".as_ptr()
+                    b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     366 as ::core::ffi::c_uint,
                     b"int on_osc(int, VTermStringFragment, void *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5338,10 +5217,7 @@ unsafe extern "C" fn on_osc(
             frag.str as *const ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
         );
-        (*term).termrequest_buffer.size = (*term)
-            .termrequest_buffer
-            .size
-            .wrapping_add(frag.len());
+        (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(frag.len());
     }
     if frag.final_0() {
         (*term).termrequest_terminator = frag.terminator;
@@ -5350,10 +5226,7 @@ unsafe extern "C" fn on_osc(
         }
         if command == 8 as ::core::ffi::c_int {
             if (*term).termrequest_buffer.size == (*term).termrequest_buffer.capacity {
-                (*term).termrequest_buffer.capacity = (if (*term)
-                    .termrequest_buffer
-                    .capacity != 0
-                {
+                (*term).termrequest_buffer.capacity = (if (*term).termrequest_buffer.capacity != 0 {
                     (*term).termrequest_buffer.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
@@ -5363,16 +5236,16 @@ unsafe extern "C" fn on_osc(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*term).termrequest_buffer.capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh5 = (*term).termrequest_buffer.size;
-            (*term).termrequest_buffer.size = (*term)
+            (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(1);
+            *(*term)
                 .termrequest_buffer
-                .size
-                .wrapping_add(1);
-            *(*term).termrequest_buffer.items.offset(c2rust_fresh5 as isize) = '\0'
-                as ::core::ffi::c_char;
-            let off: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                .wrapping_sub(1 as size_t);
+                .items
+                .offset(c2rust_fresh5 as isize) = '\0' as ::core::ffi::c_char;
+            let off: size_t =
+                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t);
             let mut attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             if parse_osc8(
                 (*term).termrequest_buffer.items.offset(off as isize),
@@ -5381,12 +5254,7 @@ unsafe extern "C" fn on_osc(
             {
                 let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
                 let mut value: VTermValue = VTermValue { number: attr };
-                vterm_state_set_penattr(
-                    state,
-                    VTERM_ATTR_URI,
-                    VTERM_VALUETYPE_INT,
-                    &raw mut value,
-                );
+                vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &raw mut value);
             }
         }
     }
@@ -5418,28 +5286,22 @@ unsafe extern "C" fn on_dcs(
         if (*term).termrequest_buffer.capacity
             < (*term).termrequest_buffer.size.wrapping_add(frag.len())
         {
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .size
-                .wrapping_add(frag.len());
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .capacity
-                .wrapping_sub(1);
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .capacity
-                .wrapping_add(1);
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.size.wrapping_add(frag.len());
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.capacity.wrapping_sub(1);
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.capacity.wrapping_add(1);
             (*term).termrequest_buffer.capacity = (*term).termrequest_buffer.capacity;
             (*term).termrequest_buffer.items = xrealloc(
                 (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
@@ -5448,15 +5310,15 @@ unsafe extern "C" fn on_dcs(
             ) as *mut ::core::ffi::c_char;
         }
         '_c2rust_label: {
-            if !(*term).termrequest_buffer.items.is_null() {} else {
+            if !(*term).termrequest_buffer.items.is_null() {
+            } else {
                 __assert_fail(
-                    b"(term->termrequest_buffer).items\0".as_ptr()
+                    b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     401 as ::core::ffi::c_uint,
-                    b"int on_dcs(const char *, size_t, VTermStringFragment, void *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"int on_dcs(const char *, size_t, VTermStringFragment, void *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5469,10 +5331,7 @@ unsafe extern "C" fn on_dcs(
             frag.str as *const ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
         );
-        (*term).termrequest_buffer.size = (*term)
-            .termrequest_buffer
-            .size
-            .wrapping_add(frag.len());
+        (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(frag.len());
     }
     if frag.final_0() {
         (*term).termrequest_terminator = frag.terminator;
@@ -5485,8 +5344,7 @@ unsafe extern "C" fn on_apc(
     mut user: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut term: *mut Terminal = user as *mut Terminal;
-    if frag.str.is_null() || frag.len() as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-    {
+    if frag.str.is_null() || frag.len() as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     if !has_event(EVENT_TERMREQUEST) {
@@ -5503,28 +5361,22 @@ unsafe extern "C" fn on_apc(
         if (*term).termrequest_buffer.capacity
             < (*term).termrequest_buffer.size.wrapping_add(frag.len())
         {
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .size
-                .wrapping_add(frag.len());
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .capacity
-                .wrapping_sub(1);
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity
-                |= (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity = (*term)
-                .termrequest_buffer
-                .capacity
-                .wrapping_add(1);
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.size.wrapping_add(frag.len());
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.capacity.wrapping_sub(1);
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity |=
+                (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
+            (*term).termrequest_buffer.capacity =
+                (*term).termrequest_buffer.capacity.wrapping_add(1);
             (*term).termrequest_buffer.capacity = (*term).termrequest_buffer.capacity;
             (*term).termrequest_buffer.items = xrealloc(
                 (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
@@ -5533,12 +5385,12 @@ unsafe extern "C" fn on_apc(
             ) as *mut ::core::ffi::c_char;
         }
         '_c2rust_label: {
-            if !(*term).termrequest_buffer.items.is_null() {} else {
+            if !(*term).termrequest_buffer.items.is_null() {
+            } else {
                 __assert_fail(
-                    b"(term->termrequest_buffer).items\0".as_ptr()
+                    b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     424 as ::core::ffi::c_uint,
                     b"int on_apc(VTermStringFragment, void *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5554,10 +5406,7 @@ unsafe extern "C" fn on_apc(
             frag.str as *const ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
         );
-        (*term).termrequest_buffer.size = (*term)
-            .termrequest_buffer
-            .size
-            .wrapping_add(frag.len());
+        (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(frag.len());
     }
     if frag.final_0() {
         (*term).termrequest_terminator = frag.terminator;
@@ -5637,9 +5486,9 @@ unsafe extern "C" fn term_may_alloc_scrollback(
         (*buf).b_p_scbk = SB_MAX as OptInt;
     }
     (*term).sb_size = (*buf).b_p_scbk as size_t;
-    (*term).sb_buffer = xmalloc(
-        ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_size),
-    ) as *mut *mut ScrollbackLine;
+    (*term).sb_buffer =
+        xmalloc(::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_size))
+            as *mut *mut ScrollbackLine;
     return true_0 != 0;
 }
 #[no_mangle]
@@ -5647,10 +5496,8 @@ pub unsafe extern "C" fn terminal_alloc(
     mut buf: *mut buf_T,
     mut opts: TerminalOptions,
 ) -> *mut Terminal {
-    let mut term: *mut Terminal = xcalloc(
-        1 as size_t,
-        ::core::mem::size_of::<Terminal>(),
-    ) as *mut Terminal;
+    let mut term: *mut Terminal =
+        xcalloc(1 as size_t, ::core::mem::size_of::<Terminal>()) as *mut Terminal;
     (*term).opts = opts;
     (*term).buf_handle = (*buf).handle;
     (*buf).terminal = term;
@@ -5687,8 +5534,8 @@ pub unsafe extern "C" fn terminal_alloc(
         ),
         term as *mut ::core::ffi::c_void,
     );
-    (*term).selection_buffer = xcalloc(SELECTIONBUF_SIZE as size_t, 1 as size_t)
-        as *mut ::core::ffi::c_char;
+    (*term).selection_buffer =
+        xcalloc(SELECTIONBUF_SIZE as size_t, 1 as size_t) as *mut ::core::ffi::c_char;
     vterm_state_set_selection_callbacks(
         state,
         &raw mut vterm_selection_callbacks,
@@ -5697,9 +5544,7 @@ pub unsafe extern "C" fn terminal_alloc(
         SELECTIONBUF_SIZE as size_t,
     );
     let mut cursor_shape: VTermValue = VTermValue { boolean: 0 };
-    match shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape
-        as ::core::ffi::c_uint
-    {
+    match shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape as ::core::ffi::c_uint {
         0 => {
             cursor_shape.number = VTERM_PROP_CURSORSHAPE_BLOCK as ::core::ffi::c_int;
         }
@@ -5713,8 +5558,7 @@ pub unsafe extern "C" fn terminal_alloc(
     }
     vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, &raw mut cursor_shape);
     let mut cursor_blink: VTermValue = VTermValue { boolean: 0 };
-    if shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon
-        != 0 as ::core::ffi::c_int
+    if shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon != 0 as ::core::ffi::c_int
         && shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff
             != 0 as ::core::ffi::c_int
     {
@@ -5737,13 +5581,11 @@ pub unsafe extern "C" fn terminal_alloc(
     return term;
 }
 #[no_mangle]
-pub unsafe extern "C" fn terminal_open(
-    mut termpp: *mut *mut Terminal,
-    mut buf: *mut buf_T,
-) {
+pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T) {
     let mut term: *mut Terminal = *termpp;
     '_c2rust_label: {
-        if !term.is_null() {} else {
+        if !term.is_null() {
+        } else {
             __assert_fail(
                 b"term != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -5774,11 +5616,12 @@ pub unsafe extern "C" fn terminal_open(
         refresh_scrollback(term, buf);
     } else {
         '_c2rust_label_0: {
-            if (*term).invalid_start >= 0 as ::core::ffi::c_int {} else {
+            if (*term).invalid_start >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"term->invalid_start >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     598 as ::core::ffi::c_uint,
                     b"void terminal_open(Terminal **, buf_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5838,10 +5681,8 @@ pub unsafe extern "C" fn terminal_open(
             b"terminal_color_%d\0".as_ptr() as *const ::core::ffi::c_char,
             i,
         );
-        let mut name: *mut ::core::ffi::c_char = get_config_string(
-            buf,
-            &raw mut var as *mut ::core::ffi::c_char,
-        );
+        let mut name: *mut ::core::ffi::c_char =
+            get_config_string(buf, &raw mut var as *mut ::core::ffi::c_char);
         if !name.is_null() {
             let mut dummy: ::core::ffi::c_int = 0;
             let mut color_val: RgbValue = name_to_color(name, &raw mut dummy);
@@ -5849,8 +5690,7 @@ pub unsafe extern "C" fn terminal_open(
                 let mut color: VTermColor = VTermColor { type_0: 0 };
                 vterm_color_rgb(
                     &raw mut color,
-                    (color_val >> 16 as ::core::ffi::c_int & 0xff as RgbValue)
-                        as uint8_t,
+                    (color_val >> 16 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
                     (color_val >> 8 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
                     (color_val >> 0 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
                 );
@@ -5989,24 +5829,17 @@ pub unsafe extern "C" fn terminal_close(
         restore_v_event(dict, &raw mut save_v_event);
     }
 }
-unsafe extern "C" fn terminal_state_change_event(
-    mut argv: *mut *mut ::core::ffi::c_void,
-) {
-    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as handle_T;
-    let mut buf: *mut buf_T = map_get_int_ptr_t(
-        &raw mut buffer_handles,
-        buf_handle as ::core::ffi::c_int,
-    ) as *mut buf_T;
+unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi::c_void) {
+    let mut buf_handle: handle_T =
+        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
+    let mut buf: *mut buf_T =
+        map_get_int_ptr_t(&raw mut buffer_handles, buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if !buf.is_null() && !(*buf).terminal.is_null() {
         redraw_buf_line_later(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn terminal_set_state(
-    mut term: *mut Terminal,
-    mut suspended: bool,
-) {
+pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
     if (*term).suspended as ::core::ffi::c_int != suspended as ::core::ffi::c_int {
         multiqueue_put_event(
             refresh_timer.events,
@@ -6016,9 +5849,9 @@ pub unsafe extern "C" fn terminal_set_state(
                         as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
-                    ::core::ptr::from_exposed_addr_mut::<
-                        ::core::ffi::c_void,
-                    >((*term).buf_handle as intptr_t as usize),
+                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        (*term).buf_handle as intptr_t as usize,
+                    ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -6046,20 +5879,21 @@ pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
     let mut height: uint16_t = 0 as uint16_t;
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if !is_aucmd_win(wp) {
                 if !(*wp).w_buffer.is_null() && (*(*wp).w_buffer).terminal == term {
-                    let win_width: uint16_t = (if 0 as ::core::ffi::c_int
-                        > (*wp).w_view_width - win_col_off(wp)
-                    {
-                        0 as ::core::ffi::c_int
-                    } else {
-                        (*wp).w_view_width - win_col_off(wp)
-                    }) as uint16_t;
-                    width = (if width as ::core::ffi::c_int
-                        > win_width as ::core::ffi::c_int
-                    {
+                    let win_width: uint16_t =
+                        (if 0 as ::core::ffi::c_int > (*wp).w_view_width - win_col_off(wp) {
+                            0 as ::core::ffi::c_int
+                        } else {
+                            (*wp).w_view_width - win_col_off(wp)
+                        }) as uint16_t;
+                    width = (if width as ::core::ffi::c_int > win_width as ::core::ffi::c_int {
                         width as ::core::ffi::c_int
                     } else {
                         win_width as ::core::ffi::c_int
@@ -6075,8 +5909,7 @@ pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
         }
         tp = (*tp).tp_next as *mut tabpage_T;
     }
-    if curheight == height as ::core::ffi::c_int
-        && curwidth == width as ::core::ffi::c_int
+    if curheight == height as ::core::ffi::c_int && curwidth == width as ::core::ffi::c_int
         || height as ::core::ffi::c_int == 0 as ::core::ffi::c_int
         || width as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
@@ -6093,7 +5926,8 @@ pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
 }
 unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
     '_c2rust_label: {
-        if (*s).save_curwin_handle == 0 as ::core::ffi::c_int {} else {
+        if (*s).save_curwin_handle == 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"s->save_curwin_handle == 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -6113,19 +5947,18 @@ unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
     (*s).save_w_p_siso = (*curwin).w_onebuf_opt.wo_siso;
     if (*curwin).w_onebuf_opt.wo_cul != 0
         && (*curwin).w_p_culopt_flags as ::core::ffi::c_int
-            & kOptCuloptFlagNumber as ::core::ffi::c_int != 0
+            & kOptCuloptFlagNumber as ::core::ffi::c_int
+            != 0
     {
         if !strequal(
             (*curwin).w_onebuf_opt.wo_culopt,
             b"number\0".as_ptr() as *const ::core::ffi::c_char,
         ) {
             (*s).save_w_p_culopt = (*curwin).w_onebuf_opt.wo_culopt;
-            (*curwin).w_onebuf_opt.wo_culopt = xstrdup(
-                b"number\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            (*curwin).w_onebuf_opt.wo_culopt =
+                xstrdup(b"number\0".as_ptr() as *const ::core::ffi::c_char);
         }
-        (*curwin).w_p_culopt_flags = kOptCuloptFlagNumber as ::core::ffi::c_int
-            as uint8_t;
+        (*curwin).w_p_culopt_flags = kOptCuloptFlagNumber as ::core::ffi::c_int as uint8_t;
     } else {
         (*curwin).w_onebuf_opt.wo_cul = false_0;
     }
@@ -6145,7 +5978,8 @@ unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
 unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
     let mut winopts: *mut winopt_T = ::core::ptr::null_mut::<winopt_T>();
     '_c2rust_label: {
-        if (*s).save_curwin_handle != 0 as ::core::ffi::c_int {} else {
+        if (*s).save_curwin_handle != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"s->save_curwin_handle != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -6173,13 +6007,8 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
                 } else {
                     let mut i: size_t = 0 as size_t;
                     while i < (*buf).b_wininfo.size {
-                        let mut wip: *mut WinInfo = *(*buf)
-                            .b_wininfo
-                            .items
-                            .offset(i as isize);
-                        if (*wip).wi_win == wp
-                            && (*wip).wi_optset as ::core::ffi::c_int != 0
-                        {
+                        let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.offset(i as isize);
+                        if (*wip).wi_win == wp && (*wip).wi_optset as ::core::ffi::c_int != 0 {
                             winopts = &raw mut (*wip).wi_opt;
                             break;
                         } else {
@@ -6195,8 +6024,7 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
                 if win_valid(wp) {
                     if (*s).save_w_p_cuc != (*wp).w_onebuf_opt.wo_cuc {
                         redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
-                    } else if (*s).save_w_p_cul as ::core::ffi::c_int
-                        != (*wp).w_onebuf_opt.wo_cul
+                    } else if (*s).save_w_p_cul as ::core::ffi::c_int != (*wp).w_onebuf_opt.wo_cul
                         || (*s).save_w_p_cul as ::core::ffi::c_int != 0
                             && (*s).save_w_p_culopt_flags as ::core::ffi::c_int
                                 != (*wp).w_p_culopt_flags as ::core::ffi::c_int
@@ -6224,7 +6052,8 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
 pub unsafe extern "C" fn terminal_enter() -> bool {
     let mut buf: *mut buf_T = curbuf;
     '_c2rust_label: {
-        if !(*buf).terminal.is_null() {} else {
+        if !(*buf).terminal.is_null() {
+        } else {
             __assert_fail(
                 b"buf->terminal\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -6234,27 +6063,25 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
             );
         }
     };
-    let mut s: [TerminalState; 1] = [
-        TerminalState {
-            state: vim_state {
-                check: None,
-                execute: None,
-            },
-            term: ::core::ptr::null_mut::<Terminal>(),
-            save_rd: 0,
-            close: false,
-            got_bsl: false,
-            got_bsl_o: false,
-            cursor_visible: false,
-            save_curwin_handle: 0,
-            save_w_p_cul: false,
-            save_w_p_culopt: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_w_p_culopt_flags: 0,
-            save_w_p_cuc: 0,
-            save_w_p_so: 0,
-            save_w_p_siso: 0,
+    let mut s: [TerminalState; 1] = [TerminalState {
+        state: vim_state {
+            check: None,
+            execute: None,
         },
-    ];
+        term: ::core::ptr::null_mut::<Terminal>(),
+        save_rd: 0,
+        close: false,
+        got_bsl: false,
+        got_bsl_o: false,
+        cursor_visible: false,
+        save_curwin_handle: 0,
+        save_w_p_cul: false,
+        save_w_p_culopt: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        save_w_p_culopt_flags: 0,
+        save_w_p_cuc: 0,
+        save_w_p_so: 0,
+        save_w_p_siso: 0,
+    }];
     (*(&raw mut s as *mut TerminalState)).term = (*buf).terminal;
     (*(&raw mut s as *mut TerminalState)).cursor_visible = true_0 != 0;
     stop_insert_mode = false_0 != 0;
@@ -6275,11 +6102,10 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
     ui_cursor_shape();
     terminal_focus((*(&raw mut s as *mut TerminalState)).term, true_0 != 0);
     (*curbuf).b_last_changedtick_i = buf_get_changedtick(curbuf);
-    (*(*(&raw mut s as *mut TerminalState)).term).refcount = (*(*(&raw mut s
-        as *mut TerminalState))
-        .term)
-        .refcount
-        .wrapping_add(1);
+    (*(*(&raw mut s as *mut TerminalState)).term).refcount =
+        (*(*(&raw mut s as *mut TerminalState)).term)
+            .refcount
+            .wrapping_add(1);
     apply_autocmds(
         EVENT_TERMENTER,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -6288,26 +6114,20 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
         curbuf,
     );
     may_trigger_modechanged();
-    (*(*(&raw mut s as *mut TerminalState)).term).refcount = (*(*(&raw mut s
-        as *mut TerminalState))
-        .term)
-        .refcount
-        .wrapping_sub(1);
-    if (*(*(&raw mut s as *mut TerminalState)).term).buf_handle
-        == 0 as ::core::ffi::c_int
-    {
+    (*(*(&raw mut s as *mut TerminalState)).term).refcount =
+        (*(*(&raw mut s as *mut TerminalState)).term)
+            .refcount
+            .wrapping_sub(1);
+    if (*(*(&raw mut s as *mut TerminalState)).term).buf_handle == 0 as ::core::ffi::c_int {
         (*(&raw mut s as *mut TerminalState)).close = true_0 != 0;
     }
     (*(&raw mut s as *mut TerminalState)).state.execute = Some(
         terminal_execute
-            as unsafe extern "C" fn(
-                *mut VimState,
-                ::core::ffi::c_int,
-            ) -> ::core::ffi::c_int,
+            as unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
     ) as state_execute_callback;
-    (*(&raw mut s as *mut TerminalState)).state.check = Some(
-        terminal_check as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
-    ) as state_check_callback;
+    (*(&raw mut s as *mut TerminalState)).state.check =
+        Some(terminal_check as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int)
+            as state_check_callback;
     state_enter(&raw mut (*(&raw mut s as *mut TerminalState)).state);
     if !(*(&raw mut s as *mut TerminalState)).got_bsl_o {
         restart_edit = 0 as ::core::ffi::c_int;
@@ -6333,11 +6153,10 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
     }
     ui_cursor_shape();
     if (*(&raw mut s as *mut TerminalState)).close {
-        (*(*(&raw mut s as *mut TerminalState)).term).refcount = (*(*(&raw mut s
-            as *mut TerminalState))
-            .term)
-            .refcount
-            .wrapping_add(1);
+        (*(*(&raw mut s as *mut TerminalState)).term).refcount =
+            (*(*(&raw mut s as *mut TerminalState)).term)
+                .refcount
+                .wrapping_add(1);
     }
     apply_autocmds(
         EVENT_TERMLEAVE,
@@ -6347,20 +6166,18 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
         curbuf,
     );
     if (*(&raw mut s as *mut TerminalState)).close {
-        (*(*(&raw mut s as *mut TerminalState)).term).refcount = (*(*(&raw mut s
-            as *mut TerminalState))
-            .term)
-            .refcount
-            .wrapping_sub(1);
-        let buf_handle: handle_T = (*(*(&raw mut s as *mut TerminalState)).term)
-            .buf_handle;
+        (*(*(&raw mut s as *mut TerminalState)).term).refcount =
+            (*(*(&raw mut s as *mut TerminalState)).term)
+                .refcount
+                .wrapping_sub(1);
+        let buf_handle: handle_T = (*(*(&raw mut s as *mut TerminalState)).term).buf_handle;
         (*(*(&raw mut s as *mut TerminalState)).term).destroy = true_0 != 0;
         (*(*(&raw mut s as *mut TerminalState)).term)
             .opts
             .close_cb
-            .expect(
-                "non-null function pointer",
-            )((*(*(&raw mut s as *mut TerminalState)).term).opts.data);
+            .expect("non-null function pointer")(
+            (*(*(&raw mut s as *mut TerminalState)).term).opts.data,
+        );
         if buf_handle != 0 as ::core::ffi::c_int {
             do_buffer(
                 DOBUF_WIPE as ::core::ffi::c_int,
@@ -6375,18 +6192,17 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
 }
 unsafe extern "C" fn terminal_check_cursor() {
     let mut term: *mut Terminal = (*curbuf).terminal;
-    (*curwin).w_cursor.lnum = if (*curbuf).b_ml.ml_line_count
-        < row_to_linenr(term, (*term).cursor.row) as linenr_T
+    (*curwin).w_cursor.lnum =
+        if (*curbuf).b_ml.ml_line_count < row_to_linenr(term, (*term).cursor.row) as linenr_T {
+            (*curbuf).b_ml.ml_line_count
+        } else {
+            row_to_linenr(term, (*term).cursor.row) as linenr_T
+        };
+    let topline: linenr_T = if (*curbuf).b_ml.ml_line_count - (*curwin).w_view_height as linenr_T
+        + 1 as linenr_T
+        > 1 as linenr_T
     {
-        (*curbuf).b_ml.ml_line_count
-    } else {
-        row_to_linenr(term, (*term).cursor.row) as linenr_T
-    };
-    let topline: linenr_T = if (*curbuf).b_ml.ml_line_count
-        - (*curwin).w_view_height as linenr_T + 1 as linenr_T > 1 as linenr_T
-    {
-        (*curbuf).b_ml.ml_line_count - (*curwin).w_view_height as linenr_T
-            + 1 as linenr_T
+        (*curbuf).b_ml.ml_line_count - (*curwin).w_view_height as linenr_T + 1 as linenr_T
     } else {
         1 as linenr_T
     };
@@ -6402,9 +6218,7 @@ unsafe extern "C" fn terminal_check_cursor() {
             coladd: 0,
         };
     } else {
-        let mut off: ::core::ffi::c_int = if State & MODE_TERMINAL as ::core::ffi::c_int
-            != 0
-        {
+        let mut off: ::core::ffi::c_int = if State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
             0 as ::core::ffi::c_int
         } else if (*curwin).w_onebuf_opt.wo_rl != 0 {
             1 as ::core::ffi::c_int
@@ -6454,17 +6268,16 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
     let s: *mut TerminalState = state as *mut TerminalState;
     '_c2rust_label: {
         if !(*s).close
-            || (*(*s).term).buf_handle == 0 as ::core::ffi::c_int
-                && (*s).term != (*curbuf).terminal
-        {} else {
+            || (*(*s).term).buf_handle == 0 as ::core::ffi::c_int && (*s).term != (*curbuf).terminal
+        {
+        } else {
             __assert_fail(
-                b"!s->close || (s->term->buf_handle == 0 && s->term != curbuf->terminal)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"!s->close || (s->term->buf_handle == 0 && s->term != curbuf->terminal)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1053 as ::core::ffi::c_uint,
-                b"int terminal_check(VimState *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int terminal_check(VimState *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -6524,26 +6337,10 @@ unsafe extern "C" fn terminal_execute(
     's_214: {
         'c_47026: {
             match mod_key {
-                K_LEFTMOUSE
-                | K_LEFTDRAG
-                | -12029
-                | K_MIDDLEMOUSE
-                | K_MIDDLEDRAG
-                | K_MIDDLERELEASE
-                | K_RIGHTMOUSE
-                | K_RIGHTDRAG
-                | K_RIGHTRELEASE
-                | K_X1MOUSE
-                | K_X1DRAG
-                | K_X1RELEASE
-                | K_X2MOUSE
-                | K_X2DRAG
-                | K_X2RELEASE
-                | -19453
-                | -19709
-                | -19965
-                | -20221
-                | -25853 => {
+                K_LEFTMOUSE | K_LEFTDRAG | -12029 | K_MIDDLEMOUSE | K_MIDDLEDRAG
+                | K_MIDDLERELEASE | K_RIGHTMOUSE | K_RIGHTDRAG | K_RIGHTRELEASE | K_X1MOUSE
+                | K_X1DRAG | K_X1RELEASE | K_X2MOUSE | K_X2DRAG | K_X2RELEASE | -19453 | -19709
+                | -19965 | -20221 | -25853 => {
                     if send_mouse_event((*s).term, key) {
                         return 0 as ::core::ffi::c_int;
                     }
@@ -6572,7 +6369,8 @@ unsafe extern "C" fn terminal_execute(
                                     *mut ::core::ffi::c_void,
                                     ::core::ffi::c_int,
                                     bool,
-                                ) -> *mut ::core::ffi::c_char,
+                                )
+                                    -> *mut ::core::ffi::c_char,
                         ),
                         NULL_0,
                         0 as ::core::ffi::c_int,
@@ -6657,9 +6455,7 @@ pub unsafe extern "C" fn terminal_destroy(mut termpp: *mut *mut Terminal) {
         xfree((*term).termrequest_buffer.items as *mut ::core::ffi::c_void);
         (*term).termrequest_buffer.capacity = 0 as size_t;
         (*term).termrequest_buffer.size = (*term).termrequest_buffer.capacity;
-        (*term).termrequest_buffer.items = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        (*term).termrequest_buffer.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
         vterm_free((*term).vt);
         multiqueue_free((*term).pending.events);
         xfree(term as *mut ::core::ffi::c_void);
@@ -6676,28 +6472,20 @@ unsafe extern "C" fn terminal_send(
     }
     if !(*term).pending.send.is_null() {
         if size > 0 as size_t {
-            if (*(*term).pending.send).capacity
-                < (*(*term).pending.send).size.wrapping_add(size)
-            {
-                (*(*term).pending.send).capacity = (*(*term).pending.send)
-                    .size
-                    .wrapping_add(size);
-                (*(*term).pending.send).capacity = (*(*term).pending.send)
-                    .capacity
-                    .wrapping_sub(1);
-                (*(*term).pending.send).capacity
-                    |= (*(*term).pending.send).capacity >> 1 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity
-                    |= (*(*term).pending.send).capacity >> 2 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity
-                    |= (*(*term).pending.send).capacity >> 4 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity
-                    |= (*(*term).pending.send).capacity >> 8 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity
-                    |= (*(*term).pending.send).capacity >> 16 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity = (*(*term).pending.send)
-                    .capacity
-                    .wrapping_add(1);
+            if (*(*term).pending.send).capacity < (*(*term).pending.send).size.wrapping_add(size) {
+                (*(*term).pending.send).capacity = (*(*term).pending.send).size.wrapping_add(size);
+                (*(*term).pending.send).capacity = (*(*term).pending.send).capacity.wrapping_sub(1);
+                (*(*term).pending.send).capacity |=
+                    (*(*term).pending.send).capacity >> 1 as ::core::ffi::c_int;
+                (*(*term).pending.send).capacity |=
+                    (*(*term).pending.send).capacity >> 2 as ::core::ffi::c_int;
+                (*(*term).pending.send).capacity |=
+                    (*(*term).pending.send).capacity >> 4 as ::core::ffi::c_int;
+                (*(*term).pending.send).capacity |=
+                    (*(*term).pending.send).capacity >> 8 as ::core::ffi::c_int;
+                (*(*term).pending.send).capacity |=
+                    (*(*term).pending.send).capacity >> 16 as ::core::ffi::c_int;
+                (*(*term).pending.send).capacity = (*(*term).pending.send).capacity.wrapping_add(1);
                 (*(*term).pending.send).capacity = (*(*term).pending.send).capacity;
                 (*(*term).pending.send).items = xrealloc(
                     (*(*term).pending.send).items as *mut ::core::ffi::c_void,
@@ -6706,15 +6494,15 @@ unsafe extern "C" fn terminal_send(
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label: {
-                if !(*(*term).pending.send).items.is_null() {} else {
+                if !(*(*term).pending.send).items.is_null() {
+                } else {
                     __assert_fail(
-                        b"(*term->pending.send).items\0".as_ptr()
+                        b"(*term->pending.send).items\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         1249 as ::core::ffi::c_uint,
-                        b"void terminal_send(Terminal *, const char *, size_t)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"void terminal_send(Terminal *, const char *, size_t)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -6726,16 +6514,11 @@ unsafe extern "C" fn terminal_send(
                 data as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(size),
             );
-            (*(*term).pending.send).size = (*(*term).pending.send)
-                .size
-                .wrapping_add(size);
+            (*(*term).pending.send).size = (*(*term).pending.send).size.wrapping_add(size);
         }
         return;
     }
-    (*term)
-        .opts
-        .write_cb
-        .expect("non-null function pointer")(data, size, (*term).opts.data);
+    (*term).opts.write_cb.expect("non-null function pointer")(data, size, (*term).opts.data);
 }
 unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
     let mut flag: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
@@ -6759,8 +6542,7 @@ unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
         _ => {
             if c < ' ' as ::core::ffi::c_int {
                 flag = kOptTpfFlagC0 as ::core::ffi::c_int as ::core::ffi::c_uint;
-            } else if c >= 0x80 as ::core::ffi::c_int && c <= 0x9f as ::core::ffi::c_int
-            {
+            } else if c >= 0x80 as ::core::ffi::c_int && c <= 0x9f as ::core::ffi::c_int {
                 flag = kOptTpfFlagC1 as ::core::ffi::c_int as ::core::ffi::c_uint;
             }
         }
@@ -6768,10 +6550,7 @@ unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
     return tpf_flags & flag != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn terminal_set_streamed_paste(
-    mut term: *mut Terminal,
-    mut streamed: bool,
-) {
+pub unsafe extern "C" fn terminal_set_streamed_paste(mut term: *mut Terminal, mut streamed: bool) {
     if (*term).streamed_paste as ::core::ffi::c_int != streamed as ::core::ffi::c_int {
         if streamed {
             vterm_keyboard_start_paste((*(*curbuf).terminal).vt);
@@ -6794,8 +6573,7 @@ pub unsafe extern "C" fn terminal_paste(
         vterm_keyboard_start_paste((*(*curbuf).terminal).vt);
     }
     let mut buff_len: size_t = (*y_array.offset(0 as ::core::ffi::c_int as isize)).size;
-    let mut buff: *mut ::core::ffi::c_char = xmalloc(buff_len)
-        as *mut ::core::ffi::c_char;
+    let mut buff: *mut ::core::ffi::c_char = xmalloc(buff_len) as *mut ::core::ffi::c_char;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < count {
         let mut j: size_t = 0 as size_t;
@@ -6809,8 +6587,7 @@ pub unsafe extern "C" fn terminal_paste(
             }
             let mut len: size_t = (*y_array.offset(j as isize)).size;
             if len > buff_len {
-                buff = xrealloc(buff as *mut ::core::ffi::c_void, len)
-                    as *mut ::core::ffi::c_char;
+                buff = xrealloc(buff as *mut ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
                 buff_len = len;
             }
             let mut dst: *mut ::core::ffi::c_char = buff;
@@ -6838,18 +6615,13 @@ pub unsafe extern "C" fn terminal_paste(
         vterm_keyboard_end_paste((*(*curbuf).terminal).vt);
     }
 }
-unsafe extern "C" fn terminal_send_key(
-    mut term: *mut Terminal,
-    mut c: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn terminal_send_key(mut term: *mut Terminal, mut c: ::core::ffi::c_int) {
     let mut mod_0: VTermModifier = VTERM_MOD_NONE;
     if c == K_ZERO {
         c = Ctrl_AT;
     }
     let mut key: VTermKey = convert_key(&raw mut c, &raw mut mod_0);
-    if key as ::core::ffi::c_uint
-        != VTERM_KEY_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if key as ::core::ffi::c_uint != VTERM_KEY_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
         vterm_keyboard_key((*term).vt, key, mod_0);
     } else if !(c < 0 as ::core::ffi::c_int) {
         vterm_keyboard_unichar((*term).vt, c as uint32_t, mod_0);
@@ -6859,12 +6631,10 @@ unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
     if exiting {
         return;
     }
-    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_addr() as intptr_t as handle_T;
-    let mut buf: *mut buf_T = map_get_int_ptr_t(
-        &raw mut buffer_handles,
-        buf_handle as ::core::ffi::c_int,
-    ) as *mut buf_T;
+    let mut buf_handle: handle_T =
+        (*argv.offset(0 as ::core::ffi::c_int as isize)).expose_addr() as intptr_t as handle_T;
+    let mut buf: *mut buf_T =
+        map_get_int_ptr_t(&raw mut buffer_handles, buf_handle as ::core::ffi::c_int) as *mut buf_T;
     if buf.is_null() || (*buf).terminal.is_null() {
         return;
     }
@@ -6889,12 +6659,11 @@ pub unsafe extern "C" fn terminal_receive(
         };
         let mut i: size_t = 0 as size_t;
         while i < len {
-            if *data.offset(i as isize) as ::core::ffi::c_int
-                == '\n' as ::core::ffi::c_int
+            if *data.offset(i as isize) as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
                 && (i == 0 as size_t
                     || i > 0 as size_t
-                        && *data.offset(i.wrapping_sub(1 as size_t) as isize)
-                            as ::core::ffi::c_int != '\r' as ::core::ffi::c_int)
+                        && *data.offset(i.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                            != '\r' as ::core::ffi::c_int)
             {
                 if crlf_data.size == crlf_data.capacity {
                     crlf_data.capacity = (if crlf_data.capacity != 0 {
@@ -6907,11 +6676,11 @@ pub unsafe extern "C" fn terminal_receive(
                         ::core::mem::size_of::<::core::ffi::c_char>()
                             .wrapping_mul(crlf_data.capacity),
                     ) as *mut ::core::ffi::c_char;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh8 = crlf_data.size;
                 crlf_data.size = crlf_data.size.wrapping_add(1);
-                *crlf_data.items.offset(c2rust_fresh8 as isize) = '\r'
-                    as ::core::ffi::c_char;
+                *crlf_data.items.offset(c2rust_fresh8 as isize) = '\r' as ::core::ffi::c_char;
             }
             if crlf_data.size == crlf_data.capacity {
                 crlf_data.capacity = (if crlf_data.capacity != 0 {
@@ -6921,10 +6690,10 @@ pub unsafe extern "C" fn terminal_receive(
                 });
                 crlf_data.items = xrealloc(
                     crlf_data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(crlf_data.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(crlf_data.capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh9 = crlf_data.size;
             crlf_data.size = crlf_data.size.wrapping_add(1);
             *crlf_data.items.offset(c2rust_fresh9 as isize) = *data.offset(i as isize);
@@ -6953,13 +6722,12 @@ pub unsafe extern "C" fn terminal_receive(
             main_loop.events,
             Event {
                 handler: Some(
-                    on_sync_flush
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    on_sync_flush as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
-                    ::core::ptr::from_exposed_addr_mut::<
-                        ::core::ffi::c_void,
-                    >((*term).buf_handle as intptr_t as usize),
+                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        (*term).buf_handle as intptr_t as usize,
+                    ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -6983,9 +6751,7 @@ unsafe extern "C" fn get_rgb(
         | (color.rgb.green as ::core::ffi::c_int) << 8 as ::core::ffi::c_int
         | color.rgb.blue as ::core::ffi::c_int;
 }
-unsafe extern "C" fn get_underline_hl_flag(
-    mut attrs: VTermScreenCellAttrs,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> ::core::ffi::c_int {
     match attrs.underline() as ::core::ffi::c_int {
         0 => return 0 as ::core::ffi::c_int,
         1 => return HL_UNDERLINE as ::core::ffi::c_int,
@@ -7006,14 +6772,15 @@ pub unsafe extern "C" fn terminal_get_line_attributes(
     vterm_get_size((*term).vt, &raw mut height, &raw mut width);
     let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
     '_c2rust_label: {
-        if linenr != 0 {} else {
+        if linenr != 0 {
+        } else {
             __assert_fail(
                 b"linenr\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1448 as ::core::ffi::c_uint,
-                b"void terminal_get_line_attributes(Terminal *, win_T *, int, int *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"void terminal_get_line_attributes(Terminal *, win_T *, int, int *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -7041,11 +6808,11 @@ pub unsafe extern "C" fn terminal_get_line_attributes(
         };
         let mut color_valid: bool = fetch_cell(term, row, col, &raw mut cell);
         let mut fg_default: bool = !color_valid
-            || cell.fg.type_0 as ::core::ffi::c_int
-                & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int != 0;
+            || cell.fg.type_0 as ::core::ffi::c_int & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int
+                != 0;
         let mut bg_default: bool = !color_valid
-            || cell.bg.type_0 as ::core::ffi::c_int
-                & VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int != 0;
+            || cell.bg.type_0 as ::core::ffi::c_int & VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int
+                != 0;
         let mut vt_fg: ::core::ffi::c_int = if fg_default as ::core::ffi::c_int != 0 {
             -1 as ::core::ffi::c_int
         } else {
@@ -7062,82 +6829,73 @@ pub unsafe extern "C" fn terminal_get_line_attributes(
         let mut bg_indexed: bool = cell.bg.type_0 as ::core::ffi::c_int
             & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int
             == VTERM_COLOR_INDEXED as ::core::ffi::c_int;
-        let mut vt_fg_idx: int16_t = (if !fg_default
-            && fg_indexed as ::core::ffi::c_int != 0
-        {
+        let mut vt_fg_idx: int16_t = (if !fg_default && fg_indexed as ::core::ffi::c_int != 0 {
             cell.fg.indexed.idx as ::core::ffi::c_int + 1 as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
         }) as int16_t;
-        let mut vt_bg_idx: int16_t = (if !bg_default
-            && bg_indexed as ::core::ffi::c_int != 0
-        {
+        let mut vt_bg_idx: int16_t = (if !bg_default && bg_indexed as ::core::ffi::c_int != 0 {
             cell.bg.indexed.idx as ::core::ffi::c_int + 1 as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
         }) as int16_t;
         let mut fg_set: bool = vt_fg_idx as ::core::ffi::c_int != 0
             && vt_fg_idx as ::core::ffi::c_int <= 16 as ::core::ffi::c_int
-            && (*term)
-                .color_set[(vt_fg_idx as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as usize] as ::core::ffi::c_int != 0;
+            && (*term).color_set
+                [(vt_fg_idx as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize]
+                as ::core::ffi::c_int
+                != 0;
         let mut bg_set: bool = vt_bg_idx as ::core::ffi::c_int != 0
             && vt_bg_idx as ::core::ffi::c_int <= 16 as ::core::ffi::c_int
-            && (*term)
-                .color_set[(vt_bg_idx as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as usize] as ::core::ffi::c_int != 0;
-        let mut hl_attrs: ::core::ffi::c_int = (if cell.attrs.bold()
-            as ::core::ffi::c_int != 0
-        {
-            HL_BOLD as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        })
-            | (if cell.attrs.dim() as ::core::ffi::c_int != 0 {
+            && (*term).color_set
+                [(vt_bg_idx as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize]
+                as ::core::ffi::c_int
+                != 0;
+        let mut hl_attrs: ::core::ffi::c_int =
+            (if cell.attrs.bold() as ::core::ffi::c_int != 0 {
+                HL_BOLD as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }) | (if cell.attrs.dim() as ::core::ffi::c_int != 0 {
                 HL_DIM as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-            | (if cell.attrs.blink() as ::core::ffi::c_int != 0 {
+            }) | (if cell.attrs.blink() as ::core::ffi::c_int != 0 {
                 HL_BLINK as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-            | (if cell.attrs.conceal() as ::core::ffi::c_int != 0 {
+            }) | (if cell.attrs.conceal() as ::core::ffi::c_int != 0 {
                 HL_CONCEALED as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-            | (if cell.attrs.overline() as ::core::ffi::c_int != 0 {
+            }) | (if cell.attrs.overline() as ::core::ffi::c_int != 0 {
                 HL_OVERLINE as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-            | (if cell.attrs.italic() as ::core::ffi::c_int != 0 {
+            }) | (if cell.attrs.italic() as ::core::ffi::c_int != 0 {
                 HL_ITALIC as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-            | (if cell.attrs.reverse() as ::core::ffi::c_int != 0 {
+            }) | (if cell.attrs.reverse() as ::core::ffi::c_int != 0 {
                 HL_INVERSE as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
             }) | get_underline_hl_flag(cell.attrs)
-            | (if cell.attrs.strike() as ::core::ffi::c_int != 0 {
-                HL_STRIKETHROUGH as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if fg_indexed as ::core::ffi::c_int != 0 && !fg_set {
-                HL_FG_INDEXED as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if bg_indexed as ::core::ffi::c_int != 0 && !bg_set {
-                HL_BG_INDEXED as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            });
+                | (if cell.attrs.strike() as ::core::ffi::c_int != 0 {
+                    HL_STRIKETHROUGH as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                })
+                | (if fg_indexed as ::core::ffi::c_int != 0 && !fg_set {
+                    HL_FG_INDEXED as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                })
+                | (if bg_indexed as ::core::ffi::c_int != 0 && !bg_set {
+                    HL_BG_INDEXED as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                });
         let mut attr_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if hl_attrs != 0 || !fg_default || !bg_default {
             let mut c2rust_lvalue: HlAttrs = HlAttrs {
@@ -7189,7 +6947,8 @@ pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark
         },
     ) as ssize_t;
     '_c2rust_label: {
-        if ret > 0 as ssize_t {} else {
+        if ret > 0 as ssize_t {
+        } else {
             __assert_fail(
                 b"ret > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -7201,7 +6960,8 @@ pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark
         }
     };
     '_c2rust_label_0: {
-        if ret as size_t <= ::core::mem::size_of::<[::core::ffi::c_char; 10]>() {} else {
+        if ret as size_t <= ::core::mem::size_of::<[::core::ffi::c_char; 10]>() {
+        } else {
             __assert_fail(
                 b"(size_t)ret <= sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -7212,7 +6972,11 @@ pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark
             );
         }
     };
-    terminal_send(term, &raw mut buf as *mut ::core::ffi::c_char, ret as size_t);
+    terminal_send(
+        term,
+        &raw mut buf as *mut ::core::ffi::c_char,
+        ret as size_t,
+    );
 }
 unsafe extern "C" fn terminal_focus(mut term: *const Terminal, mut focus: bool) {
     let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
@@ -7236,8 +7000,16 @@ unsafe extern "C" fn term_moverect(
 ) -> ::core::ffi::c_int {
     invalidate_terminal(
         data as *mut Terminal,
-        if dest.start_row < src.start_row { dest.start_row } else { src.start_row },
-        if dest.end_row > src.end_row { dest.end_row } else { src.end_row },
+        if dest.start_row < src.start_row {
+            dest.start_row
+        } else {
+            src.start_row
+        },
+        if dest.end_row > src.end_row {
+            dest.end_row
+        } else {
+            src.end_row
+        },
     );
     return 1 as ::core::ffi::c_int;
 }
@@ -7271,8 +7043,7 @@ unsafe extern "C" fn buf_set_term_title(
         String_0 {
             data: b"term_title\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
-            size: ::core::mem::size_of::<[::core::ffi::c_char; 11]>()
-                .wrapping_sub(1 as size_t),
+            size: ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
         },
         object {
             type_0: kObjectTypeString,
@@ -7304,11 +7075,7 @@ unsafe extern "C" fn term_settermprop(
         }
         1 => {
             (*term).cursor.visible = (*val).boolean != 0;
-            invalidate_terminal(
-                term,
-                -1 as ::core::ffi::c_int,
-                -1 as ::core::ffi::c_int,
-            );
+            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
         }
         4 => {
             let mut buf: *mut buf_T = map_get_int_ptr_t(
@@ -7323,19 +7090,17 @@ unsafe extern "C" fn term_settermprop(
             } else {
                 if frag.initial() {
                     (*term).title_len = 0 as size_t;
-                    (*term).title_size = (if frag.len() as ::core::ffi::c_int
-                        > 1024 as ::core::ffi::c_int
-                    {
-                        frag.len() as ::core::ffi::c_int
-                    } else {
-                        1024 as ::core::ffi::c_int
-                    }) as size_t;
+                    (*term).title_size =
+                        (if frag.len() as ::core::ffi::c_int > 1024 as ::core::ffi::c_int {
+                            frag.len() as ::core::ffi::c_int
+                        } else {
+                            1024 as ::core::ffi::c_int
+                        }) as size_t;
                     (*term).title = xmalloc(
                         ::core::mem::size_of::<*mut ::core::ffi::c_char>()
                             .wrapping_mul((*term).title_size),
                     ) as *mut ::core::ffi::c_char;
-                } else if (*term).title_len.wrapping_add(frag.len()) > (*term).title_size
-                {
+                } else if (*term).title_len.wrapping_add(frag.len()) > (*term).title_size {
                     (*term).title_size = (*term).title_size.wrapping_mul(2 as size_t);
                     (*term).title = xrealloc(
                         (*term).title as *mut ::core::ffi::c_void,
@@ -7344,8 +7109,7 @@ unsafe extern "C" fn term_settermprop(
                     ) as *mut ::core::ffi::c_char;
                 }
                 memcpy(
-                    (*term).title.offset((*term).title_len as isize)
-                        as *mut ::core::ffi::c_void,
+                    (*term).title.offset((*term).title_len as isize) as *mut ::core::ffi::c_void,
                     frag.str as *const ::core::ffi::c_void,
                     frag.len(),
                 );
@@ -7363,20 +7127,12 @@ unsafe extern "C" fn term_settermprop(
         2 => {
             (*term).cursor.blink = (*val).boolean != 0;
             (*term).pending.cursor = true_0 != 0;
-            invalidate_terminal(
-                term,
-                -1 as ::core::ffi::c_int,
-                -1 as ::core::ffi::c_int,
-            );
+            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
         }
         7 => {
             (*term).cursor.shape = (*val).number;
             (*term).pending.cursor = true_0 != 0;
-            invalidate_terminal(
-                term,
-                -1 as ::core::ffi::c_int,
-                -1 as ::core::ffi::c_int,
-            );
+            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
         }
         10 => {
             (*term).theme_updates = (*val).boolean != 0;
@@ -7391,9 +7147,7 @@ unsafe extern "C" fn term_settermprop(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn term_bell(
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn term_bell(mut data: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
     vim_beep(kOptBoFlagTerm as ::core::ffi::c_int as ::core::ffi::c_uint);
     return 1 as ::core::ffi::c_int;
 }
@@ -7414,7 +7168,8 @@ unsafe extern "C" fn term_sb_push(
         return 0 as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if (*term).sb_size > 0 as size_t {} else {
+        if (*term).sb_size > 0 as size_t {
+        } else {
             __assert_fail(
                 b"term->sb_size > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -7431,7 +7186,8 @@ unsafe extern "C" fn term_sb_push(
         if (**(*term)
             .sb_buffer
             .offset((*term).sb_current.wrapping_sub(1 as size_t) as isize))
-            .cols == c
+        .cols
+            == c
         {
             sbrow = *(*term)
                 .sb_buffer
@@ -7446,19 +7202,16 @@ unsafe extern "C" fn term_sb_push(
         }
         (*term).sb_deleted = (*term).sb_deleted.wrapping_add(1);
         memmove(
-            (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize)
-                as *mut ::core::ffi::c_void,
+            (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
             (*term).sb_buffer as *const ::core::ffi::c_void,
             ::core::mem::size_of::<*mut ScrollbackLine>()
                 .wrapping_mul((*term).sb_current.wrapping_sub(1 as size_t)),
         );
     } else if (*term).sb_current > 0 as size_t {
         memmove(
-            (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize)
-                as *mut ::core::ffi::c_void,
+            (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
             (*term).sb_buffer as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<*mut ScrollbackLine>()
-                .wrapping_mul((*term).sb_current),
+            ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_current),
         );
     }
     if sbrow.is_null() {
@@ -7503,14 +7256,12 @@ unsafe extern "C" fn term_sb_pop(
     } else {
         (*term).old_height += 1;
     }
-    let mut sbrow: *mut ScrollbackLine = *(*term)
-        .sb_buffer
-        .offset(0 as ::core::ffi::c_int as isize);
+    let mut sbrow: *mut ScrollbackLine =
+        *(*term).sb_buffer.offset(0 as ::core::ffi::c_int as isize);
     (*term).sb_current = (*term).sb_current.wrapping_sub(1);
     memmove(
         (*term).sb_buffer as *mut ::core::ffi::c_void,
-        (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize)
-            as *const ::core::ffi::c_void,
+        (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
         ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_current),
     );
     let mut cols_to_copy: size_t = if (cols as size_t) < (*sbrow).cols {
@@ -7539,11 +7290,10 @@ unsafe extern "C" fn term_sb_pop(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn term_sb_clear(
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn term_sb_clear(mut data: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
     let mut term: *mut Terminal = data as *mut Terminal;
-    if (*term).in_altscreen as ::core::ffi::c_int != 0 || (*term).sb_size == 0
+    if (*term).in_altscreen as ::core::ffi::c_int != 0
+        || (*term).sb_size == 0
         || (*term).sb_current == 0
     {
         return 1 as ::core::ffi::c_int;
@@ -7561,9 +7311,10 @@ unsafe extern "C" fn term_sb_clear(
 }
 unsafe extern "C" fn term_clipboard_set(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut mask: VTermSelectionMask = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_addr() as ::core::ffi::c_long as VTermSelectionMask;
-    let mut data: *mut ::core::ffi::c_char = *argv
-        .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
+        .expose_addr() as ::core::ffi::c_long
+        as VTermSelectionMask;
+    let mut data: *mut ::core::ffi::c_char =
+        *argv.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
     let mut regname: ::core::ffi::c_char = 0;
     match mask as ::core::ffi::c_uint {
         1 => {
@@ -7584,8 +7335,7 @@ unsafe extern "C" fn term_clipboard_set(mut argv: *mut *mut ::core::ffi::c_void)
     tv_list_append_string(args, &raw const regtype, 1 as ssize_t);
     tv_list_append_string(args, &raw mut regname, 1 as ssize_t);
     eval_call_provider(
-        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"set\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
         true_0 != 0,
@@ -7604,16 +7354,11 @@ unsafe extern "C" fn term_selection_set(
         if (*term).selection.capacity < (*term).selection.size.wrapping_add(frag.len()) {
             (*term).selection.capacity = (*term).selection.size.wrapping_add(frag.len());
             (*term).selection.capacity = (*term).selection.capacity.wrapping_sub(1);
-            (*term).selection.capacity
-                |= (*term).selection.capacity >> 1 as ::core::ffi::c_int;
-            (*term).selection.capacity
-                |= (*term).selection.capacity >> 2 as ::core::ffi::c_int;
-            (*term).selection.capacity
-                |= (*term).selection.capacity >> 4 as ::core::ffi::c_int;
-            (*term).selection.capacity
-                |= (*term).selection.capacity >> 8 as ::core::ffi::c_int;
-            (*term).selection.capacity
-                |= (*term).selection.capacity >> 16 as ::core::ffi::c_int;
+            (*term).selection.capacity |= (*term).selection.capacity >> 1 as ::core::ffi::c_int;
+            (*term).selection.capacity |= (*term).selection.capacity >> 2 as ::core::ffi::c_int;
+            (*term).selection.capacity |= (*term).selection.capacity >> 4 as ::core::ffi::c_int;
+            (*term).selection.capacity |= (*term).selection.capacity >> 8 as ::core::ffi::c_int;
+            (*term).selection.capacity |= (*term).selection.capacity >> 16 as ::core::ffi::c_int;
             (*term).selection.capacity = (*term).selection.capacity.wrapping_add(1);
             (*term).selection.capacity = (*term).selection.capacity;
             (*term).selection.items = xrealloc(
@@ -7623,11 +7368,12 @@ unsafe extern "C" fn term_selection_set(
             ) as *mut ::core::ffi::c_char;
         }
         '_c2rust_label: {
-            if !(*term).selection.items.is_null() {} else {
+            if !(*term).selection.items.is_null() {
+            } else {
                 __assert_fail(
                     b"(term->selection).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     1851 as ::core::ffi::c_uint,
                     b"int term_selection_set(VTermSelectionMask, VTermStringFragment, void *)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -7635,8 +7381,10 @@ unsafe extern "C" fn term_selection_set(
             }
         };
         memcpy(
-            (*term).selection.items.offset((*term).selection.size as isize)
-                as *mut ::core::ffi::c_void,
+            (*term)
+                .selection
+                .items
+                .offset((*term).selection.size as isize) as *mut ::core::ffi::c_void,
             frag.str as *const ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
         );
@@ -7651,13 +7399,10 @@ unsafe extern "C" fn term_selection_set(
             main_loop.events,
             Event {
                 handler: Some(
-                    term_clipboard_set
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    term_clipboard_set as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
-                    ::core::ptr::from_exposed_addr_mut::<
-                        ::core::ffi::c_void,
-                    >(mask as usize),
+                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(mask as usize),
                     data as *mut ::core::ffi::c_void,
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -7686,7 +7431,8 @@ unsafe extern "C" fn convert_modifiers(
         *statep = (*statep as ::core::ffi::c_uint
             | VTERM_MOD_CTRL as ::core::ffi::c_int as ::core::ffi::c_uint)
             as VTermModifier;
-        if mod_mask & MOD_MASK_SHIFT == 0 && *key >= 'A' as ::core::ffi::c_int
+        if mod_mask & MOD_MASK_SHIFT == 0
+            && *key >= 'A' as ::core::ffi::c_int
             && *key <= 'Z' as ::core::ffi::c_int
         {
             *key += 'a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int;
@@ -7698,25 +7444,9 @@ unsafe extern "C" fn convert_modifiers(
             as VTermModifier;
     }
     match *key {
-        K_S_TAB
-        | K_S_UP
-        | K_S_DOWN
-        | K_S_LEFT
-        | K_S_RIGHT
-        | K_S_HOME
-        | K_S_END
-        | K_S_F1
-        | K_S_F2
-        | K_S_F3
-        | K_S_F4
-        | K_S_F5
-        | K_S_F6
-        | K_S_F7
-        | K_S_F8
-        | K_S_F9
-        | K_S_F10
-        | K_S_F11
-        | K_S_F12 => {
+        K_S_TAB | K_S_UP | K_S_DOWN | K_S_LEFT | K_S_RIGHT | K_S_HOME | K_S_END | K_S_F1
+        | K_S_F2 | K_S_F3 | K_S_F4 | K_S_F5 | K_S_F6 | K_S_F7 | K_S_F8 | K_S_F9 | K_S_F10
+        | K_S_F11 | K_S_F12 => {
             *statep = (*statep as ::core::ffi::c_uint
                 | VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint)
                 as VTermModifier;
@@ -7802,220 +7532,220 @@ unsafe extern "C" fn convert_key(
                 as VTermKey;
         }
         K_S_F10 | K_F10 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 10 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 10 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_S_F11 | K_F11 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 11 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 11 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_S_F12 | K_F12 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 12 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 12 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F13 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 13 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 13 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F14 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 14 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 14 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F15 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 15 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 15 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F16 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 16 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 16 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F17 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 17 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 17 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F18 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 18 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 18 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F19 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 19 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 19 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F20 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 20 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 20 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F21 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 21 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 21 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F22 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 22 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 22 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F23 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 23 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 23 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F24 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 24 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 24 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F25 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 25 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 25 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F26 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 26 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 26 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F27 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 27 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 27 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F28 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 28 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 28 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F29 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 29 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 29 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F30 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 30 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 30 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F31 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 31 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 31 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F32 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 32 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 32 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F33 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 33 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 33 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F34 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 34 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 34 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F35 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 35 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 35 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F36 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 36 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 36 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F37 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 37 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 37 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F38 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 38 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 38 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F39 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 39 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 39 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F40 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 40 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 40 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F41 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 41 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 41 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F42 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 42 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 42 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F43 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 43 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 43 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F44 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 44 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 44 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F45 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 45 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 45 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F46 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 46 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 46 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F47 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 47 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 47 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F48 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 48 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 48 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F49 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 49 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 49 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F50 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 50 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 50 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F51 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 51 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 51 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F52 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 52 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 52 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F53 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 53 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 53 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F54 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 54 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 54 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F55 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 55 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 55 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F56 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 56 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 56 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F57 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 57 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 57 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F58 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 58 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 58 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F59 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 59 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 59 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F60 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 60 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 60 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F61 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 61 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 61 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F62 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 62 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 62 as ::core::ffi::c_int)
+                as VTermKey;
         }
         K_F63 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int
-                + 63 as ::core::ffi::c_int) as VTermKey;
+            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 63 as ::core::ffi::c_int)
+                as VTermKey;
         }
         _ => return VTERM_KEY_NONE,
     };
@@ -8033,22 +7763,16 @@ unsafe extern "C" fn mouse_action(
         vterm_mouse_button((*term).vt, button, pressed, mod_0);
     }
 }
-unsafe extern "C" fn send_mouse_event(
-    mut term: *mut Terminal,
-    mut c: ::core::ffi::c_int,
-) -> bool {
+unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -> bool {
     let mut offset: ::core::ffi::c_int = 0;
     let mut row: ::core::ffi::c_int = mouse_row;
     let mut col: ::core::ffi::c_int = mouse_col;
     let mut grid: ::core::ffi::c_int = mouse_grid;
-    let mut mouse_win: *mut win_T = mouse_find_win_inner(
-        &raw mut grid,
-        &raw mut row,
-        &raw mut col,
-    );
+    let mut mouse_win: *mut win_T = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
     if !mouse_win.is_null() {
         offset = 0;
-        if !(*term).suspended && !(*term).closed
+        if !(*term).suspended
+            && !(*term).closed
             && (*term).forward_mouse as ::core::ffi::c_int != 0
             && (*(*mouse_win).w_buffer).terminal == term
             && row >= 0 as ::core::ffi::c_int
@@ -8057,7 +7781,8 @@ unsafe extern "C" fn send_mouse_event(
             && {
                 offset = win_col_off(mouse_win);
                 col >= offset
-            } && (grid > 1 as ::core::ffi::c_int || col < (*mouse_win).w_width)
+            }
+            && (grid > 1 as ::core::ffi::c_int || col < (*mouse_win).w_width)
         {
             let mut button: ::core::ffi::c_int = 0;
             let mut pressed: bool = false_0 != 0;
@@ -8144,18 +7869,14 @@ unsafe extern "C" fn send_mouse_event(
             mouse_action(term, button, row, col - offset, pressed, mod_0);
             return false_0 != 0;
         }
-        if c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        if c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || c == -(253 as ::core::ffi::c_int
+                + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || c == -(253 as ::core::ffi::c_int
+                + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || c == -(253 as ::core::ffi::c_int
+                + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
         {
             let mut save_curwin: *mut win_T = curwin;
             curwin = mouse_win;
@@ -8237,29 +7958,20 @@ unsafe extern "C" fn send_mouse_event(
             curwin = save_curwin;
             curbuf = (*curwin).w_buffer;
             redraw_later(mouse_win, UPD_NOT_VALID as ::core::ffi::c_int);
-            invalidate_terminal(
-                term,
-                -1 as ::core::ffi::c_int,
-                -1 as ::core::ffi::c_int,
-            );
+            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
             return mouse_win == curwin;
         }
     }
-    if c
-        == -(253 as ::core::ffi::c_int
-            + ((KE_LEFTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        && !mouse_win.is_null() && (*(*mouse_win).w_buffer).terminal == term
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+    if c == -(253 as ::core::ffi::c_int
+        + ((KE_LEFTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        && !mouse_win.is_null()
+        && (*(*mouse_win).w_buffer).terminal == term
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
     {
         return false_0 != 0;
     }
-    let mut len: ::core::ffi::c_int = ins_char_typebuf(
-        vgetc_char,
-        vgetc_mod_mask,
-        true_0 != 0,
-    );
+    let mut len: ::core::ffi::c_int = ins_char_typebuf(vgetc_char, vgetc_mod_mask, true_0 != 0);
     if KeyTyped {
         ungetchars(len);
     }
@@ -8272,8 +7984,7 @@ unsafe extern "C" fn fetch_row(
 ) {
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut line_len: size_t = 0 as size_t;
-    let mut ptr: *mut ::core::ffi::c_char = &raw mut (*term).textbuf
-        as *mut ::core::ffi::c_char;
+    let mut ptr: *mut ::core::ffi::c_char = &raw mut (*term).textbuf as *mut ::core::ffi::c_char;
     while col < end_col {
         let mut cell: VTermScreenCell = VTermScreenCell {
             schar: 0,
@@ -8289,9 +8000,8 @@ unsafe extern "C" fn fetch_row(
         fetch_cell(term, row, col, &raw mut cell);
         if cell.schar != 0 {
             schar_get_adv(&raw mut ptr, cell.schar);
-            line_len = ptr
-                .offset_from(&raw mut (*term).textbuf as *mut ::core::ffi::c_char)
-                as size_t;
+            line_len =
+                ptr.offset_from(&raw mut (*term).textbuf as *mut ::core::ffi::c_char) as size_t;
         } else {
             let c2rust_fresh6 = ptr;
             ptr = ptr.offset(1);
@@ -8312,8 +8022,7 @@ unsafe extern "C" fn fetch_cell(
             .sb_buffer
             .offset((-row - 1 as ::core::ffi::c_int) as isize);
         if (col as size_t) < (*sbrow).cols {
-            *cell = *(&raw mut (*sbrow).cells as *mut VTermScreenCell)
-                .offset(col as isize);
+            *cell = *(&raw mut (*sbrow).cells as *mut VTermScreenCell).offset(col as isize);
         } else {
             *cell = VTermScreenCell {
                 schar: 0 as schar_T,
@@ -8363,10 +8072,7 @@ unsafe extern "C" fn invalidate_terminal(
             &raw mut refresh_timer,
             Some(
                 refresh_timer_cb
-                    as unsafe extern "C" fn(
-                        *mut TimeWatcher,
-                        *mut ::core::ffi::c_void,
-                    ) -> (),
+                    as unsafe extern "C" fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> (),
             ),
             REFRESH_DELAY as uint64_t,
             0 as uint64_t,
@@ -8390,8 +8096,8 @@ unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
     let mut resized: bool = refresh_size(term, buf);
     refresh_scrollback(term, buf);
     refresh_screen(term, buf);
-    let mut ml_added: ::core::ffi::c_int = (*buf).b_ml.ml_line_count
-        as ::core::ffi::c_int - ml_before as ::core::ffi::c_int;
+    let mut ml_added: ::core::ffi::c_int =
+        (*buf).b_ml.ml_line_count as ::core::ffi::c_int - ml_before as ::core::ffi::c_int;
     adjust_topline_cursor(term, buf, ml_added);
     if resized {
         let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
@@ -8413,16 +8119,11 @@ unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
     }
     multiqueue_move_events(main_loop.events, (*term).pending.events);
 }
-unsafe extern "C" fn refresh_cursor(
-    mut term: *mut Terminal,
-    mut cursor_visible: *mut bool,
-) {
+unsafe extern "C" fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible: *mut bool) {
     if !is_focused(term) {
         return;
     }
-    if (*term).cursor.visible as ::core::ffi::c_int
-        != *cursor_visible as ::core::ffi::c_int
-    {
+    if (*term).cursor.visible as ::core::ffi::c_int != *cursor_visible as ::core::ffi::c_int {
         *cursor_visible = (*term).cursor.visible;
         if *cursor_visible {
             ui_busy_stop();
@@ -8435,15 +8136,15 @@ unsafe extern "C" fn refresh_cursor(
     }
     (*term).pending.cursor = false_0 != 0;
     if (*term).cursor.blink {
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon = 500
-            as ::core::ffi::c_int;
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff = 500
-            as ::core::ffi::c_int;
+        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
+            500 as ::core::ffi::c_int;
+        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
+            500 as ::core::ffi::c_int;
     } else {
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon = 0
-            as ::core::ffi::c_int;
-        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff = 0
-            as ::core::ffi::c_int;
+        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
+            0 as ::core::ffi::c_int;
+        shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
+            0 as ::core::ffi::c_int;
     }
     match (*term).cursor.shape {
         1 => {
@@ -8451,13 +8152,13 @@ unsafe extern "C" fn refresh_cursor(
         }
         2 => {
             shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_HOR;
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage = 20
-                as ::core::ffi::c_int;
+            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
+                20 as ::core::ffi::c_int;
         }
         3 => {
             shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_VER;
-            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage = 25
-                as ::core::ffi::c_int;
+            shape_table[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
+                25 as ::core::ffi::c_int;
         }
         _ => {}
     }
@@ -8499,12 +8200,11 @@ unsafe extern "C" fn refresh_size(mut term: *mut Terminal, mut buf: *mut buf_T) 
     vterm_get_size((*term).vt, &raw mut height, &raw mut width);
     (*term).invalid_start = 0 as ::core::ffi::c_int;
     (*term).invalid_end = height;
-    (*term)
-        .opts
-        .resize_cb
-        .expect(
-            "non-null function pointer",
-        )(width as uint16_t, height as uint16_t, (*term).opts.data);
+    (*term).opts.resize_cb.expect("non-null function pointer")(
+        width as uint16_t,
+        height as uint16_t,
+        (*term).opts.data,
+    );
     return true_0 != 0;
 }
 #[no_mangle]
@@ -8519,7 +8219,8 @@ unsafe extern "C" fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut bu
     }
     let scbk: size_t = (*buf).b_p_scbk as size_t;
     '_c2rust_label: {
-        if (*term).sb_current < 18446744073709551615 as size_t {} else {
+        if (*term).sb_current < 18446744073709551615 as size_t {
+        } else {
             __assert_fail(
                 b"term->sb_current < SIZE_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/terminal.c\0".as_ptr()
@@ -8540,8 +8241,7 @@ unsafe extern "C" fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut bu
             ml_delete_buf(buf, 1 as linenr_T, false_0 != 0);
             (*term).sb_current = (*term).sb_current.wrapping_sub(1);
             xfree(
-                *(*term).sb_buffer.offset((*term).sb_current as isize)
-                    as *mut ::core::ffi::c_void,
+                *(*term).sb_buffer.offset((*term).sb_current as isize) as *mut ::core::ffi::c_void
             );
             i = i.wrapping_add(1);
         }
@@ -8557,13 +8257,10 @@ unsafe extern "C" fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut bu
         );
         deleted_lines_buf(buf, 1 as linenr_T, diff as linenr_T);
     }
-    let mut sb_region: size_t = ::core::mem::size_of::<*mut ScrollbackLine>()
-        .wrapping_mul(scbk);
+    let mut sb_region: size_t = ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul(scbk);
     if scbk != (*term).sb_size {
-        (*term).sb_buffer = xrealloc(
-            (*term).sb_buffer as *mut ::core::ffi::c_void,
-            sb_region,
-        ) as *mut *mut ScrollbackLine;
+        (*term).sb_buffer = xrealloc((*term).sb_buffer as *mut ::core::ffi::c_void, sb_region)
+            as *mut *mut ScrollbackLine;
     }
     (*term).sb_size = scbk;
 }
@@ -8572,8 +8269,7 @@ unsafe extern "C" fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut b
         .opts
         .read_pause_cb
         .expect("non-null function pointer")(true_0 != 0, (*term).opts.data);
-    let mut deleted: linenr_T = (*term).sb_deleted.wrapping_sub((*term).old_sb_deleted)
-        as linenr_T;
+    let mut deleted: linenr_T = (*term).sb_deleted.wrapping_sub((*term).old_sb_deleted) as linenr_T;
     deleted = if deleted < (*buf).b_ml.ml_line_count {
         deleted
     } else {
@@ -8606,8 +8302,8 @@ unsafe extern "C" fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut b
     }) as ::core::ffi::c_int;
     while (*term).sb_pending > 0 as ::core::ffi::c_int {
         fetch_row(term, -(*term).sb_pending, width);
-        let mut buf_index: ::core::ffi::c_int = (*buf).b_ml.ml_line_count
-            as ::core::ffi::c_int - old_height;
+        let mut buf_index: ::core::ffi::c_int =
+            (*buf).b_ml.ml_line_count as ::core::ffi::c_int - old_height;
         ml_append_buf(
             buf,
             buf_index as linenr_T,
@@ -8618,8 +8314,7 @@ unsafe extern "C" fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut b
         appended_lines_buf(buf, buf_index as linenr_T, 1 as linenr_T);
         (*term).sb_pending -= 1;
     }
-    let mut max_line_count: ::core::ffi::c_int = (*term).sb_current as ::core::ffi::c_int
-        + height;
+    let mut max_line_count: ::core::ffi::c_int = (*term).sb_current as ::core::ffi::c_int + height;
     while (*buf).b_ml.ml_line_count > max_line_count as linenr_T {
         ml_delete_buf(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
         deleted_lines_buf(buf, (*buf).b_ml.ml_line_count, 1 as linenr_T);
@@ -8673,10 +8368,7 @@ unsafe extern "C" fn refresh_screen(mut term: *mut Terminal, mut buf: *mut buf_T
         linenr += 1;
     }
     (*term).old_height = height;
-    let mut change_start: ::core::ffi::c_int = row_to_linenr(
-        term,
-        (*term).invalid_start,
-    );
+    let mut change_start: ::core::ffi::c_int = row_to_linenr(term, (*term).invalid_start);
     let mut change_end: ::core::ffi::c_int = change_start + changed;
     (*term).invalid_start = INT_MAX;
     (*term).invalid_end = -1 as ::core::ffi::c_int;
@@ -8697,20 +8389,23 @@ unsafe extern "C" fn adjust_topline_cursor(
     let mut ml_end: linenr_T = (*buf).b_ml.ml_line_count;
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
                 if wp == curwin && is_focused(term) as ::core::ffi::c_int != 0 {
                     terminal_check_cursor();
                 } else {
-                    let mut following: bool = ml_end
-                        == (*wp).w_cursor.lnum + added as linenr_T;
+                    let mut following: bool = ml_end == (*wp).w_cursor.lnum + added as linenr_T;
                     if following {
                         (*wp).w_cursor.lnum = ml_end;
                         set_topline(
                             wp,
-                            if (*wp).w_cursor.lnum - (*wp).w_view_height as linenr_T
-                                + 1 as linenr_T > 1 as linenr_T
+                            if (*wp).w_cursor.lnum - (*wp).w_view_height as linenr_T + 1 as linenr_T
+                                > 1 as linenr_T
                             {
                                 (*wp).w_cursor.lnum - (*wp).w_view_height as linenr_T
                                     + 1 as linenr_T
@@ -8761,8 +8456,7 @@ unsafe extern "C" fn linenr_to_row(
     return linenr - (*term).sb_current as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn is_focused(mut term: *mut Terminal) -> bool {
-    return State & MODE_TERMINAL as ::core::ffi::c_int != 0
-        && (*curbuf).terminal == term;
+    return State & MODE_TERMINAL as ::core::ffi::c_int != 0 && (*curbuf).terminal == term;
 }
 unsafe extern "C" fn get_config_string(
     mut buf: *mut buf_T,
@@ -8800,8 +8494,8 @@ unsafe extern "C" fn get_config_string(
 }
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SB_MAX: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_UP: ::core::ffi::c_int = -30059;
 pub const K_KUP: ::core::ffi::c_int = -30027;
 pub const K_DOWN: ::core::ffi::c_int = -25707;

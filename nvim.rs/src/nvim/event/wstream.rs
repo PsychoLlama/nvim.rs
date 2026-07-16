@@ -160,9 +160,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -189,9 +188,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -409,9 +406,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -423,9 +419,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -437,15 +432,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_6 {
@@ -554,9 +544,7 @@ pub struct uv_write_s {
     pub error: ::core::ffi::c_int,
     pub bufsml: [uv_buf_t; 4],
 }
-pub type uv_write_cb = Option<
-    unsafe extern "C" fn(*mut uv_write_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_write_cb = Option<unsafe extern "C" fn(*mut uv_write_t, ::core::ffi::c_int) -> ()>;
 pub type uv_write_t = uv_write_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -662,9 +650,7 @@ pub struct wbuffer {
     pub data: *mut ::core::ffi::c_char,
     pub cb: wbuffer_data_finalizer,
 }
-pub type wbuffer_data_finalizer = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
+pub type wbuffer_data_finalizer = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
 pub type WBuffer = wbuffer;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -686,13 +672,11 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
 pub type Stream = stream;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_10 {
@@ -708,16 +692,13 @@ pub struct WRequest {
     pub uv_req: uv_write_t,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"int wstream_write(Stream *, WBuffer *)\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"int wstream_write(Stream *, WBuffer *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const DEFAULT_MAXMEM: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    * 1024 as ::core::ffi::c_int * 2000 as ::core::ffi::c_int;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const DEFAULT_MAXMEM: ::core::ffi::c_int =
+    1024 as ::core::ffi::c_int * 1024 as ::core::ffi::c_int * 2000 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn wstream_init_fd(
     mut loop_0: *mut Loop,
@@ -744,7 +725,11 @@ pub unsafe extern "C" fn wstream_init_stream(
 }
 #[no_mangle]
 pub unsafe extern "C" fn wstream_init(mut stream: *mut Stream, mut maxmem: size_t) {
-    (*stream).maxmem = if maxmem != 0 { maxmem } else { DEFAULT_MAXMEM as size_t };
+    (*stream).maxmem = if maxmem != 0 {
+        maxmem
+    } else {
+        DEFAULT_MAXMEM as size_t
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn wstream_set_write_cb(
@@ -762,22 +747,24 @@ pub unsafe extern "C" fn wstream_write(
 ) -> ::core::ffi::c_int {
     let mut data: *mut WRequest = ::core::ptr::null_mut::<WRequest>();
     '_c2rust_label: {
-        if (*stream).maxmem != 0 {} else {
+        if (*stream).maxmem != 0 {
+        } else {
             __assert_fail(
                 b"stream->maxmem\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 70 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
         }
     };
     '_c2rust_label_0: {
-        if !(*stream).closed {} else {
+        if !(*stream).closed {
+        } else {
             __assert_fail(
                 b"!stream->closed\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 72 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -868,19 +855,23 @@ pub unsafe extern "C" fn wstream_write(
         uv_fs_req_cleanup(&raw mut req);
         wstream_release_wbuffer(buffer);
         '_c2rust_label_1: {
-            if (*stream).write_cb.is_none() {} else {
+            if (*stream).write_cb.is_none() {
+            } else {
                 __assert_fail(
                     b"stream->write_cb == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     89 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
             }
         };
         (*stream).fpos = ((*stream).fpos as ::core::ffi::c_long
-            + (if req.result > 0 as ssize_t { req.result } else { 0 as ssize_t })
-                as ::core::ffi::c_long) as int64_t;
+            + (if req.result > 0 as ssize_t {
+                req.result
+            } else {
+                0 as ssize_t
+            }) as ::core::ffi::c_long) as int64_t;
         return if req.result > 0 as ssize_t {
             0 as ::core::ffi::c_int
         } else if err != 0 as ::core::ffi::c_int {
@@ -902,21 +893,19 @@ pub unsafe extern "C" fn wstream_write(
             (*stream).uvstream,
             &raw mut uvbuf as *const uv_buf_t,
             1 as ::core::ffi::c_uint,
-            Some(
-                write_cb
-                    as unsafe extern "C" fn(*mut uv_write_t, ::core::ffi::c_int) -> (),
-            ),
+            Some(write_cb as unsafe extern "C" fn(*mut uv_write_t, ::core::ffi::c_int) -> ()),
         );
         if err != 0 as ::core::ffi::c_int {
             xfree(data as *mut ::core::ffi::c_void);
         } else {
             (*stream).pending_reqs = (*stream).pending_reqs.wrapping_add(1);
             '_c2rust_label_2: {
-                if err == 0 as ::core::ffi::c_int {} else {
+                if err == 0 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
                         b"err == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         113 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -927,11 +916,12 @@ pub unsafe extern "C" fn wstream_write(
     }
     wstream_release_wbuffer(buffer);
     '_c2rust_label_3: {
-        if err != 0 as ::core::ffi::c_int {} else {
+        if err != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"err != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/event/wstream.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 118 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -946,8 +936,7 @@ pub unsafe extern "C" fn wstream_new_buffer(
     mut refcount: size_t,
     mut cb: wbuffer_data_finalizer,
 ) -> *mut WBuffer {
-    let mut rv: *mut WBuffer = xmalloc(::core::mem::size_of::<WBuffer>())
-        as *mut WBuffer;
+    let mut rv: *mut WBuffer = xmalloc(::core::mem::size_of::<WBuffer>()) as *mut WBuffer;
     (*rv).size = size;
     (*rv).refcount = refcount;
     (*rv).cb = cb;
@@ -963,9 +952,9 @@ unsafe extern "C" fn write_cb(mut req: *mut uv_write_t, mut status: ::core::ffi:
     if (*(*data).stream).write_cb.is_some() {
         (*(*data).stream)
             .write_cb
-            .expect(
-                "non-null function pointer",
-            )((*data).stream, (*(*data).stream).cb_data, status);
+            .expect("non-null function pointer")(
+            (*data).stream, (*(*data).stream).cb_data, status
+        );
     }
     (*(*data).stream).pending_reqs = (*(*data).stream).pending_reqs.wrapping_sub(1);
     if (*(*data).stream).closed as ::core::ffi::c_int != 0
@@ -980,11 +969,9 @@ pub unsafe extern "C" fn wstream_release_wbuffer(mut buffer: *mut WBuffer) {
     (*buffer).refcount = (*buffer).refcount.wrapping_sub(1);
     if (*buffer).refcount == 0 {
         if (*buffer).cb.is_some() {
-            (*buffer)
-                .cb
-                .expect(
-                    "non-null function pointer",
-                )((*buffer).data as *mut ::core::ffi::c_void);
+            (*buffer).cb.expect("non-null function pointer")(
+                (*buffer).data as *mut ::core::ffi::c_void,
+            );
         }
         xfree(buffer as *mut ::core::ffi::c_void);
     }

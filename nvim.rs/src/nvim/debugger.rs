@@ -31,11 +31,7 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits_int32(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: int32_t,
-    ) -> int32_t;
+    fn getdigits_int32(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: int32_t) -> int32_t;
     fn redraw_all_later(type_0: ::core::ffi::c_int);
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static e_invarg2: [::core::ffi::c_char; 0];
@@ -49,11 +45,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn typval_tostring(arg: *mut typval_T, quotes: bool) -> *mut ::core::ffi::c_char;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn msg_starthere();
@@ -2896,9 +2888,7 @@ pub const KE_S_F2: key_extra = 7;
 pub const KE_S_F1: key_extra = 6;
 pub const KE_S_DOWN: key_extra = 5;
 pub const KE_S_UP: key_extra = 4;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -2909,12 +2899,8 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut debug_greedy: bool = false_0 != 0;
-static mut debug_oldval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
-static mut debug_newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut debug_oldval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static mut debug_newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll;
@@ -2968,13 +2954,9 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     };
     let mut typeahead_saved: bool = false_0 != 0;
     let mut save_ignore_script: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static mut last_cmd: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     RedrawingDisabled += 1;
     no_wait_return += 1;
@@ -3000,8 +2982,8 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             gettext(b"Oldval = \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             debug_oldval,
         );
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut debug_oldval
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut debug_oldval as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -3012,8 +2994,8 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
             gettext(b"Newval = \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             debug_newval,
         );
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut debug_newval
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut debug_newval as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
         *ptr__0;
@@ -3025,14 +3007,15 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     xfree(sname as *mut ::core::ffi::c_void);
     if (*(exestack.ga_data as *mut estack_T)
         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum != 0 as linenr_T
+    .es_lnum
+        != 0 as linenr_T
     {
         smsg(
             0 as ::core::ffi::c_int,
             gettext(b"line %ld: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*(exestack.ga_data as *mut estack_T)
                 .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum as int64_t,
+            .es_lnum as int64_t,
             cmd,
         );
     } else {
@@ -3100,8 +3083,8 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
                     }
                     102 => {
                         last_cmd = 0 as ::core::ffi::c_int;
-                        if *p.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 'r' as ::core::ffi::c_int
+                        if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == 'r' as ::core::ffi::c_int
                         {
                             last_cmd = CMD_FRAME;
                             tail = b"rame\0".as_ptr() as *const ::core::ffi::c_char
@@ -3124,8 +3107,8 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
                     }
                     98 => {
                         last_cmd = CMD_BACKTRACE;
-                        if *p.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 't' as ::core::ffi::c_int
+                        if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == 't' as ::core::ffi::c_int
                         {
                             tail = b"t\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -3233,11 +3216,11 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
                                 *mut ::core::ffi::c_void,
                                 ::core::ffi::c_int,
                                 bool,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     ),
                     NULL,
-                    DOCMD_VERBOSE as ::core::ffi::c_int
-                        | DOCMD_EXCRESET as ::core::ffi::c_int,
+                    DOCMD_VERBOSE as ::core::ffi::c_int | DOCMD_EXCRESET as ::core::ffi::c_int,
                 );
                 debug_break_level = n;
             }
@@ -3291,9 +3274,7 @@ unsafe extern "C" fn get_maxbacktrace_level(
 }
 unsafe extern "C" fn do_setdebugtracelevel(mut arg: *mut ::core::ffi::c_char) {
     let mut level: ::core::ffi::c_int = atoi(arg);
-    if *arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int
-        || level < 0 as ::core::ffi::c_int
-    {
+    if *arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int || level < 0 as ::core::ffi::c_int {
         debug_backtrace_level += level;
     } else {
         debug_backtrace_level = level;
@@ -3314,10 +3295,7 @@ unsafe extern "C" fn do_checkbacktracelevel() {
             debug_backtrace_level = max;
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"frame at highest level: %d\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"frame at highest level: %d\0".as_ptr() as *const ::core::ffi::c_char),
                 max,
             );
         }
@@ -3331,10 +3309,8 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut cur: *mut ::core::ffi::c_char = sname;
         while !got_int {
-            let mut next: *mut ::core::ffi::c_char = strstr(
-                cur,
-                b"..\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            let mut next: *mut ::core::ffi::c_char =
+                strstr(cur, b"..\0".as_ptr() as *const ::core::ffi::c_char);
             if !next.is_null() {
                 *next = NUL as ::core::ffi::c_char;
             }
@@ -3364,14 +3340,15 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
     }
     if (*(exestack.ga_data as *mut estack_T)
         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum != 0 as linenr_T
+    .es_lnum
+        != 0 as linenr_T
     {
         smsg(
             0 as ::core::ffi::c_int,
             gettext(b"line %ld: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*(exestack.ga_data as *mut estack_T)
                 .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum as int64_t,
+            .es_lnum as int64_t,
             cmd,
         );
     } else {
@@ -3389,50 +3366,43 @@ pub unsafe extern "C" fn ex_debug(mut eap: *mut exarg_T) {
     do_cmdline_cmd((*eap).arg);
     debug_break_level = debug_break_level_save;
 }
-static mut debug_breakpoint_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut debug_breakpoint_name: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 static mut debug_breakpoint_lnum: linenr_T = 0;
 static mut debug_skipped: bool = false;
-static mut debug_skipped_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut debug_skipped_name: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub unsafe extern "C" fn dbg_check_breakpoint(mut eap: *mut exarg_T) {
     debug_skipped = false_0 != 0;
     if !debug_breakpoint_name.is_null() {
         if (*eap).skip == 0 {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             if *debug_breakpoint_name.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int == K_SPECIAL
-                && *debug_breakpoint_name.offset(1 as ::core::ffi::c_int as isize)
-                    as uint8_t as ::core::ffi::c_int == KS_EXTRA
+                as ::core::ffi::c_int
+                == K_SPECIAL
+                && *debug_breakpoint_name.offset(1 as ::core::ffi::c_int as isize) as uint8_t
+                    as ::core::ffi::c_int
+                    == KS_EXTRA
                 && *debug_breakpoint_name.offset(2 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == KE_SNR as ::core::ffi::c_int
+                    as ::core::ffi::c_int
+                    == KE_SNR as ::core::ffi::c_int
             {
-                p = b"<SNR>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                p = b"<SNR>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                p = b"\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                p = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Breakpoint in \"%s%s\" line %ld\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Breakpoint in \"%s%s\" line %ld\0".as_ptr() as *const ::core::ffi::c_char),
                 p,
-                debug_breakpoint_name
-                    .offset(
-                        (if *p as ::core::ffi::c_int == NUL {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            3 as ::core::ffi::c_int
-                        }) as isize,
-                    ),
+                debug_breakpoint_name.offset(
+                    (if *p as ::core::ffi::c_int == NUL {
+                        0 as ::core::ffi::c_int
+                    } else {
+                        3 as ::core::ffi::c_int
+                    }) as isize,
+                ),
                 debug_breakpoint_lnum as int64_t,
             );
             debug_breakpoint_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -3486,10 +3456,7 @@ pub const DBG_FILE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DBG_EXPR: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 unsafe extern "C" fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
     emsg_off += 1;
-    let tv: *mut typval_T = eval_expr(
-        (*bp).dbg_name,
-        ::core::ptr::null_mut::<exarg_T>(),
-    );
+    let tv: *mut typval_T = eval_expr((*bp).dbg_name, ::core::ptr::null_mut::<exarg_T>());
     emsg_off -= 1;
     return tv;
 }
@@ -3500,19 +3467,27 @@ unsafe extern "C" fn dbg_parsearg(
     let mut p: *mut ::core::ffi::c_char = arg;
     let mut here: bool = false_0 != 0;
     ga_grow(gap, 1 as ::core::ffi::c_int);
-    let mut bp: *mut debuggy = ((*gap).ga_data as *mut debuggy)
-        .offset((*gap).ga_len as isize);
-    if strncmp(p, b"func\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-        == 0 as ::core::ffi::c_int
+    let mut bp: *mut debuggy = ((*gap).ga_data as *mut debuggy).offset((*gap).ga_len as isize);
+    if strncmp(
+        p,
+        b"func\0".as_ptr() as *const ::core::ffi::c_char,
+        4 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         (*bp).dbg_type = DBG_FUNC;
-    } else if strncmp(p, b"file\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-        == 0 as ::core::ffi::c_int
+    } else if strncmp(
+        p,
+        b"file\0".as_ptr() as *const ::core::ffi::c_char,
+        4 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         (*bp).dbg_type = DBG_FILE;
     } else if gap != &raw mut prof_ga
-        && strncmp(p, b"here\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            p,
+            b"here\0".as_ptr() as *const ::core::ffi::c_char,
+            4 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         if (*curbuf).b_ffname.is_null() {
             emsg(gettext(&raw const e_noname as *const ::core::ffi::c_char));
@@ -3521,12 +3496,18 @@ unsafe extern "C" fn dbg_parsearg(
         (*bp).dbg_type = DBG_FILE;
         here = true_0 != 0;
     } else if gap != &raw mut prof_ga
-        && strncmp(p, b"expr\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            p,
+            b"expr\0".as_ptr() as *const ::core::ffi::c_char,
+            4 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         (*bp).dbg_type = DBG_EXPR;
     } else {
-        semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), p);
+        semsg(
+            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+            p,
+        );
         return FAIL;
     }
     p = skipwhite(p.offset(4 as ::core::ffi::c_int as isize));
@@ -3535,8 +3516,7 @@ unsafe extern "C" fn dbg_parsearg(
     } else if gap != &raw mut prof_ga
         && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
     {
-        (*bp).dbg_lnum = getdigits_int32(&raw mut p, true_0 != 0, 0 as int32_t)
-            as linenr_T;
+        (*bp).dbg_lnum = getdigits_int32(&raw mut p, true_0 != 0, 0 as int32_t) as linenr_T;
         p = skipwhite(p);
     } else {
         (*bp).dbg_lnum = 0 as ::core::ffi::c_int as linenr_T;
@@ -3546,13 +3526,19 @@ unsafe extern "C" fn dbg_parsearg(
         || (*bp).dbg_type == DBG_FUNC
             && !strstr(p, b"()\0".as_ptr() as *const ::core::ffi::c_char).is_null()
     {
-        semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), arg);
+        semsg(
+            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+            arg,
+        );
         return FAIL;
     }
     if (*bp).dbg_type == DBG_FUNC {
         (*bp).dbg_name = xstrdup(
-            if strncmp(p, b"g:\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-                == 0 as ::core::ffi::c_int
+            if strncmp(
+                p,
+                b"g:\0".as_ptr() as *const ::core::ffi::c_char,
+                2 as size_t,
+            ) == 0 as ::core::ffi::c_int
             {
                 p.offset(2 as ::core::ffi::c_int as isize)
             } else {
@@ -3595,8 +3581,7 @@ pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
     if dbg_parsearg((*eap).arg, gap) != OK {
         return;
     }
-    let mut bp: *mut debuggy = ((*gap).ga_data as *mut debuggy)
-        .offset((*gap).ga_len as isize);
+    let mut bp: *mut debuggy = ((*gap).ga_data as *mut debuggy).offset((*gap).ga_len as isize);
     (*bp).dbg_forceit = (*eap).forceit;
     if (*bp).dbg_type != DBG_EXPR {
         let mut pat: *mut ::core::ffi::c_char = file_pat_to_reg_pat(
@@ -3617,8 +3602,8 @@ pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
             }
             if (*eap).cmdidx as ::core::ffi::c_int != CMD_profile as ::core::ffi::c_int {
                 last_breakp += 1;
-                (*((*gap).ga_data as *mut debuggy).offset((*gap).ga_len as isize))
-                    .dbg_nr = last_breakp;
+                (*((*gap).ga_data as *mut debuggy).offset((*gap).ga_len as isize)).dbg_nr =
+                    last_breakp;
                 debug_tick += 1;
             }
             (*gap).ga_len += 1;
@@ -3646,9 +3631,7 @@ unsafe extern "C" fn update_has_expr_breakpoint() {
     has_expr_breakpoint = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < dbg_breakp.ga_len {
-        if (*(dbg_breakp.ga_data as *mut debuggy).offset(i as isize)).dbg_type
-            == DBG_EXPR
-        {
+        if (*(dbg_breakp.ga_data as *mut debuggy).offset(i as isize)).dbg_type == DBG_EXPR {
             has_expr_breakpoint = true_0 != 0;
             break;
         } else {
@@ -3683,12 +3666,10 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
         if dbg_parsearg((*eap).arg, gap) == FAIL {
             return;
         }
-        let mut bp: *mut debuggy = ((*gap).ga_data as *mut debuggy)
-            .offset((*gap).ga_len as isize);
+        let mut bp: *mut debuggy = ((*gap).ga_data as *mut debuggy).offset((*gap).ga_len as isize);
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_0 < (*gap).ga_len {
-            let mut bpi: *mut debuggy = ((*gap).ga_data as *mut debuggy)
-                .offset(i_0 as isize);
+            let mut bpi: *mut debuggy = ((*gap).ga_data as *mut debuggy).offset(i_0 as isize);
             if (*bp).dbg_type == (*bpi).dbg_type
                 && strcmp((*bp).dbg_name, (*bpi).dbg_name) == 0 as ::core::ffi::c_int
                 && ((*bp).dbg_lnum == (*bpi).dbg_lnum
@@ -3704,10 +3685,7 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
     }
     if todel < 0 as ::core::ffi::c_int {
         semsg(
-            gettext(
-                b"E161: Breakpoint not found: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"E161: Breakpoint not found: %s\0".as_ptr() as *const ::core::ffi::c_char),
             (*eap).arg,
         );
         return;
@@ -3717,8 +3695,7 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
             (*((*gap).ga_data as *mut debuggy).offset(todel as isize)).dbg_name
                 as *mut ::core::ffi::c_void,
         );
-        if (*((*gap).ga_data as *mut debuggy).offset(todel as isize)).dbg_type
-            == DBG_EXPR
+        if (*((*gap).ga_data as *mut debuggy).offset(todel as isize)).dbg_type == DBG_EXPR
             && !(*((*gap).ga_data as *mut debuggy).offset(todel as isize))
                 .dbg_val
                 .is_null()
@@ -3729,13 +3706,10 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
         (*gap).ga_len -= 1;
         if todel < (*gap).ga_len {
             memmove(
-                ((*gap).ga_data as *mut debuggy).offset(todel as isize)
-                    as *mut ::core::ffi::c_void,
-                ((*gap).ga_data as *mut debuggy)
-                    .offset((todel + 1 as ::core::ffi::c_int) as isize)
+                ((*gap).ga_data as *mut debuggy).offset(todel as isize) as *mut ::core::ffi::c_void,
+                ((*gap).ga_data as *mut debuggy).offset((todel + 1 as ::core::ffi::c_int) as isize)
                     as *const ::core::ffi::c_void,
-                (((*gap).ga_len - todel) as size_t)
-                    .wrapping_mul(::core::mem::size_of::<debuggy>()),
+                (((*gap).ga_len - todel) as size_t).wrapping_mul(::core::mem::size_of::<debuggy>()),
             );
         }
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_breakdel as ::core::ffi::c_int {
@@ -3763,8 +3737,7 @@ pub unsafe extern "C" fn ex_breaklist(mut eap: *mut exarg_T) {
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < dbg_breakp.ga_len {
-        let mut bp: *mut debuggy = (dbg_breakp.ga_data as *mut debuggy)
-            .offset(i as isize);
+        let mut bp: *mut debuggy = (dbg_breakp.ga_data as *mut debuggy).offset(i as isize);
         if (*bp).dbg_type == DBG_FILE {
             home_replace(
                 ::core::ptr::null::<buf_T>(),
@@ -3777,9 +3750,7 @@ pub unsafe extern "C" fn ex_breaklist(mut eap: *mut exarg_T) {
         if (*bp).dbg_type != DBG_EXPR {
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"%3d  %s %s  line %ld\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                gettext(b"%3d  %s %s  line %ld\0".as_ptr() as *const ::core::ffi::c_char),
                 (*bp).dbg_nr,
                 if (*bp).dbg_type == DBG_FUNC {
                     b"func\0".as_ptr() as *const ::core::ffi::c_char
@@ -3824,8 +3795,7 @@ pub unsafe extern "C" fn has_profiling(
     mut fname: *mut ::core::ffi::c_char,
     mut fp: *mut bool,
 ) -> bool {
-    return debuggy_find(file, fname, 0 as linenr_T, &raw mut prof_ga, fp)
-        != 0 as linenr_T;
+    return debuggy_find(file, fname, 0 as linenr_T, &raw mut prof_ga, fp) != 0 as linenr_T;
 }
 unsafe extern "C" fn debuggy_find(
     mut file: bool,
@@ -3841,11 +3811,10 @@ unsafe extern "C" fn debuggy_find(
         return 0 as linenr_T;
     }
     if !file
-        && *fname.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-            as ::core::ffi::c_int == K_SPECIAL
+        && *fname.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+            == K_SPECIAL
     {
-        name = xmalloc(strlen(fname).wrapping_add(3 as size_t))
-            as *mut ::core::ffi::c_char;
+        name = xmalloc(strlen(fname).wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
         strcpy(
             name,
             b"<SNR>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3858,37 +3827,28 @@ unsafe extern "C" fn debuggy_find(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*gap).ga_len {
         bp = ((*gap).ga_data as *mut debuggy).offset(i as isize);
-        if ((*bp).dbg_type == DBG_FILE) as ::core::ffi::c_int
-            == file as ::core::ffi::c_int && (*bp).dbg_type != DBG_EXPR
+        if ((*bp).dbg_type == DBG_FILE) as ::core::ffi::c_int == file as ::core::ffi::c_int
+            && (*bp).dbg_type != DBG_EXPR
             && (gap == &raw mut prof_ga
-                || (*bp).dbg_lnum > after
-                    && (lnum == 0 as linenr_T || (*bp).dbg_lnum < lnum))
+                || (*bp).dbg_lnum > after && (lnum == 0 as linenr_T || (*bp).dbg_lnum < lnum))
         {
             let mut prev_got_int: bool = got_int;
             got_int = false_0 != 0;
-            if vim_regexec_prog(
-                &raw mut (*bp).dbg_prog,
-                false_0 != 0,
-                name,
-                0 as colnr_T,
-            ) {
+            if vim_regexec_prog(&raw mut (*bp).dbg_prog, false_0 != 0, name, 0 as colnr_T) {
                 lnum = (*bp).dbg_lnum;
                 if !fp.is_null() {
                     *fp = (*bp).dbg_forceit != 0;
                 }
             }
-            got_int = got_int as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int
-                != 0;
+            got_int = got_int as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0;
         } else if (*bp).dbg_type == DBG_EXPR {
             let mut line: bool = false_0 != 0;
             let tv: *mut typval_T = eval_expr_no_emsg(bp);
             if !tv.is_null() {
                 if (*bp).dbg_val.is_null() {
                     xfree(debug_oldval as *mut ::core::ffi::c_void);
-                    debug_oldval = typval_tostring(
-                        ::core::ptr::null_mut::<typval_T>(),
-                        true_0 != 0,
-                    );
+                    debug_oldval =
+                        typval_tostring(::core::ptr::null_mut::<typval_T>(), true_0 != 0);
                     (*bp).dbg_val = tv;
                     xfree(debug_newval as *mut ::core::ffi::c_void);
                     debug_newval = typval_tostring((*bp).dbg_val, true_0 != 0);
@@ -3912,16 +3872,17 @@ unsafe extern "C" fn debuggy_find(
                 xfree(debug_oldval as *mut ::core::ffi::c_void);
                 debug_oldval = typval_tostring((*bp).dbg_val, true_0 != 0);
                 xfree(debug_newval as *mut ::core::ffi::c_void);
-                debug_newval = typval_tostring(
-                    ::core::ptr::null_mut::<typval_T>(),
-                    true_0 != 0,
-                );
+                debug_newval = typval_tostring(::core::ptr::null_mut::<typval_T>(), true_0 != 0);
                 tv_free((*bp).dbg_val);
                 (*bp).dbg_val = ::core::ptr::null_mut::<typval_T>();
                 line = true_0 != 0;
             }
             if line {
-                lnum = if after > 0 as linenr_T { after } else { 1 as linenr_T };
+                lnum = if after > 0 as linenr_T {
+                    after
+                } else {
+                    1 as linenr_T
+                };
                 break;
             }
         }
@@ -3933,10 +3894,7 @@ unsafe extern "C" fn debuggy_find(
     return lnum;
 }
 #[no_mangle]
-pub unsafe extern "C" fn dbg_breakpoint(
-    mut name: *mut ::core::ffi::c_char,
-    mut lnum: linenr_T,
-) {
+pub unsafe extern "C" fn dbg_breakpoint(mut name: *mut ::core::ffi::c_char, mut lnum: linenr_T) {
     debug_breakpoint_name = name;
     debug_breakpoint_lnum = lnum;
 }

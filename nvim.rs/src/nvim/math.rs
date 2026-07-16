@@ -9,19 +9,16 @@ pub type int64_t = i64;
 pub type uint64_t = u64;
 pub type size_t = usize;
 #[no_mangle]
-pub unsafe extern "C" fn xfpclassify(
-    mut d: ::core::ffi::c_double,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn xfpclassify(mut d: ::core::ffi::c_double) -> ::core::ffi::c_int {
     let mut m: uint64_t = 0;
     memcpy(
         &raw mut m as *mut ::core::ffi::c_void,
         &raw mut d as *const ::core::ffi::c_void,
         ::core::mem::size_of::<uint64_t>(),
     );
-    let mut e: ::core::ffi::c_int = (0x7ff as uint64_t & m >> 52 as ::core::ffi::c_int)
-        as ::core::ffi::c_int;
-    m = (0xfffffffffffff as ::core::ffi::c_ulonglong & m as ::core::ffi::c_ulonglong)
-        as uint64_t;
+    let mut e: ::core::ffi::c_int =
+        (0x7ff as uint64_t & m >> 52 as ::core::ffi::c_int) as ::core::ffi::c_int;
+    m = (0xfffffffffffff as ::core::ffi::c_ulonglong & m as ::core::ffi::c_ulonglong) as uint64_t;
     match e {
         0 => return if m != 0 { FP_SUBNORMAL } else { FP_ZERO },
         2047 => return if m != 0 { FP_NAN } else { FP_INFINITE },
@@ -39,8 +36,7 @@ pub unsafe extern "C" fn xisnan(mut d: ::core::ffi::c_double) -> ::core::ffi::c_
 #[no_mangle]
 pub unsafe extern "C" fn xctz(mut x: uint64_t) -> ::core::ffi::c_int {
     if x == 0 as uint64_t {
-        return (8 as usize).wrapping_mul(::core::mem::size_of::<uint64_t>())
-            as ::core::ffi::c_int;
+        return (8 as usize).wrapping_mul(::core::mem::size_of::<uint64_t>()) as ::core::ffi::c_int;
     }
     return (x as ::core::ffi::c_ulonglong).trailing_zeros() as i32;
 }

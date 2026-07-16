@@ -21,10 +21,7 @@ extern "C" {
     fn tzset();
     fn uv_now(_: *const uv_loop_t) -> uint64_t;
     fn uv_err_name(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_clock_gettime(
-        clock_id: uv_clock_id,
-        ts: *mut uv_timespec64_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_clock_gettime(clock_id: uv_clock_id, ts: *mut uv_timespec64_t) -> ::core::ffi::c_int;
     fn uv_hrtime() -> uint64_t;
     fn uv_sleep(msec: ::core::ffi::c_uint);
     fn xstrlcpy(
@@ -184,9 +181,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -213,9 +209,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -344,9 +338,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -358,9 +351,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -372,15 +364,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_5 {
@@ -619,12 +606,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -671,12 +656,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_12 {
@@ -688,9 +671,7 @@ pub type Loop = loop_0;
 pub type ProcType = ::core::ffi::c_uint;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
@@ -769,8 +750,7 @@ pub unsafe extern "C" fn os_delay(mut ms: uint64_t, mut ignoreinput: bool) {
             continue;
         }
         let mut now: uint64_t = os_hrtime();
-        remaining
-            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
+        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
         before = now;
         if remaining <= 0 as int64_t {
             break;
@@ -786,13 +766,9 @@ pub unsafe extern "C" fn os_sleep(mut ms: uint64_t) {
 }
 static mut tz_cache: [::core::ffi::c_char; 64] = [0; 64];
 #[no_mangle]
-pub unsafe extern "C" fn os_localtime_r(
-    mut clock: *const time_t,
-    mut result: *mut tm,
-) -> *mut tm {
-    let mut tz: *const ::core::ffi::c_char = os_getenv_noalloc(
-        b"TZ\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+pub unsafe extern "C" fn os_localtime_r(mut clock: *const time_t, mut result: *mut tm) -> *mut tm {
+    let mut tz: *const ::core::ffi::c_char =
+        os_getenv_noalloc(b"TZ\0".as_ptr() as *const ::core::ffi::c_char);
     if tz.is_null() {
         tz = b"\0".as_ptr() as *const ::core::ffi::c_char;
     }
@@ -857,7 +833,11 @@ pub unsafe extern "C" fn os_ctime_r(
         );
     }
     if add_newline {
-        xstrlcat(result, b"\n\0".as_ptr() as *const ::core::ffi::c_char, result_len);
+        xstrlcat(
+            result,
+            b"\n\0".as_ptr() as *const ::core::ffi::c_char,
+            result_len,
+        );
     }
     return result;
 }

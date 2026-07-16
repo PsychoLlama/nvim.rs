@@ -51,10 +51,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strpbrk(
         __s: *const ::core::ffi::c_char,
         __accept: *const ::core::ffi::c_char,
@@ -84,11 +82,7 @@ extern "C" {
     ) -> size_t;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(
-        arena: *mut Arena,
-        size: size_t,
-        align: bool,
-    ) -> *mut ::core::ffi::c_void;
+    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_mem_free(mem: ArenaMem);
     fn object_to_vim_take_luaref(
         obj: *mut Object,
@@ -103,12 +97,7 @@ extern "C" {
     fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array;
     fn api_free_object(value: Object);
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
     static mut p_cpo: *mut ::core::ffi::c_char;
     static mut p_langmap: *mut ::core::ffi::c_char;
@@ -182,10 +171,7 @@ extern "C" {
         key: *const ::core::ffi::c_char,
         len: ptrdiff_t,
     ) -> *mut dictitem_T;
-    fn tv_dict_get_number(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-    ) -> varnumber_T;
+    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
     fn tv_dict_get_bool(
         d: *const dict_T,
         key: *const ::core::ffi::c_char,
@@ -200,10 +186,7 @@ extern "C" {
     fn tv_dict_alloc_ret(ret_tv: *mut typval_T);
     fn tv_get_number(tv: *const typval_T) -> varnumber_T;
     fn tv_get_bool(tv: *const typval_T) -> varnumber_T;
-    fn tv_check_for_dict_arg(
-        args: *const typval_T,
-        idx: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn tv_check_for_dict_arg(args: *const typval_T, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn tv_get_string_buf_chk(
         tv: *const typval_T,
         buf: *mut ::core::ffi::c_char,
@@ -218,11 +201,7 @@ extern "C" {
     fn put_eol(fd: *mut FILE) -> ::core::ffi::c_int;
     fn check_secure() -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
@@ -288,20 +267,13 @@ extern "C" {
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_prevptr(
         line: *mut ::core::ffi::c_char,
         p: *mut ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
     fn mb_unescape(pp: *mut *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     static mut exestack: garray_T;
 }
 pub type ptrdiff_t = isize;
@@ -378,9 +350,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -3684,12 +3655,8 @@ pub struct langmap_entry_T {
 }
 pub const MAPTYPE_MAP: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -3703,8 +3670,7 @@ unsafe extern "C" fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -3752,8 +3718,8 @@ pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 static mut first_abbr: *mut mapblock_T = ::core::ptr::null_mut::<mapblock_T>();
 static mut maphash: [*mut mapblock_T; 256] = [
     ::core::ptr::null_mut::<mapblock_T>(),
@@ -4139,40 +4105,34 @@ pub const MAP_ARGUMENTS_INIT: MapArguments = map_arguments {
     desc: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
 static mut e_global_abbreviation_already_exists_for_str: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 48],
-        [::core::ffi::c_char; 48],
-    >(*b"E224: Global abbreviation already exists for %s\0")
+    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+        *b"E224: Global abbreviation already exists for %s\0",
+    )
 };
 static mut e_global_mapping_already_exists_for_str: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 43],
-        [::core::ffi::c_char; 43],
-    >(*b"E225: Global mapping already exists for %s\0")
+    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+        *b"E225: Global mapping already exists for %s\0",
+    )
 };
 static mut e_abbreviation_already_exists_for_str: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 41],
-        [::core::ffi::c_char; 41],
-    >(*b"E226: Abbreviation already exists for %s\0")
+    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+        *b"E226: Abbreviation already exists for %s\0",
+    )
 };
 static mut e_mapping_already_exists_for_str: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E227: Mapping already exists for %s\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E227: Mapping already exists for %s\0",
+    )
 };
 static mut e_entries_missing_in_mapset_dict_argument: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 48],
-        [::core::ffi::c_char; 48],
-    >(*b"E460: Entries missing in mapset() dict argument\0")
+    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+        *b"E460: Entries missing in mapset() dict argument\0",
+    )
 };
 static mut e_illegal_map_mode_string_str: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"E1276: Illegal map mode string: '%s'\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"E1276: Illegal map mode string: '%s'\0",
+    )
 };
 #[no_mangle]
 pub unsafe extern "C" fn get_maphash_list(
@@ -4180,9 +4140,12 @@ pub unsafe extern "C" fn get_maphash_list(
     mut c: ::core::ffi::c_int,
 ) -> *mut mapblock_T {
     return maphash[(if state
-        & (MODE_NORMAL as ::core::ffi::c_int | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int | MODE_OP_PENDING as ::core::ffi::c_int
-            | MODE_TERMINAL as ::core::ffi::c_int) != 0
+        & (MODE_NORMAL as ::core::ffi::c_int
+            | MODE_VISUAL as ::core::ffi::c_int
+            | MODE_SELECT as ::core::ffi::c_int
+            | MODE_OP_PENDING as ::core::ffi::c_int
+            | MODE_TERMINAL as ::core::ffi::c_int)
+        != 0
     {
         c
     } else {
@@ -4194,11 +4157,13 @@ pub unsafe extern "C" fn get_buf_maphash_list(
     mut state: ::core::ffi::c_int,
     mut c: ::core::ffi::c_int,
 ) -> *mut mapblock_T {
-    return (*curbuf)
-        .b_maphash[(if state
-        & (MODE_NORMAL as ::core::ffi::c_int | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int | MODE_OP_PENDING as ::core::ffi::c_int
-            | MODE_TERMINAL as ::core::ffi::c_int) != 0
+    return (*curbuf).b_maphash[(if state
+        & (MODE_NORMAL as ::core::ffi::c_int
+            | MODE_VISUAL as ::core::ffi::c_int
+            | MODE_SELECT as ::core::ffi::c_int
+            | MODE_OP_PENDING as ::core::ffi::c_int
+            | MODE_TERMINAL as ::core::ffi::c_int)
+        != 0
     {
         c
     } else {
@@ -4247,10 +4212,14 @@ pub unsafe extern "C" fn map_mode_to_chars(
         p = p.offset(1);
         *c2rust_fresh3 = 'c' as ::core::ffi::c_char;
     } else if mode
-        & (MODE_NORMAL as ::core::ffi::c_int | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int | MODE_OP_PENDING as ::core::ffi::c_int)
-        == MODE_NORMAL as ::core::ffi::c_int | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int | MODE_OP_PENDING as ::core::ffi::c_int
+        & (MODE_NORMAL as ::core::ffi::c_int
+            | MODE_VISUAL as ::core::ffi::c_int
+            | MODE_SELECT as ::core::ffi::c_int
+            | MODE_OP_PENDING as ::core::ffi::c_int)
+        == MODE_NORMAL as ::core::ffi::c_int
+            | MODE_VISUAL as ::core::ffi::c_int
+            | MODE_SELECT as ::core::ffi::c_int
+            | MODE_OP_PENDING as ::core::ffi::c_int
     {
         let c2rust_fresh4 = p;
         p = p.offset(1);
@@ -4295,8 +4264,7 @@ pub unsafe extern "C" fn map_mode_to_chars(
 unsafe extern "C" fn showmap(mut mp: *mut mapblock_T, mut local: bool) {
     if message_filtered((*mp).m_keys) as ::core::ffi::c_int != 0
         && message_filtered((*mp).m_str) as ::core::ffi::c_int != 0
-        && ((*mp).m_desc.is_null()
-            || message_filtered((*mp).m_desc) as ::core::ffi::c_int != 0)
+        && ((*mp).m_desc.is_null() || message_filtered((*mp).m_desc) as ::core::ffi::c_int != 0)
     {
         return;
     }
@@ -4317,8 +4285,7 @@ unsafe extern "C" fn showmap(mut mp: *mut mapblock_T, mut local: bool) {
         }
         msg_putchar(' ' as ::core::ffi::c_int);
     }
-    len = msg_outtrans_special((*mp).m_keys, true_0 != 0, 0 as ::core::ffi::c_int)
-        as size_t;
+    len = msg_outtrans_special((*mp).m_keys, true_0 != 0, 0 as ::core::ffi::c_int) as size_t;
     loop {
         msg_putchar(' ' as ::core::ffi::c_int);
         len = len.wrapping_add(1);
@@ -4347,15 +4314,11 @@ unsafe extern "C" fn showmap(mut mp: *mut mapblock_T, mut local: bool) {
         msg_putchar(' ' as ::core::ffi::c_int);
     }
     if (*mp).m_luaref != LUA_NOREF {
-        let mut str: *mut ::core::ffi::c_char = nlua_funcref_str(
-            (*mp).m_luaref,
-            ::core::ptr::null_mut::<Arena>(),
-        );
+        let mut str: *mut ::core::ffi::c_char =
+            nlua_funcref_str((*mp).m_luaref, ::core::ptr::null_mut::<Arena>());
         msg_puts_hl(str, HLF_8 as ::core::ffi::c_int, false_0 != 0);
         xfree(str as *mut ::core::ffi::c_void);
-    } else if *(*mp).m_str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == NUL
-    {
+    } else if *(*mp).m_str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
         msg_puts_hl(
             b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char,
             HLF_8 as ::core::ffi::c_int,
@@ -4385,10 +4348,9 @@ unsafe extern "C" fn set_maparg_lhs_rhs(
     (*mapargs).rhs_lua = rhs_lua;
     let mut lhs_buf: [::core::ffi::c_char; 128] = [0; 128];
     let mut did_simplify: bool = false_0 != 0;
-    let flags: ::core::ffi::c_int = REPTERM_FROM_PART as ::core::ffi::c_int
-        | REPTERM_DO_LT as ::core::ffi::c_int;
-    let mut bufarg: *mut ::core::ffi::c_char = &raw mut lhs_buf
-        as *mut ::core::ffi::c_char;
+    let flags: ::core::ffi::c_int =
+        REPTERM_FROM_PART as ::core::ffi::c_int | REPTERM_DO_LT as ::core::ffi::c_int;
+    let mut bufarg: *mut ::core::ffi::c_char = &raw mut lhs_buf as *mut ::core::ffi::c_char;
     let mut replaced: *mut ::core::ffi::c_char = replace_termcodes(
         orig_lhs,
         orig_lhs_len,
@@ -4429,7 +4391,14 @@ unsafe extern "C" fn set_maparg_lhs_rhs(
     } else {
         (*mapargs).alt_lhs_len = 0 as size_t;
     }
-    set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0 as scid_T, cpo_val, mapargs);
+    set_maparg_rhs(
+        orig_rhs,
+        orig_rhs_len,
+        rhs_lua,
+        0 as scid_T,
+        cpo_val,
+        mapargs,
+    );
     return true_0 != 0;
 }
 unsafe extern "C" fn set_maparg_rhs(
@@ -4457,16 +4426,13 @@ unsafe extern "C" fn set_maparg_rhs(
             b"<nop>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
         {
-            (*mapargs).rhs = xcalloc(
-                1 as size_t,
-                ::core::mem::size_of::<::core::ffi::c_char>(),
-            ) as *mut ::core::ffi::c_char;
+            (*mapargs).rhs = xcalloc(1 as size_t, ::core::mem::size_of::<::core::ffi::c_char>())
+                as *mut ::core::ffi::c_char;
             (*mapargs).rhs_len = 0 as size_t;
             (*mapargs).rhs_is_noop = true_0 != 0;
         } else {
-            let mut rhs_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut rhs_buf: *mut ::core::ffi::c_char =
+                ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut replaced: *mut ::core::ffi::c_char = replace_termcodes(
                 orig_rhs,
                 orig_rhs_len,
@@ -4477,21 +4443,18 @@ unsafe extern "C" fn set_maparg_rhs(
                 cpo_val,
             );
             (*mapargs).rhs_len = strlen(replaced);
-            (*mapargs).rhs_is_noop = orig_rhs_len != 0 as size_t
-                && (*mapargs).rhs_len == 0 as size_t;
+            (*mapargs).rhs_is_noop =
+                orig_rhs_len != 0 as size_t && (*mapargs).rhs_len == 0 as size_t;
             (*mapargs).rhs = replaced;
         }
     } else {
         let mut tmp_buf: [::core::ffi::c_char; 64] = [0; 64];
-        (*mapargs).orig_rhs = xcalloc(
-            1 as size_t,
-            ::core::mem::size_of::<::core::ffi::c_char>(),
-        ) as *mut ::core::ffi::c_char;
+        (*mapargs).orig_rhs = xcalloc(1 as size_t, ::core::mem::size_of::<::core::ffi::c_char>())
+            as *mut ::core::ffi::c_char;
         (*mapargs).orig_rhs_len = 0 as size_t;
         (*mapargs).rhs_len = vim_snprintf(
             &raw mut tmp_buf as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(1 as size_t),
             b"%c%c%c%d\r\0".as_ptr() as *const ::core::ffi::c_char,
             K_SPECIAL,
             KS_EXTRA,
@@ -4577,16 +4540,13 @@ unsafe extern "C" fn str_to_mapargs(
     let mut lhs_end: *const ::core::ffi::c_char = to_parse;
     let mut do_backslash: bool = vim_strchr(p_cpo, CPO_BSLASH).is_null();
     while *lhs_end as ::core::ffi::c_int != 0
-        && (is_unmap as ::core::ffi::c_int != 0
-            || !ascii_iswhite(*lhs_end as ::core::ffi::c_int))
+        && (is_unmap as ::core::ffi::c_int != 0 || !ascii_iswhite(*lhs_end as ::core::ffi::c_int))
     {
-        if (*lhs_end.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == Ctrl_V
+        if (*lhs_end.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == Ctrl_V
             || do_backslash as ::core::ffi::c_int != 0
-                && *lhs_end.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == '\\' as ::core::ffi::c_int)
-            && *lhs_end.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
+                && *lhs_end.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == '\\' as ::core::ffi::c_int)
+            && *lhs_end.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         {
             lhs_end = lhs_end.offset(1);
         }
@@ -4633,10 +4593,8 @@ unsafe extern "C" fn map_add(
     mut lnum: linenr_T,
     mut simplified: bool,
 ) -> *mut mapblock_T {
-    let mut mp: *mut mapblock_T = xcalloc(
-        1 as size_t,
-        ::core::mem::size_of::<mapblock_T>(),
-    ) as *mut mapblock_T;
+    let mut mp: *mut mapblock_T =
+        xcalloc(1 as size_t, ::core::mem::size_of::<mapblock_T>()) as *mut mapblock_T;
     if *keys as ::core::ffi::c_int == Ctrl_C {
         if map_table == &raw mut (*buf).b_maphash as *mut *mut mapblock_T {
             (*buf).b_mapped_ctrl_c |= mode;
@@ -4661,10 +4619,9 @@ unsafe extern "C" fn map_add(
         (*mp).m_script_ctx.sc_lnum = lnum;
     } else {
         (*mp).m_script_ctx = current_sctx;
-        (*mp).m_script_ctx.sc_lnum
-            += (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum;
+        (*mp).m_script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        .es_lnum;
         nlua_set_sctx(&raw mut (*mp).m_script_ctx);
     }
     (*mp).m_desc = (*args).desc;
@@ -4673,16 +4630,17 @@ unsafe extern "C" fn map_add(
         *abbr_table = mp;
     } else {
         let n: ::core::ffi::c_int = if (*mp).m_mode
-            & (MODE_NORMAL as ::core::ffi::c_int | MODE_VISUAL as ::core::ffi::c_int
+            & (MODE_NORMAL as ::core::ffi::c_int
+                | MODE_VISUAL as ::core::ffi::c_int
                 | MODE_SELECT as ::core::ffi::c_int
                 | MODE_OP_PENDING as ::core::ffi::c_int
-                | MODE_TERMINAL as ::core::ffi::c_int) != 0
+                | MODE_TERMINAL as ::core::ffi::c_int)
+            != 0
         {
-            *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int
+            *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
         } else {
-            *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int ^ 0x80 as ::core::ffi::c_int
+            *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+                ^ 0x80 as ::core::ffi::c_int
         };
         (*mp).m_next = *map_table.offset(n as isize);
         *map_table.offset(n as isize) = mp;
@@ -4699,16 +4657,12 @@ unsafe extern "C" fn buf_do_map(
     let mut lhs: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut did_simplify: bool = false;
     let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut map_table: *mut *mut mapblock_T = if (*args).buffer as ::core::ffi::c_int
-        != 0
-    {
+    let mut map_table: *mut *mut mapblock_T = if (*args).buffer as ::core::ffi::c_int != 0 {
         &raw mut (*buf).b_maphash as *mut *mut mapblock_T
     } else {
         &raw mut maphash as *mut *mut mapblock_T
     };
-    let mut abbr_table: *mut *mut mapblock_T = if (*args).buffer as ::core::ffi::c_int
-        != 0
-    {
+    let mut abbr_table: *mut *mut mapblock_T = if (*args).buffer as ::core::ffi::c_int != 0 {
         &raw mut (*buf).b_first_abbr
     } else {
         &raw mut first_abbr
@@ -4729,13 +4683,11 @@ unsafe extern "C" fn buf_do_map(
     } else {
         REMAP_YES as ::core::ffi::c_int
     };
-    let has_lhs: bool = (*args).lhs[0 as ::core::ffi::c_int as usize]
-        as ::core::ffi::c_int != NUL;
+    let has_lhs: bool = (*args).lhs[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != NUL;
     let has_rhs: bool = (*args).rhs_lua != LUA_NOREF
-        || *(*args).rhs.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            != NUL || (*args).rhs_is_noop as ::core::ffi::c_int != 0;
-    let do_print: bool = !has_lhs
-        || maptype != MAPTYPE_UNMAP as ::core::ffi::c_int && !has_rhs;
+        || *(*args).rhs.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+        || (*args).rhs_is_noop as ::core::ffi::c_int != 0;
+    let do_print: bool = !has_lhs || maptype != MAPTYPE_UNMAP as ::core::ffi::c_int && !has_rhs;
     if do_print {
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     }
@@ -4749,8 +4701,8 @@ unsafe extern "C" fn buf_do_map(
             while keyround <= 2 as ::core::ffi::c_int {
                 let mut did_it: bool = false_0 != 0;
                 let mut did_local: bool = false_0 != 0;
-                let mut keyround1_simplified: bool = keyround == 1 as ::core::ffi::c_int
-                    && did_simplify as ::core::ffi::c_int != 0;
+                let mut keyround1_simplified: bool =
+                    keyround == 1 as ::core::ffi::c_int && did_simplify as ::core::ffi::c_int != 0;
                 let mut len: ::core::ffi::c_int = (*args).lhs_len as ::core::ffi::c_int;
                 if keyround == 2 as ::core::ffi::c_int {
                     if !did_simplify {
@@ -4773,11 +4725,10 @@ unsafe extern "C" fn buf_do_map(
                             && maptype != MAPTYPE_UNMAP as ::core::ffi::c_int
                         {
                             let mut same: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                            let first: ::core::ffi::c_int = vim_iswordp(lhs)
-                                as ::core::ffi::c_int;
+                            let first: ::core::ffi::c_int = vim_iswordp(lhs) as ::core::ffi::c_int;
                             let mut last: ::core::ffi::c_int = first;
-                            let mut p: *const ::core::ffi::c_char = lhs
-                                .offset(utfc_ptr2len(lhs) as isize);
+                            let mut p: *const ::core::ffi::c_char =
+                                lhs.offset(utfc_ptr2len(lhs) as isize);
                             let mut n: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
                             while p < lhs.offset(len as isize) {
                                 n += 1;
@@ -4787,7 +4738,8 @@ unsafe extern "C" fn buf_do_map(
                                 }
                                 p = p.offset(utfc_ptr2len(p) as isize);
                             }
-                            if last != 0 && n > 2 as ::core::ffi::c_int
+                            if last != 0
+                                && n > 2 as ::core::ffi::c_int
                                 && same >= 0 as ::core::ffi::c_int
                                 && same < n - 1 as ::core::ffi::c_int
                             {
@@ -4799,9 +4751,8 @@ unsafe extern "C" fn buf_do_map(
                                     if n >= len {
                                         break 's_209;
                                     }
-                                    if ascii_iswhite(
-                                        *lhs.offset(n as isize) as ::core::ffi::c_int,
-                                    ) {
+                                    if ascii_iswhite(*lhs.offset(n as isize) as ::core::ffi::c_int)
+                                    {
                                         retval = 1 as ::core::ffi::c_int;
                                         break '_theend;
                                     } else {
@@ -4833,9 +4784,7 @@ unsafe extern "C" fn buf_do_map(
                             if !(hash < 256 as ::core::ffi::c_int && !got_int) {
                                 break 's_299;
                             }
-                            let mut mp: *mut mapblock_T = ::core::ptr::null_mut::<
-                                mapblock_T,
-                            >();
+                            let mut mp: *mut mapblock_T = ::core::ptr::null_mut::<mapblock_T>();
                             if is_abbrev {
                                 if hash != 0 as ::core::ffi::c_int {
                                     break 's_299;
@@ -4861,13 +4810,12 @@ unsafe extern "C" fn buf_do_map(
                     }
                 }
                 if map_table != &raw mut (*buf).b_maphash as *mut *mut mapblock_T
-                    && !has_rhs && maptype != MAPTYPE_UNMAP as ::core::ffi::c_int
+                    && !has_rhs
+                    && maptype != MAPTYPE_UNMAP as ::core::ffi::c_int
                 {
                     let mut hash_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while hash_0 < 256 as ::core::ffi::c_int && !got_int {
-                        let mut mp_0: *mut mapblock_T = ::core::ptr::null_mut::<
-                            mapblock_T,
-                        >();
+                        let mut mp_0: *mut mapblock_T = ::core::ptr::null_mut::<mapblock_T>();
                         if is_abbrev {
                             if hash_0 != 0 as ::core::ffi::c_int {
                                 break;
@@ -4901,19 +4849,17 @@ unsafe extern "C" fn buf_do_map(
                         hash_0 += 1;
                     }
                 }
-                let num_rounds: ::core::ffi::c_int = if maptype
-                    == MAPTYPE_UNMAP as ::core::ffi::c_int && !unmap_lhs_only
-                {
-                    2 as ::core::ffi::c_int
-                } else {
-                    1 as ::core::ffi::c_int
-                };
+                let num_rounds: ::core::ffi::c_int =
+                    if maptype == MAPTYPE_UNMAP as ::core::ffi::c_int && !unmap_lhs_only {
+                        2 as ::core::ffi::c_int
+                    } else {
+                        1 as ::core::ffi::c_int
+                    };
                 let mut round: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while round < num_rounds && !did_it && !got_int {
                     let mut hash_start: ::core::ffi::c_int = 0;
                     let mut hash_end: ::core::ffi::c_int = 0;
-                    if round == 0 as ::core::ffi::c_int
-                        && has_lhs as ::core::ffi::c_int != 0
+                    if round == 0 as ::core::ffi::c_int && has_lhs as ::core::ffi::c_int != 0
                         || is_abbrev as ::core::ffi::c_int != 0
                     {
                         hash_start = if is_abbrev as ::core::ffi::c_int != 0 {
@@ -4923,13 +4869,15 @@ unsafe extern "C" fn buf_do_map(
                                 | MODE_VISUAL as ::core::ffi::c_int
                                 | MODE_SELECT as ::core::ffi::c_int
                                 | MODE_OP_PENDING as ::core::ffi::c_int
-                                | MODE_TERMINAL as ::core::ffi::c_int) != 0
+                                | MODE_TERMINAL as ::core::ffi::c_int)
+                            != 0
                         {
                             *lhs.offset(0 as ::core::ffi::c_int as isize) as uint8_t
                                 as ::core::ffi::c_int
                         } else {
                             *lhs.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                                as ::core::ffi::c_int ^ 0x80 as ::core::ffi::c_int
+                                as ::core::ffi::c_int
+                                ^ 0x80 as ::core::ffi::c_int
                         };
                         hash_end = hash_start + 1 as ::core::ffi::c_int;
                     } else {
@@ -4938,8 +4886,7 @@ unsafe extern "C" fn buf_do_map(
                     }
                     let mut hash_1: ::core::ffi::c_int = hash_start;
                     while hash_1 < hash_end && !got_int {
-                        let mut mpp: *mut *mut mapblock_T = if is_abbrev
-                            as ::core::ffi::c_int != 0
+                        let mut mpp: *mut *mut mapblock_T = if is_abbrev as ::core::ffi::c_int != 0
                         {
                             abbr_table
                         } else {
@@ -4955,15 +4902,15 @@ unsafe extern "C" fn buf_do_map(
                                         if (*mp_1).m_simplified == 0 {
                                             showmap(
                                                 mp_1,
-                                                map_table != &raw mut maphash as *mut *mut mapblock_T,
+                                                map_table
+                                                    != &raw mut maphash as *mut *mut mapblock_T,
                                             );
                                             did_it = true_0 != 0;
                                         }
                                     } else {
                                         let mut n_1: ::core::ffi::c_int = 0;
-                                        let mut p_0: *const ::core::ffi::c_char = ::core::ptr::null::<
-                                            ::core::ffi::c_char,
-                                        >();
+                                        let mut p_0: *const ::core::ffi::c_char =
+                                            ::core::ptr::null::<::core::ffi::c_char>();
                                         if round != 0 {
                                             n_1 = strlen((*mp_1).m_str) as ::core::ffi::c_int;
                                             p_0 = (*mp_1).m_str;
@@ -4979,14 +4926,18 @@ unsafe extern "C" fn buf_do_map(
                                         {
                                             if maptype == MAPTYPE_UNMAP as ::core::ffi::c_int {
                                                 if n_1 != len
-                                                    && (!is_abbrev || round != 0 || n_1 > len
+                                                    && (!is_abbrev
+                                                        || round != 0
+                                                        || n_1 > len
                                                         || *skipwhite(lhs.offset(n_1 as isize))
-                                                            as ::core::ffi::c_int != NUL)
+                                                            as ::core::ffi::c_int
+                                                            != NUL)
                                                 {
                                                     mpp = &raw mut (*mp_1).m_next;
                                                     break 's_458;
                                                 } else {
-                                                    if keyround1_simplified as ::core::ffi::c_int != 0
+                                                    if keyround1_simplified as ::core::ffi::c_int
+                                                        != 0
                                                         && (*mp_1).m_simplified == 0
                                                     {
                                                         break 's_448;
@@ -4998,14 +4949,17 @@ unsafe extern "C" fn buf_do_map(
                                                 if (*mp_1).m_simplified == 0 {
                                                     showmap(
                                                         mp_1,
-                                                        map_table != &raw mut maphash as *mut *mut mapblock_T,
+                                                        map_table
+                                                            != &raw mut maphash
+                                                                as *mut *mut mapblock_T,
                                                     );
                                                     did_it = true_0 != 0;
                                                 }
                                             } else if n_1 != len {
                                                 mpp = &raw mut (*mp_1).m_next;
                                                 break 's_458;
-                                            } else if keyround1_simplified as ::core::ffi::c_int != 0
+                                            } else if keyround1_simplified as ::core::ffi::c_int
+                                                != 0
                                                 && (*mp_1).m_simplified == 0
                                             {
                                                 did_it = true_0 != 0;
@@ -5015,42 +4969,59 @@ unsafe extern "C" fn buf_do_map(
                                                 break '_theend;
                                             } else {
                                                 (*mp_1).m_mode &= !mode;
-                                                if (*mp_1).m_mode == 0 as ::core::ffi::c_int && !did_it {
+                                                if (*mp_1).m_mode == 0 as ::core::ffi::c_int
+                                                    && !did_it
+                                                {
                                                     if !(*mp_1).m_alt.is_null() {
-                                                        (*(*mp_1).m_alt).m_alt = ::core::ptr::null_mut::<
-                                                            mapblock_T,
-                                                        >();
+                                                        (*(*mp_1).m_alt).m_alt =
+                                                            ::core::ptr::null_mut::<mapblock_T>();
                                                         (*mp_1).m_alt = (*(*mp_1).m_alt).m_alt;
                                                     } else {
                                                         if (*mp_1).m_luaref != LUA_NOREF {
                                                             api_free_luaref((*mp_1).m_luaref);
                                                             (*mp_1).m_luaref = LUA_NOREF as LuaRef;
                                                         }
-                                                        xfree((*mp_1).m_str as *mut ::core::ffi::c_void);
-                                                        xfree((*mp_1).m_orig_str as *mut ::core::ffi::c_void);
-                                                        xfree((*mp_1).m_desc as *mut ::core::ffi::c_void);
+                                                        xfree(
+                                                            (*mp_1).m_str
+                                                                as *mut ::core::ffi::c_void,
+                                                        );
+                                                        xfree(
+                                                            (*mp_1).m_orig_str
+                                                                as *mut ::core::ffi::c_void,
+                                                        );
+                                                        xfree(
+                                                            (*mp_1).m_desc
+                                                                as *mut ::core::ffi::c_void,
+                                                        );
                                                     }
                                                     (*mp_1).m_str = (*args).rhs;
                                                     (*mp_1).m_orig_str = (*args).orig_rhs;
                                                     (*mp_1).m_luaref = (*args).rhs_lua;
                                                     (*mp_1).m_noremap = noremap;
-                                                    (*mp_1).m_nowait = (*args).nowait as ::core::ffi::c_char;
-                                                    (*mp_1).m_silent = (*args).silent as ::core::ffi::c_char;
+                                                    (*mp_1).m_nowait =
+                                                        (*args).nowait as ::core::ffi::c_char;
+                                                    (*mp_1).m_silent =
+                                                        (*args).silent as ::core::ffi::c_char;
                                                     (*mp_1).m_mode = mode;
-                                                    (*mp_1).m_simplified = keyround1_simplified
-                                                        as ::core::ffi::c_int;
-                                                    (*mp_1).m_expr = (*args).expr as ::core::ffi::c_char;
-                                                    (*mp_1).m_replace_keycodes = (*args).replace_keycodes;
+                                                    (*mp_1).m_simplified =
+                                                        keyround1_simplified as ::core::ffi::c_int;
+                                                    (*mp_1).m_expr =
+                                                        (*args).expr as ::core::ffi::c_char;
+                                                    (*mp_1).m_replace_keycodes =
+                                                        (*args).replace_keycodes;
                                                     (*mp_1).m_script_ctx = current_sctx;
-                                                    (*mp_1).m_script_ctx.sc_lnum
-                                                        += (*(exestack.ga_data as *mut estack_T)
+                                                    (*mp_1).m_script_ctx.sc_lnum +=
+                                                        (*(exestack.ga_data as *mut estack_T)
                                                             .offset(
-                                                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
+                                                                (exestack.ga_len
+                                                                    - 1 as ::core::ffi::c_int)
+                                                                    as isize,
                                                             ))
-                                                            .es_lnum;
+                                                        .es_lnum;
                                                     nlua_set_sctx(&raw mut (*mp_1).m_script_ctx);
                                                     (*mp_1).m_desc = (*args).desc;
-                                                    mp_result[(keyround - 1 as ::core::ffi::c_int) as usize] = mp_1;
+                                                    mp_result[(keyround - 1 as ::core::ffi::c_int)
+                                                        as usize] = mp_1;
                                                     did_it = true_0 != 0;
                                                 }
                                             }
@@ -5058,23 +5029,32 @@ unsafe extern "C" fn buf_do_map(
                                                 mapblock_free(mpp);
                                                 break 's_458;
                                             } else {
-                                                let mut new_hash: ::core::ffi::c_int = if (*mp_1).m_mode
+                                                let mut new_hash: ::core::ffi::c_int = if (*mp_1)
+                                                    .m_mode
                                                     & (MODE_NORMAL as ::core::ffi::c_int
                                                         | MODE_VISUAL as ::core::ffi::c_int
                                                         | MODE_SELECT as ::core::ffi::c_int
                                                         | MODE_OP_PENDING as ::core::ffi::c_int
-                                                        | MODE_TERMINAL as ::core::ffi::c_int) != 0
+                                                        | MODE_TERMINAL as ::core::ffi::c_int)
+                                                    != 0
                                                 {
-                                                    *(*mp_1).m_keys.offset(0 as ::core::ffi::c_int as isize)
-                                                        as uint8_t as ::core::ffi::c_int
+                                                    *(*mp_1)
+                                                        .m_keys
+                                                        .offset(0 as ::core::ffi::c_int as isize)
+                                                        as uint8_t
+                                                        as ::core::ffi::c_int
                                                 } else {
-                                                    *(*mp_1).m_keys.offset(0 as ::core::ffi::c_int as isize)
-                                                        as uint8_t as ::core::ffi::c_int
+                                                    *(*mp_1)
+                                                        .m_keys
+                                                        .offset(0 as ::core::ffi::c_int as isize)
+                                                        as uint8_t
+                                                        as ::core::ffi::c_int
                                                         ^ 0x80 as ::core::ffi::c_int
                                                 };
                                                 if !is_abbrev && new_hash != hash_1 {
                                                     *mpp = (*mp_1).m_next;
-                                                    (*mp_1).m_next = *map_table.offset(new_hash as isize);
+                                                    (*mp_1).m_next =
+                                                        *map_table.offset(new_hash as isize);
                                                     *map_table.offset(new_hash as isize) = mp_1;
                                                     break 's_458;
                                                 }
@@ -5096,8 +5076,7 @@ unsafe extern "C" fn buf_do_map(
                             retval = 2 as ::core::ffi::c_int;
                         }
                     } else if *lhs as ::core::ffi::c_int == Ctrl_C {
-                        if map_table == &raw mut (*buf).b_maphash as *mut *mut mapblock_T
-                        {
+                        if map_table == &raw mut (*buf).b_maphash as *mut *mut mapblock_T {
                             (*buf).b_mapped_ctrl_c &= !mode;
                         } else {
                             mapped_ctrl_c &= !mode;
@@ -5107,16 +5086,14 @@ unsafe extern "C" fn buf_do_map(
                     if !did_it && !did_local {
                         if is_abbrev {
                             msg(
-                                gettext(
-                                    b"No abbreviation found\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"No abbreviation found\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                                 0 as ::core::ffi::c_int,
                             );
                         } else {
                             msg(
                                 gettext(
-                                    b"No mapping found\0".as_ptr() as *const ::core::ffi::c_char,
+                                    b"No mapping found\0".as_ptr() as *const ::core::ffi::c_char
                                 ),
                                 0 as ::core::ffi::c_int,
                             );
@@ -5143,10 +5120,10 @@ unsafe extern "C" fn buf_do_map(
             if !mp_result[0 as ::core::ffi::c_int as usize].is_null()
                 && !mp_result[1 as ::core::ffi::c_int as usize].is_null()
             {
-                (*mp_result[0 as ::core::ffi::c_int as usize]).m_alt = mp_result[1
-                    as ::core::ffi::c_int as usize];
-                (*mp_result[1 as ::core::ffi::c_int as usize]).m_alt = mp_result[0
-                    as ::core::ffi::c_int as usize];
+                (*mp_result[0 as ::core::ffi::c_int as usize]).m_alt =
+                    mp_result[1 as ::core::ffi::c_int as usize];
+                (*mp_result[1 as ::core::ffi::c_int as usize]).m_alt =
+                    mp_result[0 as ::core::ffi::c_int as usize];
             }
         }
     }
@@ -5204,12 +5181,13 @@ pub unsafe extern "C" fn do_map(
                     && !(b"Unknown return code from str_to_mapargs!\0".as_ptr()
                         as *const ::core::ffi::c_char)
                         .is_null()
-                {} else {
+                {
+                } else {
                     __assert_fail(
-                        b"false && \"Unknown return code from str_to_mapargs!\"\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"false && \"Unknown return code from str_to_mapargs!\"\0".as_ptr()
+                            as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         968 as ::core::ffi::c_uint,
                         b"int do_map(int, char *, int, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5255,10 +5233,10 @@ unsafe extern "C" fn get_map_mode(
     } else {
         p = p.offset(-1);
         if forceit {
-            mode = MODE_INSERT as ::core::ffi::c_int
-                | MODE_CMDLINE as ::core::ffi::c_int;
+            mode = MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int;
         } else {
-            mode = MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int
+            mode = MODE_VISUAL as ::core::ffi::c_int
+                | MODE_SELECT as ::core::ffi::c_int
                 | MODE_NORMAL as ::core::ffi::c_int
                 | MODE_OP_PENDING as ::core::ffi::c_int;
         }
@@ -5272,10 +5250,8 @@ unsafe extern "C" fn do_mapclear(
     mut forceit: ::core::ffi::c_int,
     mut abbr: ::core::ffi::c_int,
 ) {
-    let mut local: bool = strcmp(
-        arg,
-        b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int;
+    let mut local: bool = strcmp(arg, b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char)
+        == 0 as ::core::ffi::c_int;
     if !local && *arg as ::core::ffi::c_int != NUL {
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         return;
@@ -5303,8 +5279,8 @@ pub unsafe extern "C" fn map_clear_mode(
                 mpp = &raw mut first_abbr;
             }
         } else if local {
-            mpp = (&raw mut (*buf).b_maphash as *mut *mut mapblock_T)
-                .offset(hash as isize) as *mut *mut mapblock_T;
+            mpp = (&raw mut (*buf).b_maphash as *mut *mut mapblock_T).offset(hash as isize)
+                as *mut *mut mapblock_T;
         } else {
             mpp = (&raw mut maphash as *mut *mut mapblock_T).offset(hash as isize)
                 as *mut *mut mapblock_T;
@@ -5322,19 +5298,20 @@ pub unsafe extern "C" fn map_clear_mode(
                             | MODE_VISUAL as ::core::ffi::c_int
                             | MODE_SELECT as ::core::ffi::c_int
                             | MODE_OP_PENDING as ::core::ffi::c_int
-                            | MODE_TERMINAL as ::core::ffi::c_int) != 0
+                            | MODE_TERMINAL as ::core::ffi::c_int)
+                        != 0
                     {
                         *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t
                             as ::core::ffi::c_int
                     } else {
                         *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                            as ::core::ffi::c_int ^ 0x80 as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            ^ 0x80 as ::core::ffi::c_int
                     };
                     if !abbr && new_hash != hash {
                         *mpp = (*mp).m_next;
                         if local {
-                            (*mp).m_next = (*buf).b_maphash[new_hash as usize]
-                                as *mut mapblock_T;
+                            (*mp).m_next = (*buf).b_maphash[new_hash as usize] as *mut mapblock_T;
                             (*buf).b_maphash[new_hash as usize] = mp as *mut mapblock_T;
                         } else {
                             (*mp).m_next = maphash[new_hash as usize] as *mut mapblock_T;
@@ -5356,9 +5333,7 @@ pub unsafe extern "C" fn map_to_exists(
     abbr: bool,
 ) -> bool {
     let mut mode: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let rhs: *const ::core::ffi::c_char = replace_termcodes(
         str,
         strlen(str),
@@ -5451,16 +5426,18 @@ unsafe extern "C" fn translate_mapping(
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    ga_init(&raw mut ga, 1 as ::core::ffi::c_int, 40 as ::core::ffi::c_int);
+    ga_init(
+        &raw mut ga,
+        1 as ::core::ffi::c_int,
+        40 as ::core::ffi::c_int,
+    );
     let cpo_bslash: bool = !vim_strchr(cpo_val, CPO_BSLASH).is_null();
     while *str != 0 {
         let mut c: ::core::ffi::c_int = *str as ::core::ffi::c_int;
         's_13: {
             if c == K_SPECIAL
-                && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
-                && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+                && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -5473,24 +5450,22 @@ unsafe extern "C" fn translate_mapping(
                     c = *str as ::core::ffi::c_int;
                 }
                 if c == K_SPECIAL
-                    && *str.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != NUL
-                    && *str.offset(2 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != NUL
+                    && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+                    && *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
                 {
-                    c = if *str.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == KS_SPECIAL
+                    c = if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == KS_SPECIAL
                     {
                         K_SPECIAL
-                    } else if *str.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == KS_ZERO
+                    } else if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == KS_ZERO
                     {
                         K_ZERO
                     } else {
-                        -(*str.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
+                        -(*str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             + ((*str.offset(2 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+                                as ::core::ffi::c_int)
+                                << 8 as ::core::ffi::c_int))
                     };
                     if c == K_ZERO {
                         c = NUL;
@@ -5502,8 +5477,11 @@ unsafe extern "C" fn translate_mapping(
                     break 's_13;
                 }
             }
-            if c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int
-                || c == Ctrl_J || c == Ctrl_V || c == '<' as ::core::ffi::c_int
+            if c == ' ' as ::core::ffi::c_int
+                || c == '\t' as ::core::ffi::c_int
+                || c == Ctrl_J
+                || c == Ctrl_V
+                || c == '<' as ::core::ffi::c_int
                 || c == '\\' as ::core::ffi::c_int && !cpo_bslash
             {
                 ga_append(
@@ -5546,14 +5524,13 @@ pub unsafe extern "C" fn set_context_in_map_cmd(
                 forceit as ::core::ffi::c_int != 0 || isabbrev as ::core::ffi::c_int != 0,
             );
         } else {
-            expand_mapmodes = MODE_INSERT as ::core::ffi::c_int
-                | MODE_CMDLINE as ::core::ffi::c_int;
+            expand_mapmodes =
+                MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int;
             if !isabbrev {
-                expand_mapmodes
-                    |= MODE_VISUAL as ::core::ffi::c_int
-                        | MODE_SELECT as ::core::ffi::c_int
-                        | MODE_NORMAL as ::core::ffi::c_int
-                        | MODE_OP_PENDING as ::core::ffi::c_int;
+                expand_mapmodes |= MODE_VISUAL as ::core::ffi::c_int
+                    | MODE_SELECT as ::core::ffi::c_int
+                    | MODE_NORMAL as ::core::ffi::c_int
+                    | MODE_OP_PENDING as ::core::ffi::c_int;
             }
         }
         expand_isabbrev = isabbrev;
@@ -5651,9 +5628,7 @@ pub unsafe extern "C" fn ExpandMappings(
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 7 as ::core::ffi::c_int {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         's_34: {
             if i == 0 as ::core::ffi::c_int {
                 p = b"<silent>\0".as_ptr() as *const ::core::ffi::c_char
@@ -5665,8 +5640,7 @@ pub unsafe extern "C" fn ExpandMappings(
                 p = b"<script>\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char;
             } else if i == 3 as ::core::ffi::c_int {
-                p = b"<expr>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                p = b"<expr>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else if i == 4 as ::core::ffi::c_int && !expand_buffer {
                 p = b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char;
@@ -5690,16 +5664,17 @@ pub unsafe extern "C" fn ExpandMappings(
             if match_0 {
                 if fuzzy {
                     ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) = fuzmatch_str_T {
-                        idx: ga.ga_len,
-                        str: xstrdup(p),
-                        score: score,
-                    };
+                    *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
+                        fuzmatch_str_T {
+                            idx: ga.ga_len,
+                            str: xstrdup(p),
+                            score: score,
+                        };
                     ga.ga_len += 1;
                 } else {
                     ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                        .offset(ga.ga_len as isize) = xstrdup(p);
+                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
+                        xstrdup(p);
                     ga.ga_len += 1;
                 }
             }
@@ -5722,10 +5697,7 @@ pub unsafe extern "C" fn ExpandMappings(
         }
         while !mp.is_null() {
             if !((*mp).m_simplified != 0 || (*mp).m_mode & expand_mapmodes == 0) {
-                let mut p_0: *mut ::core::ffi::c_char = translate_mapping(
-                    (*mp).m_keys,
-                    p_cpo,
-                );
+                let mut p_0: *mut ::core::ffi::c_char = translate_mapping((*mp).m_keys, p_cpo);
                 if !p_0.is_null() {
                     let mut match_1: bool = false;
                     let mut score_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5739,17 +5711,17 @@ pub unsafe extern "C" fn ExpandMappings(
                         xfree(p_0 as *mut ::core::ffi::c_void);
                     } else if fuzzy {
                         ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                        *(ga.ga_data as *mut fuzmatch_str_T)
-                            .offset(ga.ga_len as isize) = fuzmatch_str_T {
-                            idx: ga.ga_len,
-                            str: p_0,
-                            score: score_0,
-                        };
+                        *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
+                            fuzmatch_str_T {
+                                idx: ga.ga_len,
+                                str: p_0,
+                                score: score_0,
+                            };
                         ga.ga_len += 1;
                     } else {
                         ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                        *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                            .offset(ga.ga_len as isize) = p_0;
+                        *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
+                            p_0;
                         ga.ga_len += 1;
                     }
                 }
@@ -5779,8 +5751,7 @@ pub unsafe extern "C" fn ExpandMappings(
             sort_strings(*matches, count);
         }
         let mut ptr1: *mut *mut ::core::ffi::c_char = *matches;
-        let mut ptr2: *mut *mut ::core::ffi::c_char = ptr1
-            .offset(1 as ::core::ffi::c_int as isize);
+        let mut ptr2: *mut *mut ::core::ffi::c_char = ptr1.offset(1 as ::core::ffi::c_int as isize);
         let mut ptr3: *mut *mut ::core::ffi::c_char = ptr1.offset(count as isize);
         while ptr2 < ptr3 {
             if strcmp(*ptr1, *ptr2) != 0 as ::core::ffi::c_int {
@@ -5798,7 +5769,11 @@ pub unsafe extern "C" fn ExpandMappings(
         }
     }
     *numMatches = count;
-    return if count == 0 as ::core::ffi::c_int { FAIL } else { OK };
+    return if count == 0 as ::core::ffi::c_int {
+        FAIL
+    } else {
+        OK
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_abbr(
@@ -5834,8 +5809,7 @@ pub unsafe extern "C" fn check_abbr(
     while p > ptr.offset(mincol as isize) {
         p = mb_prevptr(ptr, p);
         if ascii_isspace(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            || !vim_abbr
-                && is_id as ::core::ffi::c_int != vim_iswordp(p) as ::core::ffi::c_int
+            || !vim_abbr && is_id as ::core::ffi::c_int != vim_iswordp(p) as ::core::ffi::c_int
         {
             p = p.offset(utfc_ptr2len(p) as isize);
             break;
@@ -5864,9 +5838,9 @@ pub unsafe extern "C" fn check_abbr(
                 vim_unescape_ks(q);
                 qlen = strlen(q) as ::core::ffi::c_int;
             }
-            let mut match_0: ::core::ffi::c_int = ((*mp).m_mode & State != 0
-                && qlen == len && strncmp(q, ptr, len as size_t) == 0)
-                as ::core::ffi::c_int;
+            let mut match_0: ::core::ffi::c_int =
+                ((*mp).m_mode & State != 0 && qlen == len && strncmp(q, ptr, len as size_t) == 0)
+                    as ::core::ffi::c_int;
             if q != (*mp).m_keys {
                 xfree(q as *mut ::core::ffi::c_void);
             }
@@ -5906,8 +5880,7 @@ pub unsafe extern "C" fn check_abbr(
                     }) as uint8_t;
                 } else {
                     if c < ABBR_OFF
-                        && (c < ' ' as ::core::ffi::c_int
-                            || c > '~' as ::core::ffi::c_int)
+                        && (c < ' ' as ::core::ffi::c_int || c > '~' as ::core::ffi::c_int)
                     {
                         let c2rust_fresh17 = j;
                         j = j + 1;
@@ -5950,9 +5923,7 @@ pub unsafe extern "C" fn check_abbr(
             let noremap: ::core::ffi::c_int = (*mp).m_noremap;
             let silent: bool = (*mp).m_silent != 0;
             let expr: bool = (*mp).m_expr != 0;
-            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             if expr {
                 s = eval_map_expr(mp, c);
             } else {
@@ -5960,8 +5931,8 @@ pub unsafe extern "C" fn check_abbr(
             }
             if !s.is_null() {
                 ins_typebuf(s, noremap, 0 as ::core::ffi::c_int, true_0 != 0, silent);
-                typebuf.tb_no_abbr_cnt
-                    += strlen(s) as ::core::ffi::c_int + j + 1 as ::core::ffi::c_int;
+                typebuf.tb_no_abbr_cnt +=
+                    strlen(s) as ::core::ffi::c_int + j + 1 as ::core::ffi::c_int;
                 if expr {
                     xfree(s as *mut ::core::ffi::c_void);
                 }
@@ -5994,9 +5965,7 @@ pub unsafe extern "C" fn eval_map_expr(
     mut c: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut expr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut expr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if (*mp).m_luaref == LUA_NOREF {
         expr = xstrdup((*mp).m_str);
         vim_unescape_ks(expr);
@@ -6046,9 +6015,7 @@ pub unsafe extern "C" fn eval_map_expr(
     if p.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut res: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut res: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if replace_keycodes {
         replace_termcodes(
             p,
@@ -6066,10 +6033,7 @@ pub unsafe extern "C" fn eval_map_expr(
     return res;
 }
 #[no_mangle]
-pub unsafe extern "C" fn makemap(
-    mut fd: *mut FILE,
-    mut buf: *mut buf_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn makemap(mut fd: *mut FILE, mut buf: *mut buf_T) -> ::core::ffi::c_int {
     let mut did_cpo: bool = false_0 != 0;
     let mut abbr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while abbr < 2 as ::core::ffi::c_int {
@@ -6093,17 +6057,18 @@ pub unsafe extern "C" fn makemap(
             while !mp.is_null() {
                 if (*mp).m_noremap != REMAP_SCRIPT as ::core::ffi::c_int {
                     if (*mp).m_luaref == LUA_NOREF {
-                        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                            ::core::ffi::c_char,
-                        >();
+                        let mut p: *mut ::core::ffi::c_char =
+                            ::core::ptr::null_mut::<::core::ffi::c_char>();
                         p = (*mp).m_str;
                         while *p as ::core::ffi::c_int != NUL {
                             if *p.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                                as ::core::ffi::c_int == K_SPECIAL
+                                as ::core::ffi::c_int
+                                == K_SPECIAL
                                 && *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                                    as ::core::ffi::c_int == KS_EXTRA
-                                && *p.offset(2 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int == KE_SNR as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == KS_EXTRA
+                                && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                    == KE_SNR as ::core::ffi::c_int
                             {
                                 break;
                             }
@@ -6117,7 +6082,8 @@ pub unsafe extern "C" fn makemap(
                                 b"abbr\0".as_ptr() as *const ::core::ffi::c_char
                             } else {
                                 b"map\0".as_ptr() as *const ::core::ffi::c_char
-                            }) as *mut ::core::ffi::c_char;
+                            })
+                                as *mut ::core::ffi::c_char;
                             match (*mp).m_mode {
                                 71 => {}
                                 1 => {
@@ -6192,12 +6158,8 @@ pub unsafe extern "C" fn makemap(
                                     c1 = 't' as ::core::ffi::c_char;
                                 }
                                 _ => {
-                                    iemsg(
-                                        gettext(
-                                            b"E228: makemap: Illegal mode\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                        ),
-                                    );
+                                    iemsg(gettext(b"E228: makemap: Illegal mode\0".as_ptr()
+                                        as *const ::core::ffi::c_char));
                                     return FAIL;
                                 }
                             }
@@ -6212,15 +6174,15 @@ pub unsafe extern "C" fn makemap(
                                             NUL as ::core::ffi::c_char,
                                         ];
                                         if !strpbrk(
-                                                (*mp).m_str,
+                                            (*mp).m_str,
+                                            &raw const specials as *const ::core::ffi::c_char,
+                                        )
+                                        .is_null()
+                                            || !strpbrk(
+                                                (*mp).m_keys,
                                                 &raw const specials as *const ::core::ffi::c_char,
                                             )
                                             .is_null()
-                                            || !strpbrk(
-                                                    (*mp).m_keys,
-                                                    &raw const specials as *const ::core::ffi::c_char,
-                                                )
-                                                .is_null()
                                         {
                                             did_cpo = true_0 != 0;
                                         }
@@ -6234,7 +6196,8 @@ pub unsafe extern "C" fn makemap(
                                             || put_eol(fd) < 0 as ::core::ffi::c_int
                                             || fprintf(
                                                 fd,
-                                                b"set cpo&vim\0".as_ptr() as *const ::core::ffi::c_char,
+                                                b"set cpo&vim\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                             ) < 0 as ::core::ffi::c_int
                                             || put_eol(fd) < 0 as ::core::ffi::c_int
                                         {
@@ -6243,16 +6206,13 @@ pub unsafe extern "C" fn makemap(
                                     }
                                 }
                                 if c1 as ::core::ffi::c_int != 0
-                                    && putc(c1 as ::core::ffi::c_int, fd)
-                                        < 0 as ::core::ffi::c_int
+                                    && putc(c1 as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int
                                 {
                                     return FAIL;
                                 }
                                 if (*mp).m_noremap != REMAP_YES as ::core::ffi::c_int
-                                    && fprintf(
-                                        fd,
-                                        b"nore\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ) < 0 as ::core::ffi::c_int
+                                    && fprintf(fd, b"nore\0".as_ptr() as *const ::core::ffi::c_char)
+                                        < 0 as ::core::ffi::c_int
                                 {
                                     return FAIL;
                                 }
@@ -6291,14 +6251,11 @@ pub unsafe extern "C" fn makemap(
                                 {
                                     return FAIL;
                                 }
-                                if putc(' ' as ::core::ffi::c_int, fd)
-                                    < 0 as ::core::ffi::c_int
-                                    || put_escstr(fd, (*mp).m_keys, 0 as ::core::ffi::c_int)
-                                        == FAIL
-                                    || putc(' ' as ::core::ffi::c_int, fd)
-                                        < 0 as ::core::ffi::c_int
-                                    || put_escstr(fd, (*mp).m_str, 1 as ::core::ffi::c_int)
-                                        == FAIL || put_eol(fd) < 0 as ::core::ffi::c_int
+                                if putc(' ' as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int
+                                    || put_escstr(fd, (*mp).m_keys, 0 as ::core::ffi::c_int) == FAIL
+                                    || putc(' ' as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int
+                                    || put_escstr(fd, (*mp).m_str, 1 as ::core::ffi::c_int) == FAIL
+                                    || put_eol(fd) < 0 as ::core::ffi::c_int
                                 {
                                     return FAIL;
                                 }
@@ -6319,10 +6276,16 @@ pub unsafe extern "C" fn makemap(
         abbr += 1;
     }
     if did_cpo {
-        if fprintf(fd, b"let &cpo=s:cpo_save\0".as_ptr() as *const ::core::ffi::c_char)
-            < 0 as ::core::ffi::c_int || put_eol(fd) < 0 as ::core::ffi::c_int
-            || fprintf(fd, b"unlet s:cpo_save\0".as_ptr() as *const ::core::ffi::c_char)
-                < 0 as ::core::ffi::c_int || put_eol(fd) < 0 as ::core::ffi::c_int
+        if fprintf(
+            fd,
+            b"let &cpo=s:cpo_save\0".as_ptr() as *const ::core::ffi::c_char,
+        ) < 0 as ::core::ffi::c_int
+            || put_eol(fd) < 0 as ::core::ffi::c_int
+            || fprintf(
+                fd,
+                b"unlet s:cpo_save\0".as_ptr() as *const ::core::ffi::c_char,
+            ) < 0 as ::core::ffi::c_int
+            || put_eol(fd) < 0 as ::core::ffi::c_int
         {
             return FAIL;
         }
@@ -6337,25 +6300,21 @@ pub unsafe extern "C" fn put_escstr(
 ) -> ::core::ffi::c_int {
     let mut str: *mut uint8_t = strstart as *mut uint8_t;
     if *str as ::core::ffi::c_int == NUL && what == 1 as ::core::ffi::c_int {
-        if fprintf(fd, b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char)
-            < 0 as ::core::ffi::c_int
+        if fprintf(fd, b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char) < 0 as ::core::ffi::c_int
         {
             return FAIL;
         }
         return OK;
     }
     while *str as ::core::ffi::c_int != NUL {
-        let mut p: *const ::core::ffi::c_char = mb_unescape(
-            &raw mut str as *mut *const ::core::ffi::c_char,
-        );
+        let mut p: *const ::core::ffi::c_char =
+            mb_unescape(&raw mut str as *mut *const ::core::ffi::c_char);
         's_26: {
             if !p.is_null() {
                 while *p as ::core::ffi::c_int != NUL {
                     let c2rust_fresh19 = p;
                     p = p.offset(1);
-                    if fputc(*c2rust_fresh19 as ::core::ffi::c_int, fd)
-                        < 0 as ::core::ffi::c_int
-                    {
+                    if fputc(*c2rust_fresh19 as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int {
                         return FAIL;
                     }
                 }
@@ -6364,11 +6323,11 @@ pub unsafe extern "C" fn put_escstr(
                 let mut c: ::core::ffi::c_int = *str as ::core::ffi::c_int;
                 if c == K_SPECIAL && what != 2 as ::core::ffi::c_int {
                     let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if *str.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == KS_MODIFIER
+                    if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == KS_MODIFIER
                     {
-                        modifiers = *str.offset(2 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int;
+                        modifiers =
+                            *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
                         str = str.offset(3 as ::core::ffi::c_int as isize);
                         p = mb_unescape(&raw mut str as *mut *const ::core::ffi::c_char);
                         if p.is_null() {
@@ -6379,26 +6338,25 @@ pub unsafe extern "C" fn put_escstr(
                         }
                     }
                     if c == K_SPECIAL {
-                        c = if *str.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == KS_SPECIAL
+                        c = if *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == KS_SPECIAL
                         {
                             K_SPECIAL
                         } else if *str.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == KS_ZERO
+                            as ::core::ffi::c_int
+                            == KS_ZERO
                         {
                             K_ZERO
                         } else {
-                            -(*str.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
+                            -(*str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                                 + ((*str.offset(2 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+                                    as ::core::ffi::c_int)
+                                    << 8 as ::core::ffi::c_int))
                         };
                         str = str.offset(2 as ::core::ffi::c_int as isize);
                     }
                     if c < 0 as ::core::ffi::c_int || modifiers != 0 {
-                        if fputs(get_special_key_name(c, modifiers), fd)
-                            < 0 as ::core::ffi::c_int
-                        {
+                        if fputs(get_special_key_name(c, modifiers), fd) < 0 as ::core::ffi::c_int {
                             return FAIL;
                         }
                         break 's_26;
@@ -6406,19 +6364,15 @@ pub unsafe extern "C" fn put_escstr(
                 }
                 if c == NL {
                     if what == 2 as ::core::ffi::c_int {
-                        if fprintf(
-                            fd,
-                            b"\\\x16\n\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) < 0 as ::core::ffi::c_int
+                        if fprintf(fd, b"\\\x16\n\0".as_ptr() as *const ::core::ffi::c_char)
+                            < 0 as ::core::ffi::c_int
                         {
                             return FAIL;
                         }
-                    } else if fprintf(
-                        fd,
-                        b"<NL>\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) < 0 as ::core::ffi::c_int
+                    } else if fprintf(fd, b"<NL>\0".as_ptr() as *const ::core::ffi::c_char)
+                        < 0 as ::core::ffi::c_int
                     {
-                        return FAIL
+                        return FAIL;
                     }
                 } else {
                     if what == 2 as ::core::ffi::c_int
@@ -6426,20 +6380,17 @@ pub unsafe extern "C" fn put_escstr(
                             || c == '"' as ::core::ffi::c_int
                             || c == '\\' as ::core::ffi::c_int)
                     {
-                        if putc('\\' as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int
-                        {
+                        if putc('\\' as ::core::ffi::c_int, fd) < 0 as ::core::ffi::c_int {
                             return FAIL;
                         }
                     } else if c < ' ' as ::core::ffi::c_int
                         || c > '~' as ::core::ffi::c_int
                         || c == '|' as ::core::ffi::c_int
-                        || what == 0 as ::core::ffi::c_int
-                            && c == ' ' as ::core::ffi::c_int
+                        || what == 0 as ::core::ffi::c_int && c == ' ' as ::core::ffi::c_int
                         || what == 1 as ::core::ffi::c_int
                             && str == strstart as *mut uint8_t
                             && c == ' ' as ::core::ffi::c_int
-                        || what != 2 as ::core::ffi::c_int
-                            && c == '<' as ::core::ffi::c_int
+                        || what != 2 as ::core::ffi::c_int && c == '<' as ::core::ffi::c_int
                     {
                         if putc(Ctrl_V, fd) < 0 as ::core::ffi::c_int {
                             return FAIL;
@@ -6491,20 +6442,19 @@ pub unsafe extern "C" fn check_map(
                 if (*mp).m_mode & mode != 0 && (exact == 0 || (*mp).m_keylen == len) {
                     let mut s: *mut ::core::ffi::c_char = (*mp).m_keys;
                     let mut keylen: ::core::ffi::c_int = (*mp).m_keylen;
-                    if ign_mod != 0 && keylen >= 3 as ::core::ffi::c_int
+                    if ign_mod != 0
+                        && keylen >= 3 as ::core::ffi::c_int
                         && *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                            as ::core::ffi::c_int == K_SPECIAL
+                            as ::core::ffi::c_int
+                            == K_SPECIAL
                         && *s.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                            as ::core::ffi::c_int == KS_MODIFIER
+                            as ::core::ffi::c_int
+                            == KS_MODIFIER
                     {
                         s = s.offset(3 as ::core::ffi::c_int as isize);
                         keylen -= 3 as ::core::ffi::c_int;
                     }
-                    let mut minlen: ::core::ffi::c_int = if keylen < len {
-                        keylen
-                    } else {
-                        len
-                    };
+                    let mut minlen: ::core::ffi::c_int = if keylen < len { keylen } else { len };
                     if strncmp(s, keys, minlen as size_t) == 0 as ::core::ffi::c_int {
                         if !mp_ptr.is_null() {
                             *mp_ptr = mp;
@@ -6534,12 +6484,9 @@ pub unsafe extern "C" fn f_hasmapto(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut mode: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let name: *const ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut mode: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let name: *const ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut abbr: bool = false_0 != 0;
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -6551,8 +6498,7 @@ pub unsafe extern "C" fn f_hasmapto(
             argvars.offset(1 as ::core::ffi::c_int as isize),
             &raw mut buf as *mut ::core::ffi::c_char,
         );
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             abbr = tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize)) != 0;
@@ -6569,17 +6515,10 @@ unsafe extern "C" fn mapblock_fill_dict(
     mut arena: *mut Arena,
 ) -> Dict {
     let mut dict: Dict = arena_dict(arena, 20 as size_t);
-    let lhs: *mut ::core::ffi::c_char = str2special_arena(
-        (*mp).m_keys,
-        compatible,
-        !compatible,
-        arena,
-    );
-    let mut mapmode: *mut ::core::ffi::c_char = arena_alloc(
-        arena,
-        7 as size_t,
-        false_0 != 0,
-    ) as *mut ::core::ffi::c_char;
+    let lhs: *mut ::core::ffi::c_char =
+        str2special_arena((*mp).m_keys, compatible, !compatible, arena);
+    let mut mapmode: *mut ::core::ffi::c_char =
+        arena_alloc(arena, 7 as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
     map_mode_to_chars((*mp).m_mode, mapmode);
     let mut noremap_value: ::core::ffi::c_int = 0;
     if compatible {
@@ -6604,13 +6543,11 @@ unsafe extern "C" fn mapblock_fill_dict(
             },
         };
     } else {
-        let mut rhs: String_0 = cstr_as_string(
-            if compatible as ::core::ffi::c_int != 0 {
-                (*mp).m_orig_str
-            } else {
-                str2special_arena((*mp).m_str, false_0 != 0, true_0 != 0, arena)
-            },
-        );
+        let mut rhs: String_0 = cstr_as_string(if compatible as ::core::ffi::c_int != 0 {
+            (*mp).m_orig_str
+        } else {
+            str2special_arena((*mp).m_str, false_0 != 0, true_0 != 0, arena)
+        });
         let c2rust_fresh22 = dict.size;
         dict.size = dict.size.wrapping_add(1);
         *dict.items.offset(c2rust_fresh22 as isize) = key_value_pair {
@@ -6800,9 +6737,7 @@ unsafe extern "C" fn mapblock_fill_dict(
     let c2rust_fresh37 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh37 as isize) = key_value_pair {
-        key: cstr_as_string(
-            b"replace_keycodes\0".as_ptr() as *const ::core::ffi::c_char,
-        ),
+        key: cstr_as_string(b"replace_keycodes\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
@@ -6860,15 +6795,12 @@ unsafe extern "C" fn get_maparg(
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut keys: *mut ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as *mut ::core::ffi::c_char;
+    let mut keys: *mut ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_char;
     if *keys as ::core::ffi::c_int == NUL {
         return;
     }
-    let mut which: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut which: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     let mut abbr: bool = false_0 != 0;
     let mut get_dict: bool = false_0 != 0;
@@ -6879,18 +6811,14 @@ unsafe extern "C" fn get_maparg(
             argvars.offset(1 as ::core::ffi::c_int as isize),
             &raw mut buf as *mut ::core::ffi::c_char,
         );
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             abbr = tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize)) != 0;
-            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type
-                as ::core::ffi::c_uint
+            if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                get_dict = tv_get_number(
-                    argvars.offset(3 as ::core::ffi::c_int as isize),
-                ) != 0;
+                get_dict = tv_get_number(argvars.offset(3 as ::core::ffi::c_int as isize)) != 0;
             }
         }
     } else {
@@ -6899,19 +6827,13 @@ unsafe extern "C" fn get_maparg(
     if which.is_null() {
         return;
     }
-    let mut keys_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut alt_keys_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut keys_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut alt_keys_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut did_simplify: bool = false_0 != 0;
-    let flags: ::core::ffi::c_int = REPTERM_FROM_PART as ::core::ffi::c_int
-        | REPTERM_DO_LT as ::core::ffi::c_int;
-    let mode: ::core::ffi::c_int = get_map_mode(
-        &raw mut which as *mut *mut ::core::ffi::c_char,
-        false,
-    );
+    let flags: ::core::ffi::c_int =
+        REPTERM_FROM_PART as ::core::ffi::c_int | REPTERM_DO_LT as ::core::ffi::c_int;
+    let mode: ::core::ffi::c_int =
+        get_map_mode(&raw mut which as *mut *mut ::core::ffi::c_char, false);
     let mut keys_simplified: *mut ::core::ffi::c_char = replace_termcodes(
         keys,
         strlen(keys),
@@ -6958,21 +6880,13 @@ unsafe extern "C" fn get_maparg(
     if !get_dict {
         if !rhs.is_null() {
             if *rhs as ::core::ffi::c_int == NUL {
-                (*rettv).vval.v_string = xstrdup(
-                    b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                (*rettv).vval.v_string = xstrdup(b"<Nop>\0".as_ptr() as *const ::core::ffi::c_char);
             } else {
-                (*rettv).vval.v_string = str2special_save(
-                    rhs,
-                    false_0 != 0,
-                    false_0 != 0,
-                );
+                (*rettv).vval.v_string = str2special_save(rhs, false_0 != 0, false_0 != 0);
             }
         } else if rhs_lua != LUA_NOREF {
-            (*rettv).vval.v_string = nlua_funcref_str(
-                (*mp).m_luaref,
-                ::core::ptr::null_mut::<Arena>(),
-            );
+            (*rettv).vval.v_string =
+                nlua_funcref_str((*mp).m_luaref, ::core::ptr::null_mut::<Arena>());
         }
     } else if !mp.is_null() && (!rhs.is_null() || rhs_lua != LUA_NOREF) {
         let mut arena: Arena = ARENA_EMPTY;
@@ -7010,13 +6924,14 @@ unsafe extern "C" fn get_map_mode_string(
     abbr: bool,
 ) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = mode_string;
-    let MASK_V: ::core::ffi::c_int = MODE_VISUAL as ::core::ffi::c_int
-        | MODE_SELECT as ::core::ffi::c_int;
+    let MASK_V: ::core::ffi::c_int =
+        MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int;
     let MASK_MAP: ::core::ffi::c_int = MODE_VISUAL as ::core::ffi::c_int
-        | MODE_SELECT as ::core::ffi::c_int | MODE_NORMAL as ::core::ffi::c_int
+        | MODE_SELECT as ::core::ffi::c_int
+        | MODE_NORMAL as ::core::ffi::c_int
         | MODE_OP_PENDING as ::core::ffi::c_int;
-    let MASK_BANG: ::core::ffi::c_int = MODE_INSERT as ::core::ffi::c_int
-        | MODE_CMDLINE as ::core::ffi::c_int;
+    let MASK_BANG: ::core::ffi::c_int =
+        MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int;
     if *p as ::core::ffi::c_int == NUL {
         p = b" \0".as_ptr() as *const ::core::ffi::c_char;
     }
@@ -7069,7 +6984,8 @@ unsafe extern "C" fn get_map_mode_string(
         mode |= tmode;
     }
     if abbr as ::core::ffi::c_int != 0 && mode & !MASK_BANG != 0 as ::core::ffi::c_int
-        || !abbr && mode & mode - 1 as ::core::ffi::c_int != 0 as ::core::ffi::c_int
+        || !abbr
+            && mode & mode - 1 as ::core::ffi::c_int != 0 as ::core::ffi::c_int
             && !(mode & MASK_BANG != 0 as ::core::ffi::c_int
                 && mode & !MASK_BANG == 0 as ::core::ffi::c_int
                 || mode & MASK_MAP != 0 as ::core::ffi::c_int
@@ -7088,16 +7004,17 @@ pub unsafe extern "C" fn f_mapset(
     if check_secure() {
         return;
     }
-    let mut which: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut which: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     let mut is_abbr: ::core::ffi::c_int = 0;
     let mut d: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     let dict_only: bool = (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint;
+        as ::core::ffi::c_uint
+        == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint;
     if dict_only {
-        d = (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_dict;
+        d = (*argvars.offset(0 as ::core::ffi::c_int as isize))
+            .vval
+            .v_dict;
         which = tv_dict_get_string(
             d,
             b"mode\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7109,12 +7026,9 @@ pub unsafe extern "C" fn f_mapset(
             -1 as ::core::ffi::c_int,
         ) as ::core::ffi::c_int;
         if which.is_null() || is_abbr < 0 as ::core::ffi::c_int {
-            emsg(
-                gettext(
-                    &raw const e_entries_missing_in_mapset_dict_argument
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                &raw const e_entries_missing_in_mapset_dict_argument as *const ::core::ffi::c_char,
+            ));
             return;
         }
     } else {
@@ -7125,19 +7039,19 @@ pub unsafe extern "C" fn f_mapset(
         if which.is_null() {
             return;
         }
-        is_abbr = tv_get_bool(argvars.offset(1 as ::core::ffi::c_int as isize))
-            as ::core::ffi::c_int;
+        is_abbr =
+            tv_get_bool(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
         if tv_check_for_dict_arg(argvars, 2 as ::core::ffi::c_int) == FAIL {
             return;
         }
-        d = (*argvars.offset(2 as ::core::ffi::c_int as isize)).vval.v_dict;
+        d = (*argvars.offset(2 as ::core::ffi::c_int as isize))
+            .vval
+            .v_dict;
     }
     let mode: ::core::ffi::c_int = get_map_mode_string(which, is_abbr != 0);
     if mode == 0 as ::core::ffi::c_int {
         semsg(
-            gettext(
-                &raw const e_illegal_map_mode_string_str as *const ::core::ffi::c_char,
-            ),
+            gettext(&raw const e_illegal_map_mode_string_str as *const ::core::ffi::c_char),
             which,
         );
         return;
@@ -7166,8 +7080,7 @@ pub unsafe extern "C" fn f_mapset(
     let mut callback_di: *mut dictitem_T = tv_dict_find(
         d,
         b"callback\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !callback_di.is_null() {
         if (*callback_di).di_tv.v_type as ::core::ffi::c_uint
@@ -7176,32 +7089,26 @@ pub unsafe extern "C" fn f_mapset(
             let mut fp: *mut ufunc_T = find_func((*callback_di).di_tv.vval.v_string);
             if !fp.is_null() && (*fp).uf_flags & FC_LUAREF != 0 {
                 rhs_lua = api_new_luaref((*fp).uf_luaref);
-                orig_rhs = b"\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                orig_rhs = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
         }
     }
     if lhs.is_null() || lhsraw.is_null() || orig_rhs.is_null() {
-        emsg(
-            gettext(
-                &raw const e_entries_missing_in_mapset_dict_argument
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_entries_missing_in_mapset_dict_argument as *const ::core::ffi::c_char,
+        ));
         api_free_luaref(rhs_lua);
         return;
     }
-    let mut noremap: ::core::ffi::c_int = if tv_dict_get_number(
-        d,
-        b"noremap\0".as_ptr() as *const ::core::ffi::c_char,
-    ) != 0 as varnumber_T
-    {
-        REMAP_NONE as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    if tv_dict_get_number(d, b"script\0".as_ptr() as *const ::core::ffi::c_char)
-        != 0 as varnumber_T
+    let mut noremap: ::core::ffi::c_int =
+        if tv_dict_get_number(d, b"noremap\0".as_ptr() as *const ::core::ffi::c_char)
+            != 0 as varnumber_T
+        {
+            REMAP_NONE as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        };
+    if tv_dict_get_number(d, b"script\0".as_ptr() as *const ::core::ffi::c_char) != 0 as varnumber_T
     {
         noremap = REMAP_SCRIPT as ::core::ffi::c_int;
     }
@@ -7236,19 +7143,21 @@ pub unsafe extern "C" fn f_mapset(
             true_0 != 0,
         ),
     };
-    let mut sid: scid_T = tv_dict_get_number(
-        d,
-        b"sid\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as scid_T;
-    let mut lnum: linenr_T = tv_dict_get_number(
-        d,
-        b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as linenr_T;
-    let mut buffer: bool = tv_dict_get_number(
-        d,
-        b"buffer\0".as_ptr() as *const ::core::ffi::c_char,
-    ) != 0 as varnumber_T;
-    set_maparg_rhs(orig_rhs, strlen(orig_rhs), rhs_lua, sid, p_cpo, &raw mut args);
+    let mut sid: scid_T =
+        tv_dict_get_number(d, b"sid\0".as_ptr() as *const ::core::ffi::c_char) as scid_T;
+    let mut lnum: linenr_T =
+        tv_dict_get_number(d, b"lnum\0".as_ptr() as *const ::core::ffi::c_char) as linenr_T;
+    let mut buffer: bool =
+        tv_dict_get_number(d, b"buffer\0".as_ptr() as *const ::core::ffi::c_char)
+            != 0 as varnumber_T;
+    set_maparg_rhs(
+        orig_rhs,
+        strlen(orig_rhs),
+        rhs_lua,
+        sid,
+        p_cpo,
+        &raw mut args,
+    );
     let mut map_table: *mut *mut mapblock_T = if buffer as ::core::ffi::c_int != 0 {
         &raw mut (*curbuf).b_maphash as *mut *mut mapblock_T
     } else {
@@ -7314,10 +7223,10 @@ pub unsafe extern "C" fn f_mapset(
     if !mp_result[0 as ::core::ffi::c_int as usize].is_null()
         && !mp_result[1 as ::core::ffi::c_int as usize].is_null()
     {
-        (*mp_result[0 as ::core::ffi::c_int as usize]).m_alt = mp_result[1
-            as ::core::ffi::c_int as usize];
-        (*mp_result[1 as ::core::ffi::c_int as usize]).m_alt = mp_result[0
-            as ::core::ffi::c_int as usize];
+        (*mp_result[0 as ::core::ffi::c_int as usize]).m_alt =
+            mp_result[1 as ::core::ffi::c_int as usize];
+        (*mp_result[1 as ::core::ffi::c_int as usize]).m_alt =
+            mp_result[0 as ::core::ffi::c_int as usize];
     }
 }
 #[no_mangle]
@@ -7326,8 +7235,8 @@ pub unsafe extern "C" fn f_maplist(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let flags: ::core::ffi::c_int = REPTERM_FROM_PART as ::core::ffi::c_int
-        | REPTERM_DO_LT as ::core::ffi::c_int;
+    let flags: ::core::ffi::c_int =
+        REPTERM_FROM_PART as ::core::ffi::c_int | REPTERM_DO_LT as ::core::ffi::c_int;
     let abbr: bool = (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
         as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -7354,17 +7263,12 @@ pub unsafe extern "C" fn f_maplist(
             }
             while !mp.is_null() {
                 if (*mp).m_simplified == 0 {
-                    let mut keys_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut keys_buf: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                     let mut did_simplify: bool = false_0 != 0;
                     let mut arena: Arena = ARENA_EMPTY;
-                    let mut lhs: *mut ::core::ffi::c_char = str2special_arena(
-                        (*mp).m_keys,
-                        true_0 != 0,
-                        false_0 != 0,
-                        &raw mut arena,
-                    );
+                    let mut lhs: *mut ::core::ffi::c_char =
+                        str2special_arena((*mp).m_keys, true_0 != 0, false_0 != 0, &raw mut arena);
                     replace_termcodes(
                         lhs,
                         strlen(lhs),
@@ -7404,15 +7308,16 @@ pub unsafe extern "C" fn f_maplist(
                     '_c2rust_label: {
                         if d.v_type as ::core::ffi::c_uint
                             == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {} else {
+                        {
+                        } else {
                             __assert_fail(
-                                b"d.v_type == VAR_DICT\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"d.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 2431 as ::core::ffi::c_uint,
-                                b"void f_maplist(typval_T *, typval_T *, EvalFuncData)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"void f_maplist(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                         }
                     };
@@ -7472,30 +7377,24 @@ pub unsafe extern "C" fn add_map(
     xfree(args.orig_rhs as *mut ::core::ffi::c_void);
 }
 static mut langmap_mapga: garray_T = GA_EMPTY_INIT_VALUE;
-unsafe extern "C" fn langmap_set_entry(
-    mut from: ::core::ffi::c_int,
-    mut to: ::core::ffi::c_int,
-) {
-    let mut entries: *mut langmap_entry_T = langmap_mapga.ga_data
-        as *mut langmap_entry_T;
+unsafe extern "C" fn langmap_set_entry(mut from: ::core::ffi::c_int, mut to: ::core::ffi::c_int) {
+    let mut entries: *mut langmap_entry_T = langmap_mapga.ga_data as *mut langmap_entry_T;
     let mut a: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
     '_c2rust_label: {
-        if langmap_mapga.ga_len >= 0 as ::core::ffi::c_int {} else {
+        if langmap_mapga.ga_len >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"langmap_mapga.ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2496 as ::core::ffi::c_uint,
-                b"void langmap_set_entry(int, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void langmap_set_entry(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     let mut b: ::core::ffi::c_uint = langmap_mapga.ga_len as ::core::ffi::c_uint;
     while a != b {
-        let mut i: ::core::ffi::c_uint = a
-            .wrapping_add(b)
-            .wrapping_div(2 as ::core::ffi::c_uint);
+        let mut i: ::core::ffi::c_uint = a.wrapping_add(b).wrapping_div(2 as ::core::ffi::c_uint);
         let mut d: ::core::ffi::c_int = (*entries.offset(i as isize)).from - from;
         if d == 0 as ::core::ffi::c_int {
             (*entries.offset(i as isize)).to = to;
@@ -7520,11 +7419,8 @@ unsafe extern "C" fn langmap_set_entry(
     (*entries.offset(0 as ::core::ffi::c_int as isize)).to = to;
 }
 #[no_mangle]
-pub unsafe extern "C" fn langmap_adjust_mb(
-    mut c: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut entries: *mut langmap_entry_T = langmap_mapga.ga_data
-        as *mut langmap_entry_T;
+pub unsafe extern "C" fn langmap_adjust_mb(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    let mut entries: *mut langmap_entry_T = langmap_mapga.ga_data as *mut langmap_entry_T;
     let mut a: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut b: ::core::ffi::c_int = langmap_mapga.ga_len;
     while a != b {
@@ -7555,16 +7451,12 @@ pub unsafe extern "C" fn langmap_init() {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_langmap(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_langmap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     ga_clear(&raw mut langmap_mapga);
     langmap_init();
     let mut p: *mut ::core::ffi::c_char = p_langmap;
     while *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
-        let mut p2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         p2 = p;
         while *p2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             && *p2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -7574,8 +7466,7 @@ pub unsafe extern "C" fn did_set_langmap(
         {
             if *p2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '\\' as ::core::ffi::c_int
-                && *p2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                && *p2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 p2 = p2.offset(1);
             }
@@ -7597,31 +7488,30 @@ pub unsafe extern "C" fn did_set_langmap(
             } else {
                 if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
-                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != NUL
+                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
                 {
                     p = p.offset(1);
                 }
                 let mut from: ::core::ffi::c_int = utf_ptr2char(p);
                 let from_ptr: *const ::core::ffi::c_char = p;
                 let mut to: ::core::ffi::c_int = NUL;
-                let mut to_ptr: *const ::core::ffi::c_char = b"\0".as_ptr()
-                    as *const ::core::ffi::c_char;
+                let mut to_ptr: *const ::core::ffi::c_char =
+                    b"\0".as_ptr() as *const ::core::ffi::c_char;
                 if p2.is_null() {
                     p = p.offset(utfc_ptr2len(p) as isize);
                     if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         != ',' as ::core::ffi::c_int
                     {
-                        if *p.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+                        if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '\\' as ::core::ffi::c_int
                         {
                             p = p.offset(1);
                         }
                         to_ptr = p;
                         to = utf_ptr2char(to_ptr);
                     }
-                } else if *p2.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int != ',' as ::core::ffi::c_int
+                } else if *p2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    != ',' as ::core::ffi::c_int
                 {
                     if *p2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '\\' as ::core::ffi::c_int
@@ -7636,8 +7526,8 @@ pub unsafe extern "C" fn did_set_langmap(
                         (*args).os_errbuf,
                         (*args).os_errbuflen,
                         gettext(
-                            b"E357: 'langmap': Matching character missing for %s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"E357: 'langmap': Matching character missing for %s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         transchar(from),
                     );
@@ -7657,8 +7547,7 @@ pub unsafe extern "C" fn did_set_langmap(
                             to_ptr,
                         );
                     }
-                    langmap_mapchar[(from & 255 as ::core::ffi::c_int) as usize] = to
-                        as uint8_t;
+                    langmap_mapchar[(from & 255 as ::core::ffi::c_int) as usize] = to as uint8_t;
                 }
                 p = p.offset(utfc_ptr2len(p) as isize);
                 if p2.is_null() {
@@ -7669,9 +7558,7 @@ pub unsafe extern "C" fn did_set_langmap(
                     continue;
                 }
                 p = p2;
-                if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
-                {
+                if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
                     if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         != ',' as ::core::ffi::c_int
                     {
@@ -7679,8 +7566,8 @@ pub unsafe extern "C" fn did_set_langmap(
                             (*args).os_errbuf,
                             (*args).os_errbuflen,
                             gettext(
-                                b"E358: 'langmap': Extra characters after semicolon: %s\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"E358: 'langmap': Extra characters after semicolon: %s\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                             ),
                             p,
                         );
@@ -7696,10 +7583,8 @@ pub unsafe extern "C" fn did_set_langmap(
 }
 unsafe extern "C" fn do_exmap(mut eap: *mut exarg_T, mut isabbrev: ::core::ffi::c_int) {
     let mut cmdp: *mut ::core::ffi::c_char = (*eap).cmd;
-    let mut mode: ::core::ffi::c_int = get_map_mode(
-        &raw mut cmdp,
-        (*eap).forceit != 0 || isabbrev != 0,
-    );
+    let mut mode: ::core::ffi::c_int =
+        get_map_mode(&raw mut cmdp, (*eap).forceit != 0 || isabbrev != 0);
     let mut maptype: ::core::ffi::c_int = 0;
     if *cmdp as ::core::ffi::c_int == 'n' as ::core::ffi::c_int {
         maptype = MAPTYPE_NOREMAP as ::core::ffi::c_int;
@@ -7735,61 +7620,51 @@ unsafe extern "C" fn do_exmap(mut eap: *mut exarg_T, mut isabbrev: ::core::ffi::
         &raw mut parsed_args,
     );
     match result {
-        0 => {
-            match buf_do_map(
-                maptype,
-                &raw mut parsed_args,
-                mode,
-                isabbrev != 0,
-                curbuf,
-            ) {
-                1 => {
-                    emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-                }
-                2 => {
-                    emsg(
-                        if isabbrev != 0 {
-                            gettext(&raw const e_noabbr as *const ::core::ffi::c_char)
-                        } else {
-                            gettext(&raw const e_nomap as *const ::core::ffi::c_char)
-                        },
-                    );
-                }
-                5 => {
-                    semsg(
-                        if isabbrev != 0 {
-                            gettext(
-                                &raw const e_abbreviation_already_exists_for_str
-                                    as *const ::core::ffi::c_char,
-                            )
-                        } else {
-                            gettext(
-                                &raw const e_mapping_already_exists_for_str
-                                    as *const ::core::ffi::c_char,
-                            )
-                        },
-                        &raw mut parsed_args.lhs as *mut ::core::ffi::c_char,
-                    );
-                }
-                6 => {
-                    semsg(
-                        if isabbrev != 0 {
-                            gettext(
-                                &raw const e_global_abbreviation_already_exists_for_str
-                                    as *const ::core::ffi::c_char,
-                            )
-                        } else {
-                            gettext(
-                                &raw const e_global_mapping_already_exists_for_str
-                                    as *const ::core::ffi::c_char,
-                            )
-                        },
-                        &raw mut parsed_args.lhs as *mut ::core::ffi::c_char,
-                    );
-                }
-                _ => {}
+        0 => match buf_do_map(maptype, &raw mut parsed_args, mode, isabbrev != 0, curbuf) {
+            1 => {
+                emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
             }
-        }
+            2 => {
+                emsg(if isabbrev != 0 {
+                    gettext(&raw const e_noabbr as *const ::core::ffi::c_char)
+                } else {
+                    gettext(&raw const e_nomap as *const ::core::ffi::c_char)
+                });
+            }
+            5 => {
+                semsg(
+                    if isabbrev != 0 {
+                        gettext(
+                            &raw const e_abbreviation_already_exists_for_str
+                                as *const ::core::ffi::c_char,
+                        )
+                    } else {
+                        gettext(
+                            &raw const e_mapping_already_exists_for_str
+                                as *const ::core::ffi::c_char,
+                        )
+                    },
+                    &raw mut parsed_args.lhs as *mut ::core::ffi::c_char,
+                );
+            }
+            6 => {
+                semsg(
+                    if isabbrev != 0 {
+                        gettext(
+                            &raw const e_global_abbreviation_already_exists_for_str
+                                as *const ::core::ffi::c_char,
+                        )
+                    } else {
+                        gettext(
+                            &raw const e_global_mapping_already_exists_for_str
+                                as *const ::core::ffi::c_char,
+                        )
+                    },
+                    &raw mut parsed_args.lhs as *mut ::core::ffi::c_char,
+                );
+            }
+            _ => {}
+        },
         1 => {
             emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         }
@@ -7799,15 +7674,15 @@ unsafe extern "C" fn do_exmap(mut eap: *mut exarg_T, mut isabbrev: ::core::ffi::
                     && !(b"Unknown return code from str_to_mapargs!\0".as_ptr()
                         as *const ::core::ffi::c_char)
                         .is_null()
-                {} else {
+                {
+                } else {
                     __assert_fail(
-                        b"false && \"Unknown return code from str_to_mapargs!\"\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        2669 as ::core::ffi::c_uint,
-                        b"void do_exmap(exarg_T *, int)\0".as_ptr()
+                        b"false && \"Unknown return code from str_to_mapargs!\"\0".as_ptr()
                             as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
+                        2669 as ::core::ffi::c_uint,
+                        b"void do_exmap(exarg_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -7897,8 +7772,7 @@ pub unsafe extern "C" fn modify_keymap(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"\"replace_keycodes\" requires \"expr\"\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"\"replace_keycodes\" requires \"expr\"\0".as_ptr() as *const ::core::ffi::c_char,
             );
         } else if !set_maparg_lhs_rhs(
             lhs.data,
@@ -7912,8 +7786,7 @@ pub unsafe extern "C" fn modify_keymap(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"LHS exceeds maximum map length: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"LHS exceeds maximum map length: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 lhs.data,
             );
         } else if parsed_args.lhs_len > MAXMAPLEN as ::core::ffi::c_int as size_t
@@ -7922,8 +7795,7 @@ pub unsafe extern "C" fn modify_keymap(
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"LHS exceeds maximum map length: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"LHS exceeds maximum map length: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 lhs.data,
             );
         } else {
@@ -7936,7 +7808,8 @@ pub unsafe extern "C" fn modify_keymap(
             mode_val = get_map_mode(&raw mut p, forceit);
             if forceit {
                 '_c2rust_label: {
-                    if p == mode.data {} else {
+                    if p == mode.data {
+                    } else {
                         __assert_fail(
                             b"p == mode.data\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
@@ -7950,19 +7823,17 @@ pub unsafe extern "C" fn modify_keymap(
                 p = p.offset(1);
             }
             is_abbrev = mode_val
-                & (MODE_INSERT as ::core::ffi::c_int
-                    | MODE_CMDLINE as ::core::ffi::c_int) != 0 as ::core::ffi::c_int
+                & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int)
+                != 0 as ::core::ffi::c_int
                 && *p as ::core::ffi::c_int == 'a' as ::core::ffi::c_int;
             if is_abbrev {
                 p = p.offset(1);
             }
-            if mode.size > 0 as size_t && p.offset_from(mode.data) as size_t != mode.size
-            {
+            if mode.size > 0 as size_t && p.offset_from(mode.data) as size_t != mode.size {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"Invalid mode shortname: \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Invalid mode shortname: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
                     mode.data,
                 );
             } else if parsed_args.lhs_len == 0 as size_t {
@@ -7976,7 +7847,8 @@ pub unsafe extern "C" fn modify_keymap(
                 '_c2rust_label_0: {
                     if !(is_unmap as ::core::ffi::c_int != 0
                         && is_noremap as ::core::ffi::c_int != 0)
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"!(is_unmap && is_noremap)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -7988,7 +7860,8 @@ pub unsafe extern "C" fn modify_keymap(
                         );
                     }
                 };
-                if !is_unmap && lua_funcref == LUA_NOREF
+                if !is_unmap
+                    && lua_funcref == LUA_NOREF
                     && (parsed_args.rhs_len == 0 as size_t && !parsed_args.rhs_is_noop)
                 {
                     if rhs.size == 0 as size_t {
@@ -8011,8 +7884,7 @@ pub unsafe extern "C" fn modify_keymap(
                         api_set_error(
                             err,
                             kErrorTypeValidation,
-                            b"Gave nonempty RHS for unmap\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"Gave nonempty RHS for unmap\0".as_ptr() as *const ::core::ffi::c_char,
                         );
                     }
                     break '_fail_and_free;
@@ -8081,7 +7953,8 @@ pub unsafe extern "C" fn modify_keymap(
                                 && !(b"Unrecognized return code!\0".as_ptr()
                                     as *const ::core::ffi::c_char)
                                     .is_null()
-                            {} else {
+                            {
+                            } else {
                                 __assert_fail(
                                     b"false && \"Unrecognized return code!\"\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -8125,9 +7998,8 @@ pub unsafe extern "C" fn keymap_array(
     mappings.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
         .wrapping_div(
-            (::core::mem::size_of::<[Object; 16]>()
-                .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                as ::core::ffi::c_int as usize,
+            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     mappings.size = 0 as size_t;
     mappings.items = &raw mut mappings.init_array as *mut Object;
@@ -8140,11 +8012,12 @@ pub unsafe extern "C" fn keymap_array(
     let mut int_mode: ::core::ffi::c_int = get_map_mode(&raw mut p, forceit);
     if forceit {
         '_c2rust_label: {
-            if p == mode.data {} else {
+            if p == mode.data {
+            } else {
                 __assert_fail(
                     b"p == mode.data\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/mapping.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     2888 as ::core::ffi::c_uint,
                     b"Array keymap_array(String, buf_T *, Arena *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -8170,10 +8043,12 @@ pub unsafe extern "C" fn keymap_array(
             MAX_MAPHASH
         })
     {
-        let mut current_maphash: *const mapblock_T = if is_abbrev as ::core::ffi::c_int
-            != 0
-        {
-            if !buf.is_null() { (*buf).b_first_abbr } else { first_abbr }
+        let mut current_maphash: *const mapblock_T = if is_abbrev as ::core::ffi::c_int != 0 {
+            if !buf.is_null() {
+                (*buf).b_first_abbr
+            } else {
+                first_abbr
+            }
         } else if !buf.is_null() {
             (*buf).b_maphash[i as usize] as *mut mapblock_T
         } else {
@@ -8183,24 +8058,26 @@ pub unsafe extern "C" fn keymap_array(
             if (*current_maphash).m_simplified == 0 {
                 if int_mode & (*current_maphash).m_mode != 0 {
                     if mappings.size == mappings.capacity {
-                        mappings.capacity = (if mappings.capacity
-                            << 1 as ::core::ffi::c_int
+                        mappings.capacity = (if mappings.capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[Object; 16]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                        as ::core::ffi::c_int as usize,
-                                )
-                        {
+                                        .wrapping_rem(::core::mem::size_of::<Object>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as usize,
+                                ) {
                             mappings.capacity << 1 as ::core::ffi::c_int
                         } else {
                             ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[Object; 16]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                        as ::core::ffi::c_int as size_t,
+                                        .wrapping_rem(::core::mem::size_of::<Object>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as size_t,
                                 )
                         });
                         mappings.items = (if mappings.capacity
@@ -8208,13 +8085,12 @@ pub unsafe extern "C" fn keymap_array(
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[Object; 16]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                        as ::core::ffi::c_int as usize,
-                                )
-                        {
-                            (if mappings.items
-                                == &raw mut mappings.init_array as *mut Object
-                            {
+                                        .wrapping_rem(::core::mem::size_of::<Object>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as usize,
+                                ) {
+                            (if mappings.items == &raw mut mappings.init_array as *mut Object {
                                 mappings.items as *mut ::core::ffi::c_void
                             } else {
                                 _memcpy_free(
@@ -8225,9 +8101,7 @@ pub unsafe extern "C" fn keymap_array(
                                 )
                             })
                         } else {
-                            (if mappings.items
-                                == &raw mut mappings.init_array as *mut Object
-                            {
+                            (if mappings.items == &raw mut mappings.init_array as *mut Object {
                                 memcpy(
                                     xmalloc(
                                         mappings
@@ -8246,7 +8120,8 @@ pub unsafe extern "C" fn keymap_array(
                                 )
                             })
                         }) as *mut Object;
-                    } else {};
+                    } else {
+                    };
                     let c2rust_fresh41 = mappings.size;
                     mappings.size = mappings.size.wrapping_add(1);
                     *mappings.items.offset(c2rust_fresh41 as isize) = object {
@@ -8275,8 +8150,8 @@ pub unsafe extern "C" fn keymap_array(
     return arena_take_arraybuilder(arena, &raw mut mappings);
 }
 pub const SCHAR_MAX: ::core::ffi::c_int = __SCHAR_MAX__;
-pub const UCHAR_MAX: ::core::ffi::c_int = SCHAR_MAX * 2 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const UCHAR_MAX: ::core::ffi::c_int =
+    SCHAR_MAX * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __SCHAR_MAX__: ::core::ffi::c_int = 127 as ::core::ffi::c_int;

@@ -35,14 +35,8 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr_0: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xrealloc(
-        ptr_0: *mut ::core::ffi::c_void,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn xmemdup(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xrealloc(ptr_0: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
+    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
     fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t;
     fn map_put_ref_ptr_t_ptr_t(
@@ -69,11 +63,7 @@ extern "C" {
         new_item: *mut bool,
     ) -> *mut MTDamagePair;
     fn ga_take_string(ga: *mut garray_T) -> String_0;
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
 }
 pub type int16_t = i16;
@@ -325,9 +315,7 @@ pub struct C2Rust_Unnamed_3 {
     pub items: *mut MTKey,
 }
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: C2Rust_Unnamed_3 = C2Rust_Unnamed_3 {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -340,8 +328,7 @@ unsafe extern "C" fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -373,10 +360,7 @@ unsafe extern "C" fn map_put_ptr_t_ptr_t(
     *val = value;
 }
 #[inline]
-unsafe extern "C" fn map_get_ptr_t_ptr_t(
-    mut map: *mut Map_ptr_t_ptr_t,
-    mut key: ptr_t,
-) -> ptr_t {
+unsafe extern "C" fn map_get_ptr_t_ptr_t(mut map: *mut Map_ptr_t_ptr_t, mut key: ptr_t) -> ptr_t {
     let mut k: uint32_t = mh_get_ptr_t(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
         value_init_ptr_t
@@ -419,8 +403,8 @@ pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInli
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const ILEN: usize = ::core::mem::size_of::<MTNode>()
-    .wrapping_add(::core::mem::size_of::<mtnode_inner_s>());
+pub const ILEN: usize =
+    ::core::mem::size_of::<MTNode>().wrapping_add(::core::mem::size_of::<mtnode_inner_s>());
 unsafe extern "C" fn pos_leq(mut a: MTPos, mut b: MTPos) -> bool {
     return a.row < b.row || a.row == b.row && a.col <= b.col;
 }
@@ -429,7 +413,8 @@ unsafe extern "C" fn pos_less(mut a: MTPos, mut b: MTPos) -> bool {
 }
 unsafe extern "C" fn relative(mut base: MTPos, mut val: *mut MTPos) {
     '_c2rust_label: {
-        if pos_leq(base, *val) {} else {
+        if pos_leq(base, *val) {
+        } else {
             __assert_fail(
                 b"pos_leq(base, *val)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
@@ -473,8 +458,8 @@ unsafe extern "C" fn key_cmp(mut a: MTKey, mut b: MTKey) -> ::core::ffi::c_int {
     if cmp != 0 as ::core::ffi::c_int {
         return cmp;
     }
-    let cmp_mask: uint16_t = (MT_FLAG_RIGHT_GRAVITY | MT_FLAG_END | MT_FLAG_REAL
-        | MT_FLAG_LAST) as uint16_t;
+    let cmp_mask: uint16_t =
+        (MT_FLAG_RIGHT_GRAVITY | MT_FLAG_END | MT_FLAG_REAL | MT_FLAG_LAST) as uint16_t;
     return ((b.flags as ::core::ffi::c_int & cmp_mask as ::core::ffi::c_int)
         < a.flags as ::core::ffi::c_int & cmp_mask as ::core::ffi::c_int)
         as ::core::ffi::c_int
@@ -519,11 +504,7 @@ unsafe extern "C" fn marktree_getp_aux(
     return begin;
 }
 #[inline]
-unsafe extern "C" fn refkey(
-    mut b: *mut MarkTree,
-    mut x: *mut MTNode,
-    mut i: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn refkey(mut b: *mut MarkTree, mut x: *mut MTNode, mut i: ::core::ffi::c_int) {
     map_put_uint64_t_ptr_t(
         &raw mut (*b).id2node as *mut Map_uint64_t_ptr_t,
         mt_lookup_key((*x).key[i as usize]),
@@ -541,12 +522,10 @@ unsafe extern "C" fn split_node(
     i: ::core::ffi::c_int,
     mut next: MTKey,
 ) {
-    let mut y: *mut MTNode = (*(&raw mut (*x).s as *mut mtnode_inner_s))
-        .i_ptr[i as usize];
+    let mut y: *mut MTNode = (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i as usize];
     let mut z: *mut MTNode = marktree_alloc_node(b, (*y).level != 0);
     (*z).level = (*y).level;
-    (*z).n = (MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-        as int32_t;
+    (*z).n = (MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int32_t;
     let mut last_start: uint64_t = if mt_end(next) as ::core::ffi::c_int != 0 {
         mt_lookup_id(next.ns, next.id, false_0 != 0)
     } else {
@@ -558,18 +537,17 @@ unsafe extern "C" fn split_node(
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
                     (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
+                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
             (*y).intersect.size
         } else {
             ::core::mem::size_of::<[uint64_t; 4]>()
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
                     (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                        as ::core::ffi::c_int as size_t,
+                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                        == 0) as ::core::ffi::c_int as size_t,
                 )
         });
         (*z).intersect.items = (if (*z).intersect.capacity
@@ -577,41 +555,37 @@ unsafe extern "C" fn split_node(
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
                     (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
-            (if (*z).intersect.items
-                == &raw mut (*z).intersect.init_array as *mut uint64_t
-            {
+                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
+            (if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
                 (*z).intersect.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
-                    &raw mut (*z).intersect.init_array as *mut uint64_t
-                        as *mut ::core::ffi::c_void,
+                    &raw mut (*z).intersect.init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                     (*z).intersect.items as *mut ::core::ffi::c_void,
-                    (*z).intersect.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                    (*z).intersect
+                        .size
+                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
             })
         } else {
-            (if (*z).intersect.items
-                == &raw mut (*z).intersect.init_array as *mut uint64_t
-            {
+            (if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
                 memcpy(
                     xmalloc(
-                        (*z)
-                            .intersect
+                        (*z).intersect
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     ),
                     (*z).intersect.items as *const ::core::ffi::c_void,
-                    (*z).intersect.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                    (*z).intersect
+                        .size
+                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
             } else {
                 xrealloc(
                     (*z).intersect.items as *mut ::core::ffi::c_void,
-                    (*z)
-                        .intersect
+                    (*z).intersect
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
@@ -629,33 +603,26 @@ unsafe extern "C" fn split_node(
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while j < MT_BRANCH_FACTOR as ::core::ffi::c_int {
             let mut k: MTKey = (*y).key[j as usize];
-            let mut pi_end: uint64_t = pseudo_index_for_id(
-                b,
-                mt_lookup_id(k.ns, k.id, true_0 != 0),
-                true_0 != 0,
-            );
-            if mt_start(k) as ::core::ffi::c_int != 0 && pi_end > pi
+            let mut pi_end: uint64_t =
+                pseudo_index_for_id(b, mt_lookup_id(k.ns, k.id, true_0 != 0), true_0 != 0);
+            if mt_start(k) as ::core::ffi::c_int != 0
+                && pi_end > pi
                 && mt_lookup_key(k) != last_start
             {
                 intersect_node(b, z, mt_lookup_id(k.ns, k.id, false_0 != 0));
             }
             j += 1;
         }
-        let mut j_0: ::core::ffi::c_int = MT_BRANCH_FACTOR as ::core::ffi::c_int
-            - 1 as ::core::ffi::c_int;
+        let mut j_0: ::core::ffi::c_int =
+            MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
         while j_0
             < MT_BRANCH_FACTOR as ::core::ffi::c_int * 2 as ::core::ffi::c_int
                 - 1 as ::core::ffi::c_int
         {
             let mut k_0: MTKey = (*y).key[j_0 as usize];
-            let mut pi_start: uint64_t = pseudo_index_for_id(
-                b,
-                mt_lookup_id(k_0.ns, k_0.id, false_0 != 0),
-                true_0 != 0,
-            );
-            if mt_end(k_0) as ::core::ffi::c_int != 0 && pi_start > 0 as uint64_t
-                && pi_start < pi
-            {
+            let mut pi_start: uint64_t =
+                pseudo_index_for_id(b, mt_lookup_id(k_0.ns, k_0.id, false_0 != 0), true_0 != 0);
+            if mt_end(k_0) as ::core::ffi::c_int != 0 && pi_start > 0 as uint64_t && pi_start < pi {
                 intersect_node(b, y, mt_lookup_id(k_0.ns, k_0.id, false_0 != 0));
             }
             j_0 += 1;
@@ -663,14 +630,11 @@ unsafe extern "C" fn split_node(
     }
     memcpy(
         &raw mut (*z).key as *mut MTKey as *mut ::core::ffi::c_void,
-        (&raw mut (*y).key as *mut MTKey)
-            .offset(MT_BRANCH_FACTOR as ::core::ffi::c_int as isize)
+        (&raw mut (*y).key as *mut MTKey).offset(MT_BRANCH_FACTOR as ::core::ffi::c_int as isize)
             as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<MTKey>()
-            .wrapping_mul(
-                (MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                    as size_t,
-            ),
+        ::core::mem::size_of::<MTKey>().wrapping_mul(
+            (MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t,
+        ),
     );
     let mut j_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while j_1 < MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
@@ -679,20 +643,18 @@ unsafe extern "C" fn split_node(
     }
     if (*y).level != 0 {
         memcpy(
-            &raw mut (*(&raw mut (*z).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode as *mut ::core::ffi::c_void,
-            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode)
+            &raw mut (*(&raw mut (*z).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode
+                as *mut ::core::ffi::c_void,
+            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
                 .offset(MT_BRANCH_FACTOR as ::core::ffi::c_int as isize)
                 as *const ::core::ffi::c_void,
             ::core::mem::size_of::<*mut MTNode>()
                 .wrapping_mul(MT_BRANCH_FACTOR as ::core::ffi::c_int as size_t),
         );
         memcpy(
-            &raw mut (*(&raw mut (*z).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5] as *mut ::core::ffi::c_void,
-            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5])
+            &raw mut (*(&raw mut (*z).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5]
+                as *mut ::core::ffi::c_void,
+            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
                 .offset(MT_BRANCH_FACTOR as ::core::ffi::c_int as isize)
                 as *const ::core::ffi::c_void,
             ::core::mem::size_of::<[uint32_t; 5]>()
@@ -701,35 +663,27 @@ unsafe extern "C" fn split_node(
         let mut j_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while j_2 < MT_BRANCH_FACTOR as ::core::ffi::c_int {
             (*(*(&raw mut (*z).s as *mut mtnode_inner_s)).i_ptr[j_2 as usize]).parent = z;
-            (*(*(&raw mut (*z).s as *mut mtnode_inner_s)).i_ptr[j_2 as usize]).p_idx = j_2
-                as int16_t;
+            (*(*(&raw mut (*z).s as *mut mtnode_inner_s)).i_ptr[j_2 as usize]).p_idx =
+                j_2 as int16_t;
             j_2 += 1;
         }
     }
-    (*y).n = (MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-        as int32_t;
+    (*y).n = (MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int32_t;
     memmove(
         (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
             .offset((i + 2 as ::core::ffi::c_int) as isize) as *mut ::core::ffi::c_void,
         (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
-            .offset((i + 1 as ::core::ffi::c_int) as isize)
-            as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<*mut MTNode>()
-            .wrapping_mul(((*x).n - i as int32_t) as size_t),
+            .offset((i + 1 as ::core::ffi::c_int) as isize) as *const ::core::ffi::c_void,
+        ::core::mem::size_of::<*mut MTNode>().wrapping_mul(((*x).n - i as int32_t) as size_t),
     );
     memmove(
-        (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
-            as *mut [uint32_t; 5])
+        (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
             .offset((i + 2 as ::core::ffi::c_int) as isize) as *mut ::core::ffi::c_void,
-        (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
-            as *mut [uint32_t; 5])
-            .offset((i + 1 as ::core::ffi::c_int) as isize)
-            as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<[uint32_t; 5]>()
-            .wrapping_mul(((*x).n - i as int32_t) as size_t),
+        (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
+            .offset((i + 1 as ::core::ffi::c_int) as isize) as *const ::core::ffi::c_void,
+        ::core::mem::size_of::<[uint32_t; 5]>().wrapping_mul(((*x).n - i as int32_t) as size_t),
     );
-    (*(&raw mut (*x).s as *mut mtnode_inner_s))
-        .i_ptr[(i + 1 as ::core::ffi::c_int) as usize] = z;
+    (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[(i + 1 as ::core::ffi::c_int) as usize] = z;
     meta_describe_node(
         &raw mut *(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
             as *mut [uint32_t; 5])
@@ -739,34 +693,30 @@ unsafe extern "C" fn split_node(
     (*z).parent = x;
     let mut j_3: ::core::ffi::c_int = i + 1 as ::core::ffi::c_int;
     while (j_3 as int32_t) < (*x).n + 2 as int32_t {
-        (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[j_3 as usize]).p_idx = j_3
-            as int16_t;
+        (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[j_3 as usize]).p_idx = j_3 as int16_t;
         j_3 += 1;
     }
     memmove(
         (&raw mut (*x).key as *mut MTKey).offset((i + 1 as ::core::ffi::c_int) as isize)
             as *mut ::core::ffi::c_void,
-        (&raw mut (*x).key as *mut MTKey).offset(i as isize)
-            as *const ::core::ffi::c_void,
+        (&raw mut (*x).key as *mut MTKey).offset(i as isize) as *const ::core::ffi::c_void,
         ::core::mem::size_of::<MTKey>().wrapping_mul(((*x).n - i as int32_t) as size_t),
     );
-    (*x).key[i as usize] = (*y)
-        .key[(MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-        as usize];
+    (*x).key[i as usize] =
+        (*y).key[(MT_BRANCH_FACTOR as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize];
     refkey(b, x, i);
     (*x).n += 1;
     let mut meta_inc: [uint32_t; 5] = [0; 5];
     meta_describe_key(&raw mut meta_inc as *mut uint32_t, (*x).key[i as usize]);
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
-        (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] = (*(&raw mut (*x)
-            .s as *mut mtnode_inner_s))
-            .i_meta[i as usize][m as usize]
-            .wrapping_sub(
-                (*(&raw mut (*x).s as *mut mtnode_inner_s))
-                    .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m as usize]
-                    .wrapping_add(meta_inc[m as usize]),
-            );
+        (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] =
+            (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize]
+                .wrapping_sub(
+                    (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
+                        [(i + 1 as ::core::ffi::c_int) as usize][m as usize]
+                        .wrapping_add(meta_inc[m as usize]),
+                );
         m += 1;
     }
     let mut j_4: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -795,21 +745,15 @@ unsafe extern "C" fn marktree_putp_aux(
     mut k: MTKey,
     mut meta_inc: *mut uint32_t,
 ) {
-    let mut i: ::core::ffi::c_int = marktree_getp_aux(
-        x,
-        k,
-        ::core::ptr::null_mut::<bool>(),
-    ) + 1 as ::core::ffi::c_int;
+    let mut i: ::core::ffi::c_int =
+        marktree_getp_aux(x, k, ::core::ptr::null_mut::<bool>()) + 1 as ::core::ffi::c_int;
     if (*x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         if i as int32_t != (*x).n {
             memmove(
-                (&raw mut (*x).key as *mut MTKey)
-                    .offset((i + 1 as ::core::ffi::c_int) as isize)
+                (&raw mut (*x).key as *mut MTKey).offset((i + 1 as ::core::ffi::c_int) as isize)
                     as *mut ::core::ffi::c_void,
-                (&raw mut (*x).key as *mut MTKey).offset(i as isize)
-                    as *const ::core::ffi::c_void,
-                (((*x).n - i as int32_t) as size_t)
-                    .wrapping_mul(::core::mem::size_of::<MTKey>()),
+                (&raw mut (*x).key as *mut MTKey).offset(i as isize) as *const ::core::ffi::c_void,
+                (((*x).n - i as int32_t) as size_t).wrapping_mul(::core::mem::size_of::<MTKey>()),
             );
         }
         (*x).key[i as usize] = k;
@@ -817,8 +761,7 @@ unsafe extern "C" fn marktree_putp_aux(
         (*x).n += 1;
     } else {
         if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i as usize]).n
-            == 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t
-                - 1 as int32_t
+            == 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
         {
             split_node(b, x, i, k);
             if key_cmp(k, (*x).key[i as usize]) > 0 as ::core::ffi::c_int {
@@ -839,10 +782,9 @@ unsafe extern "C" fn marktree_putp_aux(
         );
         let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while m < kMTMetaCount as ::core::ffi::c_int {
-            (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] = (*(&raw mut (*x)
-                .s as *mut mtnode_inner_s))
-                .i_meta[i as usize][m as usize]
-                .wrapping_add(*meta_inc.offset(m as isize));
+            (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] =
+                (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize]
+                    .wrapping_add(*meta_inc.offset(m as isize));
             m += 1;
         }
     };
@@ -878,11 +820,13 @@ pub unsafe extern "C" fn marktree_put(
                 | (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int)
                     << 13 as ::core::ffi::c_int
                 | (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int)
-                    << 14 as ::core::ffi::c_int) == 0
-        {} else {
+                    << 14 as ::core::ffi::c_int)
+            == 0
+        {
+        } else {
             __assert_fail(
-                b"!(key.flags & ~(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY))\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"!(key.flags & ~(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY))\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 299 as ::core::ffi::c_uint,
@@ -897,8 +841,8 @@ pub unsafe extern "C" fn marktree_put(
     marktree_put_key(b, key);
     if end_row >= 0 as ::core::ffi::c_int {
         let mut end_key: MTKey = key;
-        end_key.flags = ((key.flags as ::core::ffi::c_int & !MT_FLAG_RIGHT_GRAVITY)
-            as uint16_t as ::core::ffi::c_int
+        end_key.flags = ((key.flags as ::core::ffi::c_int & !MT_FLAG_RIGHT_GRAVITY) as uint16_t
+            as ::core::ffi::c_int
             | MT_FLAG_END as uint16_t as ::core::ffi::c_int
             | (if end_right as ::core::ffi::c_int != 0 {
                 MT_FLAG_RIGHT_GRAVITY
@@ -910,36 +854,32 @@ pub unsafe extern "C" fn marktree_put(
             col: end_col as int32_t,
         };
         marktree_put_key(b, end_key);
-        let mut itr: [MarkTreeIter; 1] = [
-            MarkTreeIter {
-                pos: MTPos { row: 0 as int32_t, col: 0 },
-                lvl: 0,
-                x: ::core::ptr::null_mut::<MTNode>(),
-                i: 0,
-                s: [C2Rust_Unnamed_2 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
-                intersect_idx: 0,
-                intersect_pos: MTPos { row: 0, col: 0 },
-                intersect_pos_x: MTPos { row: 0, col: 0 },
+        let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+            pos: MTPos {
+                row: 0 as int32_t,
+                col: 0,
             },
-        ];
-        let mut end_itr: [MarkTreeIter; 1] = [
-            MarkTreeIter {
-                pos: MTPos { row: 0 as int32_t, col: 0 },
-                lvl: 0,
-                x: ::core::ptr::null_mut::<MTNode>(),
-                i: 0,
-                s: [C2Rust_Unnamed_2 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
-                intersect_idx: 0,
-                intersect_pos: MTPos { row: 0, col: 0 },
-                intersect_pos_x: MTPos { row: 0, col: 0 },
+            lvl: 0,
+            x: ::core::ptr::null_mut::<MTNode>(),
+            i: 0,
+            s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
+            intersect_idx: 0,
+            intersect_pos: MTPos { row: 0, col: 0 },
+            intersect_pos_x: MTPos { row: 0, col: 0 },
+        }];
+        let mut end_itr: [MarkTreeIter; 1] = [MarkTreeIter {
+            pos: MTPos {
+                row: 0 as int32_t,
+                col: 0,
             },
-        ];
+            lvl: 0,
+            x: ::core::ptr::null_mut::<MTNode>(),
+            i: 0,
+            s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
+            intersect_idx: 0,
+            intersect_pos: MTPos { row: 0, col: 0 },
+            intersect_pos_x: MTPos { row: 0, col: 0 },
+        }];
         marktree_lookup(b, mt_lookup_key(key), &raw mut itr as *mut MarkTreeIter);
         marktree_lookup(
             b,
@@ -955,28 +895,22 @@ pub unsafe extern "C" fn marktree_put(
         );
     }
 }
-unsafe extern "C" fn intersection_has(
-    mut x: *mut Intersection,
-    mut id: uint64_t,
-) -> bool {
+unsafe extern "C" fn intersection_has(mut x: *mut Intersection, mut id: uint64_t) -> bool {
     let mut i: size_t = 0 as size_t;
     while i < (*x).size {
         if *(*x).items.offset(i as isize) == id {
-            return true_0 != 0
+            return true_0 != 0;
         } else if *(*x).items.offset(i as isize) >= id {
-            return false_0 != 0
+            return false_0 != 0;
         }
         i = i.wrapping_add(1);
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn intersect_node(
-    mut b: *mut MarkTree,
-    mut x: *mut MTNode,
-    mut id: uint64_t,
-) {
+unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mut id: uint64_t) {
     '_c2rust_label: {
-        if id & 1 as ::core::ffi::c_int as uint64_t == 0 {} else {
+        if id & 1 as ::core::ffi::c_int as uint64_t == 0 {
+        } else {
             __assert_fail(
                 b"!(id & MARKTREE_END_FLAG)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
@@ -993,18 +927,17 @@ unsafe extern "C" fn intersect_node(
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
                     (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
+                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
             (*x).intersect.capacity << 1 as ::core::ffi::c_int
         } else {
             ::core::mem::size_of::<[uint64_t; 4]>()
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
                     (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                        as ::core::ffi::c_int as size_t,
+                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                        == 0) as ::core::ffi::c_int as size_t,
                 )
         });
         (*x).intersect.items = (if (*x).intersect.capacity
@@ -1012,57 +945,50 @@ unsafe extern "C" fn intersect_node(
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
                     (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
-            (if (*x).intersect.items
-                == &raw mut (*x).intersect.init_array as *mut uint64_t
-            {
+                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
+            (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                 (*x).intersect.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
-                    &raw mut (*x).intersect.init_array as *mut uint64_t
-                        as *mut ::core::ffi::c_void,
+                    &raw mut (*x).intersect.init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                     (*x).intersect.items as *mut ::core::ffi::c_void,
-                    (*x).intersect.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                    (*x).intersect
+                        .size
+                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
             })
         } else {
-            (if (*x).intersect.items
-                == &raw mut (*x).intersect.init_array as *mut uint64_t
-            {
+            (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                 memcpy(
                     xmalloc(
-                        (*x)
-                            .intersect
+                        (*x).intersect
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     ),
                     (*x).intersect.items as *const ::core::ffi::c_void,
-                    (*x).intersect.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                    (*x).intersect
+                        .size
+                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
             } else {
                 xrealloc(
                     (*x).intersect.items as *mut ::core::ffi::c_void,
-                    (*x)
-                        .intersect
+                    (*x).intersect
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
             })
         }) as *mut uint64_t;
-    } else {};
+    } else {
+    };
     (*x).intersect.size = (*x).intersect.size.wrapping_add(1);
     let mut i: ssize_t = (*x).intersect.size as ssize_t - 1 as ssize_t;
     while i >= 0 as ssize_t {
-        if i > 0 as ssize_t
-            && *(*x).intersect.items.offset((i - 1 as ssize_t) as isize) > id
-        {
-            *(*x).intersect.items.offset(i as isize) = *(*x)
-                .intersect
-                .items
-                .offset((i - 1 as ssize_t) as isize);
+        if i > 0 as ssize_t && *(*x).intersect.items.offset((i - 1 as ssize_t) as isize) > id {
+            *(*x).intersect.items.offset(i as isize) =
+                *(*x).intersect.items.offset((i - 1 as ssize_t) as isize);
             i -= 1;
         } else {
             *(*x).intersect.items.offset(i as isize) = id;
@@ -1077,14 +1003,15 @@ unsafe extern "C" fn unintersect_node(
     mut strict: bool,
 ) {
     '_c2rust_label: {
-        if id & 1 as ::core::ffi::c_int as uint64_t == 0 {} else {
+        if id & 1 as ::core::ffi::c_int as uint64_t == 0 {
+        } else {
             __assert_fail(
                 b"!(id & MARKTREE_END_FLAG)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 352 as ::core::ffi::c_uint,
-                b"void unintersect_node(MarkTree *, MTNode *, uint64_t, _Bool)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"void unintersect_node(MarkTree *, MTNode *, uint64_t, _Bool)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -1104,14 +1031,15 @@ unsafe extern "C" fn unintersect_node(
     }
     if strict {
         '_c2rust_label_0: {
-            if seen {} else {
+            if seen {
+            } else {
                 __assert_fail(
                     b"seen\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     371 as ::core::ffi::c_uint,
-                    b"void unintersect_node(MarkTree *, MTNode *, uint64_t, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void unintersect_node(MarkTree *, MTNode *, uint64_t, _Bool)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -1120,10 +1048,11 @@ unsafe extern "C" fn unintersect_node(
         if i < (*x).intersect.size.wrapping_sub(1 as size_t) {
             memmove(
                 (*x).intersect.items.offset(i as isize) as *mut ::core::ffi::c_void,
-                (*x).intersect.items.offset(i.wrapping_add(1 as size_t) as isize)
+                (*x).intersect
+                    .items
+                    .offset(i.wrapping_add(1 as size_t) as isize)
                     as *const ::core::ffi::c_void,
-                (*x)
-                    .intersect
+                (*x).intersect
                     .size
                     .wrapping_sub(i)
                     .wrapping_sub(1 as size_t)
@@ -1149,7 +1078,7 @@ pub unsafe extern "C" fn marktree_intersect_pair(
     };
     while lvl < maxlvl {
         if (*itr).s[lvl as usize].i > (*end_itr).s[lvl as usize].i {
-            return
+            return;
         } else {
             if (*itr).s[lvl as usize].i < (*end_itr).s[lvl as usize].i {
                 break;
@@ -1162,12 +1091,11 @@ pub unsafe extern "C" fn marktree_intersect_pair(
             (*itr).i + 1 as ::core::ffi::c_int
         } else {
             (*itr).s[lvl as usize].i
+        }) > (if lvl == (*end_itr).lvl {
+            (*end_itr).i + 0 as ::core::ffi::c_int
+        } else {
+            (*end_itr).s[lvl as usize].i
         })
-            > (if lvl == (*end_itr).lvl {
-                (*end_itr).i + 0 as ::core::ffi::c_int
-            } else {
-                (*end_itr).s[lvl as usize].i
-            })
     {
         return;
     }
@@ -1186,22 +1114,19 @@ pub unsafe extern "C" fn marktree_intersect_pair(
             (*itr).i + 1 as ::core::ffi::c_int
         } else {
             (*itr).s[lvl as usize].i
-        })
-            < (if lvl == (*end_itr).lvl {
-                (*end_itr).i + 1 as ::core::ffi::c_int
-            } else {
-                (*end_itr).s[lvl as usize].i
-            })
-        {
+        }) < (if lvl == (*end_itr).lvl {
+            (*end_itr).i + 1 as ::core::ffi::c_int
+        } else {
+            (*end_itr).s[lvl as usize].i
+        }) {
             skip = true_0 != 0;
         } else {
             lvl += 1;
         }
         if skip {
             if (*(*itr).x).level != 0 {
-                let mut x: *mut MTNode = (*(&raw mut (*(*itr).x).s
-                    as *mut mtnode_inner_s))
-                    .i_ptr[((*itr).i + 1 as ::core::ffi::c_int) as usize];
+                let mut x: *mut MTNode = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr
+                    [((*itr).i + 1 as ::core::ffi::c_int) as usize];
                 if delete {
                     unintersect_node(b, x, id, true_0 != 0);
                 } else {
@@ -1219,10 +1144,7 @@ pub unsafe extern "C" fn marktree_intersect_pair(
         );
     }
 }
-unsafe extern "C" fn marktree_alloc_node(
-    mut b: *mut MarkTree,
-    mut internal: bool,
-) -> *mut MTNode {
+unsafe extern "C" fn marktree_alloc_node(mut b: *mut MarkTree, mut internal: bool) -> *mut MTNode {
     let mut x: *mut MTNode = xcalloc(
         1 as size_t,
         if internal as ::core::ffi::c_int != 0 {
@@ -1235,60 +1157,50 @@ unsafe extern "C" fn marktree_alloc_node(
         .wrapping_div(::core::mem::size_of::<uint64_t>())
         .wrapping_div(
             (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     (*x).intersect.size = 0 as size_t;
     (*x).intersect.items = &raw mut (*x).intersect.init_array as *mut uint64_t;
     (*b).n_nodes = (*b).n_nodes.wrapping_add(1);
     return x;
 }
-unsafe extern "C" fn meta_describe_key_inc(
-    mut meta_inc: *mut uint32_t,
-    mut k: *mut MTKey,
-) {
+unsafe extern "C" fn meta_describe_key_inc(mut meta_inc: *mut uint32_t, mut k: *mut MTKey) {
     if !mt_end(*k) && !mt_invalid(*k) {
-        *meta_inc.offset(kMTMetaInline as ::core::ffi::c_int as isize) = (*meta_inc
-            .offset(kMTMetaInline as ::core::ffi::c_int as isize))
-            .wrapping_add(
-                (if (*k).flags as ::core::ffi::c_int & MT_FLAG_DECOR_VIRT_TEXT_INLINE
-                    != 0
-                {
+        *meta_inc.offset(kMTMetaInline as ::core::ffi::c_int as isize) =
+            (*meta_inc.offset(kMTMetaInline as ::core::ffi::c_int as isize)).wrapping_add(
+                (if (*k).flags as ::core::ffi::c_int & MT_FLAG_DECOR_VIRT_TEXT_INLINE != 0 {
                     1 as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 }) as uint32_t,
             );
-        *meta_inc.offset(kMTMetaLines as ::core::ffi::c_int as isize) = (*meta_inc
-            .offset(kMTMetaLines as ::core::ffi::c_int as isize))
-            .wrapping_add(
+        *meta_inc.offset(kMTMetaLines as ::core::ffi::c_int as isize) =
+            (*meta_inc.offset(kMTMetaLines as ::core::ffi::c_int as isize)).wrapping_add(
                 (if (*k).flags as ::core::ffi::c_int & MT_FLAG_DECOR_VIRT_LINES != 0 {
                     1 as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 }) as uint32_t,
             );
-        *meta_inc.offset(kMTMetaSignHL as ::core::ffi::c_int as isize) = (*meta_inc
-            .offset(kMTMetaSignHL as ::core::ffi::c_int as isize))
-            .wrapping_add(
+        *meta_inc.offset(kMTMetaSignHL as ::core::ffi::c_int as isize) =
+            (*meta_inc.offset(kMTMetaSignHL as ::core::ffi::c_int as isize)).wrapping_add(
                 (if (*k).flags as ::core::ffi::c_int & MT_FLAG_DECOR_SIGNHL != 0 {
                     1 as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 }) as uint32_t,
             );
-        *meta_inc.offset(kMTMetaSignText as ::core::ffi::c_int as isize) = (*meta_inc
-            .offset(kMTMetaSignText as ::core::ffi::c_int as isize))
-            .wrapping_add(
+        *meta_inc.offset(kMTMetaSignText as ::core::ffi::c_int as isize) =
+            (*meta_inc.offset(kMTMetaSignText as ::core::ffi::c_int as isize)).wrapping_add(
                 (if (*k).flags as ::core::ffi::c_int & MT_FLAG_DECOR_SIGNTEXT != 0 {
                     1 as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 }) as uint32_t,
             );
-        *meta_inc.offset(kMTMetaConcealLines as ::core::ffi::c_int as isize) = (*meta_inc
-            .offset(kMTMetaConcealLines as ::core::ffi::c_int as isize))
-            .wrapping_add(
+        *meta_inc.offset(kMTMetaConcealLines as ::core::ffi::c_int as isize) =
+            (*meta_inc.offset(kMTMetaConcealLines as ::core::ffi::c_int as isize)).wrapping_add(
                 (if (*k).flags as ::core::ffi::c_int & MT_FLAG_DECOR_CONCEAL_LINES != 0 {
                     1 as ::core::ffi::c_int
                 } else {
@@ -1306,10 +1218,7 @@ unsafe extern "C" fn meta_describe_key(mut meta_inc: *mut uint32_t, mut k: MTKey
     );
     meta_describe_key_inc(meta_inc, &raw mut k);
 }
-unsafe extern "C" fn meta_describe_node(
-    mut meta_node: *mut uint32_t,
-    mut x: *mut MTNode,
-) {
+unsafe extern "C" fn meta_describe_node(mut meta_node: *mut uint32_t, mut x: *mut MTNode) {
     memset(
         meta_node as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -1329,11 +1238,9 @@ unsafe extern "C" fn meta_describe_node(
         while (i_0 as int32_t) < (*x).n + 1 as int32_t {
             let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while m < kMTMetaCount as ::core::ffi::c_int {
-                *meta_node.offset(m as isize) = (*meta_node.offset(m as isize))
-                    .wrapping_add(
-                        (*(&raw mut (*x).s as *mut mtnode_inner_s))
-                            .i_meta[i_0 as usize][m as usize],
-                    );
+                *meta_node.offset(m as isize) = (*meta_node.offset(m as isize)).wrapping_add(
+                    (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta[i_0 as usize][m as usize],
+                );
                 m += 1;
             }
             i_0 += 1;
@@ -1347,10 +1254,8 @@ unsafe extern "C" fn meta_has(
     let mut count: uint32_t = 0 as uint32_t;
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
-        count = count
-            .wrapping_add(
-                *meta_count.offset(m as isize) & *meta_filter.offset(m as isize),
-            );
+        count =
+            count.wrapping_add(*meta_count.offset(m as isize) & *meta_filter.offset(m as isize));
         m += 1;
     }
     return count > 0 as uint32_t;
@@ -1362,22 +1267,16 @@ pub unsafe extern "C" fn marktree_put_key(mut b: *mut MarkTree, mut k: MTKey) {
         (*b).root = marktree_alloc_node(b, true_0 != 0);
     }
     let mut r: *mut MTNode = (*b).root;
-    if (*r).n
-        == 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t
-            - 1 as int32_t
-    {
+    if (*r).n == 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t {
         let mut s: *mut MTNode = marktree_alloc_node(b, true_0 != 0);
         (*b).root = s;
-        (*s).level = ((*r).level as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-            as int16_t;
+        (*s).level = ((*r).level as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as int16_t;
         (*s).n = 0 as ::core::ffi::c_int as int32_t;
-        (*(&raw mut (*s).s as *mut mtnode_inner_s))
-            .i_ptr[0 as ::core::ffi::c_int as usize] = r;
+        (*(&raw mut (*s).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize] = r;
         let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while m < kMTMetaCount as ::core::ffi::c_int {
-            (*(&raw mut (*s).s as *mut mtnode_inner_s))
-                .i_meta[0 as ::core::ffi::c_int as usize][m as usize] = (*b)
-                .meta_root[m as usize];
+            (*(&raw mut (*s).s as *mut mtnode_inner_s)).i_meta[0 as ::core::ffi::c_int as usize]
+                [m as usize] = (*b).meta_root[m as usize];
             m += 1;
         }
         (*r).parent = s;
@@ -1390,9 +1289,8 @@ pub unsafe extern "C" fn marktree_put_key(mut b: *mut MarkTree, mut k: MTKey) {
     marktree_putp_aux(b, r, k, &raw mut meta_inc as *mut uint32_t);
     let mut m_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m_0 < kMTMetaCount as ::core::ffi::c_int {
-        (*b).meta_root[m_0 as usize] = (*b)
-            .meta_root[m_0 as usize]
-            .wrapping_add(meta_inc[m_0 as usize]);
+        (*b).meta_root[m_0 as usize] =
+            (*b).meta_root[m_0 as usize].wrapping_add(meta_inc[m_0 as usize]);
         m_0 += 1;
     }
     (*b).n_keys = (*b).n_keys.wrapping_add(1);
@@ -1418,20 +1316,18 @@ pub unsafe extern "C" fn marktree_del_itr(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_2 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
         }; 1];
         marktree_lookup(b, other, &raw mut other_itr as *mut MarkTreeIter);
-        (*(*(&raw mut other_itr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut other_itr as *mut MarkTreeIter)).i as usize]
-            .flags = ((*(*(&raw mut other_itr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut other_itr as *mut MarkTreeIter)).i as usize]
-            .flags as ::core::ffi::c_int | MT_FLAG_ORPHANED) as uint16_t;
+        (*(*(&raw mut other_itr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut other_itr as *mut MarkTreeIter)).i as usize]
+            .flags = ((*(*(&raw mut other_itr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut other_itr as *mut MarkTreeIter)).i as usize]
+            .flags as ::core::ffi::c_int
+            | MT_FLAG_ORPHANED) as uint16_t;
         if mt_start(raw) {
             let mut this_itr: [MarkTreeIter; 1] = [*itr];
             marktree_intersect_pair(
@@ -1461,14 +1357,15 @@ pub unsafe extern "C" fn marktree_del_itr(
     }
     let mut x: *mut MTNode = (*itr).x;
     '_c2rust_label: {
-        if (*x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int {} else {
+        if (*x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"x->level == 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 577 as ::core::ffi::c_uint,
-                b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -1477,10 +1374,8 @@ pub unsafe extern "C" fn marktree_del_itr(
     meta_describe_key(&raw mut meta_inc as *mut uint32_t, intkey);
     if (*x).n > (*itr).i as int32_t + 1 as int32_t {
         memmove(
-            (&raw mut (*x).key as *mut MTKey).offset((*itr).i as isize)
-                as *mut ::core::ffi::c_void,
-            (&raw mut (*x).key as *mut MTKey)
-                .offset(((*itr).i + 1 as ::core::ffi::c_int) as isize)
+            (&raw mut (*x).key as *mut MTKey).offset((*itr).i as isize) as *mut ::core::ffi::c_void,
+            (&raw mut (*x).key as *mut MTKey).offset(((*itr).i + 1 as ::core::ffi::c_int) as isize)
                 as *const ::core::ffi::c_void,
             ::core::mem::size_of::<MTKey>()
                 .wrapping_mul(((*x).n - (*itr).i as int32_t - 1 as int32_t) as size_t),
@@ -1508,15 +1403,15 @@ pub unsafe extern "C" fn marktree_del_itr(
             }
             let mut i: ::core::ffi::c_int = (*itr).s[ilvl as usize].i;
             '_c2rust_label_0: {
-                if (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize] == lnode
-                {} else {
+                if (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize] == lnode {
+                } else {
                     __assert_fail(
                         b"p->ptr[i] == lnode\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         609 as ::core::ffi::c_uint,
-                        b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -1528,10 +1423,10 @@ pub unsafe extern "C" fn marktree_del_itr(
             }
             if p != cur && start_id != 0 {
                 if intersection_has(
-                    &raw mut (**(&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                        .i_ptr as *mut *mut MTNode)
+                    &raw mut (**(&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr
+                        as *mut *mut MTNode)
                         .offset(0 as ::core::ffi::c_int as isize))
-                        .intersect,
+                    .intersect,
                     start_id,
                 ) {
                     let mut last: ::core::ffi::c_int = if lnode != x {
@@ -1543,8 +1438,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                     while (k as int32_t) < (*p).n + last as int32_t {
                         unintersect_node(
                             b,
-                            (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                                .i_ptr[k as usize],
+                            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[k as usize],
                             start_id,
                             true_0 != 0,
                         );
@@ -1556,10 +1450,9 @@ pub unsafe extern "C" fn marktree_del_itr(
             }
             let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while m < kMTMetaCount as ::core::ffi::c_int {
-                (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                    .i_meta[(*lnode).p_idx as usize][m as usize] = (*(&raw mut (*p).s
-                    as *mut mtnode_inner_s))
-                    .i_meta[(*lnode).p_idx as usize][m as usize]
+                (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[(*lnode).p_idx as usize]
+                    [m as usize] = (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
+                    [(*lnode).p_idx as usize][m as usize]
                     .wrapping_sub(meta_inc[m as usize]);
                 m += 1;
             }
@@ -1581,23 +1474,21 @@ pub unsafe extern "C" fn marktree_del_itr(
             }
         }
         relative(intkey.pos, &raw mut deleted.pos);
-        let mut y: *mut MTNode = (*(&raw mut (*cur).s as *mut mtnode_inner_s))
-            .i_ptr[(curi + 1 as ::core::ffi::c_int) as usize];
+        let mut y: *mut MTNode = (*(&raw mut (*cur).s as *mut mtnode_inner_s)).i_ptr
+            [(curi + 1 as ::core::ffi::c_int) as usize];
         if deleted.pos.row != 0 || deleted.pos.col != 0 {
             while !y.is_null() {
                 let mut k_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while (k_0 as int32_t) < (*y).n {
                     unrelative(
                         deleted.pos,
-                        &raw mut (*(&raw mut (*y).key as *mut MTKey)
-                            .offset(k_0 as isize))
-                            .pos,
+                        &raw mut (*(&raw mut (*y).key as *mut MTKey).offset(k_0 as isize)).pos,
                     );
                     k_0 += 1;
                 }
                 y = if (*y).level as ::core::ffi::c_int != 0 {
-                    (*(&raw mut (*y).s as *mut mtnode_inner_s))
-                        .i_ptr[0 as ::core::ffi::c_int as usize]
+                    (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
+                        [0 as ::core::ffi::c_int as usize]
                 } else {
                     ::core::ptr::null_mut::<MTNode>()
                 };
@@ -1607,15 +1498,14 @@ pub unsafe extern "C" fn marktree_del_itr(
     }
     let mut lnode_0: *mut MTNode = cur;
     while !(*lnode_0).parent.is_null() {
-        let mut meta_p: *mut uint32_t = &raw mut *(&raw mut (*(&raw mut (*(*lnode_0)
-            .parent)
-            .s as *mut mtnode_inner_s))
-            .i_meta as *mut [uint32_t; 5])
-            .offset((*lnode_0).p_idx as isize) as *mut uint32_t;
+        let mut meta_p: *mut uint32_t =
+            &raw mut *(&raw mut (*(&raw mut (*(*lnode_0).parent).s as *mut mtnode_inner_s)).i_meta
+                as *mut [uint32_t; 5])
+                .offset((*lnode_0).p_idx as isize) as *mut uint32_t;
         let mut m_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while m_0 < kMTMetaCount as ::core::ffi::c_int {
-            *meta_p.offset(m_0 as isize) = (*meta_p.offset(m_0 as isize))
-                .wrapping_sub(meta_inc[m_0 as usize]);
+            *meta_p.offset(m_0 as isize) =
+                (*meta_p.offset(m_0 as isize)).wrapping_sub(meta_inc[m_0 as usize]);
             m_0 += 1;
         }
         lnode_0 = (*lnode_0).parent;
@@ -1623,21 +1513,20 @@ pub unsafe extern "C" fn marktree_del_itr(
     let mut m_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m_1 < kMTMetaCount as ::core::ffi::c_int {
         '_c2rust_label_1: {
-            if (*b).meta_root[m_1 as usize] >= meta_inc[m_1 as usize] {} else {
+            if (*b).meta_root[m_1 as usize] >= meta_inc[m_1 as usize] {
+            } else {
                 __assert_fail(
-                    b"b->meta_root[m] >= meta_inc[m]\0".as_ptr()
+                    b"b->meta_root[m] >= meta_inc[m]\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     671 as ::core::ffi::c_uint,
-                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
-        (*b).meta_root[m_1 as usize] = (*b)
-            .meta_root[m_1 as usize]
-            .wrapping_sub(meta_inc[m_1 as usize]);
+        (*b).meta_root[m_1 as usize] =
+            (*b).meta_root[m_1 as usize].wrapping_sub(meta_inc[m_1 as usize]);
         m_1 += 1;
     }
     let mut itr_dirty: bool = false_0 != 0;
@@ -1646,14 +1535,15 @@ pub unsafe extern "C" fn marktree_del_itr(
     let mut ppos: MTPos = (*itr).pos;
     while x != (*b).root {
         '_c2rust_label_2: {
-            if rlvl >= 0 as ::core::ffi::c_int {} else {
+            if rlvl >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"rlvl >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     681 as ::core::ffi::c_uint,
-                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -1663,52 +1553,55 @@ pub unsafe extern "C" fn marktree_del_itr(
         }
         let mut pi_0: ::core::ffi::c_int = (*itr).s[rlvl as usize].i;
         '_c2rust_label_3: {
-            if (*(&raw mut (*p_0).s as *mut mtnode_inner_s)).i_ptr[pi_0 as usize] == x
-            {} else {
+            if (*(&raw mut (*p_0).s as *mut mtnode_inner_s)).i_ptr[pi_0 as usize] == x {
+            } else {
                 __assert_fail(
                     b"p->ptr[pi] == x\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     688 as ::core::ffi::c_uint,
-                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
         if pi_0 > 0 as ::core::ffi::c_int {
-            ppos.row -= (*p_0).key[(pi_0 - 1 as ::core::ffi::c_int) as usize].pos.row;
+            ppos.row -= (*p_0).key[(pi_0 - 1 as ::core::ffi::c_int) as usize]
+                .pos
+                .row;
             ppos.col = (*itr).s[rlvl as usize].oldcol as int32_t;
         }
         if pi_0 > 0 as ::core::ffi::c_int
-            && (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s))
-                .i_ptr[(pi_0 - 1 as ::core::ffi::c_int) as usize])
-                .n > MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
+            && (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s)).i_ptr
+                [(pi_0 - 1 as ::core::ffi::c_int) as usize])
+                .n
+                > MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
         {
             *lasti += 1 as ::core::ffi::c_int;
             itr_dirty = true_0 != 0;
             pivot_right(b, ppos, p_0, pi_0 - 1 as ::core::ffi::c_int);
             break;
         } else if (pi_0 as int32_t) < (*p_0).n
-            && (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s))
-                .i_ptr[(pi_0 + 1 as ::core::ffi::c_int) as usize])
-                .n > MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
+            && (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s)).i_ptr
+                [(pi_0 + 1 as ::core::ffi::c_int) as usize])
+                .n
+                > MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
         {
             pivot_left(b, ppos, p_0, pi_0);
             break;
         } else {
             if pi_0 > 0 as ::core::ffi::c_int {
                 '_c2rust_label_4: {
-                    if (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s))
-                        .i_ptr[(pi_0 - 1 as ::core::ffi::c_int) as usize])
+                    if (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s)).i_ptr
+                        [(pi_0 - 1 as ::core::ffi::c_int) as usize])
                         .n
-                        == MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t
-                            - 1 as int32_t
-                    {} else {
+                        == MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
+                    {
+                    } else {
                         __assert_fail(
-                            b"p->ptr[pi - 1]->n == T - 1\0".as_ptr()
+                            b"p->ptr[pi - 1]->n == T - 1\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
                             706 as ::core::ffi::c_uint,
                             b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -1725,17 +1618,17 @@ pub unsafe extern "C" fn marktree_del_itr(
             } else {
                 '_c2rust_label_5: {
                     if (pi_0 as int32_t) < (*p_0).n
-                        && (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s))
-                            .i_ptr[(pi_0 + 1 as ::core::ffi::c_int) as usize])
+                        && (*(*(&raw mut (*p_0).s as *mut mtnode_inner_s)).i_ptr
+                            [(pi_0 + 1 as ::core::ffi::c_int) as usize])
                             .n
-                            == MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t
-                                - 1 as int32_t
-                    {} else {
+                            == MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
+                    {
+                    } else {
                         __assert_fail(
                             b"pi < p->n && p->ptr[pi + 1]->n == T - 1\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             717 as ::core::ffi::c_uint,
                             b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -1744,9 +1637,8 @@ pub unsafe extern "C" fn marktree_del_itr(
                 };
                 merge_node(b, p_0, pi_0);
             }
-            lasti = &raw mut (*(&raw mut (*itr).s as *mut C2Rust_Unnamed_2)
-                .offset(rlvl as isize))
-                .i;
+            lasti =
+                &raw mut (*(&raw mut (*itr).s as *mut C2Rust_Unnamed_2).offset(rlvl as isize)).i;
             rlvl -= 1;
             x = p_0;
         }
@@ -1765,20 +1657,21 @@ pub unsafe extern "C" fn marktree_del_itr(
         }
         if (*(*b).root).level != 0 {
             let mut oldroot: *mut MTNode = (*b).root;
-            (*b).root = (*(&raw mut (*(*b).root).s as *mut mtnode_inner_s))
-                .i_ptr[0 as ::core::ffi::c_int as usize];
+            (*b).root = (*(&raw mut (*(*b).root).s as *mut mtnode_inner_s)).i_ptr
+                [0 as ::core::ffi::c_int as usize];
             let mut m_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while m_2 < kMTMetaCount as ::core::ffi::c_int {
                 '_c2rust_label_6: {
                     if (*b).meta_root[m_2 as usize]
-                        == (*(&raw mut (*oldroot).s as *mut mtnode_inner_s))
-                            .i_meta[0 as ::core::ffi::c_int as usize][m_2 as usize]
-                    {} else {
+                        == (*(&raw mut (*oldroot).s as *mut mtnode_inner_s)).i_meta
+                            [0 as ::core::ffi::c_int as usize][m_2 as usize]
+                    {
+                    } else {
                         __assert_fail(
                             b"b->meta_root[m] == oldroot->meta[0][m]\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             736 as ::core::ffi::c_uint,
                             b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -1801,15 +1694,15 @@ pub unsafe extern "C" fn marktree_del_itr(
         marktree_itr_next(b, itr);
     } else if !(*itr).x.is_null() && (*itr).i as int32_t >= (*(*itr).x).n {
         '_c2rust_label_7: {
-            if (*(*itr).x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-            {} else {
+            if (*(*itr).x).level as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"itr->x->level == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     767 as ::core::ffi::c_uint,
-                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"uint64_t marktree_del_itr(MarkTree *, MarkTreeIter *, _Bool)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -1840,11 +1733,10 @@ pub unsafe extern "C" fn marktree_revise_meta(
     }
     let mut lnode: *mut MTNode = (*itr).x;
     while !(*lnode).parent.is_null() {
-        let mut meta_p: *mut uint32_t = &raw mut *(&raw mut (*(&raw mut (*(*lnode)
-            .parent)
-            .s as *mut mtnode_inner_s))
-            .i_meta as *mut [uint32_t; 5])
-            .offset((*lnode).p_idx as isize) as *mut uint32_t;
+        let mut meta_p: *mut uint32_t =
+            &raw mut *(&raw mut (*(&raw mut (*(*lnode).parent).s as *mut mtnode_inner_s)).i_meta
+                as *mut [uint32_t; 5])
+                .offset((*lnode).p_idx as isize) as *mut uint32_t;
         let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while m < kMTMetaCount as ::core::ffi::c_int {
             *meta_p.offset(m as isize) = (*meta_p.offset(m as isize))
@@ -1855,8 +1747,7 @@ pub unsafe extern "C" fn marktree_revise_meta(
     }
     let mut m_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m_0 < kMTMetaCount as ::core::ffi::c_int {
-        (*b).meta_root[m_0 as usize] = (*b)
-            .meta_root[m_0 as usize]
+        (*b).meta_root[m_0 as usize] = (*b).meta_root[m_0 as usize]
             .wrapping_add(meta_new[m_0 as usize].wrapping_sub(meta_old[m_0 as usize]));
         m_0 += 1;
     }
@@ -1878,18 +1769,17 @@ unsafe extern "C" fn intersect_merge(
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (*m).capacity << 1 as ::core::ffi::c_int
                 } else {
                     ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as size_t,
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as size_t,
                         )
                 });
                 (*m).items = (if (*m).capacity
@@ -1897,16 +1787,14 @@ unsafe extern "C" fn intersect_merge(
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
                         (*m).items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
-                            &raw mut (*m).init_array as *mut uint64_t
-                                as *mut ::core::ffi::c_void,
+                            &raw mut (*m).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                             (*m).items as *mut ::core::ffi::c_void,
                             (*m).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
@@ -1915,8 +1803,7 @@ unsafe extern "C" fn intersect_merge(
                     (if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
                         memcpy(
                             xmalloc(
-                                (*m)
-                                    .capacity
+                                (*m).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             ),
                             (*m).items as *const ::core::ffi::c_void,
@@ -1925,13 +1812,13 @@ unsafe extern "C" fn intersect_merge(
                     } else {
                         xrealloc(
                             (*m).items as *mut ::core::ffi::c_void,
-                            (*m)
-                                .capacity
+                            (*m).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
                     })
                 }) as *mut uint64_t;
-            } else {};
+            } else {
+            };
             let c2rust_fresh3 = (*m).size;
             (*m).size = (*m).size.wrapping_add(1);
             *(*m).items.offset(c2rust_fresh3 as isize) = *(*x).items.offset(xi as isize);
@@ -1942,17 +1829,13 @@ unsafe extern "C" fn intersect_merge(
             xi = xi.wrapping_add(1);
             let c2rust_fresh5 = xn;
             xn = xn.wrapping_add(1);
-            *(*x).items.offset(c2rust_fresh5 as isize) = *(*x)
-                .items
-                .offset(c2rust_fresh4 as isize);
+            *(*x).items.offset(c2rust_fresh5 as isize) = *(*x).items.offset(c2rust_fresh4 as isize);
         } else {
             let c2rust_fresh6 = yi;
             yi = yi.wrapping_add(1);
             let c2rust_fresh7 = yn;
             yn = yn.wrapping_add(1);
-            *(*y).items.offset(c2rust_fresh7 as isize) = *(*y)
-                .items
-                .offset(c2rust_fresh6 as isize);
+            *(*y).items.offset(c2rust_fresh7 as isize) = *(*y).items.offset(c2rust_fresh6 as isize);
         }
     }
     if xi < (*x).size {
@@ -1990,8 +1873,7 @@ unsafe extern "C" fn intersect_mov(
             && (xi >= (*x).size
                 || *(*x).items.offset(xi as isize) >= *(*w).items.offset(wi as isize))
         {
-            if xi < (*x).size
-                && *(*x).items.offset(xi as isize) == *(*w).items.offset(wi as isize)
+            if xi < (*x).size && *(*x).items.offset(xi as isize) == *(*w).items.offset(wi as isize)
             {
                 xi = xi.wrapping_add(1);
             }
@@ -2004,18 +1886,19 @@ unsafe extern "C" fn intersect_mov(
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
+                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
                         (*d).capacity << 1 as ::core::ffi::c_int
                     } else {
                         ::core::mem::size_of::<[uint64_t; 4]>()
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                    as ::core::ffi::c_int as size_t,
+                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                    == 0) as ::core::ffi::c_int
+                                    as size_t,
                             )
                     });
                     (*d).items = (if (*d).capacity
@@ -2023,10 +1906,10 @@ unsafe extern "C" fn intersect_mov(
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
+                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
                         (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             (*d).items as *mut ::core::ffi::c_void
                         } else {
@@ -2041,8 +1924,7 @@ unsafe extern "C" fn intersect_mov(
                         (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             memcpy(
                                 xmalloc(
-                                    (*d)
-                                        .capacity
+                                    (*d).capacity
                                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                                 ),
                                 (*d).items as *const ::core::ffi::c_void,
@@ -2051,39 +1933,34 @@ unsafe extern "C" fn intersect_mov(
                         } else {
                             xrealloc(
                                 (*d).items as *mut ::core::ffi::c_void,
-                                (*d)
-                                    .capacity
+                                (*d).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             )
                         })
                     }) as *mut uint64_t;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh8 = (*d).size;
                 (*d).size = (*d).size.wrapping_add(1);
-                *(*d).items.offset(c2rust_fresh8 as isize) = *(*y)
-                    .items
-                    .offset(yi as isize);
+                *(*d).items.offset(c2rust_fresh8 as isize) = *(*y).items.offset(yi as isize);
                 yi = yi.wrapping_add(1);
             }
-            if yi < (*y).size
-                && *(*y).items.offset(yi as isize) == *(*w).items.offset(wi as isize)
+            if yi < (*y).size && *(*y).items.offset(yi as isize) == *(*w).items.offset(wi as isize)
             {
                 let c2rust_fresh9 = yi;
                 yi = yi.wrapping_add(1);
                 let c2rust_fresh10 = yn;
                 yn = yn.wrapping_add(1);
-                *(*y).items.offset(c2rust_fresh10 as isize) = *(*y)
-                    .items
-                    .offset(c2rust_fresh9 as isize);
+                *(*y).items.offset(c2rust_fresh10 as isize) =
+                    *(*y).items.offset(c2rust_fresh9 as isize);
                 wi = wi.wrapping_add(1);
             } else {
                 let c2rust_fresh11 = wi;
                 wi = wi.wrapping_add(1);
                 let c2rust_fresh12 = wn;
                 wn = wn.wrapping_add(1);
-                *(*w).items.offset(c2rust_fresh12 as isize) = *(*w)
-                    .items
-                    .offset(c2rust_fresh11 as isize);
+                *(*w).items.offset(c2rust_fresh12 as isize) =
+                    *(*w).items.offset(c2rust_fresh11 as isize);
             }
         } else {
             while yi < (*y).size
@@ -2095,18 +1972,19 @@ unsafe extern "C" fn intersect_mov(
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
+                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
                         (*d).capacity << 1 as ::core::ffi::c_int
                     } else {
                         ::core::mem::size_of::<[uint64_t; 4]>()
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                    as ::core::ffi::c_int as size_t,
+                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                    == 0) as ::core::ffi::c_int
+                                    as size_t,
                             )
                     });
                     (*d).items = (if (*d).capacity
@@ -2114,10 +1992,10 @@ unsafe extern "C" fn intersect_mov(
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
+                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
                         (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             (*d).items as *mut ::core::ffi::c_void
                         } else {
@@ -2132,8 +2010,7 @@ unsafe extern "C" fn intersect_mov(
                         (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             memcpy(
                                 xmalloc(
-                                    (*d)
-                                        .capacity
+                                    (*d).capacity
                                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                                 ),
                                 (*d).items as *const ::core::ffi::c_void,
@@ -2142,30 +2019,26 @@ unsafe extern "C" fn intersect_mov(
                         } else {
                             xrealloc(
                                 (*d).items as *mut ::core::ffi::c_void,
-                                (*d)
-                                    .capacity
+                                (*d).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             )
                         })
                     }) as *mut uint64_t;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh13 = (*d).size;
                 (*d).size = (*d).size.wrapping_add(1);
-                *(*d).items.offset(c2rust_fresh13 as isize) = *(*y)
-                    .items
-                    .offset(yi as isize);
+                *(*d).items.offset(c2rust_fresh13 as isize) = *(*y).items.offset(yi as isize);
                 yi = yi.wrapping_add(1);
             }
-            if yi < (*y).size
-                && *(*y).items.offset(yi as isize) == *(*x).items.offset(xi as isize)
+            if yi < (*y).size && *(*y).items.offset(yi as isize) == *(*x).items.offset(xi as isize)
             {
                 let c2rust_fresh14 = yi;
                 yi = yi.wrapping_add(1);
                 let c2rust_fresh15 = yn;
                 yn = yn.wrapping_add(1);
-                *(*y).items.offset(c2rust_fresh15 as isize) = *(*y)
-                    .items
-                    .offset(c2rust_fresh14 as isize);
+                *(*y).items.offset(c2rust_fresh15 as isize) =
+                    *(*y).items.offset(c2rust_fresh14 as isize);
                 xi = xi.wrapping_add(1);
             } else {
                 if wi == wn {
@@ -2176,18 +2049,21 @@ unsafe extern "C" fn intersect_mov(
                                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[uint64_t; 4]>()
-                                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                        as ::core::ffi::c_int as usize,
-                                )
-                        {
+                                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as usize,
+                                ) {
                             (*w).capacity << 1 as ::core::ffi::c_int
                         } else {
                             ::core::mem::size_of::<[uint64_t; 4]>()
                                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[uint64_t; 4]>()
-                                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                        as ::core::ffi::c_int as size_t,
+                                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as size_t,
                                 )
                         });
                         (*w).items = (if (*w).capacity
@@ -2195,10 +2071,11 @@ unsafe extern "C" fn intersect_mov(
                                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[uint64_t; 4]>()
-                                        .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                        as ::core::ffi::c_int as usize,
-                                )
-                        {
+                                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as usize,
+                                ) {
                             (if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
                                 (*w).items as *mut ::core::ffi::c_void
                             } else {
@@ -2213,8 +2090,7 @@ unsafe extern "C" fn intersect_mov(
                             (if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
                                 memcpy(
                                     xmalloc(
-                                        (*w)
-                                            .capacity
+                                        (*w).capacity
                                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                                     ),
                                     (*w).items as *const ::core::ffi::c_void,
@@ -2223,13 +2099,13 @@ unsafe extern "C" fn intersect_mov(
                             } else {
                                 xrealloc(
                                     (*w).items as *mut ::core::ffi::c_void,
-                                    (*w)
-                                        .capacity
+                                    (*w).capacity
                                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                                 )
                             })
                         }) as *mut uint64_t;
-                    } else {};
+                    } else {
+                    };
                     *w;
                     (*w).size = (*w).size.wrapping_add(1);
                     if n > 0 as size_t {
@@ -2245,7 +2121,8 @@ unsafe extern "C" fn intersect_mov(
                     wi = wi.wrapping_add(1);
                 } else {
                     '_c2rust_label: {
-                        if wn < wi {} else {
+                        if wn < wi {
+                        } else {
                             __assert_fail(
                                 b"wn < wi\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
@@ -2258,9 +2135,7 @@ unsafe extern "C" fn intersect_mov(
                     };
                     let c2rust_fresh16 = wn;
                     wn = wn.wrapping_add(1);
-                    *(*w).items.offset(c2rust_fresh16 as isize) = *(*x)
-                        .items
-                        .offset(xi as isize);
+                    *(*w).items.offset(c2rust_fresh16 as isize) = *(*x).items.offset(xi as isize);
                 }
                 xi = xi.wrapping_add(1);
             }
@@ -2282,18 +2157,17 @@ unsafe extern "C" fn intersect_mov(
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*d).capacity
             } else {
                 ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*d).items = (if (*d).capacity
@@ -2301,16 +2175,14 @@ unsafe extern "C" fn intersect_mov(
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                     (*d).items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
-                        &raw mut (*d).init_array as *mut uint64_t
-                            as *mut ::core::ffi::c_void,
+                        &raw mut (*d).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                         (*d).items as *mut ::core::ffi::c_void,
                         (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
@@ -2319,8 +2191,7 @@ unsafe extern "C" fn intersect_mov(
                 (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(
-                            (*d)
-                                .capacity
+                            (*d).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         ),
                         (*d).items as *const ::core::ffi::c_void,
@@ -2329,7 +2200,8 @@ unsafe extern "C" fn intersect_mov(
                 } else {
                     xrealloc(
                         (*d).items as *mut ::core::ffi::c_void,
-                        (*d).capacity.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                        (*d).capacity
+                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
                 })
             }) as *mut uint64_t;
@@ -2379,8 +2251,8 @@ pub unsafe extern "C" fn intersect_mov_test(
         .wrapping_div(::core::mem::size_of::<uint64_t>())
         .wrapping_div(
             (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     w.size = 0 as size_t;
     w.items = &raw mut w.init_array as *mut uint64_t;
@@ -2392,18 +2264,17 @@ pub unsafe extern "C" fn intersect_mov_test(
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 w.capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             w.items = (if w.capacity
@@ -2411,16 +2282,14 @@ pub unsafe extern "C" fn intersect_mov_test(
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if w.items == &raw mut w.init_array as *mut uint64_t {
                     w.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
-                        &raw mut w.init_array as *mut uint64_t
-                            as *mut ::core::ffi::c_void,
+                        &raw mut w.init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                         w.items as *mut ::core::ffi::c_void,
                         w.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
@@ -2428,9 +2297,7 @@ pub unsafe extern "C" fn intersect_mov_test(
             } else {
                 (if w.items == &raw mut w.init_array as *mut uint64_t {
                     memcpy(
-                        xmalloc(
-                            w.capacity.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        ),
+                        xmalloc(w.capacity.wrapping_mul(::core::mem::size_of::<uint64_t>())),
                         w.items as *const ::core::ffi::c_void,
                         w.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
@@ -2441,7 +2308,8 @@ pub unsafe extern "C" fn intersect_mov_test(
                     )
                 })
             }) as *mut uint64_t;
-        } else {};
+        } else {
+        };
         let c2rust_fresh17 = w.size;
         w.size = w.size.wrapping_add(1);
         *w.items.offset(c2rust_fresh17 as isize) = *win.offset(i as isize);
@@ -2457,8 +2325,8 @@ pub unsafe extern "C" fn intersect_mov_test(
         .wrapping_div(::core::mem::size_of::<uint64_t>())
         .wrapping_div(
             (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     d.size = 0 as size_t;
     d.items = &raw mut d.init_array as *mut uint64_t;
@@ -2495,18 +2363,17 @@ unsafe extern "C" fn intersect_common(
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (*i).capacity << 1 as ::core::ffi::c_int
                 } else {
                     ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as size_t,
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as size_t,
                         )
                 });
                 (*i).items = (if (*i).capacity
@@ -2514,16 +2381,14 @@ unsafe extern "C" fn intersect_common(
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
                         (*i).items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
-                            &raw mut (*i).init_array as *mut uint64_t
-                                as *mut ::core::ffi::c_void,
+                            &raw mut (*i).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                             (*i).items as *mut ::core::ffi::c_void,
                             (*i).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
@@ -2532,8 +2397,7 @@ unsafe extern "C" fn intersect_common(
                     (if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
                         memcpy(
                             xmalloc(
-                                (*i)
-                                    .capacity
+                                (*i).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             ),
                             (*i).items as *const ::core::ffi::c_void,
@@ -2542,13 +2406,13 @@ unsafe extern "C" fn intersect_common(
                     } else {
                         xrealloc(
                             (*i).items as *mut ::core::ffi::c_void,
-                            (*i)
-                                .capacity
+                            (*i).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
                     })
                 }) as *mut uint64_t;
-            } else {};
+            } else {
+            };
             let c2rust_fresh2 = (*i).size;
             (*i).size = (*i).size.wrapping_add(1);
             *(*i).items.offset(c2rust_fresh2 as isize) = *(*x).items.offset(xi as isize);
@@ -2576,18 +2440,17 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (*x).capacity << 1 as ::core::ffi::c_int
                 } else {
                     ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as size_t,
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as size_t,
                         )
                 });
                 (*x).items = (if (*x).capacity
@@ -2595,16 +2458,14 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
                             (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                                as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                         (*x).items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
-                            &raw mut (*x).init_array as *mut uint64_t
-                                as *mut ::core::ffi::c_void,
+                            &raw mut (*x).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                             (*x).items as *mut ::core::ffi::c_void,
                             (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
@@ -2613,8 +2474,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                     (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                         memcpy(
                             xmalloc(
-                                (*x)
-                                    .capacity
+                                (*x).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             ),
                             (*x).items as *const ::core::ffi::c_void,
@@ -2623,13 +2483,13 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                     } else {
                         xrealloc(
                             (*x).items as *mut ::core::ffi::c_void,
-                            (*x)
-                                .capacity
+                            (*x).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
                     })
                 }) as *mut uint64_t;
-            } else {};
+            } else {
+            };
             *x;
             (*x).size = (*x).size.wrapping_add(1);
             memmove(
@@ -2661,18 +2521,17 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*x).capacity
             } else {
                 ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*x).items = (if (*x).capacity
@@ -2680,16 +2539,14 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                     (*x).items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
-                        &raw mut (*x).init_array as *mut uint64_t
-                            as *mut ::core::ffi::c_void,
+                        &raw mut (*x).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
                         (*x).items as *mut ::core::ffi::c_void,
                         (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
@@ -2698,8 +2555,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                 (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(
-                            (*x)
-                                .capacity
+                            (*x).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         ),
                         (*x).items as *const ::core::ffi::c_void,
@@ -2708,7 +2564,8 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                 } else {
                     xrealloc(
                         (*x).items as *mut ::core::ffi::c_void,
-                        (*x).capacity.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                        (*x).capacity
+                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
                 })
             }) as *mut uint64_t;
@@ -2734,9 +2591,7 @@ unsafe extern "C" fn intersect_sub(mut x: *mut Intersection, mut y: *mut Interse
             xi = xi.wrapping_add(1);
             let c2rust_fresh1 = xn;
             xn = xn.wrapping_add(1);
-            *(*x).items.offset(c2rust_fresh1 as isize) = *(*x)
-                .items
-                .offset(c2rust_fresh0 as isize);
+            *(*x).items.offset(c2rust_fresh1 as isize) = *(*x).items.offset(c2rust_fresh0 as isize);
         } else {
             yi = yi.wrapping_add(1);
         }
@@ -2765,8 +2620,8 @@ unsafe extern "C" fn bubble_up(mut x: *mut MTNode) {
         .wrapping_div(::core::mem::size_of::<uint64_t>())
         .wrapping_div(
             (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     xi.size = 0 as size_t;
     xi.items = &raw mut xi.init_array as *mut uint64_t;
@@ -2775,11 +2630,11 @@ unsafe extern "C" fn bubble_up(mut x: *mut MTNode) {
         &raw mut (**(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr
             as *mut *mut MTNode)
             .offset(0 as ::core::ffi::c_int as isize))
-            .intersect,
+        .intersect,
         &raw mut (**(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr
             as *mut *mut MTNode)
             .offset((*x).n as isize))
-            .intersect,
+        .intersect,
     );
     if xi.size != 0 {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2788,7 +2643,7 @@ unsafe extern "C" fn bubble_up(mut x: *mut MTNode) {
                 &raw mut (**(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr
                     as *mut *mut MTNode)
                     .offset(i as isize))
-                    .intersect,
+                .intersect,
                 &raw mut xi,
             );
             i += 1;
@@ -2796,8 +2651,8 @@ unsafe extern "C" fn bubble_up(mut x: *mut MTNode) {
         intersect_add(&raw mut (*x).intersect, &raw mut xi);
     }
     if xi.items != &raw mut xi.init_array as *mut uint64_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut xi.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut xi.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -2808,10 +2663,9 @@ unsafe extern "C" fn merge_node(
     mut p: *mut MTNode,
     mut i: ::core::ffi::c_int,
 ) -> *mut MTNode {
-    let mut x: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s))
-        .i_ptr[i as usize];
-    let mut y: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s))
-        .i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
+    let mut x: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize];
+    let mut y: *mut MTNode =
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
     let mut mi: Intersection = Intersection {
         size: 0,
         capacity: 0,
@@ -2822,12 +2676,16 @@ unsafe extern "C" fn merge_node(
         .wrapping_div(::core::mem::size_of::<uint64_t>())
         .wrapping_div(
             (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     mi.size = 0 as size_t;
     mi.items = &raw mut mi.init_array as *mut uint64_t;
-    intersect_merge(&raw mut mi, &raw mut (*x).intersect, &raw mut (*y).intersect);
+    intersect_merge(
+        &raw mut mi,
+        &raw mut (*x).intersect,
+        &raw mut (*y).intersect,
+    );
     (*x).key[(*x).n as usize] = (*p).key[i as usize];
     refkey(b, x, (*x).n as ::core::ffi::c_int);
     if i > 0 as ::core::ffi::c_int {
@@ -2837,7 +2695,10 @@ unsafe extern "C" fn merge_node(
         );
     }
     let mut meta_inc: [uint32_t; 5] = [0; 5];
-    meta_describe_key(&raw mut meta_inc as *mut uint32_t, (*x).key[(*x).n as usize]);
+    meta_describe_key(
+        &raw mut meta_inc as *mut uint32_t,
+        (*x).key[(*x).n as usize],
+    );
     memmove(
         (&raw mut (*x).key as *mut MTKey).offset(((*x).n + 1 as int32_t) as isize)
             as *mut ::core::ffi::c_void,
@@ -2846,32 +2707,34 @@ unsafe extern "C" fn merge_node(
     );
     let mut k: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while (k as int32_t) < (*y).n {
-        refkey(b, x, (*x).n as ::core::ffi::c_int + 1 as ::core::ffi::c_int + k);
+        refkey(
+            b,
+            x,
+            (*x).n as ::core::ffi::c_int + 1 as ::core::ffi::c_int + k,
+        );
         unrelative(
             (*x).key[(*x).n as usize].pos,
             &raw mut (*(&raw mut (*x).key as *mut MTKey)
                 .offset(((*x).n + 1 as int32_t + k as int32_t) as isize))
-                .pos,
+            .pos,
         );
         k += 1;
     }
     if (*x).level != 0 {
         memmove(
-            (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode)
+            (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
                 .offset(((*x).n + 1 as int32_t) as isize) as *mut ::core::ffi::c_void,
-            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode as *const ::core::ffi::c_void,
+            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode
+                as *const ::core::ffi::c_void,
             ((*y).n as size_t)
                 .wrapping_add(1 as size_t)
                 .wrapping_mul(::core::mem::size_of::<*mut MTNode>()),
         );
         memmove(
-            (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5])
+            (&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
                 .offset(((*x).n + 1 as int32_t) as isize) as *mut ::core::ffi::c_void,
-            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5] as *const ::core::ffi::c_void,
+            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5]
+                as *const ::core::ffi::c_void,
             ((*y).n as size_t)
                 .wrapping_add(1 as size_t)
                 .wrapping_mul(::core::mem::size_of::<[uint32_t; 5]>()),
@@ -2891,11 +2754,11 @@ unsafe extern "C" fn merge_node(
         }
         let mut ky: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (ky as int32_t) < (*y).n + 1 as int32_t {
-            let mut k_1: ::core::ffi::c_int = (*x).n as ::core::ffi::c_int + ky
-                + 1 as ::core::ffi::c_int;
+            let mut k_1: ::core::ffi::c_int =
+                (*x).n as ::core::ffi::c_int + ky + 1 as ::core::ffi::c_int;
             (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[k_1 as usize]).parent = x;
-            (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[k_1 as usize]).p_idx = k_1
-                as int16_t;
+            (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[k_1 as usize]).p_idx =
+                k_1 as int16_t;
             let mut idx_0: size_t = 0 as size_t;
             while idx_0 < (*y).intersect.size {
                 intersect_node(
@@ -2908,18 +2771,17 @@ unsafe extern "C" fn merge_node(
             ky += 1;
         }
     }
-    (*x).n = ((*x).n as ::core::ffi::c_int
-        + ((*y).n + 1 as int32_t) as ::core::ffi::c_int) as int32_t;
+    (*x).n =
+        ((*x).n as ::core::ffi::c_int + ((*y).n + 1 as int32_t) as ::core::ffi::c_int) as int32_t;
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
-        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] = (*(&raw mut (*p)
-            .s as *mut mtnode_inner_s))
-            .i_meta[i as usize][m as usize]
-            .wrapping_add(
-                (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                    .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m as usize]
-                    .wrapping_add(meta_inc[m as usize]),
-            );
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] =
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize]
+                .wrapping_add(
+                    (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
+                        [(i + 1 as ::core::ffi::c_int) as usize][m as usize]
+                        .wrapping_add(meta_inc[m as usize]),
+                );
         m += 1;
     }
     memmove(
@@ -2933,33 +2795,28 @@ unsafe extern "C" fn merge_node(
         (&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
             .offset((i + 1 as ::core::ffi::c_int) as isize) as *mut ::core::ffi::c_void,
         (&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
-            .offset((i + 2 as ::core::ffi::c_int) as isize)
-            as *const ::core::ffi::c_void,
+            .offset((i + 2 as ::core::ffi::c_int) as isize) as *const ::core::ffi::c_void,
         (((*p).n - i as int32_t - 1 as int32_t) as size_t)
             .wrapping_mul(::core::mem::size_of::<*mut MTKey>()),
     );
     memmove(
-        (&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
-            as *mut [uint32_t; 5])
+        (&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
             .offset((i + 1 as ::core::ffi::c_int) as isize) as *mut ::core::ffi::c_void,
-        (&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
-            as *mut [uint32_t; 5])
-            .offset((i + 2 as ::core::ffi::c_int) as isize)
-            as *const ::core::ffi::c_void,
+        (&raw mut (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
+            .offset((i + 2 as ::core::ffi::c_int) as isize) as *const ::core::ffi::c_void,
         (((*p).n - i as int32_t - 1 as int32_t) as size_t)
             .wrapping_mul(::core::mem::size_of::<[uint32_t; 5]>()),
     );
     let mut j: ::core::ffi::c_int = i + 1 as ::core::ffi::c_int;
     while (j as int32_t) < (*p).n {
-        (*(*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[j as usize]).p_idx = j
-            as int16_t;
+        (*(*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[j as usize]).p_idx = j as int16_t;
         j += 1;
     }
     (*p).n -= 1;
     marktree_free_node(b, y);
     if (*x).intersect.items != &raw mut (*x).intersect.init_array as *mut uint64_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*x).intersect.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*x).intersect.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -2968,10 +2825,7 @@ unsafe extern "C" fn merge_node(
     return x;
 }
 #[no_mangle]
-pub unsafe extern "C" fn kvi_move(
-    mut dest: *mut Intersection,
-    mut src: *mut Intersection,
-) {
+pub unsafe extern "C" fn kvi_move(mut dest: *mut Intersection, mut src: *mut Intersection) {
     (*dest).size = (*src).size;
     (*dest).capacity = (*src).capacity;
     if (*src).items == &raw mut (*src).init_array as *mut uint64_t {
@@ -2991,10 +2845,9 @@ unsafe extern "C" fn pivot_right(
     mut p: *mut MTNode,
     i: ::core::ffi::c_int,
 ) {
-    let mut x: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s))
-        .i_ptr[i as usize];
-    let mut y: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s))
-        .i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
+    let mut x: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize];
+    let mut y: *mut MTNode =
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
     memmove(
         (&raw mut (*y).key as *mut MTKey).offset(1 as ::core::ffi::c_int as isize)
             as *mut ::core::ffi::c_void,
@@ -3003,29 +2856,26 @@ unsafe extern "C" fn pivot_right(
     );
     if (*y).level != 0 {
         memmove(
-            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode)
+            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
                 .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode as *const ::core::ffi::c_void,
+            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode
+                as *const ::core::ffi::c_void,
             ((*y).n as size_t)
                 .wrapping_add(1 as size_t)
                 .wrapping_mul(::core::mem::size_of::<*mut MTNode>()),
         );
         memmove(
-            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5])
+            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
                 .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5] as *const ::core::ffi::c_void,
+            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5]
+                as *const ::core::ffi::c_void,
             ((*y).n as size_t)
                 .wrapping_add(1 as size_t)
                 .wrapping_mul(::core::mem::size_of::<[uint32_t; 5]>()),
         );
         let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
         while (j as int32_t) < (*y).n + 2 as int32_t {
-            (*(*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[j as usize]).p_idx = j
-                as int16_t;
+            (*(*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[j as usize]).p_idx = j as int16_t;
             j += 1;
         }
     }
@@ -3042,22 +2892,19 @@ unsafe extern "C" fn pivot_right(
     meta_describe_key(&raw mut meta_inc_x as *mut uint32_t, (*p).key[i as usize]);
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
-        (*(&raw mut (*p).s as *mut mtnode_inner_s))
-            .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m as usize] = (*(&raw mut (*p)
-            .s as *mut mtnode_inner_s))
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
+            [(i + 1 as ::core::ffi::c_int) as usize][m as usize] = (*(&raw mut (*p).s
+            as *mut mtnode_inner_s))
             .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m as usize]
             .wrapping_add(meta_inc_y[m as usize]);
-        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] = (*(&raw mut (*p)
-            .s as *mut mtnode_inner_s))
-            .i_meta[i as usize][m as usize]
-            .wrapping_sub(meta_inc_x[m as usize]);
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] =
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize]
+                .wrapping_sub(meta_inc_x[m as usize]);
         m += 1;
     }
     if (*x).level != 0 {
-        (*(&raw mut (*y).s as *mut mtnode_inner_s))
-            .i_ptr[0 as ::core::ffi::c_int as usize] = (*(&raw mut (*x).s
-            as *mut mtnode_inner_s))
-            .i_ptr[(*x).n as usize];
+        (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize] =
+            (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[(*x).n as usize];
         memcpy(
             &raw mut *(&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
                 as *mut [uint32_t; 5])
@@ -3070,29 +2917,25 @@ unsafe extern "C" fn pivot_right(
         );
         let mut m_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while m_0 < kMTMetaCount as ::core::ffi::c_int {
-            (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m_0 as usize] = (*(&raw mut (*p)
-                .s as *mut mtnode_inner_s))
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
+                [(i + 1 as ::core::ffi::c_int) as usize][m_0 as usize] = (*(&raw mut (*p).s
+                as *mut mtnode_inner_s))
                 .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m_0 as usize]
                 .wrapping_add(
-                    (*(&raw mut (*y).s as *mut mtnode_inner_s))
-                        .i_meta[0 as ::core::ffi::c_int as usize][m_0 as usize],
+                    (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
+                        [0 as ::core::ffi::c_int as usize][m_0 as usize],
                 );
-            (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                .i_meta[i as usize][m_0 as usize] = (*(&raw mut (*p).s
-                as *mut mtnode_inner_s))
-                .i_meta[i as usize][m_0 as usize]
-                .wrapping_sub(
-                    (*(&raw mut (*y).s as *mut mtnode_inner_s))
-                        .i_meta[0 as ::core::ffi::c_int as usize][m_0 as usize],
-                );
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m_0 as usize] =
+                (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m_0 as usize]
+                    .wrapping_sub(
+                        (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
+                            [0 as ::core::ffi::c_int as usize][m_0 as usize],
+                    );
             m_0 += 1;
         }
-        (*(*(&raw mut (*y).s as *mut mtnode_inner_s))
-            .i_ptr[0 as ::core::ffi::c_int as usize])
+        (*(*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize])
             .parent = y;
-        (*(*(&raw mut (*y).s as *mut mtnode_inner_s))
-            .i_ptr[0 as ::core::ffi::c_int as usize])
+        (*(*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize])
             .p_idx = 0 as int16_t;
     }
     (*x).n -= 1;
@@ -3105,9 +2948,7 @@ unsafe extern "C" fn pivot_right(
     }
     relative(
         (*p).key[i as usize].pos,
-        &raw mut (*(&raw mut (*y).key as *mut MTKey)
-            .offset(0 as ::core::ffi::c_int as isize))
-            .pos,
+        &raw mut (*(&raw mut (*y).key as *mut MTKey).offset(0 as ::core::ffi::c_int as isize)).pos,
     );
     let mut k: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while (k as int32_t) < (*y).n {
@@ -3128,8 +2969,8 @@ unsafe extern "C" fn pivot_right(
             .wrapping_div(::core::mem::size_of::<uint64_t>())
             .wrapping_div(
                 (::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                    == 0) as ::core::ffi::c_int as usize,
             ) as size_t;
         d.size = 0 as size_t;
         d.items = &raw mut d.init_array as *mut uint64_t;
@@ -3139,25 +2980,25 @@ unsafe extern "C" fn pivot_right(
             &raw mut (**(&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
                 as *mut *mut MTNode)
                 .offset(0 as ::core::ffi::c_int as isize))
-                .intersect,
+            .intersect,
             &raw mut d,
         );
         if d.size != 0 {
             let mut yi: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             while (yi as int32_t) < (*y).n + 1 as int32_t {
                 intersect_add(
-                    &raw mut (**(&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s))
-                        .i_ptr as *mut *mut MTNode)
+                    &raw mut (**(&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
+                        as *mut *mut MTNode)
                         .offset(yi as isize))
-                        .intersect,
+                    .intersect,
                     &raw mut d,
                 );
                 yi += 1;
             }
         }
         if d.items != &raw mut d.init_array as *mut uint64_t {
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut d.items
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut d.items as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
@@ -3166,10 +3007,7 @@ unsafe extern "C" fn pivot_right(
     } else {
         if mt_end((*p).key[i as usize]) {
             let mut pi: uint64_t = pseudo_index(x, 0 as ::core::ffi::c_int);
-            let mut start_id: uint64_t = mt_lookup_key_side(
-                (*p).key[i as usize],
-                false_0 != 0,
-            );
+            let mut start_id: uint64_t = mt_lookup_key_side((*p).key[i as usize], false_0 != 0);
             let mut pi_start: uint64_t = pseudo_index_for_id(b, start_id, true_0 != 0);
             if pi_start > 0 as uint64_t && pi_start < pi {
                 intersect_node(b, x, start_id);
@@ -3191,10 +3029,9 @@ unsafe extern "C" fn pivot_left(
     mut p: *mut MTNode,
     mut i: ::core::ffi::c_int,
 ) {
-    let mut x: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s))
-        .i_ptr[i as usize];
-    let mut y: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s))
-        .i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
+    let mut x: *mut MTNode = (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize];
+    let mut y: *mut MTNode =
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
     let mut k: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while (k as int32_t) < (*y).n {
         relative(
@@ -3205,9 +3042,7 @@ unsafe extern "C" fn pivot_left(
     }
     unrelative(
         (*p).key[i as usize].pos,
-        &raw mut (*(&raw mut (*y).key as *mut MTKey)
-            .offset(0 as ::core::ffi::c_int as isize))
-            .pos,
+        &raw mut (*(&raw mut (*y).key as *mut MTKey).offset(0 as ::core::ffi::c_int as isize)).pos,
     );
     if i > 0 as ::core::ffi::c_int {
         relative(
@@ -3220,27 +3055,27 @@ unsafe extern "C" fn pivot_left(
     (*p).key[i as usize] = (*y).key[0 as ::core::ffi::c_int as usize];
     refkey(b, p, i);
     let mut meta_inc_x: [uint32_t; 5] = [0; 5];
-    meta_describe_key(&raw mut meta_inc_x as *mut uint32_t, (*x).key[(*x).n as usize]);
+    meta_describe_key(
+        &raw mut meta_inc_x as *mut uint32_t,
+        (*x).key[(*x).n as usize],
+    );
     let mut meta_inc_y: [uint32_t; 5] = [0; 5];
     meta_describe_key(&raw mut meta_inc_y as *mut uint32_t, (*p).key[i as usize]);
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
-        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] = (*(&raw mut (*p)
-            .s as *mut mtnode_inner_s))
-            .i_meta[i as usize][m as usize]
-            .wrapping_add(meta_inc_x[m as usize]);
-        (*(&raw mut (*p).s as *mut mtnode_inner_s))
-            .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m as usize] = (*(&raw mut (*p)
-            .s as *mut mtnode_inner_s))
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize] =
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m as usize]
+                .wrapping_add(meta_inc_x[m as usize]);
+        (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
+            [(i + 1 as ::core::ffi::c_int) as usize][m as usize] = (*(&raw mut (*p).s
+            as *mut mtnode_inner_s))
             .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m as usize]
             .wrapping_sub(meta_inc_y[m as usize]);
         m += 1;
     }
     if (*x).level != 0 {
-        (*(&raw mut (*x).s as *mut mtnode_inner_s))
-            .i_ptr[((*x).n + 1 as int32_t) as usize] = (*(&raw mut (*y).s
-            as *mut mtnode_inner_s))
-            .i_ptr[0 as ::core::ffi::c_int as usize];
+        (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[((*x).n + 1 as int32_t) as usize] =
+            (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize];
         memcpy(
             &raw mut *(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
                 as *mut [uint32_t; 5])
@@ -3254,29 +3089,25 @@ unsafe extern "C" fn pivot_left(
         );
         let mut m_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while m_0 < kMTMetaCount as ::core::ffi::c_int {
-            (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m_0 as usize] = (*(&raw mut (*p)
-                .s as *mut mtnode_inner_s))
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta
+                [(i + 1 as ::core::ffi::c_int) as usize][m_0 as usize] = (*(&raw mut (*p).s
+                as *mut mtnode_inner_s))
                 .i_meta[(i + 1 as ::core::ffi::c_int) as usize][m_0 as usize]
                 .wrapping_sub(
-                    (*(&raw mut (*y).s as *mut mtnode_inner_s))
-                        .i_meta[0 as ::core::ffi::c_int as usize][m_0 as usize],
+                    (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
+                        [0 as ::core::ffi::c_int as usize][m_0 as usize],
                 );
-            (*(&raw mut (*p).s as *mut mtnode_inner_s))
-                .i_meta[i as usize][m_0 as usize] = (*(&raw mut (*p).s
-                as *mut mtnode_inner_s))
-                .i_meta[i as usize][m_0 as usize]
-                .wrapping_add(
-                    (*(&raw mut (*y).s as *mut mtnode_inner_s))
-                        .i_meta[0 as ::core::ffi::c_int as usize][m_0 as usize],
-                );
+            (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m_0 as usize] =
+                (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_meta[i as usize][m_0 as usize]
+                    .wrapping_add(
+                        (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
+                            [0 as ::core::ffi::c_int as usize][m_0 as usize],
+                    );
             m_0 += 1;
         }
-        (*(*(&raw mut (*x).s as *mut mtnode_inner_s))
-            .i_ptr[((*x).n + 1 as int32_t) as usize])
+        (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[((*x).n + 1 as int32_t) as usize])
             .parent = x;
-        (*(*(&raw mut (*x).s as *mut mtnode_inner_s))
-            .i_ptr[((*x).n + 1 as int32_t) as usize])
+        (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[((*x).n + 1 as int32_t) as usize])
             .p_idx = ((*x).n + 1 as int32_t) as int16_t;
     }
     memmove(
@@ -3287,25 +3118,22 @@ unsafe extern "C" fn pivot_left(
     );
     if (*y).level != 0 {
         memmove(
-            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode as *mut ::core::ffi::c_void,
-            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr
-                as *mut *mut MTNode)
+            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode
+                as *mut ::core::ffi::c_void,
+            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr as *mut *mut MTNode)
                 .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
             ((*y).n as size_t).wrapping_mul(::core::mem::size_of::<*mut MTNode>()),
         );
         memmove(
-            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5] as *mut ::core::ffi::c_void,
-            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta
-                as *mut [uint32_t; 5])
+            &raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5]
+                as *mut ::core::ffi::c_void,
+            (&raw mut (*(&raw mut (*y).s as *mut mtnode_inner_s)).i_meta as *mut [uint32_t; 5])
                 .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
             ((*y).n as size_t).wrapping_mul(::core::mem::size_of::<[uint32_t; 5]>()),
         );
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (j as int32_t) < (*y).n {
-            (*(*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[j as usize]).p_idx = j
-                as int16_t;
+            (*(*(&raw mut (*y).s as *mut mtnode_inner_s)).i_ptr[j as usize]).p_idx = j as int16_t;
             j += 1;
         }
     }
@@ -3322,8 +3150,8 @@ unsafe extern "C" fn pivot_left(
             .wrapping_div(::core::mem::size_of::<uint64_t>())
             .wrapping_div(
                 (::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                    == 0) as ::core::ffi::c_int as usize,
             ) as size_t;
         d.size = 0 as size_t;
         d.items = &raw mut d.init_array as *mut uint64_t;
@@ -3333,25 +3161,25 @@ unsafe extern "C" fn pivot_left(
             &raw mut (**(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr
                 as *mut *mut MTNode)
                 .offset((*x).n as isize))
-                .intersect,
+            .intersect,
             &raw mut d,
         );
         if d.size != 0 {
             let mut xi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while (xi as int32_t) < (*x).n {
                 intersect_add(
-                    &raw mut (**(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s))
-                        .i_ptr as *mut *mut MTNode)
+                    &raw mut (**(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr
+                        as *mut *mut MTNode)
                         .offset(xi as isize))
-                        .intersect,
+                    .intersect,
                     &raw mut d,
                 );
                 xi += 1;
             }
         }
         if d.items != &raw mut d.init_array as *mut uint64_t {
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut d.items
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut d.items as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
@@ -3360,10 +3188,7 @@ unsafe extern "C" fn pivot_left(
     } else {
         if mt_start((*p).key[i as usize]) {
             let mut pi: uint64_t = pseudo_index(y, 0 as ::core::ffi::c_int);
-            let mut end_id: uint64_t = mt_lookup_key_side(
-                (*p).key[i as usize],
-                true_0 != 0,
-            );
+            let mut end_id: uint64_t = mt_lookup_key_side((*p).key[i as usize], true_0 != 0);
             let mut pi_end: uint64_t = pseudo_index_for_id(b, end_id, true_0 != 0);
             if pi_end > pi {
                 intersect_node(b, y, mt_lookup_key((*p).key[i as usize]));
@@ -3373,10 +3198,7 @@ unsafe extern "C" fn pivot_left(
             unintersect_node(
                 b,
                 x,
-                mt_lookup_key_side(
-                    (*x).key[((*x).n - 1 as int32_t) as usize],
-                    false_0 != 0,
-                ),
+                mt_lookup_key_side((*x).key[((*x).n - 1 as int32_t) as usize], false_0 != 0),
                 false_0 != 0,
             );
         }
@@ -3389,12 +3211,15 @@ pub unsafe extern "C" fn marktree_clear(mut b: *mut MarkTree) {
         (*b).root = ::core::ptr::null_mut::<MTNode>();
     }
     xfree(
-        (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t)).set.keys
-            as *mut ::core::ffi::c_void,
+        (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))
+            .set
+            .keys as *mut ::core::ffi::c_void,
     );
     xfree(
-        (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t)).set.h.hash
-            as *mut ::core::ffi::c_void,
+        (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))
+            .set
+            .h
+            .hash as *mut ::core::ffi::c_void,
     );
     (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t)).set = Set_uint64_t {
         h: MAPHASH_INIT,
@@ -3414,23 +3239,20 @@ pub unsafe extern "C" fn marktree_clear(mut b: *mut MarkTree) {
             .wrapping_mul(::core::mem::size_of::<uint32_t>()),
     );
     '_c2rust_label: {
-        if (*b).n_nodes == 0 as size_t {} else {
+        if (*b).n_nodes == 0 as size_t {
+        } else {
             __assert_fail(
                 b"b->n_nodes == 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1293 as ::core::ffi::c_uint,
-                b"void marktree_clear(MarkTree *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void marktree_clear(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn marktree_free_subtree(
-    mut b: *mut MarkTree,
-    mut x: *mut MTNode,
-) {
+pub unsafe extern "C" fn marktree_free_subtree(mut b: *mut MarkTree, mut x: *mut MTNode) {
     if (*x).level != 0 {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (i as int32_t) < (*x).n + 1 as int32_t {
@@ -3445,8 +3267,8 @@ pub unsafe extern "C" fn marktree_free_subtree(
 }
 unsafe extern "C" fn marktree_free_node(mut b: *mut MarkTree, mut x: *mut MTNode) {
     if (*x).intersect.items != &raw mut (*x).intersect.init_array as *mut uint64_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*x).intersect.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*x).intersect.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -3485,11 +3307,7 @@ pub unsafe extern "C" fn marktree_move(
             }
             key.pos = newpos;
             let mut match_0: bool = false;
-            let mut new_i: ::core::ffi::c_int = marktree_getp_aux(
-                x,
-                key,
-                &raw mut match_0,
-            );
+            let mut new_i: ::core::ffi::c_int = marktree_getp_aux(x, key, &raw mut match_0);
             if !match_0 {
                 new_i += 1;
             }
@@ -3502,8 +3320,7 @@ pub unsafe extern "C" fn marktree_move(
                         as *mut ::core::ffi::c_void,
                     (&raw mut (*x).key as *mut MTKey).offset(new_i as isize)
                         as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<MTKey>()
-                        .wrapping_mul(((*itr).i - new_i) as size_t),
+                    ::core::mem::size_of::<MTKey>().wrapping_mul(((*itr).i - new_i) as size_t),
                 );
                 (*x).key[new_i as usize] = key;
             } else if new_i > (*itr).i {
@@ -3514,9 +3331,7 @@ pub unsafe extern "C" fn marktree_move(
                         .offset(((*itr).i + 1 as ::core::ffi::c_int) as isize)
                         as *const ::core::ffi::c_void,
                     ::core::mem::size_of::<MTKey>()
-                        .wrapping_mul(
-                            (new_i - (*itr).i - 1 as ::core::ffi::c_int) as size_t,
-                        ),
+                        .wrapping_mul((new_i - (*itr).i - 1 as ::core::ffi::c_int) as size_t),
                 );
                 (*x).key[(new_i - 1 as ::core::ffi::c_int) as usize] = key;
             }
@@ -3541,10 +3356,7 @@ pub unsafe extern "C" fn marktree_restore_pair(mut b: *mut MarkTree, mut key: MT
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_2 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -3554,10 +3366,7 @@ pub unsafe extern "C" fn marktree_restore_pair(mut b: *mut MarkTree, mut key: MT
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_2 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -3577,16 +3386,16 @@ pub unsafe extern "C" fn marktree_restore_pair(mut b: *mut MarkTree, mut key: MT
     {
         return;
     }
-    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-        .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x)
-        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+        .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
         .flags as ::core::ffi::c_int
         & !MT_FLAG_ORPHANED as uint16_t as ::core::ffi::c_int) as uint16_t;
-    (*(*(&raw mut end_itr as *mut MarkTreeIter)).x)
-        .key[(*(&raw mut end_itr as *mut MarkTreeIter)).i as usize]
-        .flags = ((*(*(&raw mut end_itr as *mut MarkTreeIter)).x)
-        .key[(*(&raw mut end_itr as *mut MarkTreeIter)).i as usize]
+    (*(*(&raw mut end_itr as *mut MarkTreeIter)).x).key
+        [(*(&raw mut end_itr as *mut MarkTreeIter)).i as usize]
+        .flags = ((*(*(&raw mut end_itr as *mut MarkTreeIter)).x).key
+        [(*(&raw mut end_itr as *mut MarkTreeIter)).i as usize]
         .flags as ::core::ffi::c_int
         & !MT_FLAG_ORPHANED as uint16_t as ::core::ffi::c_int) as uint16_t;
     marktree_intersect_pair(
@@ -3669,8 +3478,8 @@ pub unsafe extern "C" fn marktree_itr_get_ext(
         }
         if !meta_filter.is_null() {
             if !meta_has(
-                &raw mut *(&raw mut (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-                    .i_meta as *mut [uint32_t; 5])
+                &raw mut *(&raw mut (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_meta
+                    as *mut [uint32_t; 5])
                     .offset((*itr).i as isize) as *mut uint32_t,
                 meta_filter,
             ) {
@@ -3689,15 +3498,14 @@ pub unsafe extern "C" fn marktree_itr_get_ext(
                 &raw mut k.pos,
             );
         }
-        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-            .i_ptr[(*itr).i as usize];
+        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize];
         (*itr).lvl += 1;
         if !oldbase.is_null() {
             *oldbase.offset((*itr).lvl as isize) = (*itr).pos;
         }
     }
     if last {
-        return marktree_itr_prev(b, itr)
+        return marktree_itr_prev(b, itr);
     } else if (*itr).i as int32_t >= (*(*itr).x).n {
         return marktree_itr_next_skip(
             b,
@@ -3706,7 +3514,7 @@ pub unsafe extern "C" fn marktree_itr_get_ext(
             false_0 != 0,
             ::core::ptr::null_mut::<MTPos>(),
             ::core::ptr::null::<uint32_t>(),
-        )
+        );
     }
     return true_0 != 0;
 }
@@ -3730,8 +3538,8 @@ pub unsafe extern "C" fn marktree_itr_first(
         (*itr).s[(*itr).lvl as usize].i = 0 as ::core::ffi::c_int;
         (*itr).s[(*itr).lvl as usize].oldcol = 0 as ::core::ffi::c_int;
         (*itr).lvl += 1;
-        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-            .i_ptr[0 as ::core::ffi::c_int as usize];
+        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr
+            [0 as ::core::ffi::c_int as usize];
     }
     return true_0 != 0;
 }
@@ -3758,11 +3566,12 @@ pub unsafe extern "C" fn marktree_itr_last(
         (*itr).s[(*itr).lvl as usize].i = (*itr).i;
         (*itr).s[(*itr).lvl as usize].oldcol = (*itr).pos.col as ::core::ffi::c_int;
         '_c2rust_label: {
-            if (*itr).i > 0 as ::core::ffi::c_int {} else {
+            if (*itr).i > 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"itr->i > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     1490 as ::core::ffi::c_uint,
                     b"int marktree_itr_last(MarkTree *, MarkTreeIter *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3773,8 +3582,7 @@ pub unsafe extern "C" fn marktree_itr_last(
             &raw mut (*itr).pos,
             (*(*itr).x).key[((*itr).i - 1 as ::core::ffi::c_int) as usize].pos,
         );
-        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-            .i_ptr[(*itr).i as usize];
+        (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize];
         (*itr).lvl += 1;
     }
     (*itr).i -= 1;
@@ -3806,9 +3614,7 @@ unsafe extern "C" fn marktree_itr_next_skip(
         return false_0 != 0;
     }
     (*itr).i += 1;
-    if !meta_filter.is_null()
-        && (*(*itr).x).level as ::core::ffi::c_int > 0 as ::core::ffi::c_int
-    {
+    if !meta_filter.is_null() && (*(*itr).x).level as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
         if !meta_has(
             &raw mut *(&raw mut (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_meta
                 as *mut [uint32_t; 5])
@@ -3827,7 +3633,7 @@ unsafe extern "C" fn marktree_itr_next_skip(
         {
             (*itr).i = (*(*itr).x).n as ::core::ffi::c_int;
         } else if ((*itr).i as int32_t) < (*(*itr).x).n {
-            return true_0 != 0
+            return true_0 != 0;
         }
         while ((*itr).i as int32_t) >= (*(*itr).x).n {
             (*itr).x = (*(*itr).x).parent;
@@ -3837,34 +3643,32 @@ unsafe extern "C" fn marktree_itr_next_skip(
             (*itr).lvl -= 1;
             (*itr).i = (*itr).s[(*itr).lvl as usize].i;
             if (*itr).i > 0 as ::core::ffi::c_int {
-                (*itr).pos.row
-                    -= (*(*itr).x)
-                        .key[((*itr).i - 1 as ::core::ffi::c_int) as usize]
-                        .pos
-                        .row;
+                (*itr).pos.row -= (*(*itr).x).key[((*itr).i - 1 as ::core::ffi::c_int) as usize]
+                    .pos
+                    .row;
                 (*itr).pos.col = (*itr).s[(*itr).lvl as usize].oldcol as int32_t;
             }
         }
     } else {
         while (*(*itr).x).level as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
             if (*itr).i > 0 as ::core::ffi::c_int {
-                (*itr).s[(*itr).lvl as usize].oldcol = (*itr).pos.col
-                    as ::core::ffi::c_int;
+                (*itr).s[(*itr).lvl as usize].oldcol = (*itr).pos.col as ::core::ffi::c_int;
                 compose(
                     &raw mut (*itr).pos,
                     (*(*itr).x).key[((*itr).i - 1 as ::core::ffi::c_int) as usize].pos,
                 );
             }
             if !oldbase.is_null() && (*itr).i == 0 as ::core::ffi::c_int {
-                *oldbase.offset(((*itr).lvl + 1 as ::core::ffi::c_int) as isize) = *oldbase
-                    .offset((*itr).lvl as isize);
+                *oldbase.offset(((*itr).lvl + 1 as ::core::ffi::c_int) as isize) =
+                    *oldbase.offset((*itr).lvl as isize);
             }
             (*itr).s[(*itr).lvl as usize].i = (*itr).i;
             '_c2rust_label: {
-                if (*(*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-                    .i_ptr[(*itr).i as usize])
-                    .parent == (*itr).x
-                {} else {
+                if (*(*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize])
+                    .parent
+                    == (*itr).x
+                {
+                } else {
                     __assert_fail(
                         b"itr->x->ptr[itr->i]->parent == itr->x\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -3877,25 +3681,20 @@ unsafe extern "C" fn marktree_itr_next_skip(
                 }
             };
             (*itr).lvl += 1;
-            (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-                .i_ptr[(*itr).i as usize];
-            if preload as ::core::ffi::c_int != 0
-                && (*(*itr).x).level as ::core::ffi::c_int != 0
-            {
+            (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize];
+            if preload as ::core::ffi::c_int != 0 && (*(*itr).x).level as ::core::ffi::c_int != 0 {
                 (*itr).i = -1 as ::core::ffi::c_int;
                 break;
             } else {
                 (*itr).i = 0 as ::core::ffi::c_int;
-                if !(!meta_filter.is_null()
-                    && (*(*itr).x).level as ::core::ffi::c_int != 0)
-                {
+                if !(!meta_filter.is_null() && (*(*itr).x).level as ::core::ffi::c_int != 0) {
                     continue;
                 }
                 if !meta_has(
-                    &raw mut *(&raw mut (*(&raw mut (*(*itr).x).s
-                        as *mut mtnode_inner_s))
-                        .i_meta as *mut [uint32_t; 5])
-                        .offset(0 as ::core::ffi::c_int as isize) as *mut uint32_t,
+                    &raw mut *(&raw mut (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_meta
+                        as *mut [uint32_t; 5])
+                        .offset(0 as ::core::ffi::c_int as isize)
+                        as *mut uint32_t,
                     meta_filter,
                 ) {
                     break;
@@ -3946,9 +3745,8 @@ pub unsafe extern "C" fn marktree_itr_step_out_filter(
     }
     while !(*itr).x.is_null() && !(*(*itr).x).parent.is_null() {
         if meta_has(
-            &raw mut *(&raw mut (*(&raw mut (*(*(*itr).x).parent).s
-                as *mut mtnode_inner_s))
-                .i_meta as *mut [uint32_t; 5])
+            &raw mut *(&raw mut (*(&raw mut (*(*(*itr).x).parent).s as *mut mtnode_inner_s)).i_meta
+                as *mut [uint32_t; 5])
                 .offset((*(*itr).x).p_idx as isize) as *mut uint32_t,
             meta_filter,
         ) {
@@ -4030,7 +3828,7 @@ unsafe extern "C" fn marktree_itr_check_filter(
         ) {
             return false_0 != 0;
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn marktree_itr_prev(
@@ -4060,8 +3858,7 @@ pub unsafe extern "C" fn marktree_itr_prev(
     } else {
         while (*(*itr).x).level as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
             if (*itr).i > 0 as ::core::ffi::c_int {
-                (*itr).s[(*itr).lvl as usize].oldcol = (*itr).pos.col
-                    as ::core::ffi::c_int;
+                (*itr).s[(*itr).lvl as usize].oldcol = (*itr).pos.col as ::core::ffi::c_int;
                 compose(
                     &raw mut (*itr).pos,
                     (*(*itr).x).key[((*itr).i - 1 as ::core::ffi::c_int) as usize].pos,
@@ -4069,23 +3866,23 @@ pub unsafe extern "C" fn marktree_itr_prev(
             }
             (*itr).s[(*itr).lvl as usize].i = (*itr).i;
             '_c2rust_label: {
-                if (*(*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-                    .i_ptr[(*itr).i as usize])
-                    .parent == (*itr).x
-                {} else {
+                if (*(*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize])
+                    .parent
+                    == (*itr).x
+                {
+                } else {
                     __assert_fail(
                         b"itr->x->ptr[itr->i]->parent == itr->x\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1690 as ::core::ffi::c_uint,
                         b"_Bool marktree_itr_prev(MarkTree *, MarkTreeIter *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
             };
-            (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-                .i_ptr[(*itr).i as usize];
+            (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize];
             (*itr).i = (*(*itr).x).n as ::core::ffi::c_int;
             (*itr).lvl += 1;
         }
@@ -4112,10 +3909,7 @@ pub unsafe extern "C" fn marktree_itr_current(mut itr: *mut MarkTreeIter) -> MTK
     }
     return MT_INVALID_KEY;
 }
-unsafe extern "C" fn itr_eq(
-    mut itr1: *mut MarkTreeIter,
-    mut itr2: *mut MarkTreeIter,
-) -> bool {
+unsafe extern "C" fn itr_eq(mut itr1: *mut MarkTreeIter, mut itr2: *mut MarkTreeIter) -> bool {
     return (&raw mut (*(*itr1).x).key as *mut MTKey).offset((*itr1).i as isize)
         == (&raw mut (*(*itr2).x).key as *mut MTKey).offset((*itr2).i as isize);
 }
@@ -4158,10 +3952,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
         if (*itr).intersect_idx < (*(*itr).x).intersect.size {
             let c2rust_fresh18 = (*itr).intersect_idx;
             (*itr).intersect_idx = (*itr).intersect_idx.wrapping_add(1);
-            let mut id: uint64_t = *(*(*itr).x)
-                .intersect
-                .items
-                .offset(c2rust_fresh18 as isize);
+            let mut id: uint64_t = *(*(*itr).x).intersect.items.offset(c2rust_fresh18 as isize);
             *pair = mtpair_from(
                 marktree_lookup(b, id, ::core::ptr::null_mut::<MarkTreeIter>()),
                 marktree_lookup(
@@ -4205,16 +3996,18 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
                     &raw mut (*itr).intersect_pos_x,
                 );
             }
-            (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s))
-                .i_ptr[(*itr).i as usize];
+            (*itr).x = (*(&raw mut (*(*itr).x).s as *mut mtnode_inner_s)).i_ptr[(*itr).i as usize];
             (*itr).lvl += 1;
             (*itr).i = -1 as ::core::ffi::c_int;
             (*itr).intersect_idx = 0 as size_t;
         }
     }
     while ((*itr).i as int32_t) < (*(*itr).x).n
-        && pos_less((*(*itr).x).key[(*itr).i as usize].pos, (*itr).intersect_pos_x)
-            as ::core::ffi::c_int != 0
+        && pos_less(
+            (*(*itr).x).key[(*itr).i as usize].pos,
+            (*itr).intersect_pos_x,
+        ) as ::core::ffi::c_int
+            != 0
     {
         let c2rust_fresh19 = (*itr).i;
         (*itr).i = (*itr).i + 1;
@@ -4247,11 +4040,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
             continue;
         }
         unrelative((*itr).pos, &raw mut k_1.pos);
-        let mut start: MTKey = marktree_lookup(
-            b,
-            id_0,
-            ::core::ptr::null_mut::<MarkTreeIter>(),
-        );
+        let mut start: MTKey = marktree_lookup(b, id_0, ::core::ptr::null_mut::<MarkTreeIter>());
         if pos_leq((*itr).intersect_pos, start.pos) {
             continue;
         }
@@ -4260,14 +4049,15 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
     }
     (*itr).i = (*itr).s[(*itr).lvl as usize].i;
     '_c2rust_label: {
-        if (*itr).i >= 0 as ::core::ffi::c_int {} else {
+        if (*itr).i >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"itr->i >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1845 as ::core::ffi::c_uint,
-                b"_Bool marktree_itr_step_overlap(MarkTree *, MarkTreeIter *, MTPair *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"_Bool marktree_itr_step_overlap(MarkTree *, MarkTreeIter *, MTPair *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -4282,25 +4072,22 @@ unsafe extern "C" fn check_damage(
     mut itr1: *mut MarkTreeIter,
     mut itr2: *mut MarkTreeIter,
 ) {
-    let start_id: uint64_t = mt_lookup_key_side(
-        (*(*itr1).x).key[(*itr1).i as usize],
-        false_0 != 0,
-    );
+    let start_id: uint64_t = mt_lookup_key_side((*(*itr1).x).key[(*itr1).i as usize], false_0 != 0);
     let mut p: *mut MTDamagePair = map_put_ref_uint64_t_MTDamagePair(
         damage as *mut Map_uint64_t_MTDamagePair,
         start_id,
         ::core::ptr::null_mut::<*mut uint64_t>(),
         ::core::ptr::null_mut::<bool>(),
     );
-    let mut me: *mut MTDamage = if mt_end((*(*itr1).x).key[(*itr1).i as usize])
-        as ::core::ffi::c_int != 0
-    {
-        &raw mut (*p).end
-    } else {
-        &raw mut (*p).start
-    };
+    let mut me: *mut MTDamage =
+        if mt_end((*(*itr1).x).key[(*itr1).i as usize]) as ::core::ffi::c_int != 0 {
+            &raw mut (*p).end
+        } else {
+            &raw mut (*p).start
+        };
     '_c2rust_label: {
-        if (*me).new.is_null() {} else {
+        if (*me).new.is_null() {
+        } else {
             __assert_fail(
                 b"me->new == NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
@@ -4352,13 +4139,11 @@ unsafe extern "C" fn swap_keys(
             let mut x1: *mut MTNode = (*itr1).x;
             let mut x2: *mut MTNode = (*itr2).x;
             while x1 != x2 {
-                if (*x1).level as ::core::ffi::c_int <= (*x2).level as ::core::ffi::c_int
-                {
-                    let mut meta_node: *mut uint32_t = &raw mut *(&raw mut (*(&raw mut (*(*x1)
-                        .parent)
-                        .s as *mut mtnode_inner_s))
-                        .i_meta as *mut [uint32_t; 5])
-                        .offset((*x1).p_idx as isize) as *mut uint32_t;
+                if (*x1).level as ::core::ffi::c_int <= (*x2).level as ::core::ffi::c_int {
+                    let mut meta_node: *mut uint32_t =
+                        &raw mut *(&raw mut (*(&raw mut (*(*x1).parent).s as *mut mtnode_inner_s))
+                            .i_meta as *mut [uint32_t; 5])
+                            .offset((*x1).p_idx as isize) as *mut uint32_t;
                     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while m < kMTMetaCount as ::core::ffi::c_int {
                         *meta_node.offset(m as isize) = (*meta_node.offset(m as isize))
@@ -4369,21 +4154,16 @@ unsafe extern "C" fn swap_keys(
                     }
                     x1 = (*x1).parent;
                 }
-                if ((*x2).level as ::core::ffi::c_int)
-                    < (*x1).level as ::core::ffi::c_int
-                {
-                    let mut meta_node_0: *mut uint32_t = &raw mut *(&raw mut (*(&raw mut (*(*x2)
-                        .parent)
-                        .s as *mut mtnode_inner_s))
-                        .i_meta as *mut [uint32_t; 5])
-                        .offset((*x2).p_idx as isize) as *mut uint32_t;
+                if ((*x2).level as ::core::ffi::c_int) < (*x1).level as ::core::ffi::c_int {
+                    let mut meta_node_0: *mut uint32_t =
+                        &raw mut *(&raw mut (*(&raw mut (*(*x2).parent).s as *mut mtnode_inner_s))
+                            .i_meta as *mut [uint32_t; 5])
+                            .offset((*x2).p_idx as isize) as *mut uint32_t;
                     let mut m_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while m_0 < kMTMetaCount as ::core::ffi::c_int {
-                        *meta_node_0.offset(m_0 as isize) = (*meta_node_0
-                            .offset(m_0 as isize))
+                        *meta_node_0.offset(m_0 as isize) = (*meta_node_0.offset(m_0 as isize))
                             .wrapping_add(
-                                meta_inc_1[m_0 as usize]
-                                    .wrapping_sub(meta_inc_2[m_0 as usize]),
+                                meta_inc_1[m_0 as usize].wrapping_sub(meta_inc_2[m_0 as usize]),
                             );
                         m_0 += 1;
                     }
@@ -4423,44 +4203,41 @@ pub unsafe extern "C" fn marktree_splice(
         row: new_extent_line as int32_t,
         col: new_extent_col as int32_t,
     };
-    let mut may_delete: bool = old_extent.row != 0 as int32_t
-        || old_extent.col != 0 as int32_t;
-    let mut same_line: bool = old_extent.row == 0 as int32_t
-        && new_extent.row == 0 as int32_t;
+    let mut may_delete: bool = old_extent.row != 0 as int32_t || old_extent.col != 0 as int32_t;
+    let mut same_line: bool = old_extent.row == 0 as int32_t && new_extent.row == 0 as int32_t;
     unrelative(start, &raw mut old_extent);
     unrelative(start, &raw mut new_extent);
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_2 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
-    let mut enditr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_2 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
+    let mut enditr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     let mut oldbase: [MTPos; 20] = [
-        MTPos { row: 0 as int32_t, col: 0 },
+        MTPos {
+            row: 0 as int32_t,
+            col: 0,
+        },
         MTPos { row: 0, col: 0 },
         MTPos { row: 0, col: 0 },
         MTPos { row: 0, col: 0 },
@@ -4500,10 +4277,11 @@ pub unsafe extern "C" fn marktree_splice(
     if may_delete {
         let mut ipos: MTPos = marktree_itr_pos(&raw mut itr as *mut MarkTreeIter);
         if !pos_leq(old_extent, ipos)
-            || old_extent.row == ipos.row && old_extent.col == ipos.col
+            || old_extent.row == ipos.row
+                && old_extent.col == ipos.col
                 && !mt_right(
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize],
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize],
                 )
         {
             marktree_itr_get_ext(
@@ -4516,11 +4294,12 @@ pub unsafe extern "C" fn marktree_splice(
                 ::core::ptr::null::<uint32_t>(),
             );
             '_c2rust_label: {
-                if !(*(&raw mut enditr as *mut MarkTreeIter)).x.is_null() {} else {
+                if !(*(&raw mut enditr as *mut MarkTreeIter)).x.is_null() {
+                } else {
                     __assert_fail(
                         b"enditr->x\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1943 as ::core::ffi::c_uint,
                         b"_Bool marktree_splice(MarkTree *, int32_t, int, int, int, int, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4541,42 +4320,44 @@ pub unsafe extern "C" fn marktree_splice(
         values: ::core::ptr::null_mut::<MTDamagePair>(),
     };
     if may_delete {
-        's_214: while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() && !past_right
-        {
+        's_214: while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() && !past_right {
             let mut loc_start: MTPos = start;
             let mut loc_old: MTPos = old_extent;
-            relative((*(&raw mut itr as *mut MarkTreeIter)).pos, &raw mut loc_start);
+            relative(
+                (*(&raw mut itr as *mut MarkTreeIter)).pos,
+                &raw mut loc_start,
+            );
             relative(
                 oldbase[(*(&raw mut itr as *mut MarkTreeIter)).lvl as usize],
                 &raw mut loc_old,
             );
             loop {
                 if !pos_leq(
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                         .pos,
                     loc_old,
                 ) {
                     break 's_214;
                 }
                 if mt_right(
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize],
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize],
                 ) {
                     while !itr_eq(
                         &raw mut itr as *mut MarkTreeIter,
                         &raw mut enditr as *mut MarkTreeIter,
-                    )
-                        && mt_right(
-                            (*(*(&raw mut enditr as *mut MarkTreeIter)).x)
-                                .key[(*(&raw mut enditr as *mut MarkTreeIter)).i as usize],
-                        ) as ::core::ffi::c_int != 0
+                    ) && mt_right(
+                        (*(*(&raw mut enditr as *mut MarkTreeIter)).x).key
+                            [(*(&raw mut enditr as *mut MarkTreeIter)).i as usize],
+                    ) as ::core::ffi::c_int
+                        != 0
                     {
                         marktree_itr_prev(b, &raw mut enditr as *mut MarkTreeIter);
                     }
                     if !mt_right(
-                        (*(*(&raw mut enditr as *mut MarkTreeIter)).x)
-                            .key[(*(&raw mut enditr as *mut MarkTreeIter)).i as usize],
+                        (*(*(&raw mut enditr as *mut MarkTreeIter)).x).key
+                            [(*(&raw mut enditr as *mut MarkTreeIter)).i as usize],
                     ) {
                         swap_keys(
                             b,
@@ -4597,22 +4378,19 @@ pub unsafe extern "C" fn marktree_splice(
                 }
                 moved = true_0 != 0;
                 if (*(*(&raw mut itr as *mut MarkTreeIter)).x).level != 0 {
-                    oldbase[((*(&raw mut itr as *mut MarkTreeIter)).lvl
-                        + 1 as ::core::ffi::c_int) as usize] = (*(*(&raw mut itr
-                        as *mut MarkTreeIter))
-                        .x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                    oldbase[((*(&raw mut itr as *mut MarkTreeIter)).lvl + 1 as ::core::ffi::c_int)
+                        as usize] = (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                         .pos;
                     unrelative(
                         oldbase[(*(&raw mut itr as *mut MarkTreeIter)).lvl as usize],
-                        (&raw mut oldbase as *mut MTPos)
-                            .offset(
-                                ((*(&raw mut itr as *mut MarkTreeIter)).lvl
-                                    + 1 as ::core::ffi::c_int) as isize,
-                            ),
+                        (&raw mut oldbase as *mut MTPos).offset(
+                            ((*(&raw mut itr as *mut MarkTreeIter)).lvl + 1 as ::core::ffi::c_int)
+                                as isize,
+                        ),
                     );
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                         .pos = loc_start;
                     marktree_itr_next_skip(
                         b,
@@ -4624,8 +4402,8 @@ pub unsafe extern "C" fn marktree_splice(
                     );
                     break;
                 } else {
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                         .pos = loc_start;
                     if ((*(&raw mut itr as *mut MarkTreeIter)).i as int32_t)
                         < (*(*(&raw mut itr as *mut MarkTreeIter)).x).n - 1 as int32_t
@@ -4652,29 +4430,28 @@ pub unsafe extern "C" fn marktree_splice(
             loop {
                 if pos_leq(
                     limit,
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                         .pos,
                 ) {
                     break 's_289;
                 }
-                let mut oldpos: MTPos = (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                    .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                let mut oldpos: MTPos = (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                    [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                     .pos;
-                (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                    .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                    [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                     .pos = loc_new;
                 moved = true_0 != 0;
                 if (*(*(&raw mut itr as *mut MarkTreeIter)).x).level != 0 {
-                    oldbase[((*(&raw mut itr as *mut MarkTreeIter)).lvl
-                        + 1 as ::core::ffi::c_int) as usize] = oldpos;
+                    oldbase[((*(&raw mut itr as *mut MarkTreeIter)).lvl + 1 as ::core::ffi::c_int)
+                        as usize] = oldpos;
                     unrelative(
                         oldbase[(*(&raw mut itr as *mut MarkTreeIter)).lvl as usize],
-                        (&raw mut oldbase as *mut MTPos)
-                            .offset(
-                                ((*(&raw mut itr as *mut MarkTreeIter)).lvl
-                                    + 1 as ::core::ffi::c_int) as isize,
-                            ),
+                        (&raw mut oldbase as *mut MTPos).offset(
+                            ((*(&raw mut itr as *mut MarkTreeIter)).lvl + 1 as ::core::ffi::c_int)
+                                as isize,
+                        ),
                     );
                     marktree_itr_next_skip(
                         b,
@@ -4699,22 +4476,21 @@ pub unsafe extern "C" fn marktree_splice(
     while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
         unrelative(
             oldbase[(*(&raw mut itr as *mut MarkTreeIter)).lvl as usize],
-            &raw mut (*(&raw mut (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                as *mut MTKey)
+            &raw mut (*(&raw mut (*(*(&raw mut itr as *mut MarkTreeIter)).x).key as *mut MTKey)
                 .offset((*(&raw mut itr as *mut MarkTreeIter)).i as isize))
-                .pos,
+            .pos,
         );
-        let mut realrow: ::core::ffi::c_int = (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+        let mut realrow: ::core::ffi::c_int = (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
             .pos
             .row as ::core::ffi::c_int;
         '_c2rust_label_0: {
-            if realrow as int32_t >= old_extent.row {} else {
+            if realrow as int32_t >= old_extent.row {
+            } else {
                 __assert_fail(
-                    b"realrow >= old_extent.row\0".as_ptr()
+                    b"realrow >= old_extent.row\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     2044 as ::core::ffi::c_uint,
                     b"_Bool marktree_splice(MarkTree *, int32_t, int, int, int, int, int)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -4724,8 +4500,8 @@ pub unsafe extern "C" fn marktree_splice(
         let mut done: bool = false_0 != 0;
         if realrow as int32_t == old_extent.row {
             if delta.col != 0 {
-                (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                    .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                    [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                     .pos
                     .col += delta.col;
             }
@@ -4733,18 +4509,17 @@ pub unsafe extern "C" fn marktree_splice(
             done = true_0 != 0;
         }
         if delta.row != 0 {
-            (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+            (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                 .pos
                 .row += delta.row;
             moved = true_0 != 0;
         }
         relative(
             (*(&raw mut itr as *mut MarkTreeIter)).pos,
-            &raw mut (*(&raw mut (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
-                as *mut MTKey)
+            &raw mut (*(&raw mut (*(*(&raw mut itr as *mut MarkTreeIter)).x).key as *mut MTKey)
                 .offset((*(&raw mut itr as *mut MarkTreeIter)).i as isize))
-                .pos,
+            .pos,
         );
         if done {
             break;
@@ -4823,10 +4598,7 @@ pub unsafe extern "C" fn marktree_splice(
                 lvl: 0,
                 x: ::core::ptr::null_mut::<MTNode>(),
                 i: 0,
-                s: [C2Rust_Unnamed_2 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
+                s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
                 intersect_idx: 0,
                 intersect_pos: MTPos { row: 0, col: 0 },
                 intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -4843,8 +4615,7 @@ pub unsafe extern "C" fn marktree_splice(
                     d.start.old,
                     d.start.old_i,
                 );
-                *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos
-                    as *mut MarkTreeIter);
+                *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos as *mut MarkTreeIter);
                 marktree_intersect_pair(
                     b,
                     start_id,
@@ -4858,8 +4629,7 @@ pub unsafe extern "C" fn marktree_splice(
                     d.start.new,
                     d.start.new_i,
                 );
-                *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos
-                    as *mut MarkTreeIter);
+                *(&raw mut enditr as *mut MarkTreeIter) = *(&raw mut endpos as *mut MarkTreeIter);
                 marktree_intersect_pair(
                     b,
                     start_id,
@@ -4874,18 +4644,14 @@ pub unsafe extern "C" fn marktree_splice(
                 lvl: 0,
                 x: ::core::ptr::null_mut::<MTNode>(),
                 i: 0,
-                s: [C2Rust_Unnamed_2 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
+                s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
                 intersect_idx: 0,
                 intersect_pos: MTPos { row: 0, col: 0 },
                 intersect_pos_x: MTPos { row: 0, col: 0 },
             }; 1];
             marktree_lookup(b, start_id, &raw mut startpos as *mut MarkTreeIter);
             if !(*(&raw mut startpos as *mut MarkTreeIter)).x.is_null() {
-                *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos
-                    as *mut MarkTreeIter);
+                *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos as *mut MarkTreeIter);
                 marktree_itr_set_node(
                     b,
                     &raw mut enditr as *mut MarkTreeIter,
@@ -4899,8 +4665,7 @@ pub unsafe extern "C" fn marktree_splice(
                     &raw mut enditr as *mut MarkTreeIter,
                     true,
                 );
-                *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos
-                    as *mut MarkTreeIter);
+                *(&raw mut itr as *mut MarkTreeIter) = *(&raw mut startpos as *mut MarkTreeIter);
                 marktree_itr_set_node(
                     b,
                     &raw mut enditr as *mut MarkTreeIter,
@@ -4924,8 +4689,8 @@ pub unsafe extern "C" fn marktree_splice(
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<uint64_t>(),
     };
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut damage.values
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut damage.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -4951,21 +4716,19 @@ pub unsafe extern "C" fn marktree_move_region(
     };
     let mut end: MTPos = size;
     unrelative(start, &raw mut end);
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_2 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     marktree_itr_get_ext(
         b,
         start,
@@ -4979,7 +4742,8 @@ pub unsafe extern "C" fn marktree_move_region(
     while !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
         let mut k: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
         if !pos_leq(k.pos, end)
-            || k.pos.row == end.row && k.pos.col == end.col
+            || k.pos.row == end.row
+                && k.pos.col == end.col
                 && mt_right(k) as ::core::ffi::c_int != 0
         {
             break;
@@ -4995,7 +4759,8 @@ pub unsafe extern "C" fn marktree_move_region(
                 saved.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<MTKey>().wrapping_mul(saved.capacity),
             ) as *mut MTKey;
-        } else {};
+        } else {
+        };
         let c2rust_fresh21 = saved.size;
         saved.size = saved.size.wrapping_add(1);
         *saved.items.offset(c2rust_fresh21 as isize) = k;
@@ -5048,12 +4813,9 @@ pub unsafe extern "C" fn marktree_lookup_ns(
 ) -> MTKey {
     return marktree_lookup(b, mt_lookup_id(ns, id, end), itr);
 }
-unsafe extern "C" fn pseudo_index(
-    mut x: *mut MTNode,
-    mut i: ::core::ffi::c_int,
-) -> uint64_t {
-    let mut off: ::core::ffi::c_int = MT_LOG2_BRANCH as ::core::ffi::c_int
-        * (*x).level as ::core::ffi::c_int;
+unsafe extern "C" fn pseudo_index(mut x: *mut MTNode, mut i: ::core::ffi::c_int) -> uint64_t {
+    let mut off: ::core::ffi::c_int =
+        MT_LOG2_BRANCH as ::core::ffi::c_int * (*x).level as ::core::ffi::c_int;
     let mut index: uint64_t = 0 as uint64_t;
     while !x.is_null() {
         index |= ((i + 1 as ::core::ffi::c_int) as uint64_t) << off;
@@ -5082,14 +4844,15 @@ unsafe extern "C" fn pseudo_index_for_id(
             i += 1;
         }
         '_c2rust_label: {
-            if (i as int32_t) < (*n).n {} else {
+            if (i as int32_t) < (*n).n {
+            } else {
                 __assert_fail(
                     b"i < n->n\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     2184 as ::core::ffi::c_uint,
-                    b"uint64_t pseudo_index_for_id(MarkTree *, uint64_t, _Bool)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"uint64_t pseudo_index_for_id(MarkTree *, uint64_t, _Bool)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5133,19 +4896,18 @@ pub unsafe extern "C" fn marktree_itr_set_node(
     if !itr.is_null() {
         (*itr).i = i;
         (*itr).x = n;
-        (*itr).lvl = (*(*b).root).level as ::core::ffi::c_int
-            - (*n).level as ::core::ffi::c_int;
+        (*itr).lvl = (*(*b).root).level as ::core::ffi::c_int - (*n).level as ::core::ffi::c_int;
     }
     while !(*n).parent.is_null() {
         let mut p: *mut MTNode = (*n).parent;
         i = (*n).p_idx as ::core::ffi::c_int;
         '_c2rust_label: {
-            if (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize] == n
-            {} else {
+            if (*(&raw mut (*p).s as *mut mtnode_inner_s)).i_ptr[i as usize] == n {
+            } else {
                 __assert_fail(
                     b"p->ptr[i] == n\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     2224 as ::core::ffi::c_uint,
                     b"MTKey marktree_itr_set_node(MarkTree *, MarkTreeIter *, MTNode *, int)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -5191,10 +4953,7 @@ pub unsafe extern "C" fn marktree_get_alt(
         mark
     };
 }
-unsafe extern "C" fn marktree_itr_fix_pos(
-    mut b: *mut MarkTree,
-    mut itr: *mut MarkTreeIter,
-) {
+unsafe extern "C" fn marktree_itr_fix_pos(mut b: *mut MarkTree, mut itr: *mut MarkTreeIter) {
     (*itr).pos = MTPos {
         row: 0 as int32_t,
         col: 0 as int32_t,
@@ -5211,11 +4970,12 @@ unsafe extern "C" fn marktree_itr_fix_pos(
             );
         }
         '_c2rust_label: {
-            if (*x).level != 0 {} else {
+            if (*x).level != 0 {
+            } else {
                 __assert_fail(
                     b"x->level\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     2261 as ::core::ffi::c_uint,
                     b"void marktree_itr_fix_pos(MarkTree *, MarkTreeIter *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5226,7 +4986,8 @@ unsafe extern "C" fn marktree_itr_fix_pos(
         lvl += 1;
     }
     '_c2rust_label_0: {
-        if x == (*itr).x {} else {
+        if x == (*itr).x {
+        } else {
             __assert_fail(
                 b"x == itr->x\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
@@ -5251,12 +5012,7 @@ pub unsafe extern "C" fn marktree_put_test(
     mut end_right: bool,
     mut meta_inline: bool,
 ) {
-    let mut flags: uint16_t = mt_flags(
-        right_gravity,
-        false_0 != 0,
-        false_0 != 0,
-        false_0 != 0,
-    );
+    let mut flags: uint16_t = mt_flags(right_gravity, false_0 != 0, false_0 != 0, false_0 != 0);
     flags = (flags as ::core::ffi::c_int
         | if meta_inline as ::core::ffi::c_int != 0 {
             MT_FLAG_DECOR_VIRT_TEXT_INLINE
@@ -5292,22 +5048,16 @@ pub unsafe extern "C" fn marktree_del_pair_test(
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_2 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
     }; 1];
     marktree_lookup_ns(b, ns, id, false_0 != 0, &raw mut itr as *mut MarkTreeIter);
-    let mut other: uint64_t = marktree_del_itr(
-        b,
-        &raw mut itr as *mut MarkTreeIter,
-        false_0 != 0,
-    );
+    let mut other: uint64_t = marktree_del_itr(b, &raw mut itr as *mut MarkTreeIter, false_0 != 0);
     '_c2rust_label: {
-        if other != 0 {} else {
+        if other != 0 {
+        } else {
             __assert_fail(
                 b"other\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
@@ -5325,42 +5075,45 @@ pub unsafe extern "C" fn marktree_del_pair_test(
 pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
     if (*b).root.is_null() {
         '_c2rust_label: {
-            if (*b).n_keys == 0 as size_t {} else {
+            if (*b).n_keys == 0 as size_t {
+            } else {
                 __assert_fail(
                     b"b->n_keys == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    2301 as ::core::ffi::c_uint,
-                    b"void marktree_check(MarkTree *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    2301 as ::core::ffi::c_uint,
+                    b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
         '_c2rust_label_0: {
-            if (*b).n_nodes == 0 as size_t {} else {
+            if (*b).n_nodes == 0 as size_t {
+            } else {
                 __assert_fail(
                     b"b->n_nodes == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    2302 as ::core::ffi::c_uint,
-                    b"void marktree_check(MarkTree *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    2302 as ::core::ffi::c_uint,
+                    b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
         '_c2rust_label_1: {
             if (&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t).is_null()
-                || (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t)).set.h.size
+                || (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))
+                    .set
+                    .h
+                    .size
                     == 0 as uint32_t
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"b->id2node == NULL || map_size(b->id2node) == 0\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    2303 as ::core::ffi::c_uint,
-                    b"void marktree_check(MarkTree *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    2303 as ::core::ffi::c_uint,
+                    b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5376,29 +5129,31 @@ pub unsafe extern "C" fn marktree_check(mut b: *mut MarkTree) {
         &raw mut (*b).meta_root as *mut uint32_t,
     );
     '_c2rust_label_2: {
-        if (*b).n_keys == nkeys {} else {
+        if (*b).n_keys == nkeys {
+        } else {
             __assert_fail(
                 b"b->n_keys == nkeys\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2311 as ::core::ffi::c_uint,
-                b"void marktree_check(MarkTree *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     '_c2rust_label_3: {
         if (*b).n_keys
-            == (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t)).set.h.size as size_t
-        {} else {
+            == (*(&raw mut (*b).id2node as *mut Map_uint64_t_ptr_t))
+                .set
+                .h
+                .size as size_t
+        {
+        } else {
             __assert_fail(
-                b"b->n_keys == map_size(b->id2node)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"b->n_keys == map_size(b->id2node)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2312 as ::core::ffi::c_uint,
-                b"void marktree_check(MarkTree *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void marktree_check(MarkTree *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -5412,10 +5167,9 @@ pub unsafe extern "C" fn marktree_check_node(
     mut meta_node_ref: *const uint32_t,
 ) -> size_t {
     '_c2rust_label: {
-        if (*x).n
-            <= 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t
-                - 1 as int32_t
-        {} else {
+        if (*x).n <= 2 as int32_t * MT_BRANCH_FACTOR as ::core::ffi::c_int as int32_t - 1 as int32_t
+        {
+        } else {
             __assert_fail(
                 b"x->n <= 2 * T - 1\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0".as_ptr()
@@ -5433,7 +5187,8 @@ pub unsafe extern "C" fn marktree_check_node(
             } else {
                 0 as int32_t
             })
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"x->n >= (x != b->root ? T - 1 : 0)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -5449,18 +5204,15 @@ pub unsafe extern "C" fn marktree_check_node(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while (i as int32_t) < (*x).n {
         if (*x).level != 0 {
-            n_keys = n_keys
-                .wrapping_add(
-                    marktree_check_node(
-                        b,
-                        (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i as usize],
-                        last,
-                        last_right,
-                        &raw mut *(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s))
-                            .i_meta as *mut [uint32_t; 5])
-                            .offset(i as isize) as *mut uint32_t,
-                    ),
-                );
+            n_keys = n_keys.wrapping_add(marktree_check_node(
+                b,
+                (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i as usize],
+                last,
+                last_right,
+                &raw mut *(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
+                    as *mut [uint32_t; 5])
+                    .offset(i as isize) as *mut uint32_t,
+            ));
         } else {
             *last = MTPos {
                 row: 0 as int32_t,
@@ -5471,7 +5223,8 @@ pub unsafe extern "C" fn marktree_check_node(
             unrelative((*x).key[(i - 1 as ::core::ffi::c_int) as usize].pos, last);
         }
         '_c2rust_label_1: {
-            if pos_leq(*last, (*x).key[i as usize].pos) {} else {
+            if pos_leq(*last, (*x).key[i as usize].pos) {
+            } else {
                 __assert_fail(
                     b"pos_leq(*last, x->key[i].pos)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5487,9 +5240,8 @@ pub unsafe extern "C" fn marktree_check_node(
             && (*last).col == (*x).key[i as usize].pos.col
         {
             '_c2rust_label_2: {
-                if !*last_right
-                    || mt_right((*x).key[i as usize]) as ::core::ffi::c_int != 0
-                {} else {
+                if !*last_right || mt_right((*x).key[i as usize]) as ::core::ffi::c_int != 0 {
+                } else {
                     __assert_fail(
                         b"!*last_right || mt_right(x->key[i])\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5504,7 +5256,8 @@ pub unsafe extern "C" fn marktree_check_node(
         }
         *last_right = mt_right((*x).key[i as usize]);
         '_c2rust_label_3: {
-            if (*x).key[i as usize].pos.col >= 0 as int32_t {} else {
+            if (*x).key[i as usize].pos.col >= 0 as int32_t {
+            } else {
                 __assert_fail(
                     b"x->key[i].pos.col >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/marktree.c\0"
@@ -5520,7 +5273,8 @@ pub unsafe extern "C" fn marktree_check_node(
                 &raw mut (*b).id2node as *mut Map_uint64_t_ptr_t,
                 mt_lookup_key((*x).key[i as usize]),
             ) == x as ptr_t
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"pmap_get(uint64_t)(b->id2node, mt_lookup_key(x->key[i])) == x\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -5535,25 +5289,21 @@ pub unsafe extern "C" fn marktree_check_node(
         i += 1;
     }
     if (*x).level != 0 {
-        n_keys = n_keys
-            .wrapping_add(
-                marktree_check_node(
-                    b,
-                    (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[(*x).n as usize],
-                    last,
-                    last_right,
-                    &raw mut *(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s))
-                        .i_meta as *mut [uint32_t; 5])
-                        .offset((*x).n as isize) as *mut uint32_t,
-                ),
-            );
+        n_keys = n_keys.wrapping_add(marktree_check_node(
+            b,
+            (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[(*x).n as usize],
+            last,
+            last_right,
+            &raw mut *(&raw mut (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_meta
+                as *mut [uint32_t; 5])
+                .offset((*x).n as isize) as *mut uint32_t,
+        ));
         unrelative((*x).key[((*x).n - 1 as int32_t) as usize].pos, last);
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (i_0 as int32_t) < (*x).n + 1 as int32_t {
             '_c2rust_label_5: {
-                if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize])
-                    .parent == x
-                {} else {
+                if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize]).parent == x {
+                } else {
                     __assert_fail(
                         b"x->ptr[i]->parent == x\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5566,9 +5316,11 @@ pub unsafe extern "C" fn marktree_check_node(
                 }
             };
             '_c2rust_label_6: {
-                if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize])
-                    .p_idx as ::core::ffi::c_int == i_0
-                {} else {
+                if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize]).p_idx
+                    as ::core::ffi::c_int
+                    == i_0
+                {
+                } else {
                     __assert_fail(
                         b"x->ptr[i]->p_idx == i\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5581,10 +5333,11 @@ pub unsafe extern "C" fn marktree_check_node(
                 }
             };
             '_c2rust_label_7: {
-                if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize])
-                    .level as ::core::ffi::c_int
+                if (*(*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize]).level
+                    as ::core::ffi::c_int
                     == (*x).level as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"x->ptr[i]->level == x->level - 1\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5601,7 +5354,8 @@ pub unsafe extern "C" fn marktree_check_node(
                 '_c2rust_label_8: {
                     if (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[i_0 as usize]
                         != (*(&raw mut (*x).s as *mut mtnode_inner_s)).i_ptr[j as usize]
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"x->ptr[i] != x->ptr[j]\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -5625,7 +5379,8 @@ pub unsafe extern "C" fn marktree_check_node(
     let mut m: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while m < kMTMetaCount as ::core::ffi::c_int {
         '_c2rust_label_9: {
-            if *meta_node_ref.offset(m as isize) == meta_node[m as usize] {} else {
+            if *meta_node_ref.offset(m as isize) == meta_node[m as usize] {
+            } else {
                 __assert_fail(
                     b"meta_node_ref[m] == meta_node[m]\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5659,10 +5414,7 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_2 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -5679,10 +5431,7 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
                 lvl: 0,
                 x: ::core::ptr::null_mut::<MTNode>(),
                 i: 0,
-                s: [C2Rust_Unnamed_2 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
+                s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
                 intersect_idx: 0,
                 intersect_pos: MTPos { row: 0, col: 0 },
                 intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -5692,23 +5441,15 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
                 lvl: 0,
                 x: ::core::ptr::null_mut::<MTNode>(),
                 i: 0,
-                s: [C2Rust_Unnamed_2 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
+                s: [C2Rust_Unnamed_2 { oldcol: 0, i: 0 }; 20],
                 intersect_idx: 0,
                 intersect_pos: MTPos { row: 0, col: 0 },
                 intersect_pos_x: MTPos { row: 0, col: 0 },
             }; 1];
             let mut end_id: uint64_t = mt_lookup_id(mark.ns, mark.id, true_0 != 0);
-            let mut k: MTKey = marktree_lookup(
-                b,
-                end_id,
-                &raw mut end_itr as *mut MarkTreeIter,
-            );
+            let mut k: MTKey = marktree_lookup(b, end_id, &raw mut end_itr as *mut MarkTreeIter);
             if k.pos.row >= 0 as int32_t {
-                *(&raw mut start_itr as *mut MarkTreeIter) = *(&raw mut itr
-                    as *mut MarkTreeIter);
+                *(&raw mut start_itr as *mut MarkTreeIter) = *(&raw mut itr as *mut MarkTreeIter);
                 marktree_intersect_pair(
                     b,
                     mt_lookup_key(mark),
@@ -5735,38 +5476,33 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<ptr_t>(),
     };
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut checked.values
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut checked.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
     return status;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mt_recurse_nodes(
-    mut x: *mut MTNode,
-    mut checked: *mut Map_ptr_t_ptr_t,
-) {
+pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut Map_ptr_t_ptr_t) {
     if (*x).intersect.size != 0 {
         if (*x).intersect.size == (*x).intersect.capacity {
-            (*x).intersect.capacity = (if (*x).intersect.capacity
-                << 1 as ::core::ffi::c_int
+            (*x).intersect.capacity = (if (*x).intersect.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*x).intersect.capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*x).intersect.items = (if (*x).intersect.capacity
@@ -5774,62 +5510,56 @@ pub unsafe extern "C" fn mt_recurse_nodes(
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
                         (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
-                (if (*x).intersect.items
-                    == &raw mut (*x).intersect.init_array as *mut uint64_t
-                {
+                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
+                (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                     (*x).intersect.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
                         &raw mut (*x).intersect.init_array as *mut uint64_t
                             as *mut ::core::ffi::c_void,
                         (*x).intersect.items as *mut ::core::ffi::c_void,
-                        (*x)
-                            .intersect
+                        (*x).intersect
                             .size
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
                 })
             } else {
-                (if (*x).intersect.items
-                    == &raw mut (*x).intersect.init_array as *mut uint64_t
-                {
+                (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(
-                            (*x)
-                                .intersect
+                            (*x).intersect
                                 .capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         ),
                         (*x).intersect.items as *const ::core::ffi::c_void,
-                        (*x)
-                            .intersect
+                        (*x).intersect
                             .size
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
                 } else {
                     xrealloc(
                         (*x).intersect.items as *mut ::core::ffi::c_void,
-                        (*x)
-                            .intersect
+                        (*x).intersect
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
                 })
             }) as *mut uint64_t;
-        } else {};
+        } else {
+        };
         let c2rust_fresh22 = (*x).intersect.size;
         (*x).intersect.size = (*x).intersect.size.wrapping_add(1);
-        *(*x).intersect.items.offset(c2rust_fresh22 as isize) = -1 as ::core::ffi::c_int
-            as uint64_t;
+        *(*x).intersect.items.offset(c2rust_fresh22 as isize) =
+            -1 as ::core::ffi::c_int as uint64_t;
         let mut val: *mut uint64_t = ::core::ptr::null_mut::<uint64_t>();
         if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
             val = xmemdup(
                 (*x).intersect.items as *const ::core::ffi::c_void,
-                (*x).intersect.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                (*x).intersect
+                    .size
+                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
             ) as *mut uint64_t;
         } else {
             val = (*x).intersect.items;
@@ -5839,8 +5569,8 @@ pub unsafe extern "C" fn mt_recurse_nodes(
             .wrapping_div(::core::mem::size_of::<uint64_t>())
             .wrapping_div(
                 (::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<uint64_t>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
+                    == 0) as ::core::ffi::c_int as usize,
             ) as size_t;
         (*x).intersect.size = 0 as size_t;
         (*x).intersect.items = &raw mut (*x).intersect.init_array as *mut uint64_t;
@@ -5861,8 +5591,7 @@ pub unsafe extern "C" fn mt_recurse_nodes_compare(
     mut x: *mut MTNode,
     mut checked: *mut Map_ptr_t_ptr_t,
 ) -> bool {
-    let mut ref_0: *mut uint64_t = map_get_ptr_t_ptr_t(checked, x as ptr_t)
-        as *mut uint64_t;
+    let mut ref_0: *mut uint64_t = map_get_ptr_t_ptr_t(checked, x as ptr_t) as *mut uint64_t;
     if !ref_0.is_null() {
         let mut i: size_t = 0 as size_t;
         loop {
@@ -5873,8 +5602,7 @@ pub unsafe extern "C" fn mt_recurse_nodes_compare(
                 break;
             } else {
                 if (*x).intersect.size <= i
-                    || *ref_0.offset(i as isize)
-                        != *(*x).intersect.items.offset(i as isize)
+                    || *ref_0.offset(i as isize) != *(*x).intersect.items.offset(i as isize)
                 {
                     return false_0 != 0;
                 }
@@ -5882,7 +5610,7 @@ pub unsafe extern "C" fn mt_recurse_nodes_compare(
             }
         }
     } else if (*x).intersect.size != 0 {
-        return false_0 != 0
+        return false_0 != 0;
     }
     if (*x).level != 0 {
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5936,8 +5664,7 @@ pub unsafe extern "C" fn mt_inspect(
             );
             ga_concat(
                 &raw mut ga as *mut garray_T,
-                b"\n}\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"\n}\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
         } else {
             mt_inspect_node(b, &raw mut ga as *mut garray_T, keys, (*b).root, p);
@@ -5991,8 +5718,7 @@ unsafe extern "C" fn mt_inspect_node(
             b,
             ga,
             keys,
-            (*(&raw mut (*n).s as *mut mtnode_inner_s))
-                .i_ptr[0 as ::core::ffi::c_int as usize],
+            (*(&raw mut (*n).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize],
             off,
         );
     }
@@ -6017,8 +5743,7 @@ unsafe extern "C" fn mt_inspect_node(
             if mt_start(key) {
                 ga_concat(
                     ga,
-                    b"<\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"<\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
             }
             snprintf(
@@ -6031,8 +5756,7 @@ unsafe extern "C" fn mt_inspect_node(
             if mt_end(key) {
                 ga_concat(
                     ga,
-                    b">\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b">\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
             }
         }
@@ -6041,8 +5765,8 @@ unsafe extern "C" fn mt_inspect_node(
                 b,
                 ga,
                 keys,
-                (*(&raw mut (*n).s as *mut mtnode_inner_s))
-                    .i_ptr[(i_0 + 1 as ::core::ffi::c_int) as usize],
+                (*(&raw mut (*n).s as *mut mtnode_inner_s)).i_ptr
+                    [(i_0 + 1 as ::core::ffi::c_int) as usize],
                 p,
             );
         } else {
@@ -6092,16 +5816,14 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
     if (*n).intersect.size != 0 {
         ga_concat(
             ga,
-            b"    <tr><td>\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"    <tr><td>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         let mut i: size_t = 0 as size_t;
         while i < (*n).intersect.size {
             if i > 0 as size_t {
                 ga_concat(
                     ga,
-                    b", \0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b", \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
             }
             snprintf(
@@ -6115,14 +5837,12 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
         }
         ga_concat(
             ga,
-            b"</td></tr>\n\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"</td></tr>\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
     }
     ga_concat(
         ga,
-        b"    <tr><td>\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"    <tr><td>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while (i_0 as int32_t) < (*n).n {
@@ -6130,8 +5850,7 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
         if i_0 > 0 as ::core::ffi::c_int {
             ga_concat(
                 ga,
-                b", \0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b", \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
         }
         snprintf(
@@ -6155,13 +5874,11 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
     }
     ga_concat(
         ga,
-        b"</td></tr>\n\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"</td></tr>\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
     ga_concat(
         ga,
-        b"    </table>\n\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"    </table>\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
     ga_concat(
         ga,
@@ -6181,8 +5898,7 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
         mt_inspect_dotfile_node(
             b,
             ga,
-            (*(&raw mut (*n).s as *mut mtnode_inner_s))
-                .i_ptr[0 as ::core::ffi::c_int as usize],
+            (*(&raw mut (*n).s as *mut mtnode_inner_s)).i_ptr[0 as ::core::ffi::c_int as usize],
             off,
             &raw mut namebuf as *mut ::core::ffi::c_char,
         );
@@ -6195,8 +5911,8 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
             mt_inspect_dotfile_node(
                 b,
                 ga,
-                (*(&raw mut (*n).s as *mut mtnode_inner_s))
-                    .i_ptr[(i_1 + 1 as ::core::ffi::c_int) as usize],
+                (*(&raw mut (*n).s as *mut mtnode_inner_s)).i_ptr
+                    [(i_1 + 1 as ::core::ffi::c_int) as usize],
                 p,
                 &raw mut namebuf as *mut ::core::ffi::c_char,
             );
@@ -6216,43 +5932,39 @@ pub const MT_INVALID_KEY: MTKey = MTKey {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-pub const MT_FLAG_REAL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
-pub const MT_FLAG_END: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const MT_FLAG_PAIRED: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
-pub const MT_FLAG_ORPHANED: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 3 as ::core::ffi::c_int;
-pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-pub const MT_FLAG_LAST: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
+pub const MT_FLAG_REAL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
+pub const MT_FLAG_END: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
+pub const MT_FLAG_PAIRED: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
+pub const MT_FLAG_ORPHANED: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 3 as ::core::ffi::c_int;
+pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALID: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
+pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const MT_FLAG_LAST: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
 pub const MARKTREE_END_FLAG: uint64_t = 1 as ::core::ffi::c_int as uint64_t;
 #[inline]
-unsafe extern "C" fn mt_lookup_id(
-    mut ns: uint32_t,
-    mut id: uint32_t,
-    mut enda: bool,
-) -> uint64_t {
+unsafe extern "C" fn mt_lookup_id(mut ns: uint32_t, mut id: uint32_t, mut enda: bool) -> uint64_t {
     return (ns as uint64_t) << 33 as ::core::ffi::c_int
         | (id << 1 as ::core::ffi::c_int) as uint64_t
         | (if enda as ::core::ffi::c_int != 0 {
@@ -6304,22 +6016,19 @@ unsafe extern "C" fn mt_flags(
         MT_FLAG_RIGHT_GRAVITY
     } else {
         0 as ::core::ffi::c_int
-    })
-        | (if no_undo as ::core::ffi::c_int != 0 {
-            MT_FLAG_NO_UNDO
-        } else {
-            0 as ::core::ffi::c_int
-        })
-        | (if invalidate as ::core::ffi::c_int != 0 {
-            MT_FLAG_INVALIDATE
-        } else {
-            0 as ::core::ffi::c_int
-        })
-        | (if decor_ext as ::core::ffi::c_int != 0 {
-            MT_FLAG_DECOR_EXT
-        } else {
-            0 as ::core::ffi::c_int
-        })) as uint16_t;
+    }) | (if no_undo as ::core::ffi::c_int != 0 {
+        MT_FLAG_NO_UNDO
+    } else {
+        0 as ::core::ffi::c_int
+    }) | (if invalidate as ::core::ffi::c_int != 0 {
+        MT_FLAG_INVALIDATE
+    } else {
+        0 as ::core::ffi::c_int
+    }) | (if decor_ext as ::core::ffi::c_int != 0 {
+        MT_FLAG_DECOR_EXT
+    } else {
+        0 as ::core::ffi::c_int
+    })) as uint16_t;
 }
 #[inline]
 unsafe extern "C" fn mtpair_from(mut start: MTKey, mut end: MTKey) -> MTPair {

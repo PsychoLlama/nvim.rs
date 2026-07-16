@@ -28,10 +28,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn strcasecmp(
         __s1: *const ::core::ffi::c_char,
@@ -47,10 +45,7 @@ extern "C" {
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
     fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
@@ -111,10 +106,7 @@ extern "C" {
     static mut p_acd: ::core::ffi::c_int;
     static mut p_ei: *mut ::core::ffi::c_char;
     static mut p_verbose: OptInt;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strnicmp_asc(
         s1: *const ::core::ffi::c_char,
         s2: *const ::core::ffi::c_char,
@@ -141,11 +133,7 @@ extern "C" {
     ) -> bool;
     fn last_set_msg(script_ctx: sctx_T);
     fn hash_init(ht: *mut hashtab_T);
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn msg_ext_set_kind(msg_kind: *const ::core::ffi::c_char);
@@ -169,10 +157,7 @@ extern "C" {
     fn msg_advance(col: ::core::ffi::c_int);
     fn callback_free(callback: *mut Callback);
     fn callback_copy(dest: *mut Callback, src: *mut Callback);
-    fn callback_to_string(
-        cb: *mut Callback,
-        arena: *mut Arena,
-    ) -> *mut ::core::ffi::c_char;
+    fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char;
     fn tv_dict_add_tv(
         d: *mut dict_T,
         key: *const ::core::ffi::c_char,
@@ -192,10 +177,7 @@ extern "C" {
     fn get_vim_var_nr(idx: VimVarIndex) -> varnumber_T;
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
     fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_cmdarg(
-        eap: *mut exarg_T,
-        oldarg: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn vars_clear(ht: *mut hashtab_T);
     fn os_now() -> uint64_t;
     fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
@@ -288,10 +270,7 @@ extern "C" {
         fname1: *const ::core::ffi::c_char,
         fname2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn FullName_save(
-        fname: *const ::core::ffi::c_char,
-        force: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
     static mut exestack: garray_T;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -2143,9 +2122,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2172,9 +2150,7 @@ pub struct C2Rust_Unnamed_14 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_15 {
@@ -2270,12 +2246,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2328,12 +2302,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -2360,9 +2332,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2373,9 +2344,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -2400,15 +2370,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_22 {
@@ -4054,9 +4019,7 @@ pub struct AutoCmdEvent {
     pub eap: *mut exarg_T,
     pub data: *mut Object,
 }
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -4315,12 +4278,8 @@ pub const OPT_WINONLY: C2Rust_Unnamed_36 = 8;
 pub const OPT_MODELINE: C2Rust_Unnamed_36 = 4;
 pub const OPT_LOCAL: C2Rust_Unnamed_36 = 2;
 pub const OPT_GLOBAL: C2Rust_Unnamed_36 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
@@ -4410,16 +4369,13 @@ unsafe extern "C" fn map_get_int_String(
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut e_autocommand_nesting_too_deep: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E218: Autocommand nesting too deep\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E218: Autocommand nesting too deep\0",
+    )
 };
 static mut active_apc_list: *mut AutoPatCmd = ::core::ptr::null_mut::<AutoPatCmd>();
 static mut next_augroup_id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-static mut deleted_augroup: *const ::core::ffi::c_char = ::core::ptr::null::<
-    ::core::ffi::c_char,
->();
+static mut deleted_augroup: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
 static mut current_augroup: ::core::ffi::c_int = AUGROUP_DEFAULT as ::core::ffi::c_int;
 static mut au_need_clean: bool = false_0 != 0;
 static mut autocmd_blocked: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4472,9 +4428,7 @@ unsafe extern "C" fn augroup_map_del(
 #[inline(always)]
 unsafe extern "C" fn get_deleted_augroup() -> *const ::core::ffi::c_char {
     if deleted_augroup.is_null() {
-        deleted_augroup = gettext(
-            b"--Deleted--\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        deleted_augroup = gettext(b"--Deleted--\0".as_ptr() as *const ::core::ffi::c_char);
     }
     return deleted_augroup;
 }
@@ -4493,8 +4447,8 @@ unsafe extern "C" fn au_show_for_event(
     mut event: event_T,
     mut pat: *const ::core::ffi::c_char,
 ) {
-    let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-        .offset(event as ::core::ffi::c_int as isize);
+    let acs: *mut AutoCmdVec =
+        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     if (*acs).size == 0 as size_t {
         return;
     }
@@ -4507,9 +4461,8 @@ unsafe extern "C" fn au_show_for_event(
     }
     let mut buflocal_pat: [::core::ffi::c_char; 25] = [0; 25];
     let mut last_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
-    let mut last_group_name: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut last_group_name: *const ::core::ffi::c_char =
+        ::core::ptr::null::<::core::ffi::c_char>();
     loop {
         let mut last_ap: *mut AutoPat = ::core::ptr::null_mut::<AutoPat>();
         let mut endpat: *const ::core::ffi::c_char = pat.offset(patlen as isize);
@@ -4521,15 +4474,14 @@ unsafe extern "C" fn au_show_for_event(
                 aupat_get_buflocal_nr(pat, patlen),
             );
             pat = &raw mut buflocal_pat as *mut ::core::ffi::c_char;
-            patlen = strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char)
-                as ::core::ffi::c_int;
+            patlen =
+                strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
         }
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
             let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
             if !(*ac).pat.is_null() {
-                if !(group != AUGROUP_ALL as ::core::ffi::c_int
-                    && (*(*ac).pat).group != group
+                if !(group != AUGROUP_ALL as ::core::ffi::c_int && (*(*ac).pat).group != group
                     || patlen != 0
                         && ((*(*ac).pat).patlen != patlen
                             || strncmp(pat, (*(*ac).pat).pat, patlen as size_t)
@@ -4574,11 +4526,7 @@ unsafe extern "C" fn au_show_for_event(
                             return;
                         }
                         msg_advance(4 as ::core::ffi::c_int);
-                        msg_outtrans(
-                            (*(*ac).pat).pat,
-                            0 as ::core::ffi::c_int,
-                            false_0 != 0,
-                        );
+                        msg_outtrans((*(*ac).pat).pat, 0 as ::core::ffi::c_int, false_0 != 0);
                     }
                     if got_int {
                         return;
@@ -4590,13 +4538,11 @@ unsafe extern "C" fn au_show_for_event(
                     if got_int {
                         return;
                     }
-                    let mut handler_str: *mut ::core::ffi::c_char = aucmd_handler_to_string(
-                        ac,
-                    );
+                    let mut handler_str: *mut ::core::ffi::c_char = aucmd_handler_to_string(ac);
                     if !(*ac).desc.is_null() {
                         let mut msglen: size_t = 100 as size_t;
-                        let mut msg: *mut ::core::ffi::c_char = xmallocz(msglen)
-                            as *mut ::core::ffi::c_char;
+                        let mut msg: *mut ::core::ffi::c_char =
+                            xmallocz(msglen) as *mut ::core::ffi::c_char;
                         if !(*ac).handler_cmd.is_null() {
                             snprintf(
                                 msg,
@@ -4606,11 +4552,7 @@ unsafe extern "C" fn au_show_for_event(
                                 (*ac).desc,
                             );
                         } else {
-                            msg_puts_hl(
-                                handler_str,
-                                HLF_8 as ::core::ffi::c_int,
-                                false_0 != 0,
-                            );
+                            msg_puts_hl(handler_str, HLF_8 as ::core::ffi::c_int, false_0 != 0);
                             snprintf(
                                 msg,
                                 msglen,
@@ -4619,22 +4561,18 @@ unsafe extern "C" fn au_show_for_event(
                             );
                         }
                         msg_outtrans(msg, 0 as ::core::ffi::c_int, false_0 != 0);
-                        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut msg
-                            as *mut *mut ::core::ffi::c_void;
+                        let mut ptr_: *mut *mut ::core::ffi::c_void =
+                            &raw mut msg as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL_0;
                         *ptr_;
                     } else if !(*ac).handler_cmd.is_null() {
                         msg_outtrans(handler_str, 0 as ::core::ffi::c_int, false_0 != 0);
                     } else {
-                        msg_puts_hl(
-                            handler_str,
-                            HLF_8 as ::core::ffi::c_int,
-                            false_0 != 0,
-                        );
+                        msg_puts_hl(handler_str, HLF_8 as ::core::ffi::c_int, false_0 != 0);
                     }
-                    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut handler_str
-                        as *mut *mut ::core::ffi::c_void;
+                    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                        &raw mut handler_str as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL_0;
                     *ptr__0;
@@ -4652,17 +4590,15 @@ unsafe extern "C" fn au_show_for_event(
         if patlen == 0 {
             break;
         }
-    };
+    }
 }
 unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
-    if !(*ac).pat.is_null()
-        && {
-            (*(*ac).pat).refcount = (*(*ac).pat).refcount.wrapping_sub(1);
-            (*(*ac).pat).refcount == 0 as size_t
-        }
-    {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(*ac).pat).pat
-            as *mut *mut ::core::ffi::c_void;
+    if !(*ac).pat.is_null() && {
+        (*(*ac).pat).refcount = (*(*ac).pat).refcount.wrapping_sub(1);
+        (*(*ac).pat).refcount == 0 as size_t
+    } {
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*(*ac).pat).pat as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -4671,16 +4607,16 @@ unsafe extern "C" fn aucmd_del(mut ac: *mut AutoCmd) {
     }
     (*ac).pat = ::core::ptr::null_mut::<AutoPat>();
     if !(*ac).handler_cmd.is_null() {
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*ac).handler_cmd
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut (*ac).handler_cmd as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
         *ptr__0;
     } else {
         callback_free(&raw mut (*ac).handler_fn);
     }
-    let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut (*ac).desc
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__1: *mut *mut ::core::ffi::c_void =
+        &raw mut (*ac).desc as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
     *ptr__1;
@@ -4691,8 +4627,8 @@ pub unsafe extern "C" fn aucmd_del_for_event_and_group(
     mut event: event_T,
     mut group: ::core::ffi::c_int,
 ) {
-    let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-        .offset(event as ::core::ffi::c_int as isize);
+    let acs: *mut AutoCmdVec =
+        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     let mut i: size_t = 0 as size_t;
     while i < (*acs).size {
         let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -4709,8 +4645,8 @@ unsafe extern "C" fn au_cleanup() {
     }
     let mut event: event_T = EVENT_BUFADD;
     while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-        let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-            .offset(event as ::core::ffi::c_int as isize);
+        let acs: *mut AutoCmdVec =
+            (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
         let mut nsize: size_t = 0 as size_t;
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
@@ -4736,11 +4672,8 @@ unsafe extern "C" fn au_cleanup() {
     au_need_clean = false_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn au_get_autocmds_for_event(
-    mut event: event_T,
-) -> *mut AutoCmdVec {
-    return (&raw mut autocmds as *mut AutoCmdVec)
-        .offset(event as ::core::ffi::c_int as isize);
+pub unsafe extern "C" fn au_get_autocmds_for_event(mut event: event_T) -> *mut AutoCmdVec {
+    return (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
@@ -4753,8 +4686,8 @@ pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
     }
     let mut event: event_T = EVENT_BUFADD;
     while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-        let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-            .offset(event as ::core::ffi::c_int as isize);
+        let acs: *mut AutoCmdVec =
+            (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
             let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -4764,10 +4697,8 @@ pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"auto-removing autocommand: %s <buffer=%d>\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"auto-removing autocommand: %s <buffer=%d>\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         event_nr2name(event),
                         (*buf).handle,
                     );
@@ -4781,15 +4712,14 @@ pub unsafe extern "C" fn aubuflocal_remove(mut buf: *mut buf_T) {
     au_cleanup();
 }
 #[no_mangle]
-pub unsafe extern "C" fn augroup_add(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn augroup_add(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     '_c2rust_label: {
         if strcasecmp(
             name as *mut ::core::ffi::c_char,
             b"end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) != 0 as ::core::ffi::c_int
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"STRICMP(name, \"end\") != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -4802,15 +4732,14 @@ pub unsafe extern "C" fn augroup_add(
     let mut existing_id: ::core::ffi::c_int = augroup_find(name);
     if existing_id > 0 as ::core::ffi::c_int {
         '_c2rust_label_0: {
-            if existing_id != AUGROUP_DELETED as ::core::ffi::c_int {} else {
+            if existing_id != AUGROUP_DELETED as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
-                    b"existing_id != AUGROUP_DELETED\0".as_ptr()
+                    b"existing_id != AUGROUP_DELETED\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     404 as ::core::ffi::c_uint,
-                    b"int augroup_add(const char *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"int augroup_add(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -4836,35 +4765,28 @@ pub unsafe extern "C" fn augroup_del(
     let mut group: ::core::ffi::c_int = augroup_find(name);
     if group == AUGROUP_ERROR as ::core::ffi::c_int {
         semsg(
-            gettext(
-                b"E367: No such group: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"E367: No such group: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             name,
         );
         return;
     } else if group == current_augroup {
-        emsg(
-            gettext(
-                b"E936: Cannot delete the current group\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E936: Cannot delete the current group\0".as_ptr() as *const ::core::ffi::c_char
+        ));
         return;
     }
     if stupid_legacy_mode {
         let mut event: event_T = EVENT_BUFADD;
         while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-            let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-                .offset(event as ::core::ffi::c_int as isize);
+            let acs: *mut AutoCmdVec =
+                (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
             let mut i: size_t = 0 as size_t;
             while i < (*acs).size {
                 let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
                 if !ap.is_null() && (*ap).group == group {
                     give_warning(
-                        gettext(
-                            b"W19: Deleting augroup that is still in use\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"W19: Deleting augroup that is still in use\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         true_0 != 0,
                         true_0 != 0,
                     );
@@ -4873,10 +4795,7 @@ pub unsafe extern "C" fn augroup_del(
                         cstr_as_string(name),
                         AUGROUP_DELETED as ::core::ffi::c_int,
                     );
-                    augroup_map_del(
-                        (*ap).group,
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                    );
+                    augroup_map_del((*ap).group, ::core::ptr::null::<::core::ffi::c_char>());
                     return;
                 }
                 i = i.wrapping_add(1);
@@ -4896,21 +4815,16 @@ pub unsafe extern "C" fn augroup_del(
                 }
                 i_0 = i_0.wrapping_add(1);
             }
-            event_0 = (event_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                as event_T;
+            event_0 = (event_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
         }
     }
     augroup_map_del(group, name);
     au_cleanup();
 }
 #[no_mangle]
-pub unsafe extern "C" fn augroup_find(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut existing_id: ::core::ffi::c_int = map_get_String_int(
-        &raw mut map_augroup_name_to_id,
-        cstr_as_string(name),
-    );
+pub unsafe extern "C" fn augroup_find(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+    let mut existing_id: ::core::ffi::c_int =
+        map_get_String_int(&raw mut map_augroup_name_to_id, cstr_as_string(name));
     if existing_id == AUGROUP_DELETED as ::core::ffi::c_int {
         return existing_id;
     }
@@ -4920,11 +4834,10 @@ pub unsafe extern "C" fn augroup_find(
     return AUGROUP_ERROR as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn augroup_name(
-    mut group: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     '_c2rust_label: {
-        if group != 0 as ::core::ffi::c_int {} else {
+        if group != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"group != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -4941,8 +4854,7 @@ pub unsafe extern "C" fn augroup_name(
         group = current_augroup;
     }
     if group == next_augroup_id {
-        return b"END\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"END\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     if group > next_augroup_id {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4958,10 +4870,7 @@ pub unsafe extern "C" fn augroup_exists(mut name: *const ::core::ffi::c_char) ->
     return augroup_find(name) > 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn do_augroup(
-    mut arg: *mut ::core::ffi::c_char,
-    mut del_group: bool,
-) {
+pub unsafe extern "C" fn do_augroup(mut arg: *mut ::core::ffi::c_char, mut del_group: bool) {
     if del_group {
         if *arg as ::core::ffi::c_int == NUL {
             emsg(gettext(&raw const e_argreq as *const ::core::ffi::c_char));
@@ -5005,8 +4914,8 @@ pub unsafe extern "C" fn do_augroup(
 pub unsafe extern "C" fn is_aucmd_win(mut win: *mut win_T) -> bool {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < aucmd_win_vec.size as ::core::ffi::c_int {
-        if (*aucmd_win_vec.items.offset(i as isize)).auc_win_used as ::core::ffi::c_int
-            != 0 && (*aucmd_win_vec.items.offset(i as isize)).auc_win == win
+        if (*aucmd_win_vec.items.offset(i as isize)).auc_win_used as ::core::ffi::c_int != 0
+            && (*aucmd_win_vec.items.offset(i as isize)).auc_win == win
         {
             return true_0 != 0;
         }
@@ -5021,16 +4930,15 @@ pub unsafe extern "C" fn event_name2nr(
 ) -> event_T {
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     p = start;
-    while *p as ::core::ffi::c_int != 0 && !ascii_iswhite(*p as ::core::ffi::c_int)
+    while *p as ::core::ffi::c_int != 0
+        && !ascii_iswhite(*p as ::core::ffi::c_int)
         && *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
         && *p as ::core::ffi::c_int != '|' as ::core::ffi::c_int
     {
         p = p.offset(1);
     }
-    let mut hash_idx: ::core::ffi::c_int = event_name2nr_hash(
-        start,
-        p.offset_from(start) as size_t,
-    );
+    let mut hash_idx: ::core::ffi::c_int =
+        event_name2nr_hash(start, p.offset_from(start) as size_t);
     if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
         p = p.offset(1);
     }
@@ -5049,12 +4957,9 @@ pub unsafe extern "C" fn event_name2nr_str(mut str: String_0) -> event_T {
     return abs(event_names[event_hash[hash_idx as usize] as usize].event) as event_T;
 }
 #[no_mangle]
-pub unsafe extern "C" fn event_nr2name(
-    mut event: event_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn event_nr2name(mut event: event_T) -> *const ::core::ffi::c_char {
     return if event as ::core::ffi::c_uint >= 0 as ::core::ffi::c_uint
-        && (event as ::core::ffi::c_uint)
-            < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
+        && (event as ::core::ffi::c_uint) < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         event_names[event as usize].name as *const ::core::ffi::c_char
     } else {
@@ -5079,15 +4984,13 @@ pub unsafe extern "C" fn event_ignored(
                 || *ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ',' as ::core::ffi::c_int)
         {
-            ignored = ei == p_ei
-                || event_names[event as usize].event <= 0 as ::core::ffi::c_int;
-            ei = ei
-                .offset(
-                    (3 as ::core::ffi::c_int
-                        + (*ei.offset(3 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == ',' as ::core::ffi::c_int)
-                            as ::core::ffi::c_int) as isize,
-                );
+            ignored = ei == p_ei || event_names[event as usize].event <= 0 as ::core::ffi::c_int;
+            ei = ei.offset(
+                (3 as ::core::ffi::c_int
+                    + (*ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == ',' as ::core::ffi::c_int) as ::core::ffi::c_int)
+                    as isize,
+            );
         } else if event_name2nr(ei, &raw mut ei) as ::core::ffi::c_uint
             == event as ::core::ffi::c_uint
         {
@@ -5100,9 +5003,7 @@ pub unsafe extern "C" fn event_ignored(
     return ignored;
 }
 #[no_mangle]
-pub unsafe extern "C" fn check_ei(
-    mut ei: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut win: bool = ei != p_ei;
     while *ei != 0 {
         if strncasecmp(
@@ -5114,19 +5015,17 @@ pub unsafe extern "C" fn check_ei(
                 || *ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ',' as ::core::ffi::c_int)
         {
-            ei = ei
-                .offset(
-                    (3 as ::core::ffi::c_int
-                        + (*ei.offset(3 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == ',' as ::core::ffi::c_int)
-                            as ::core::ffi::c_int) as isize,
-                );
+            ei = ei.offset(
+                (3 as ::core::ffi::c_int
+                    + (*ei.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == ',' as ::core::ffi::c_int) as ::core::ffi::c_int)
+                    as isize,
+            );
         } else {
-            ei = ei
-                .offset(
-                    (*ei as ::core::ffi::c_int == '-' as ::core::ffi::c_int)
-                        as ::core::ffi::c_int as isize,
-                );
+            ei = ei.offset(
+                (*ei as ::core::ffi::c_int == '-' as ::core::ffi::c_int) as ::core::ffi::c_int
+                    as isize,
+            );
             let mut event: event_T = event_name2nr(ei, &raw mut ei);
             if event as ::core::ffi::c_uint
                 == NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5144,14 +5043,9 @@ pub unsafe extern "C" fn au_event_disable(
     mut what: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut p_ei_len: size_t = strlen(p_ei);
-    let mut save_ei: *mut ::core::ffi::c_char = xmemdupz(
-        p_ei as *const ::core::ffi::c_void,
-        p_ei_len,
-    ) as *mut ::core::ffi::c_char;
-    let mut new_ei: *mut ::core::ffi::c_char = xstrnsave(
-        p_ei,
-        p_ei_len.wrapping_add(strlen(what)),
-    );
+    let mut save_ei: *mut ::core::ffi::c_char =
+        xmemdupz(p_ei as *const ::core::ffi::c_void, p_ei_len) as *mut ::core::ffi::c_char;
+    let mut new_ei: *mut ::core::ffi::c_char = xstrnsave(p_ei, p_ei_len.wrapping_add(strlen(what)));
     if *what as ::core::ffi::c_int == ',' as ::core::ffi::c_int
         && *p_ei as ::core::ffi::c_int == NUL
     {
@@ -5197,12 +5091,8 @@ pub unsafe extern "C" fn do_autocmd(
     mut forceit: ::core::ffi::c_int,
 ) {
     let mut arg: *mut ::core::ffi::c_char = arg_in;
-    let mut envpat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut envpat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut need_free: bool = false_0 != 0;
     let mut nested: bool = false_0 != 0;
     let mut once: bool = false_0 != 0;
@@ -5214,10 +5104,8 @@ pub unsafe extern "C" fn do_autocmd(
     } else {
         group = arg_augroup_get(&raw mut arg);
     }
-    let mut pat: *mut ::core::ffi::c_char = arg_event_skip(
-        arg,
-        group != AUGROUP_ALL as ::core::ffi::c_int,
-    );
+    let mut pat: *mut ::core::ffi::c_char =
+        arg_event_skip(arg, group != AUGROUP_ALL as ::core::ffi::c_int);
     if pat.is_null() {
         return;
     }
@@ -5260,7 +5148,8 @@ pub unsafe extern "C" fn do_autocmd(
                         b"++once\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char,
                         6 as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0;
+                    ) as ::core::ffi::c_int
+                    != 0;
                 invalid_flags = invalid_flags as ::core::ffi::c_int
                     | arg_autocmd_flag_get(
                         &raw mut nested,
@@ -5268,7 +5157,8 @@ pub unsafe extern "C" fn do_autocmd(
                         b"++nested\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char,
                         8 as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0;
+                    ) as ::core::ffi::c_int
+                    != 0;
                 invalid_flags = invalid_flags as ::core::ffi::c_int
                     | arg_autocmd_flag_get(
                         &raw mut nested,
@@ -5276,7 +5166,8 @@ pub unsafe extern "C" fn do_autocmd(
                         b"nested\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char,
                         6 as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0;
+                    ) as ::core::ffi::c_int
+                    != 0;
             }
             i = i.wrapping_add(1);
         }
@@ -5294,9 +5185,9 @@ pub unsafe extern "C" fn do_autocmd(
     let is_showing: bool = forceit == 0 && *cmd as ::core::ffi::c_int == NUL;
     if is_showing {
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-        msg_puts_title(
-            gettext(b"\n--- Autocommands ---\0".as_ptr() as *const ::core::ffi::c_char),
-        );
+        msg_puts_title(gettext(
+            b"\n--- Autocommands ---\0".as_ptr() as *const ::core::ffi::c_char
+        ));
         if *arg as ::core::ffi::c_int == '*' as ::core::ffi::c_int
             || *arg as ::core::ffi::c_int == '|' as ::core::ffi::c_int
             || *arg as ::core::ffi::c_int == NUL
@@ -5307,11 +5198,12 @@ pub unsafe extern "C" fn do_autocmd(
             '_c2rust_label: {
                 if (event as ::core::ffi::c_uint)
                     < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"event < NUM_EVENTS\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         860 as ::core::ffi::c_uint,
                         b"void do_autocmd(exarg_T *, char *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5325,12 +5217,10 @@ pub unsafe extern "C" fn do_autocmd(
         || *arg as ::core::ffi::c_int == '|' as ::core::ffi::c_int
     {
         if *cmd as ::core::ffi::c_int != NUL {
-            emsg(
-                gettext(
-                    &raw const e_cannot_define_autocommands_for_all_events
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                &raw const e_cannot_define_autocommands_for_all_events
+                    as *const ::core::ffi::c_char,
+            ));
         } else {
             do_all_autocmd_events(
                 pat,
@@ -5350,11 +5240,12 @@ pub unsafe extern "C" fn do_autocmd(
             '_c2rust_label_0: {
                 if (event_0 as ::core::ffi::c_uint)
                     < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"event < NUM_EVENTS\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         873 as ::core::ffi::c_uint,
                         b"void do_autocmd(exarg_T *, char *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -5410,7 +5301,8 @@ pub unsafe extern "C" fn do_autocmd_event(
     '_c2rust_label: {
         if *pat as ::core::ffi::c_int != '\0' as ::core::ffi::c_int
             || del as ::core::ffi::c_int != 0
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"*pat != NUL || del\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -5432,8 +5324,8 @@ pub unsafe extern "C" fn do_autocmd_event(
         aucmd_del_for_event_and_group(event, findgroup);
         return OK;
     }
-    let mut patlen: ::core::ffi::c_int = aucmd_span_pattern(pat, &raw mut pat)
-        as ::core::ffi::c_int;
+    let mut patlen: ::core::ffi::c_int =
+        aucmd_span_pattern(pat, &raw mut pat) as ::core::ffi::c_int;
     while patlen != 0 {
         let mut endpat: *const ::core::ffi::c_char = pat.offset(patlen as isize);
         let mut is_buflocal: bool = aupat_is_buflocal(pat, patlen);
@@ -5446,12 +5338,13 @@ pub unsafe extern "C" fn do_autocmd_event(
                 buflocal_nr,
             );
             pat = &raw mut buflocal_pat as *mut ::core::ffi::c_char;
-            patlen = strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char)
-                as ::core::ffi::c_int;
+            patlen =
+                strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
         }
         if del {
             '_c2rust_label_0: {
-                if *pat as ::core::ffi::c_int != '\0' as ::core::ffi::c_int {} else {
+                if *pat as ::core::ffi::c_int != '\0' as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
                         b"*pat != NUL\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0"
@@ -5462,15 +5355,16 @@ pub unsafe extern "C" fn do_autocmd_event(
                     );
                 }
             };
-            let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-                .offset(event as ::core::ffi::c_int as isize);
+            let acs: *mut AutoCmdVec =
+                (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
             let mut i: size_t = 0 as size_t;
             while i < (*acs).size {
                 let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
                 let ap: *mut AutoPat = (*ac).pat;
-                if !ap.is_null() && (*ap).group == findgroup && (*ap).patlen == patlen
-                    && strncmp(pat, (*ap).pat, patlen as size_t)
-                        == 0 as ::core::ffi::c_int
+                if !ap.is_null()
+                    && (*ap).group == findgroup
+                    && (*ap).patlen == patlen
+                    && strncmp(pat, (*ap).pat, patlen as size_t) == 0 as ::core::ffi::c_int
                 {
                     aucmd_del(ac);
                 }
@@ -5516,7 +5410,8 @@ pub unsafe extern "C" fn autocmd_register(
     mut handler_fn: *mut Callback,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if group != 0 as ::core::ffi::c_int {} else {
+        if group != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"group != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -5547,19 +5442,19 @@ pub unsafe extern "C" fn autocmd_register(
             buflocal_nr,
         );
         pat = &raw mut buflocal_pat as *mut ::core::ffi::c_char;
-        patlen = strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char)
-            as ::core::ffi::c_int;
+        patlen = strlen(&raw mut buflocal_pat as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
     }
     let mut ap: *mut AutoPat = ::core::ptr::null_mut::<AutoPat>();
-    let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-        .offset(event as ::core::ffi::c_int as isize);
+    let acs: *mut AutoCmdVec =
+        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     let mut i: ptrdiff_t = (*acs).size as ptrdiff_t - 1 as ptrdiff_t;
     while i >= 0 as ptrdiff_t {
         ap = (*(*acs).items.offset(i as isize)).pat;
         if ap.is_null() {
             i -= 1;
         } else {
-            if (*ap).group != findgroup || (*ap).patlen != patlen
+            if (*ap).group != findgroup
+                || (*ap).patlen != patlen
                 || strncmp(pat, (*ap).pat, patlen as size_t) != 0 as ::core::ffi::c_int
             {
                 ap = ::core::ptr::null_mut::<AutoPat>();
@@ -5569,14 +5464,11 @@ pub unsafe extern "C" fn autocmd_register(
     }
     if ap.is_null() {
         if is_buflocal as ::core::ffi::c_int != 0
-            && (buflocal_nr == 0 as ::core::ffi::c_int
-                || buflist_findnr(buflocal_nr).is_null())
+            && (buflocal_nr == 0 as ::core::ffi::c_int || buflist_findnr(buflocal_nr).is_null())
         {
             semsg(
-                gettext(
-                    b"E680: <buffer=%d>: invalid buffer number \0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E680: <buffer=%d>: invalid buffer number \0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 buflocal_nr,
             );
             return FAIL;
@@ -5650,25 +5542,22 @@ pub unsafe extern "C" fn autocmd_register(
     if autocmds[event as ::core::ffi::c_int as usize].size
         == autocmds[event as ::core::ffi::c_int as usize].capacity
     {
-        autocmds[event as ::core::ffi::c_int as usize].capacity = (if autocmds[event
-                as ::core::ffi::c_int as usize]
-            .capacity != 0
-        {
-            autocmds[event as ::core::ffi::c_int as usize].capacity
-                << 1 as ::core::ffi::c_int
-        } else {
-            8 as size_t
-        });
+        autocmds[event as ::core::ffi::c_int as usize].capacity =
+            (if autocmds[event as ::core::ffi::c_int as usize].capacity != 0 {
+                autocmds[event as ::core::ffi::c_int as usize].capacity << 1 as ::core::ffi::c_int
+            } else {
+                8 as size_t
+            });
         autocmds[event as ::core::ffi::c_int as usize].items = xrealloc(
-            autocmds[event as ::core::ffi::c_int as usize].items
-                as *mut ::core::ffi::c_void,
+            autocmds[event as ::core::ffi::c_int as usize].items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<AutoCmd>()
                 .wrapping_mul(autocmds[event as ::core::ffi::c_int as usize].capacity),
         ) as *mut AutoCmd;
-    } else {};
+    } else {
+    };
     let c2rust_fresh2 = autocmds[event as ::core::ffi::c_int as usize].size;
-    autocmds[event as ::core::ffi::c_int as usize].size = autocmds[event
-            as ::core::ffi::c_int as usize]
+    autocmds[event as ::core::ffi::c_int as usize].size = autocmds
+        [event as ::core::ffi::c_int as usize]
         .size
         .wrapping_add(1);
     let mut ac: *mut AutoCmd = autocmds[event as ::core::ffi::c_int as usize]
@@ -5683,10 +5572,9 @@ pub unsafe extern "C" fn autocmd_register(
         callback_copy(&raw mut (*ac).handler_fn, handler_fn);
     }
     (*ac).script_ctx = current_sctx;
-    (*ac).script_ctx.sc_lnum
-        += (*(exestack.ga_data as *mut estack_T)
-            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum;
+    (*ac).script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+        .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+    .es_lnum;
     nlua_set_sctx(&raw mut (*ac).script_ctx);
     (*ac).once = once;
     (*ac).nested = nested;
@@ -5708,7 +5596,8 @@ pub unsafe extern "C" fn aucmd_span_pattern(
     let mut p: *const ::core::ffi::c_char = pat;
     let mut brace_level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while *p as ::core::ffi::c_int != 0
-        && (*p as ::core::ffi::c_int != ',' as ::core::ffi::c_int || brace_level != 0
+        && (*p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
+            || brace_level != 0
             || p > pat
                 && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int)
@@ -5736,23 +5625,20 @@ pub unsafe extern "C" fn do_doautocmd(
     }
     let mut group: ::core::ffi::c_int = arg_augroup_get(&raw mut arg);
     if *arg as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
-        emsg(
-            gettext(
-                b"E217: Can't execute autocommands for ALL events\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E217: Can't execute autocommands for ALL events\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
-    let mut fname: *mut ::core::ffi::c_char = arg_event_skip(
-        arg,
-        group != AUGROUP_ALL as ::core::ffi::c_int,
-    );
+    let mut fname: *mut ::core::ffi::c_char =
+        arg_event_skip(arg, group != AUGROUP_ALL as ::core::ffi::c_int);
     if fname.is_null() {
         return FAIL;
     }
     fname = skipwhite(fname);
-    while *arg as ::core::ffi::c_int != 0 && ends_excmd(*arg as ::core::ffi::c_int) == 0
+    while *arg as ::core::ffi::c_int != 0
+        && ends_excmd(*arg as ::core::ffi::c_int) == 0
         && !ascii_iswhite(*arg as ::core::ffi::c_int)
     {
         if apply_autocmds_group(
@@ -5771,16 +5657,18 @@ pub unsafe extern "C" fn do_doautocmd(
     if nothing_done != 0 && do_msg as ::core::ffi::c_int != 0 && !aborting() {
         smsg(
             0 as ::core::ffi::c_int,
-            gettext(
-                b"No matching autocommands: %s\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"No matching autocommands: %s\0".as_ptr() as *const ::core::ffi::c_char),
             arg_start,
         );
     }
     if !did_something.is_null() {
         *did_something = nothing_done == 0;
     }
-    return if aborting() as ::core::ffi::c_int != 0 { FAIL } else { OK };
+    return if aborting() as ::core::ffi::c_int != 0 {
+        FAIL
+    } else {
+        OK
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
@@ -5801,8 +5689,8 @@ pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
         save_prompt_insert: 0,
     };
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut call_do_modelines: ::core::ffi::c_int = check_nomodeline(&raw mut arg)
-        as ::core::ffi::c_int;
+    let mut call_do_modelines: ::core::ffi::c_int =
+        check_nomodeline(&raw mut arg) as ::core::ffi::c_int;
     let mut bufref: bufref_T = bufref_T {
         br_buf: ::core::ptr::null_mut::<buf_T>(),
         br_fnum: 0,
@@ -5816,13 +5704,11 @@ pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
             set_bufref(&raw mut bufref, buf);
             retval = do_doautocmd(arg, false_0 != 0, &raw mut did_aucmd);
             if call_do_modelines != 0 && did_aucmd as ::core::ffi::c_int != 0 {
-                do_modelines(
-                    if is_aucmd_win(curwin) as ::core::ffi::c_int != 0 {
-                        OPT_NOWIN as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    },
-                );
+                do_modelines(if is_aucmd_win(curwin) as ::core::ffi::c_int != 0 {
+                    OPT_NOWIN as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                });
             }
             aucmd_restbuf(&raw mut aco);
             if retval == FAIL || !bufref_valid(&raw mut bufref) {
@@ -5840,9 +5726,7 @@ pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn check_nomodeline(
-    mut argp: *mut *mut ::core::ffi::c_char,
-) -> bool {
+pub unsafe extern "C" fn check_nomodeline(mut argp: *mut *mut ::core::ffi::c_char) -> bool {
     if strncmp(
         *argp,
         b"<nomodeline>\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5896,10 +5780,10 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
                 });
                 aucmd_win_vec.items = xrealloc(
                     aucmd_win_vec.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<aucmdwin_T>()
-                        .wrapping_mul(aucmd_win_vec.capacity),
+                    ::core::mem::size_of::<aucmdwin_T>().wrapping_mul(aucmd_win_vec.capacity),
                 ) as *mut aucmdwin_T;
-            } else {};
+            } else {
+            };
             let c2rust_fresh12 = aucmd_win_vec.size;
             aucmd_win_vec.size = aucmd_win_vec.size.wrapping_add(1);
             *aucmd_win_vec.items.offset(c2rust_fresh12 as isize) = aucmdwin_T {
@@ -5907,7 +5791,10 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
                 auc_win_used: false,
             };
         }
-        if (*aucmd_win_vec.items.offset(auc_idx as isize)).auc_win.is_null() {
+        if (*aucmd_win_vec.items.offset(auc_idx as isize))
+            .auc_win
+            .is_null()
+        {
             win_alloc_aucmd_win(auc_idx);
             need_append = false_0 != 0;
         }
@@ -5932,8 +5819,8 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
         (*auc_win).w_s = &raw mut (*buf).b_s;
         (*buf).b_nwindows += 1;
         win_init_empty(auc_win);
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*auc_win).w_localdir
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*auc_win).w_localdir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -5974,7 +5861,7 @@ pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
         let mut awp: *mut win_T = (*aucmd_win_vec
             .items
             .offset((*aco).use_aucmd_win_idx as isize))
-            .auc_win;
+        .auc_win;
         block_autocmds();
         '_win_found: {
             if curwin != awp {
@@ -5991,11 +5878,7 @@ pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
                     while !wp.is_null() {
                         if wp == awp {
                             if tp != curtab {
-                                goto_tabpage_tp(
-                                    tp as *mut tabpage_T,
-                                    true_0 != 0,
-                                    true_0 != 0,
-                                );
+                                goto_tabpage_tp(tp as *mut tabpage_T, true_0 != 0, true_0 != 0);
                             }
                             win_goto(awp);
                             break '_win_found;
@@ -6019,8 +5902,10 @@ pub unsafe extern "C" fn aucmd_restbuf(mut aco: *mut aco_save_T) {
             ui_call_win_hide((*curwin).w_grid_alloc.handle as Integer);
             grid_free(&raw mut (*curwin).w_grid_alloc);
         }
-        (*aucmd_win_vec.items.offset((*aco).use_aucmd_win_idx as isize)).auc_win_used = false_0
-            != 0;
+        (*aucmd_win_vec
+            .items
+            .offset((*aco).use_aucmd_win_idx as isize))
+        .auc_win_used = false_0 != 0;
         if valid_tabpage_win(curtab) == 0 {
             close_tabpage(curtab);
         }
@@ -6091,8 +5976,8 @@ pub unsafe extern "C" fn aucmd_defer(
     mut eap: *mut exarg_T,
     mut data: *mut Object,
 ) {
-    let mut evdata: *mut AutoCmdEvent = xmalloc(::core::mem::size_of::<AutoCmdEvent>())
-        as *mut AutoCmdEvent;
+    let mut evdata: *mut AutoCmdEvent =
+        xmalloc(::core::mem::size_of::<AutoCmdEvent>()) as *mut AutoCmdEvent;
     (*evdata).event = event;
     (*evdata).fname = if !fname.is_null() {
         xstrdup(fname)
@@ -6117,8 +6002,7 @@ pub unsafe extern "C" fn aucmd_defer(
         deferred_events,
         Event {
             handler: Some(
-                deferred_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                deferred_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 evdata as *mut ::core::ffi::c_void,
@@ -6136,8 +6020,8 @@ pub unsafe extern "C" fn aucmd_defer(
     );
 }
 unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut e: *mut AutoCmdEvent = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut AutoCmdEvent;
+    let mut e: *mut AutoCmdEvent =
+        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut AutoCmdEvent;
     let mut event: event_T = (*e).event;
     let mut fname: *mut ::core::ffi::c_char = (*e).fname;
     let mut fname_io: *mut ::core::ffi::c_char = (*e).fname_io;
@@ -6179,9 +6063,7 @@ unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
                     vval: typval_vval_union { v_number: 0 },
                 };
                 object_to_vim(item.value, &raw mut tv, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     api_clear_error(&raw mut err);
                 } else {
                     tv_dict_add_tv(v_event, item.key.data, item.key.size, &raw mut tv);
@@ -6207,16 +6089,7 @@ unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
             save_prompt_insert: 0,
         };
         aucmd_prepbuf(&raw mut aco, buf);
-        apply_autocmds_group(
-            event,
-            fname,
-            fname_io,
-            false_0 != 0,
-            group,
-            buf,
-            eap,
-            data,
-        );
+        apply_autocmds_group(event, fname, fname_io, false_0 != 0, group, buf, eap, data);
         aucmd_restbuf(&raw mut aco);
         restore_v_event(v_event, &raw mut save_v_event);
     }
@@ -6309,9 +6182,11 @@ unsafe extern "C" fn has_cursorhold() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn trigger_cursorhold() -> bool {
-    if !did_cursorhold && has_cursorhold() as ::core::ffi::c_int != 0
+    if !did_cursorhold
+        && has_cursorhold() as ::core::ffi::c_int != 0
         && reg_recording == 0 as ::core::ffi::c_int
-        && typebuf.tb_len == 0 as ::core::ffi::c_int && !ins_compl_active()
+        && typebuf.tb_len == 0 as ::core::ffi::c_int
+        && !ins_compl_active()
     {
         let mut state: ::core::ffi::c_int = get_real_state();
         if state == MODE_NORMAL_BUSY as ::core::ffi::c_int
@@ -6334,21 +6209,17 @@ pub unsafe extern "C" fn apply_autocmds_group(
     mut data: *mut Object,
 ) -> bool {
     let mut win_ignore: bool = false;
-    let mut save_autocmd_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut save_autocmd_fname: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut save_autocmd_fname_full: bool = false;
     let mut save_autocmd_bufnr: ::core::ffi::c_int = 0;
-    let mut save_autocmd_match: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut save_autocmd_match: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut save_autocmd_busy: ::core::ffi::c_int = 0;
     let mut save_autocmd_nested: ::core::ffi::c_int = 0;
     let mut save_changed: bool = false;
     let mut old_curbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    let mut afile_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut afile_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut save_current_sctx: sctx_T = sctx_T {
         sc_sid: 0,
         sc_seq: 0,
@@ -6359,9 +6230,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
         top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         next: ::core::ptr::null_mut::<funccal_entry_T>(),
     };
-    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut patcmd: AutoPatCmd = AutoPatCmd {
         lastpat: ::core::ptr::null_mut::<AutoPat>(),
         auidx: 0,
@@ -6382,14 +6251,10 @@ pub unsafe extern "C" fn apply_autocmds_group(
         data: ::core::ptr::null_mut::<Object>(),
         next: ::core::ptr::null_mut::<AutoPatCmd>(),
     };
-    let mut sfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut sfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: bool = false_0 != 0;
     static mut nesting: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut save_cmdarg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut save_cmdarg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static mut filechangeshell_busy: bool = false_0 != 0;
     let mut wait_time: proftime_T = 0;
     let mut did_save_redobuff: bool = false_0 != 0;
@@ -6418,20 +6283,17 @@ pub unsafe extern "C" fn apply_autocmds_group(
         },
     };
     let save_KeyTyped: bool = KeyTyped;
-    if !(event as ::core::ffi::c_uint
-        == NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
+    if !(event as ::core::ffi::c_uint == NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
         || autocmds[event as ::core::ffi::c_int as usize].size == 0 as size_t
         || is_autocmd_blocked() as ::core::ffi::c_int != 0)
     {
         if !(autocmd_busy as ::core::ffi::c_int != 0
-            && !(force as ::core::ffi::c_int != 0
-                || autocmd_nested as ::core::ffi::c_int != 0))
+            && !(force as ::core::ffi::c_int != 0 || autocmd_nested as ::core::ffi::c_int != 0))
         {
             if !aborting() {
                 if !(filechangeshell_busy as ::core::ffi::c_int != 0
                     && (event as ::core::ffi::c_uint
-                        == EVENT_FILECHANGEDSHELL as ::core::ffi::c_int
-                            as ::core::ffi::c_uint
+                        == EVENT_FILECHANGEDSHELL as ::core::ffi::c_int as ::core::ffi::c_uint
                         || event as ::core::ffi::c_uint
                             == EVENT_FILECHANGEDSHELLPOST as ::core::ffi::c_int
                                 as ::core::ffi::c_uint))
@@ -6439,16 +6301,11 @@ pub unsafe extern "C" fn apply_autocmds_group(
                     if !event_ignored(event, p_ei) {
                         win_ignore = false_0 != 0;
                         if buf == curbuf
-                            && event_names[event as usize].event
-                                <= 0 as ::core::ffi::c_int
+                            && event_names[event as usize].event <= 0 as ::core::ffi::c_int
                         {
-                            win_ignore = event_ignored(
-                                event,
-                                (*curwin).w_onebuf_opt.wo_eiw,
-                            );
+                            win_ignore = event_ignored(event, (*curwin).w_onebuf_opt.wo_eiw);
                         } else if !buf.is_null()
-                            && event_names[event as usize].event
-                                <= 0 as ::core::ffi::c_int
+                            && event_names[event as usize].event <= 0 as ::core::ffi::c_int
                             && (*buf).b_nwindows > 0 as ::core::ffi::c_int
                         {
                             win_ignore = true_0 != 0;
@@ -6474,16 +6331,13 @@ pub unsafe extern "C" fn apply_autocmds_group(
                         }
                         if !win_ignore {
                             if nesting == 10 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(
-                                        &raw const e_autocommand_nesting_too_deep
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                );
+                                emsg(gettext(
+                                    &raw const e_autocommand_nesting_too_deep
+                                        as *const ::core::ffi::c_char,
+                                ));
                             } else if !(autocmd_no_enter != 0
                                 && (event as ::core::ffi::c_uint
-                                    == EVENT_WINENTER as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
+                                    == EVENT_WINENTER as ::core::ffi::c_int as ::core::ffi::c_uint
                                     || event as ::core::ffi::c_uint
                                         == EVENT_BUFENTER as ::core::ffi::c_int
                                             as ::core::ffi::c_uint)
@@ -6520,9 +6374,8 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             == EVENT_MARKSET as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                     {
-                                        autocmd_fname = ::core::ptr::null_mut::<
-                                            ::core::ffi::c_char,
-                                        >();
+                                        autocmd_fname =
+                                            ::core::ptr::null_mut::<::core::ffi::c_char>();
                                     } else if !fname.is_null()
                                         && ends_excmd(*fname as ::core::ffi::c_int) == 0
                                     {
@@ -6530,9 +6383,8 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     } else if !buf.is_null() {
                                         autocmd_fname = (*buf).b_ffname;
                                     } else {
-                                        autocmd_fname = ::core::ptr::null_mut::<
-                                            ::core::ffi::c_char,
-                                        >();
+                                        autocmd_fname =
+                                            ::core::ptr::null_mut::<::core::ffi::c_char>();
                                     }
                                 } else {
                                     autocmd_fname = fname_io;
@@ -6540,10 +6392,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                 afile_orig = ::core::ptr::null_mut::<::core::ffi::c_char>();
                                 if !autocmd_fname.is_null() {
                                     afile_orig = xstrdup(autocmd_fname);
-                                    autocmd_fname = xstrnsave(
-                                        autocmd_fname,
-                                        MAXPATHL as size_t,
-                                    );
+                                    autocmd_fname = xstrnsave(autocmd_fname, MAXPATHL as size_t);
                                 }
                                 autocmd_fname_full = false_0 != 0;
                                 autocmd_bufnr = if buf.is_null() {
@@ -6643,17 +6492,20 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             == EVENT_REMOTEREPLY as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                         || event as ::core::ffi::c_uint
-                                            == EVENT_SIGNAL as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == EVENT_SIGNAL as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         || event as ::core::ffi::c_uint
                                             == EVENT_SPELLFILEMISSING as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                         || event as ::core::ffi::c_uint
-                                            == EVENT_SYNTAX as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == EVENT_SYNTAX as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         || event as ::core::ffi::c_uint
                                             == EVENT_TABCLOSED as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                         || event as ::core::ffi::c_uint
-                                            == EVENT_USER as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == EVENT_USER as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         || event as ::core::ffi::c_uint
                                             == EVENT_WINCLOSED as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
@@ -6735,19 +6587,20 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                         patcmd.next = active_apc_list;
                                         active_apc_list = &raw mut patcmd;
                                         patcmd.data = data;
-                                        let mut save_cmdbang: varnumber_T = get_vim_var_nr(
-                                            VV_CMDBANG,
-                                        );
+                                        let mut save_cmdbang: varnumber_T =
+                                            get_vim_var_nr(VV_CMDBANG);
                                         if !eap.is_null() {
                                             save_cmdarg = set_cmdarg(
                                                 eap,
                                                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                                             );
-                                            set_vim_var_nr(VV_CMDBANG, (*eap).forceit as varnumber_T);
+                                            set_vim_var_nr(
+                                                VV_CMDBANG,
+                                                (*eap).forceit as varnumber_T,
+                                            );
                                         } else {
-                                            save_cmdarg = ::core::ptr::null_mut::<
-                                                ::core::ffi::c_char,
-                                            >();
+                                            save_cmdarg =
+                                                ::core::ptr::null_mut::<::core::ffi::c_char>();
                                         }
                                         retval = true_0 != 0;
                                         if nesting == 1 as ::core::ffi::c_int {
@@ -6779,7 +6632,10 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                             reset_lnums();
                                         }
                                         if !eap.is_null() {
-                                            set_cmdarg(::core::ptr::null_mut::<exarg_T>(), save_cmdarg);
+                                            set_cmdarg(
+                                                ::core::ptr::null_mut::<exarg_T>(),
+                                                save_cmdarg,
+                                            );
                                             set_vim_var_nr(VV_CMDBANG, save_cmdbang);
                                         }
                                         if active_apc_list == &raw mut patcmd {
@@ -6791,11 +6647,11 @@ pub unsafe extern "C" fn apply_autocmds_group(
                                     filechangeshell_busy = false_0 != 0;
                                     autocmd_nested = save_autocmd_nested != 0;
                                     xfree(
-                                        (*(exestack.ga_data as *mut estack_T)
-                                            .offset(
-                                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
-                                            ))
-                                            .es_name as *mut ::core::ffi::c_void,
+                                        (*(exestack.ga_data as *mut estack_T).offset(
+                                            (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
+                                        ))
+                                        .es_name
+                                            as *mut ::core::ffi::c_void,
                                     );
                                     estack_pop();
                                     xfree(afile_orig as *mut ::core::ffi::c_void);
@@ -6862,8 +6718,7 @@ pub unsafe extern "C" fn apply_autocmds_group(
             }
         }
     }
-    if event as ::core::ffi::c_uint
-        == EVENT_BUFWIPEOUT as ::core::ffi::c_int as ::core::ffi::c_uint
+    if event as ::core::ffi::c_uint == EVENT_BUFWIPEOUT as ::core::ffi::c_int as ::core::ffi::c_uint
         && !buf.is_null()
     {
         aubuflocal_remove(buf);
@@ -6930,7 +6785,8 @@ pub unsafe extern "C" fn block_autocmds() {
 #[no_mangle]
 pub unsafe extern "C" fn unblock_autocmds() {
     autocmd_blocked -= 1;
-    if !is_autocmd_blocked() && termresponse_changed as ::core::ffi::c_int != 0
+    if !is_autocmd_blocked()
+        && termresponse_changed as ::core::ffi::c_int != 0
         && has_event(EVENT_TERMRESPONSE) as ::core::ffi::c_int != 0
     {
         let sequence: String_0 = cstr_to_string(get_vim_var_str(VV_TERMRESPONSE));
@@ -6946,10 +6802,11 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
     let entry: *mut estack_T = (exestack.ga_data as *mut estack_T)
         .offset(exestack.ga_len as isize)
         .offset(-(1 as ::core::ffi::c_int as isize));
-    let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-        .offset((*apc).event as ::core::ffi::c_int as isize);
+    let acs: *mut AutoCmdVec =
+        (&raw mut autocmds as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
     '_c2rust_label: {
-        if (*apc).ausize <= (*acs).size {} else {
+        if (*apc).ausize <= (*acs).size {
+        } else {
             __assert_fail(
                 b"apc->ausize <= kv_size(*acs)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -6985,33 +6842,28 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
                     {
                         break 's_11;
                     } else {
-                        let name: *const ::core::ffi::c_char = event_nr2name(
-                            (*apc).event,
-                        );
-                        let s: *const ::core::ffi::c_char = gettext(
-                            b"%s Autocommands for \"%s\"\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
+                        let name: *const ::core::ffi::c_char = event_nr2name((*apc).event);
+                        let s: *const ::core::ffi::c_char =
+                            gettext(b"%s Autocommands for \"%s\"\0".as_ptr()
+                                as *const ::core::ffi::c_char);
                         let sourcing_name_len: size_t = strlen(s)
                             .wrapping_add(strlen(name))
                             .wrapping_add((*ap).patlen as size_t)
                             .wrapping_add(1 as size_t);
-                        let namep: *mut ::core::ffi::c_char = xmalloc(sourcing_name_len)
-                            as *mut ::core::ffi::c_char;
+                        let namep: *mut ::core::ffi::c_char =
+                            xmalloc(sourcing_name_len) as *mut ::core::ffi::c_char;
                         snprintf(namep, sourcing_name_len, s, name, (*ap).pat);
                         if p_verbose >= 8 as OptInt {
                             verbose_enter();
                             smsg(
                                 0 as ::core::ffi::c_int,
-                                gettext(
-                                    b"Executing %s\0".as_ptr() as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"Executing %s\0".as_ptr() as *const ::core::ffi::c_char),
                                 namep,
                             );
                             verbose_leave();
                         }
-                        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*entry)
-                            .es_name as *mut *mut ::core::ffi::c_void;
+                        let mut ptr_: *mut *mut ::core::ffi::c_void =
+                            &raw mut (*entry).es_name as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL_0;
                         *ptr_;
@@ -7027,8 +6879,8 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
         }
         i = i.wrapping_add(1);
     }
-    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*entry).es_name
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+        &raw mut (*entry).es_name as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
     *ptr__0;
@@ -7036,10 +6888,7 @@ unsafe extern "C" fn aucmd_next(mut apc: *mut AutoPatCmd) {
     (*apc).lastpat = ::core::ptr::null_mut::<AutoPat>();
     (*apc).auidx = SIZE_MAX as size_t;
 }
-unsafe extern "C" fn au_callback(
-    mut ac: *const AutoCmd,
-    mut apc: *const AutoPatCmd,
-) -> bool {
+unsafe extern "C" fn au_callback(mut ac: *const AutoCmd, mut apc: *const AutoPatCmd) -> bool {
     let mut callback: Callback = (*ac).handler_fn;
     if callback.type_0 as ::core::ffi::c_uint
         == kCallbackLua as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -7067,9 +6916,7 @@ unsafe extern "C" fn au_callback(
             key: cstr_as_string(b"id\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: (*ac).id,
-                },
+                data: C2Rust_Unnamed { integer: (*ac).id },
             },
         };
         let c2rust_fresh4 = data.size;
@@ -7134,9 +6981,7 @@ unsafe extern "C" fn au_callback(
                 let c2rust_fresh9 = data.size;
                 data.size = data.size.wrapping_add(1);
                 *data.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                    key: cstr_as_string(
-                        b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                    ),
+                    key: cstr_as_string(b"group\0".as_ptr() as *const ::core::ffi::c_char),
                     value: object {
                         type_0: kObjectTypeInteger,
                         data: C2Rust_Unnamed {
@@ -7202,14 +7047,15 @@ pub unsafe extern "C" fn getnextac(
     mut do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     let apc: *mut AutoPatCmd = cookie as *mut AutoPatCmd;
-    let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-        .offset((*apc).event as ::core::ffi::c_int as isize);
+    let acs: *mut AutoCmdVec =
+        (&raw mut autocmds as *mut AutoCmdVec).offset((*apc).event as ::core::ffi::c_int as isize);
     aucmd_next(apc);
     if (*apc).lastpat.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     '_c2rust_label: {
-        if (*apc).auidx < (*acs).size {} else {
+        if (*apc).auidx < (*acs).size {
+        } else {
             __assert_fail(
                 b"apc->auidx < kv_size(*acs)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -7222,7 +7068,8 @@ pub unsafe extern "C" fn getnextac(
     };
     let ac: *mut AutoCmd = (*acs).items.offset((*apc).auidx as isize);
     '_c2rust_label_0: {
-        if !(*ac).pat.is_null() {} else {
+        if !(*ac).pat.is_null() {
+        } else {
             __assert_fail(
                 b"ac->pat != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -7243,8 +7090,8 @@ pub unsafe extern "C" fn getnextac(
             handler_str,
         );
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut handler_str
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut handler_str as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -7253,9 +7100,7 @@ pub unsafe extern "C" fn getnextac(
     autocmd_nested = (*ac).nested;
     current_sctx = (*ac).script_ctx;
     (*apc).script_ctx = current_sctx;
-    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !(*ac).handler_cmd.is_null() {
         retval = xstrdup((*ac).handler_cmd);
     } else {
@@ -7294,8 +7139,8 @@ pub unsafe extern "C" fn has_autocmd(
     if fname.is_null() {
         return false_0 != 0;
     }
-    let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-        .offset(event as ::core::ffi::c_int as isize);
+    let acs: *mut AutoCmdVec =
+        (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
     let mut i: size_t = 0 as size_t;
     while i < (*acs).size {
         let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
@@ -7310,8 +7155,7 @@ pub unsafe extern "C" fn has_autocmd(
                     (*ap).allow_dirs as ::core::ffi::c_int,
                 ) as ::core::ffi::c_int
             } else {
-                (!buf.is_null() && (*ap).buflocal_nr == (*buf).handle)
-                    as ::core::ffi::c_int
+                (!buf.is_null() && (*ap).buflocal_nr == (*buf).handle) as ::core::ffi::c_int
             }) != 0
         {
             retval = true_0 != 0;
@@ -7339,10 +7183,9 @@ pub unsafe extern "C" fn set_context_in_autocmd(
     autocmd_include_groups = false_0 != 0;
     let mut p: *mut ::core::ffi::c_char = arg;
     let mut group: ::core::ffi::c_int = arg_augroup_get(&raw mut arg);
-    if *arg as ::core::ffi::c_int == NUL && group != AUGROUP_ALL as ::core::ffi::c_int
-        && !ascii_iswhite(
-            *arg.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        )
+    if *arg as ::core::ffi::c_int == NUL
+        && group != AUGROUP_ALL as ::core::ffi::c_int
+        && !ascii_iswhite(*arg.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
     {
         arg = p;
         group = AUGROUP_ALL as ::core::ffi::c_int;
@@ -7387,11 +7230,8 @@ pub unsafe extern "C" fn expand_get_event_name(
 ) -> *mut ::core::ffi::c_char {
     let mut name: *mut ::core::ffi::c_char = augroup_name(idx + 1 as ::core::ffi::c_int);
     if !name.is_null() {
-        if !autocmd_include_groups
-            || name == get_deleted_augroup() as *mut ::core::ffi::c_char
-        {
-            return b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+        if !autocmd_include_groups || name == get_deleted_augroup() as *mut ::core::ffi::c_char {
+            return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         return name;
     }
@@ -7416,9 +7256,7 @@ pub unsafe extern "C" fn get_event_name_no_group(
     let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NUM_EVENTS as ::core::ffi::c_int {
-        j
-            += (event_names[i as usize].event <= 0 as ::core::ffi::c_int)
-                as ::core::ffi::c_int;
+        j += (event_names[i as usize].event <= 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
         if j == idx + 1 as ::core::ffi::c_int {
             return event_names[i as usize].name;
         }
@@ -7434,9 +7272,7 @@ pub unsafe extern "C" fn autocmd_supported(event: *const ::core::ffi::c_char) ->
 }
 #[no_mangle]
 pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
-    let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut event: event_T = EVENT_BUFADD;
     let mut acs: *mut AutoCmdVec = ::core::ptr::null_mut::<AutoCmdVec>();
     let mut buflocal_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
@@ -7449,9 +7285,7 @@ pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
         *c2rust_fresh13 = NUL as ::core::ffi::c_char;
     }
     let mut group: ::core::ffi::c_int = augroup_find(arg_save);
-    let mut event_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut event_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     '_theend: {
         if group == AUGROUP_ERROR as ::core::ffi::c_int {
             group = AUGROUP_ALL as ::core::ffi::c_int;
@@ -7470,11 +7304,9 @@ pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
         }
         pattern = p;
         event = event_name2nr(event_name, &raw mut p);
-        if event as ::core::ffi::c_uint
-            != NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            acs = (&raw mut autocmds as *mut AutoCmdVec)
-                .offset(event as ::core::ffi::c_int as isize);
+        if event as ::core::ffi::c_uint != NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint {
+            acs =
+                (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
             if (*acs).size != 0 as size_t {
                 if !pattern.is_null()
                     && strcasecmp(
@@ -7489,15 +7321,13 @@ pub unsafe extern "C" fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
                 while i < (*acs).size {
                     let ap: *mut AutoPat = (*(*acs).items.offset(i as isize)).pat;
                     if !ap.is_null()
-                        && (group == AUGROUP_ALL as ::core::ffi::c_int
-                            || (*ap).group == group)
+                        && (group == AUGROUP_ALL as ::core::ffi::c_int || (*ap).group == group)
                         && (pattern.is_null()
                             || (if buflocal_buf.is_null() {
-                                (path_fnamecmp((*ap).pat, pattern)
-                                    == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
-                            } else {
-                                ((*ap).buflocal_nr == (*buflocal_buf).handle)
+                                (path_fnamecmp((*ap).pat, pattern) == 0 as ::core::ffi::c_int)
                                     as ::core::ffi::c_int
+                            } else {
+                                ((*ap).buflocal_nr == (*buflocal_buf).handle) as ::core::ffi::c_int
                             }) != 0)
                     {
                         retval = true_0 != 0;
@@ -7518,8 +7348,11 @@ pub unsafe extern "C" fn aupat_is_buflocal(
     mut patlen: ::core::ffi::c_int,
 ) -> bool {
     return patlen >= 8 as ::core::ffi::c_int
-        && strncmp(pat, b"<buffer\0".as_ptr() as *const ::core::ffi::c_char, 7 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            pat,
+            b"<buffer\0".as_ptr() as *const ::core::ffi::c_char,
+            7 as size_t,
+        ) == 0 as ::core::ffi::c_int
         && *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
             == '>' as ::core::ffi::c_int;
 }
@@ -7529,10 +7362,10 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
     mut patlen: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if aupat_is_buflocal(pat, patlen) {} else {
+        if aupat_is_buflocal(pat, patlen) {
+        } else {
             __assert_fail(
-                b"aupat_is_buflocal(pat, patlen)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"aupat_is_buflocal(pat, patlen)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2514 as ::core::ffi::c_uint,
@@ -7559,7 +7392,9 @@ pub unsafe extern "C" fn aupat_get_buflocal_nr(
             return autocmd_bufnr;
         }
         if skipdigits(pat.offset(8 as ::core::ffi::c_int as isize))
-            == pat.offset(patlen as isize).offset(-(1 as ::core::ffi::c_int as isize))
+            == pat
+                .offset(patlen as isize)
+                .offset(-(1 as ::core::ffi::c_int as isize))
                 as *mut ::core::ffi::c_char
         {
             return atoi(pat.offset(8 as ::core::ffi::c_int as isize));
@@ -7575,15 +7410,15 @@ pub unsafe extern "C" fn aupat_normalize_buflocal_pat(
     mut buflocal_nr: ::core::ffi::c_int,
 ) {
     '_c2rust_label: {
-        if aupat_is_buflocal(pat, patlen) {} else {
+        if aupat_is_buflocal(pat, patlen) {
+        } else {
             __assert_fail(
-                b"aupat_is_buflocal(pat, patlen)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"aupat_is_buflocal(pat, patlen)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2539 as ::core::ffi::c_uint,
-                b"void aupat_normalize_buflocal_pat(char *, const char *, int, int)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"void aupat_normalize_buflocal_pat(char *, const char *, int, int)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -7616,22 +7451,22 @@ pub unsafe extern "C" fn autocmd_delete_event(
 #[no_mangle]
 pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
     '_c2rust_label: {
-        if id > 0 as int64_t {} else {
+        if id > 0 as int64_t {
+        } else {
             __assert_fail(
                 b"id > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2560 as ::core::ffi::c_uint,
-                b"_Bool autocmd_delete_id(int64_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"_Bool autocmd_delete_id(int64_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     let mut success: bool = false_0 != 0;
     let mut event: event_T = EVENT_BUFADD;
     while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-        let acs: *mut AutoCmdVec = (&raw mut autocmds as *mut AutoCmdVec)
-            .offset(event as ::core::ffi::c_int as isize);
+        let acs: *mut AutoCmdVec =
+            (&raw mut autocmds as *mut AutoCmdVec).offset(event as ::core::ffi::c_int as isize);
         let mut i: size_t = 0 as size_t;
         while i < (*acs).size {
             let ac: *mut AutoCmd = (*acs).items.offset(i as isize);
@@ -7646,35 +7481,25 @@ pub unsafe extern "C" fn autocmd_delete_id(mut id: int64_t) -> bool {
     return success;
 }
 #[no_mangle]
-pub unsafe extern "C" fn aucmd_handler_to_string(
-    mut ac: *mut AutoCmd,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn aucmd_handler_to_string(mut ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
     if !(*ac).handler_cmd.is_null() {
         return xstrdup((*ac).handler_cmd);
     }
-    return callback_to_string(
-        &raw mut (*ac).handler_fn,
-        ::core::ptr::null_mut::<Arena>(),
-    );
+    return callback_to_string(&raw mut (*ac).handler_fn, ::core::ptr::null_mut::<Arena>());
 }
 unsafe extern "C" fn arg_event_skip(
     mut arg: *mut ::core::ffi::c_char,
     mut have_group: bool,
 ) -> *mut ::core::ffi::c_char {
-    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *arg as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
         if *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
-            && !ascii_iswhite(
-                *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            )
+            && !ascii_iswhite(*arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
         {
             semsg(
                 gettext(
-                    b"E215: Illegal character after *: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"E215: Illegal character after *: %s\0".as_ptr() as *const ::core::ffi::c_char
                 ),
                 arg,
             );
@@ -7692,18 +7517,13 @@ unsafe extern "C" fn arg_event_skip(
             {
                 if have_group {
                     semsg(
-                        gettext(
-                            b"E216: No such event: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E216: No such event: %s\0".as_ptr() as *const ::core::ffi::c_char),
                         pat,
                     );
                 } else {
                     semsg(
-                        gettext(
-                            b"E216: No such group or event: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E216: No such group or event: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         pat,
                     );
                 }
@@ -7720,7 +7540,8 @@ unsafe extern "C" fn arg_augroup_get(
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut arg: *mut ::core::ffi::c_char = *argp;
     p = arg;
-    while *p as ::core::ffi::c_int != 0 && !ascii_iswhite(*p as ::core::ffi::c_int)
+    while *p as ::core::ffi::c_int != 0
+        && !ascii_iswhite(*p as ::core::ffi::c_int)
         && *p as ::core::ffi::c_int != '|' as ::core::ffi::c_int
     {
         p = p.offset(1);
@@ -7749,10 +7570,14 @@ unsafe extern "C" fn arg_autocmd_flag_get(
 ) -> bool {
     if strncmp(*cmd_ptr, pattern, len as size_t) == 0 as ::core::ffi::c_int
         && ascii_iswhite(*(*cmd_ptr).offset(len as isize) as ::core::ffi::c_int)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         if *flag {
-            semsg(gettext(&raw const e_duparg2 as *const ::core::ffi::c_char), pattern);
+            semsg(
+                gettext(&raw const e_duparg2 as *const ::core::ffi::c_char),
+                pattern,
+            );
             return true_0 != 0;
         }
         *flag = true_0 != 0;
@@ -7785,16 +7610,13 @@ pub unsafe extern "C" fn may_trigger_vim_suspend_resume(mut suspend: bool) {
             ::core::ptr::null_mut::<buf_T>(),
         );
         pending_vimresume = kTrue;
-    } else if !suspend
-        && pending_vimresume as ::core::ffi::c_int == kTrue as ::core::ffi::c_int
-    {
+    } else if !suspend && pending_vimresume as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
         pending_vimresume = kNone;
         multiqueue_put_event(
             main_loop.events,
             Event {
                 handler: Some(
-                    vimresume_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    vimresume_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -7839,7 +7661,8 @@ pub unsafe extern "C" fn do_autocmd_uienter(mut chanid: uint64_t, mut attached: 
     };
     let mut dict: *mut dict_T = get_v_event(&raw mut save_v_event);
     '_c2rust_label: {
-        if chanid < 9223372036854775807 as uint64_t {} else {
+        if chanid < 9223372036854775807 as uint64_t {
+        } else {
             __assert_fail(
                 b"chanid < VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/autocmd.c\0".as_ptr()
@@ -7899,10 +7722,7 @@ pub unsafe extern "C" fn do_autocmd_focusgained(mut gained: bool) {
     recursive = false_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn do_filetype_autocmd(
-    mut buf: *mut buf_T,
-    mut force: bool,
-) -> bool {
+pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: bool) -> bool {
     static mut ft_recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if ft_recursive > 0 as ::core::ffi::c_int && !force {
         return false_0 != 0;
@@ -7933,50 +7753,42 @@ pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 static mut event_names: [event_name; 145] = [
     event_name {
         len: 6 as size_t,
-        name: b"BufAdd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufAdd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFADD as ::core::ffi::c_int),
     },
     event_name {
         len: 9 as size_t,
-        name: b"BufCreate\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufCreate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFADD as ::core::ffi::c_int),
     },
     event_name {
         len: 9 as size_t,
-        name: b"BufDelete\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufDelete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFDELETE as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"BufEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFENTER as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"BufFilePost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufFilePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFFILEPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 10 as size_t,
-        name: b"BufFilePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufFilePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFFILEPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 9 as size_t,
-        name: b"BufHidden\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufHidden\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFHIDDEN as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"BufLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFLEAVE as ::core::ffi::c_int),
     },
     event_name {
@@ -7987,98 +7799,82 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 6 as size_t,
-        name: b"BufNew\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufNew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFNEW as ::core::ffi::c_int),
     },
     event_name {
         len: 10 as size_t,
-        name: b"BufNewFile\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufNewFile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFNEWFILE as ::core::ffi::c_int),
     },
     event_name {
         len: 7 as size_t,
-        name: b"BufRead\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufRead\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFREADPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 10 as size_t,
-        name: b"BufReadCmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufReadCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFREADCMD as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"BufReadPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufReadPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFREADPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 10 as size_t,
-        name: b"BufReadPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFREADPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 9 as size_t,
-        name: b"BufUnload\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufUnload\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFUNLOAD as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"BufWinEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWinEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWINENTER as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"BufWinLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWinLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWINLEAVE as ::core::ffi::c_int),
     },
     event_name {
         len: 10 as size_t,
-        name: b"BufWipeout\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWipeout\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWIPEOUT as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"BufWrite\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWrite\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWRITEPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"BufWriteCmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWriteCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWRITECMD as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"BufWritePost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWritePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWRITEPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"BufWritePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"BufWritePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_BUFWRITEPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"ChanInfo\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ChanInfo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CHANINFO as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"ChanOpen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ChanOpen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CHANOPEN as ::core::ffi::c_int,
     },
     event_name {
@@ -8089,14 +7885,12 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 12 as size_t,
-        name: b"CmdlineEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CmdlineEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CMDLINEENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 12 as size_t,
-        name: b"CmdlineLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CmdlineLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CMDLINELEAVE as ::core::ffi::c_int,
     },
     event_name {
@@ -8107,26 +7901,22 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 12 as size_t,
-        name: b"CmdUndefined\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CmdUndefined\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CMDUNDEFINED as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"CmdwinEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CmdwinEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CMDWINENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"CmdwinLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CmdwinLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_CMDWINLEAVE as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"ColorScheme\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ColorScheme\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_COLORSCHEME as ::core::ffi::c_int,
     },
     event_name {
@@ -8143,8 +7933,7 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 12 as size_t,
-        name: b"CompleteDone\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CompleteDone\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_COMPLETEDONE as ::core::ffi::c_int,
     },
     event_name {
@@ -8155,32 +7944,27 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 10 as size_t,
-        name: b"CursorHold\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CursorHold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_CURSORHOLD as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"CursorHoldI\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CursorHoldI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_CURSORHOLDI as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"CursorMoved\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CursorMoved\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_CURSORMOVED as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"CursorMovedC\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CursorMovedC\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_CURSORMOVEDC as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"CursorMovedI\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"CursorMovedI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_CURSORMOVEDI as ::core::ffi::c_int),
     },
     event_name {
@@ -8191,20 +7975,17 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 11 as size_t,
-        name: b"DiffUpdated\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DiffUpdated\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_DIFFUPDATED as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"DirChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DirChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_DIRCHANGED as ::core::ffi::c_int,
     },
     event_name {
         len: 13 as size_t,
-        name: b"DirChangedPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"DirChangedPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_DIRCHANGEDPRE as ::core::ffi::c_int,
     },
     event_name {
@@ -8215,14 +7996,12 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 7 as size_t,
-        name: b"ExitPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ExitPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_EXITPRE as ::core::ffi::c_int,
     },
     event_name {
         len: 13 as size_t,
-        name: b"FileAppendCmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileAppendCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEAPPENDCMD as ::core::ffi::c_int),
     },
     event_name {
@@ -8233,14 +8012,12 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 13 as size_t,
-        name: b"FileAppendPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileAppendPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEAPPENDPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 13 as size_t,
-        name: b"FileChangedRO\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileChangedRO\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILECHANGEDRO as ::core::ffi::c_int),
     },
     event_name {
@@ -8257,50 +8034,42 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 12 as size_t,
-        name: b"FileEncoding\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileEncoding\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_ENCODINGCHANGED as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"FileReadCmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileReadCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEREADCMD as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"FileReadPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileReadPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEREADPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"FileReadPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEREADPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"FileType\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileType\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILETYPE as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"FileWriteCmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileWriteCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEWRITECMD as ::core::ffi::c_int),
     },
     event_name {
         len: 13 as size_t,
-        name: b"FileWritePost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileWritePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEWRITEPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"FileWritePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FileWritePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILEWRITEPRE as ::core::ffi::c_int),
     },
     event_name {
@@ -8311,8 +8080,7 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 13 as size_t,
-        name: b"FilterReadPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FilterReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_FILTERREADPRE as ::core::ffi::c_int),
     },
     event_name {
@@ -8329,56 +8097,47 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 11 as size_t,
-        name: b"FocusGained\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FocusGained\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_FOCUSGAINED as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"FocusLost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FocusLost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_FOCUSLOST as ::core::ffi::c_int,
     },
     event_name {
         len: 13 as size_t,
-        name: b"FuncUndefined\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"FuncUndefined\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_FUNCUNDEFINED as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"GUIEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"GUIEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_GUIENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"GUIFailed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"GUIFailed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_GUIFAILED as ::core::ffi::c_int,
     },
     event_name {
         len: 12 as size_t,
-        name: b"InsertChange\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"InsertChange\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_INSERTCHANGE as ::core::ffi::c_int),
     },
     event_name {
         len: 13 as size_t,
-        name: b"InsertCharPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"InsertCharPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_INSERTCHARPRE as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"InsertEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"InsertEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_INSERTENTER as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"InsertLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"InsertLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_INSERTLEAVE as ::core::ffi::c_int),
     },
     event_name {
@@ -8389,32 +8148,27 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 9 as size_t,
-        name: b"LspAttach\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LspAttach\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_LSPATTACH as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"LspDetach\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LspDetach\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_LSPDETACH as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"LspNotify\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LspNotify\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_LSPNOTIFY as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"LspProgress\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LspProgress\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_LSPPROGRESS as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"LspRequest\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"LspRequest\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_LSPREQUEST as ::core::ffi::c_int,
     },
     event_name {
@@ -8425,32 +8179,27 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 7 as size_t,
-        name: b"MarkSet\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MarkSet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_MARKSET as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"MenuPopup\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"MenuPopup\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_MENUPOPUP as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"ModeChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ModeChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_MODECHANGED as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"OptionSet\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"OptionSet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_OPTIONSET as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"PackChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"PackChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_PACKCHANGED as ::core::ffi::c_int,
     },
     event_name {
@@ -8461,8 +8210,7 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 8 as size_t,
-        name: b"Progress\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Progress\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_PROGRESS as ::core::ffi::c_int,
     },
     event_name {
@@ -8479,8 +8227,7 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 7 as size_t,
-        name: b"QuitPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"QuitPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_QUITPRE as ::core::ffi::c_int,
     },
     event_name {
@@ -8497,20 +8244,17 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 11 as size_t,
-        name: b"RemoteReply\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"RemoteReply\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_REMOTEREPLY as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"SafeState\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SafeState\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SAFESTATE as ::core::ffi::c_int,
     },
     event_name {
         len: 13 as size_t,
-        name: b"SearchWrapped\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SearchWrapped\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_SEARCHWRAPPED as ::core::ffi::c_int),
     },
     event_name {
@@ -8533,8 +8277,7 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 12 as size_t,
-        name: b"ShellCmdPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"ShellCmdPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SHELLCMDPOST as ::core::ffi::c_int,
     },
     event_name {
@@ -8545,26 +8288,22 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 6 as size_t,
-        name: b"Signal\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Signal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SIGNAL as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"SourceCmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SourceCmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SOURCECMD as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"SourcePost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SourcePost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SOURCEPOST as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"SourcePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SourcePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SOURCEPRE as ::core::ffi::c_int,
     },
     event_name {
@@ -8575,230 +8314,192 @@ static mut event_names: [event_name; 145] = [
     },
     event_name {
         len: 13 as size_t,
-        name: b"StdinReadPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"StdinReadPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_STDINREADPOST as ::core::ffi::c_int,
     },
     event_name {
         len: 12 as size_t,
-        name: b"StdinReadPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"StdinReadPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_STDINREADPRE as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"SwapExists\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"SwapExists\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SWAPEXISTS as ::core::ffi::c_int,
     },
     event_name {
         len: 6 as size_t,
-        name: b"Syntax\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"Syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_SYNTAX as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"TabClosed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TabClosed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TABCLOSED as ::core::ffi::c_int,
     },
     event_name {
         len: 12 as size_t,
-        name: b"TabClosedPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TabClosedPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TABCLOSEDPRE as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"TabEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TabEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TABENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"TabLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TabLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TABLEAVE as ::core::ffi::c_int,
     },
     event_name {
         len: 6 as size_t,
-        name: b"TabNew\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TabNew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TABNEW as ::core::ffi::c_int,
     },
     event_name {
         len: 13 as size_t,
-        name: b"TabNewEntered\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TabNewEntered\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TABNEWENTERED as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"TermChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMCHANGED as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"TermClose\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermClose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMCLOSE as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"TermEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"TermLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMLEAVE as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"TermOpen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermOpen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMOPEN as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"TermRequest\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermRequest\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMREQUEST as ::core::ffi::c_int,
     },
     event_name {
         len: 12 as size_t,
-        name: b"TermResponse\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TermResponse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_TERMRESPONSE as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"TextChanged\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TextChanged\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_TEXTCHANGED as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"TextChangedI\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TextChangedI\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_TEXTCHANGEDI as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"TextChangedP\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TextChangedP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_TEXTCHANGEDP as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"TextChangedT\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TextChangedT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_TEXTCHANGEDT as ::core::ffi::c_int),
     },
     event_name {
         len: 12 as size_t,
-        name: b"TextYankPost\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"TextYankPost\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_TEXTYANKPOST as ::core::ffi::c_int),
     },
     event_name {
         len: 7 as size_t,
-        name: b"UIEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"UIEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_UIENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 7 as size_t,
-        name: b"UILeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"UILeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_UILEAVE as ::core::ffi::c_int,
     },
     event_name {
         len: 4 as size_t,
-        name: b"User\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"User\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_USER as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"VimEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VimEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_VIMENTER as ::core::ffi::c_int,
     },
     event_name {
         len: 8 as size_t,
-        name: b"VimLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VimLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_VIMLEAVE as ::core::ffi::c_int,
     },
     event_name {
         len: 11 as size_t,
-        name: b"VimLeavePre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VimLeavePre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_VIMLEAVEPRE as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"VimResized\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VimResized\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_VIMRESIZED as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"VimResume\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VimResume\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_VIMRESUME as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"VimSuspend\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"VimSuspend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_VIMSUSPEND as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"WinClosed\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinClosed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_WINCLOSED as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"WinEnter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinEnter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_WINENTER as ::core::ffi::c_int),
     },
     event_name {
         len: 8 as size_t,
-        name: b"WinLeave\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinLeave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_WINLEAVE as ::core::ffi::c_int),
     },
     event_name {
         len: 6 as size_t,
-        name: b"WinNew\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinNew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_WINNEW as ::core::ffi::c_int,
     },
     event_name {
         len: 9 as size_t,
-        name: b"WinNewPre\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinNewPre\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: EVENT_WINNEWPRE as ::core::ffi::c_int,
     },
     event_name {
         len: 10 as size_t,
-        name: b"WinResized\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinResized\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_WINRESIZED as ::core::ffi::c_int),
     },
     event_name {
         len: 11 as size_t,
-        name: b"WinScrolled\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"WinScrolled\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         event: -(EVENT_WINSCROLLED as ::core::ffi::c_int),
     },
 ];
@@ -9687,401 +9388,379 @@ unsafe extern "C" fn event_name2nr_hash(
             low = 0 as ::core::ffi::c_int;
             high = 1 as ::core::ffi::c_int;
         }
-        6 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                66 | 98 => {
-                    low = 1 as ::core::ffi::c_int;
-                    high = 3 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 3 as ::core::ffi::c_int;
-                    high = 5 as ::core::ffi::c_int;
-                }
-                84 | 116 => {
-                    low = 5 as ::core::ffi::c_int;
-                    high = 6 as ::core::ffi::c_int;
-                }
-                87 | 119 => {
-                    low = 6 as ::core::ffi::c_int;
-                    high = 7 as ::core::ffi::c_int;
-                }
-                _ => {}
+        6 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            66 | 98 => {
+                low = 1 as ::core::ffi::c_int;
+                high = 3 as ::core::ffi::c_int;
             }
-        }
-        7 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                66 | 98 => {
-                    low = 7 as ::core::ffi::c_int;
-                    high = 8 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 8 as ::core::ffi::c_int;
-                    high = 9 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 9 as ::core::ffi::c_int;
-                    high = 10 as ::core::ffi::c_int;
-                }
-                81 | 113 => {
-                    low = 10 as ::core::ffi::c_int;
-                    high = 11 as ::core::ffi::c_int;
-                }
-                85 | 117 => {
-                    low = 11 as ::core::ffi::c_int;
-                    high = 13 as ::core::ffi::c_int;
-                }
-                _ => {}
+            83 | 115 => {
+                low = 3 as ::core::ffi::c_int;
+                high = 5 as ::core::ffi::c_int;
             }
-        }
-        8 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                66 | 98 => {
-                    low = 13 as ::core::ffi::c_int;
-                    high = 16 as ::core::ffi::c_int;
-                }
-                67 | 99 => {
-                    low = 16 as ::core::ffi::c_int;
-                    high = 18 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 18 as ::core::ffi::c_int;
-                    high = 19 as ::core::ffi::c_int;
-                }
-                71 | 103 => {
-                    low = 19 as ::core::ffi::c_int;
-                    high = 20 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 20 as ::core::ffi::c_int;
-                    high = 21 as ::core::ffi::c_int;
-                }
-                84 | 116 => {
-                    low = 21 as ::core::ffi::c_int;
-                    high = 24 as ::core::ffi::c_int;
-                }
-                86 | 118 => {
-                    low = 24 as ::core::ffi::c_int;
-                    high = 26 as ::core::ffi::c_int;
-                }
-                87 | 119 => {
-                    low = 26 as ::core::ffi::c_int;
-                    high = 28 as ::core::ffi::c_int;
-                }
-                _ => {}
+            84 | 116 => {
+                low = 5 as ::core::ffi::c_int;
+                high = 6 as ::core::ffi::c_int;
             }
-        }
-        9 => {
-            match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                65 | 97 => {
-                    low = 28 as ::core::ffi::c_int;
-                    high = 29 as ::core::ffi::c_int;
-                }
-                67 | 99 => {
-                    low = 29 as ::core::ffi::c_int;
-                    high = 32 as ::core::ffi::c_int;
-                }
-                68 | 100 => {
-                    low = 32 as ::core::ffi::c_int;
-                    high = 34 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 34 as ::core::ffi::c_int;
-                    high = 35 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 35 as ::core::ffi::c_int;
-                    high = 36 as ::core::ffi::c_int;
-                }
-                72 | 104 => {
-                    low = 36 as ::core::ffi::c_int;
-                    high = 37 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 37 as ::core::ffi::c_int;
-                    high = 38 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 38 as ::core::ffi::c_int;
-                    high = 41 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 41 as ::core::ffi::c_int;
-                    high = 43 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 43 as ::core::ffi::c_int;
-                    high = 46 as ::core::ffi::c_int;
-                }
-                85 | 117 => {
-                    low = 46 as ::core::ffi::c_int;
-                    high = 49 as ::core::ffi::c_int;
-                }
-                _ => {}
+            87 | 119 => {
+                low = 6 as ::core::ffi::c_int;
+                high = 7 as ::core::ffi::c_int;
             }
-        }
-        10 => {
-            match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                65 | 97 => {
-                    low = 49 as ::core::ffi::c_int;
-                    high = 52 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 52 as ::core::ffi::c_int;
-                    high = 53 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 53 as ::core::ffi::c_int;
-                    high = 54 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 54 as ::core::ffi::c_int;
-                    high = 55 as ::core::ffi::c_int;
-                }
-                81 | 113 => {
-                    low = 55 as ::core::ffi::c_int;
-                    high = 56 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 56 as ::core::ffi::c_int;
-                    high = 57 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 57 as ::core::ffi::c_int;
-                    high = 60 as ::core::ffi::c_int;
-                }
-                87 | 119 => {
-                    low = 60 as ::core::ffi::c_int;
-                    high = 61 as ::core::ffi::c_int;
-                }
-                88 | 120 => {
-                    low = 61 as ::core::ffi::c_int;
-                    high = 62 as ::core::ffi::c_int;
-                }
-                _ => {}
+            _ => {}
+        },
+        7 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            66 | 98 => {
+                low = 7 as ::core::ffi::c_int;
+                high = 8 as ::core::ffi::c_int;
             }
-        }
-        11 => {
-            match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                65 | 97 => {
-                    low = 62 as ::core::ffi::c_int;
-                    high = 64 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 64 as ::core::ffi::c_int;
-                    high = 68 as ::core::ffi::c_int;
-                }
-                71 | 103 => {
-                    low = 68 as ::core::ffi::c_int;
-                    high = 69 as ::core::ffi::c_int;
-                }
-                72 | 104 => {
-                    low = 69 as ::core::ffi::c_int;
-                    high = 73 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 73 as ::core::ffi::c_int;
-                    high = 75 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 75 as ::core::ffi::c_int;
-                    high = 76 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 76 as ::core::ffi::c_int;
-                    high = 80 as ::core::ffi::c_int;
-                }
-                79 | 111 => {
-                    low = 80 as ::core::ffi::c_int;
-                    high = 81 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 81 as ::core::ffi::c_int;
-                    high = 82 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 82 as ::core::ffi::c_int;
-                    high = 85 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 85 as ::core::ffi::c_int;
-                    high = 86 as ::core::ffi::c_int;
-                }
-                84 | 116 => {
-                    low = 86 as ::core::ffi::c_int;
-                    high = 88 as ::core::ffi::c_int;
-                }
-                _ => {}
+            69 | 101 => {
+                low = 8 as ::core::ffi::c_int;
+                high = 9 as ::core::ffi::c_int;
             }
-        }
-        12 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                66 | 98 => {
-                    low = 88 as ::core::ffi::c_int;
-                    high = 89 as ::core::ffi::c_int;
-                }
-                68 | 100 => {
-                    low = 89 as ::core::ffi::c_int;
-                    high = 93 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 93 as ::core::ffi::c_int;
-                    high = 94 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 94 as ::core::ffi::c_int;
-                    high = 95 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 95 as ::core::ffi::c_int;
-                    high = 99 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 99 as ::core::ffi::c_int;
-                    high = 100 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 100 as ::core::ffi::c_int;
-                    high = 103 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 103 as ::core::ffi::c_int;
-                    high = 104 as ::core::ffi::c_int;
-                }
-                88 | 120 => {
-                    low = 104 as ::core::ffi::c_int;
-                    high = 108 as ::core::ffi::c_int;
-                }
-                _ => {}
+            77 | 109 => {
+                low = 9 as ::core::ffi::c_int;
+                high = 10 as ::core::ffi::c_int;
             }
-        }
-        13 => {
-            match *str.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                65 | 97 => {
-                    low = 108 as ::core::ffi::c_int;
-                    high = 110 as ::core::ffi::c_int;
-                }
-                67 | 99 => {
-                    low = 110 as ::core::ffi::c_int;
-                    high = 112 as ::core::ffi::c_int;
-                }
-                69 | 101 => {
-                    low = 112 as ::core::ffi::c_int;
-                    high = 114 as ::core::ffi::c_int;
-                }
-                72 | 104 => {
-                    low = 114 as ::core::ffi::c_int;
-                    high = 115 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 115 as ::core::ffi::c_int;
-                    high = 116 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 116 as ::core::ffi::c_int;
-                    high = 117 as ::core::ffi::c_int;
-                }
-                85 | 117 => {
-                    low = 117 as ::core::ffi::c_int;
-                    high = 118 as ::core::ffi::c_int;
-                }
-                87 | 119 => {
-                    low = 118 as ::core::ffi::c_int;
-                    high = 119 as ::core::ffi::c_int;
-                }
-                _ => {}
+            81 | 113 => {
+                low = 10 as ::core::ffi::c_int;
+                high = 11 as ::core::ffi::c_int;
             }
-        }
-        14 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                66 | 98 => {
-                    low = 119 as ::core::ffi::c_int;
-                    high = 120 as ::core::ffi::c_int;
-                }
-                67 | 99 => {
-                    low = 120 as ::core::ffi::c_int;
-                    high = 122 as ::core::ffi::c_int;
-                }
-                70 | 102 => {
-                    low = 122 as ::core::ffi::c_int;
-                    high = 125 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 125 as ::core::ffi::c_int;
-                    high = 126 as ::core::ffi::c_int;
-                }
-                76 | 108 => {
-                    low = 126 as ::core::ffi::c_int;
-                    high = 127 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 127 as ::core::ffi::c_int;
-                    high = 128 as ::core::ffi::c_int;
-                }
-                81 | 113 => {
-                    low = 128 as ::core::ffi::c_int;
-                    high = 129 as ::core::ffi::c_int;
-                }
-                82 | 114 => {
-                    low = 129 as ::core::ffi::c_int;
-                    high = 131 as ::core::ffi::c_int;
-                }
-                83 | 115 => {
-                    low = 131 as ::core::ffi::c_int;
-                    high = 132 as ::core::ffi::c_int;
-                }
-                _ => {}
+            85 | 117 => {
+                low = 11 as ::core::ffi::c_int;
+                high = 13 as ::core::ffi::c_int;
             }
-        }
-        15 => {
-            match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                69 | 101 => {
-                    low = 132 as ::core::ffi::c_int;
-                    high = 133 as ::core::ffi::c_int;
-                }
-                72 | 104 => {
-                    low = 133 as ::core::ffi::c_int;
-                    high = 134 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 134 as ::core::ffi::c_int;
-                    high = 135 as ::core::ffi::c_int;
-                }
-                77 | 109 => {
-                    low = 135 as ::core::ffi::c_int;
-                    high = 136 as ::core::ffi::c_int;
-                }
-                78 | 110 => {
-                    low = 136 as ::core::ffi::c_int;
-                    high = 137 as ::core::ffi::c_int;
-                }
-                79 | 111 => {
-                    low = 137 as ::core::ffi::c_int;
-                    high = 139 as ::core::ffi::c_int;
-                }
-                85 | 117 => {
-                    low = 139 as ::core::ffi::c_int;
-                    high = 140 as ::core::ffi::c_int;
-                }
-                _ => {}
+            _ => {}
+        },
+        8 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            66 | 98 => {
+                low = 13 as ::core::ffi::c_int;
+                high = 16 as ::core::ffi::c_int;
             }
-        }
-        16 => {
-            match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                69 | 101 => {
-                    low = 140 as ::core::ffi::c_int;
-                    high = 141 as ::core::ffi::c_int;
-                }
-                73 | 105 => {
-                    low = 141 as ::core::ffi::c_int;
-                    high = 142 as ::core::ffi::c_int;
-                }
-                80 | 112 => {
-                    low = 142 as ::core::ffi::c_int;
-                    high = 143 as ::core::ffi::c_int;
-                }
-                _ => {}
+            67 | 99 => {
+                low = 16 as ::core::ffi::c_int;
+                high = 18 as ::core::ffi::c_int;
             }
-        }
+            70 | 102 => {
+                low = 18 as ::core::ffi::c_int;
+                high = 19 as ::core::ffi::c_int;
+            }
+            71 | 103 => {
+                low = 19 as ::core::ffi::c_int;
+                high = 20 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 20 as ::core::ffi::c_int;
+                high = 21 as ::core::ffi::c_int;
+            }
+            84 | 116 => {
+                low = 21 as ::core::ffi::c_int;
+                high = 24 as ::core::ffi::c_int;
+            }
+            86 | 118 => {
+                low = 24 as ::core::ffi::c_int;
+                high = 26 as ::core::ffi::c_int;
+            }
+            87 | 119 => {
+                low = 26 as ::core::ffi::c_int;
+                high = 28 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        9 => match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            65 | 97 => {
+                low = 28 as ::core::ffi::c_int;
+                high = 29 as ::core::ffi::c_int;
+            }
+            67 | 99 => {
+                low = 29 as ::core::ffi::c_int;
+                high = 32 as ::core::ffi::c_int;
+            }
+            68 | 100 => {
+                low = 32 as ::core::ffi::c_int;
+                high = 34 as ::core::ffi::c_int;
+            }
+            69 | 101 => {
+                low = 34 as ::core::ffi::c_int;
+                high = 35 as ::core::ffi::c_int;
+            }
+            70 | 102 => {
+                low = 35 as ::core::ffi::c_int;
+                high = 36 as ::core::ffi::c_int;
+            }
+            72 | 104 => {
+                low = 36 as ::core::ffi::c_int;
+                high = 37 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 37 as ::core::ffi::c_int;
+                high = 38 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 38 as ::core::ffi::c_int;
+                high = 41 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 41 as ::core::ffi::c_int;
+                high = 43 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 43 as ::core::ffi::c_int;
+                high = 46 as ::core::ffi::c_int;
+            }
+            85 | 117 => {
+                low = 46 as ::core::ffi::c_int;
+                high = 49 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        10 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            65 | 97 => {
+                low = 49 as ::core::ffi::c_int;
+                high = 52 as ::core::ffi::c_int;
+            }
+            69 | 101 => {
+                low = 52 as ::core::ffi::c_int;
+                high = 53 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 53 as ::core::ffi::c_int;
+                high = 54 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 54 as ::core::ffi::c_int;
+                high = 55 as ::core::ffi::c_int;
+            }
+            81 | 113 => {
+                low = 55 as ::core::ffi::c_int;
+                high = 56 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 56 as ::core::ffi::c_int;
+                high = 57 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 57 as ::core::ffi::c_int;
+                high = 60 as ::core::ffi::c_int;
+            }
+            87 | 119 => {
+                low = 60 as ::core::ffi::c_int;
+                high = 61 as ::core::ffi::c_int;
+            }
+            88 | 120 => {
+                low = 61 as ::core::ffi::c_int;
+                high = 62 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        11 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            65 | 97 => {
+                low = 62 as ::core::ffi::c_int;
+                high = 64 as ::core::ffi::c_int;
+            }
+            69 | 101 => {
+                low = 64 as ::core::ffi::c_int;
+                high = 68 as ::core::ffi::c_int;
+            }
+            71 | 103 => {
+                low = 68 as ::core::ffi::c_int;
+                high = 69 as ::core::ffi::c_int;
+            }
+            72 | 104 => {
+                low = 69 as ::core::ffi::c_int;
+                high = 73 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 73 as ::core::ffi::c_int;
+                high = 75 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 75 as ::core::ffi::c_int;
+                high = 76 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 76 as ::core::ffi::c_int;
+                high = 80 as ::core::ffi::c_int;
+            }
+            79 | 111 => {
+                low = 80 as ::core::ffi::c_int;
+                high = 81 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 81 as ::core::ffi::c_int;
+                high = 82 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 82 as ::core::ffi::c_int;
+                high = 85 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 85 as ::core::ffi::c_int;
+                high = 86 as ::core::ffi::c_int;
+            }
+            84 | 116 => {
+                low = 86 as ::core::ffi::c_int;
+                high = 88 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        12 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            66 | 98 => {
+                low = 88 as ::core::ffi::c_int;
+                high = 89 as ::core::ffi::c_int;
+            }
+            68 | 100 => {
+                low = 89 as ::core::ffi::c_int;
+                high = 93 as ::core::ffi::c_int;
+            }
+            69 | 101 => {
+                low = 93 as ::core::ffi::c_int;
+                high = 94 as ::core::ffi::c_int;
+            }
+            70 | 102 => {
+                low = 94 as ::core::ffi::c_int;
+                high = 95 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 95 as ::core::ffi::c_int;
+                high = 99 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 99 as ::core::ffi::c_int;
+                high = 100 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 100 as ::core::ffi::c_int;
+                high = 103 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 103 as ::core::ffi::c_int;
+                high = 104 as ::core::ffi::c_int;
+            }
+            88 | 120 => {
+                low = 104 as ::core::ffi::c_int;
+                high = 108 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        13 => match *str.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            65 | 97 => {
+                low = 108 as ::core::ffi::c_int;
+                high = 110 as ::core::ffi::c_int;
+            }
+            67 | 99 => {
+                low = 110 as ::core::ffi::c_int;
+                high = 112 as ::core::ffi::c_int;
+            }
+            69 | 101 => {
+                low = 112 as ::core::ffi::c_int;
+                high = 114 as ::core::ffi::c_int;
+            }
+            72 | 104 => {
+                low = 114 as ::core::ffi::c_int;
+                high = 115 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 115 as ::core::ffi::c_int;
+                high = 116 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 116 as ::core::ffi::c_int;
+                high = 117 as ::core::ffi::c_int;
+            }
+            85 | 117 => {
+                low = 117 as ::core::ffi::c_int;
+                high = 118 as ::core::ffi::c_int;
+            }
+            87 | 119 => {
+                low = 118 as ::core::ffi::c_int;
+                high = 119 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        14 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            66 | 98 => {
+                low = 119 as ::core::ffi::c_int;
+                high = 120 as ::core::ffi::c_int;
+            }
+            67 | 99 => {
+                low = 120 as ::core::ffi::c_int;
+                high = 122 as ::core::ffi::c_int;
+            }
+            70 | 102 => {
+                low = 122 as ::core::ffi::c_int;
+                high = 125 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 125 as ::core::ffi::c_int;
+                high = 126 as ::core::ffi::c_int;
+            }
+            76 | 108 => {
+                low = 126 as ::core::ffi::c_int;
+                high = 127 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 127 as ::core::ffi::c_int;
+                high = 128 as ::core::ffi::c_int;
+            }
+            81 | 113 => {
+                low = 128 as ::core::ffi::c_int;
+                high = 129 as ::core::ffi::c_int;
+            }
+            82 | 114 => {
+                low = 129 as ::core::ffi::c_int;
+                high = 131 as ::core::ffi::c_int;
+            }
+            83 | 115 => {
+                low = 131 as ::core::ffi::c_int;
+                high = 132 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        15 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            69 | 101 => {
+                low = 132 as ::core::ffi::c_int;
+                high = 133 as ::core::ffi::c_int;
+            }
+            72 | 104 => {
+                low = 133 as ::core::ffi::c_int;
+                high = 134 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 134 as ::core::ffi::c_int;
+                high = 135 as ::core::ffi::c_int;
+            }
+            77 | 109 => {
+                low = 135 as ::core::ffi::c_int;
+                high = 136 as ::core::ffi::c_int;
+            }
+            78 | 110 => {
+                low = 136 as ::core::ffi::c_int;
+                high = 137 as ::core::ffi::c_int;
+            }
+            79 | 111 => {
+                low = 137 as ::core::ffi::c_int;
+                high = 139 as ::core::ffi::c_int;
+            }
+            85 | 117 => {
+                low = 139 as ::core::ffi::c_int;
+                high = 140 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        16 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            69 | 101 => {
+                low = 140 as ::core::ffi::c_int;
+                high = 141 as ::core::ffi::c_int;
+            }
+            73 | 105 => {
+                low = 141 as ::core::ffi::c_int;
+                high = 142 as ::core::ffi::c_int;
+            }
+            80 | 112 => {
+                low = 142 as ::core::ffi::c_int;
+                high = 143 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
         17 => {
             low = 143 as ::core::ffi::c_int;
             high = 144 as ::core::ffi::c_int;
@@ -10094,9 +9773,7 @@ unsafe extern "C" fn event_name2nr_hash(
     }
     let mut i: ::core::ffi::c_int = low;
     while i < high {
-        if vim_strnicmp_asc(str, event_names[event_hash[i as usize] as usize].name, len)
-            == 0
-        {
+        if vim_strnicmp_asc(str, event_names[event_hash[i as usize] as usize].name, len) == 0 {
             return i;
         }
         i += 1;

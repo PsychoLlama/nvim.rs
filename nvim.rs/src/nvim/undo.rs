@@ -14,10 +14,7 @@ extern "C" {
     ) -> !;
     fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
     fn fflush(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fdopen(
-        __fd: ::core::ffi::c_int,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn fdopen(__fd: ::core::ffi::c_int, __modes: *const ::core::ffi::c_char) -> *mut FILE;
     fn getc(__stream: *mut FILE) -> ::core::ffi::c_int;
     fn fread(
         __ptr: *mut ::core::ffi::c_void,
@@ -115,11 +112,7 @@ extern "C" {
     fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T;
     fn verb_msg(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn smsg_keep(
         hl_id: ::core::ffi::c_int,
         s: *const ::core::ffi::c_char,
@@ -178,11 +171,7 @@ extern "C" {
     ) -> ssize_t;
     fn foldOpenCursor();
     fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn beep_flush();
     static mut firstwin: *mut win_T;
@@ -219,11 +208,8 @@ extern "C" {
         len: colnr_T,
         flags: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn ml_delete(lnum: linenr_T) -> ::core::ffi::c_int;
     fn resolve_symlink(
         fname: *const ::core::ffi::c_char,
@@ -247,24 +233,15 @@ extern "C" {
         flags: ::core::ffi::c_int,
         mode: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_fsync(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn os_getperm(name: *const ::core::ffi::c_char) -> int32_t;
-    fn os_setperm(
-        name: *const ::core::ffi::c_char,
-        perm: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn os_setperm(name: *const ::core::ffi::c_char, perm: ::core::ffi::c_int)
+        -> ::core::ffi::c_int;
     fn os_get_acl(fname: *const ::core::ffi::c_char) -> vim_acl_T;
     fn os_set_acl(fname: *const ::core::ffi::c_char, aclent: vim_acl_T);
     fn os_free_acl(aclent: vim_acl_T);
-    fn os_fchown(
-        fd: ::core::ffi::c_int,
-        owner: uv_uid_t,
-        group: uv_gid_t,
-    ) -> ::core::ffi::c_int;
+    fn os_fchown(fd: ::core::ffi::c_int, owner: uv_uid_t, group: uv_gid_t) -> ::core::ffi::c_int;
     fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
     fn os_mkdir_recurse(
         dir: *const ::core::ffi::c_char,
@@ -282,10 +259,7 @@ extern "C" {
         fname2: *const ::core::ffi::c_char,
         sep: bool,
     ) -> *mut ::core::ffi::c_char;
-    fn FullName_save(
-        fname: *const ::core::ffi::c_char,
-        force: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
     fn sha256_start(ctx: *mut context_sha256_T);
     fn sha256_update(ctx: *mut context_sha256_T, input: *const uint8_t, length: size_t);
     fn sha256_finish(ctx: *mut context_sha256_T, digest: *mut uint8_t);
@@ -2824,9 +2798,7 @@ pub struct bufinfo_T {
     pub bi_buf: *mut buf_T,
     pub bi_fp: *mut FILE,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const O_WRONLY: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
 pub const O_CREAT: ::core::ffi::c_int = 0o100 as ::core::ffi::c_int;
@@ -2839,8 +2811,8 @@ pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const NMARKS: ::core::ffi::c_int = 'z' as ::core::ffi::c_int
-    - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const NMARKS: ::core::ffi::c_int =
+    'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
     (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
@@ -2849,27 +2821,19 @@ unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const CPO_UNDO: ::core::ffi::c_int = 'u' as ::core::ffi::c_int;
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
 static mut e_undo_list_corrupt: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E439: Undo list corrupt\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E439: Undo list corrupt\0")
 };
 static mut e_undo_line_missing: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E440: Undo line missing\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E440: Undo line missing\0")
 };
 static mut e_write_error_in_undo_file_str: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E829: Write error in undo file: %s\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E829: Write error in undo file: %s\0",
+    )
 };
 static mut u_newcount: ::core::ffi::c_int = 0;
 static mut u_oldcount: ::core::ffi::c_int = 0;
@@ -2887,10 +2851,7 @@ pub unsafe extern "C" fn u_save_cursor() -> ::core::ffi::c_int {
     return u_save(top, bot);
 }
 #[no_mangle]
-pub unsafe extern "C" fn u_save(
-    mut top: linenr_T,
-    mut bot: linenr_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn u_save(mut top: linenr_T, mut bot: linenr_T) -> ::core::ffi::c_int {
     return u_save_buf(curbuf, top, bot);
 }
 #[no_mangle]
@@ -2928,31 +2889,32 @@ pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> ::core::ffi::c_int {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn u_savedel(
-    mut lnum: linenr_T,
-    mut nlines: linenr_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> ::core::ffi::c_int {
     return u_savecommon(
         curbuf,
         lnum - 1 as linenr_T,
         lnum + nlines,
-        if nlines == (*curbuf).b_ml.ml_line_count { 2 as linenr_T } else { lnum },
+        if nlines == (*curbuf).b_ml.ml_line_count {
+            2 as linenr_T
+        } else {
+            lnum
+        },
         false_0 != 0,
     );
 }
 #[no_mangle]
 pub unsafe extern "C" fn undo_allowed(mut buf: *mut buf_T) -> bool {
     if (*buf).b_p_ma == 0 {
-        emsg(gettext(&raw const e_modifiable as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_modifiable as *const ::core::ffi::c_char,
+        ));
         return false_0 != 0;
     }
     if sandbox != 0 as ::core::ffi::c_int {
         emsg(gettext(&raw const e_sandbox as *const ::core::ffi::c_char));
         return false_0 != 0;
     }
-    if textlock != 0 as ::core::ffi::c_int
-        || expr_map_locked() as ::core::ffi::c_int != 0
-    {
+    if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
         emsg(gettext(&raw const e_textlock as *const ::core::ffi::c_char));
         return false_0 != 0;
     }
@@ -2968,9 +2930,8 @@ unsafe extern "C" fn get_undolevel(mut buf: *mut buf_T) -> OptInt {
 unsafe extern "C" fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
     let mut i: size_t = 0 as size_t;
     while i < NMARKS as size_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*fmarks
-            .offset(i as isize))
-            .additional_data as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*fmarks.offset(i as isize)).additional_data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -2993,12 +2954,9 @@ pub unsafe extern "C" fn u_savecommon(
             change_warning(buf, 0 as ::core::ffi::c_int);
         }
         if bot > (*buf).b_ml.ml_line_count + 1 as linenr_T {
-            emsg(
-                gettext(
-                    b"E881: Line count changed unexpectedly\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E881: Line count changed unexpectedly\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             return FAIL;
         }
     }
@@ -3021,9 +2979,7 @@ pub unsafe extern "C" fn u_savecommon(
             (*buf).b_u_newhead = (*old_curhead).uh_next.ptr;
             (*buf).b_u_curhead = ::core::ptr::null_mut::<u_header_T>();
         }
-        while (*buf).b_u_numhead as OptInt > get_undolevel(buf)
-            && !(*buf).b_u_oldhead.is_null()
-        {
+        while (*buf).b_u_numhead as OptInt > get_undolevel(buf) && !(*buf).b_u_oldhead.is_null() {
             let mut uhfree: *mut u_header_T = (*buf).b_u_oldhead;
             if uhfree == old_curhead {
                 u_freebranch(buf, uhfree, &raw mut old_curhead);
@@ -3038,11 +2994,7 @@ pub unsafe extern "C" fn u_savecommon(
         }
         if uhp.is_null() {
             if !old_curhead.is_null() {
-                u_freebranch(
-                    buf,
-                    old_curhead,
-                    ::core::ptr::null_mut::<*mut u_header_T>(),
-                );
+                u_freebranch(buf, old_curhead, ::core::ptr::null_mut::<*mut u_header_T>());
             }
             (*buf).b_u_synced = false_0 != 0;
             return OK;
@@ -3086,12 +3038,11 @@ pub unsafe extern "C" fn u_savecommon(
             UH_CHANGED as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        })
-            + (if (*buf).b_ml.ml_flags & ML_EMPTY != 0 {
-                UH_EMPTYBUF as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            });
+        }) + (if (*buf).b_ml.ml_flags & ML_EMPTY != 0 {
+            UH_EMPTYBUF as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        });
         zero_fmark_additional_data(&raw mut (*buf).b_namedm as *mut fmark_T);
         memmove(
             &raw mut (*uhp).uh_namedm as *mut fmark_T as *mut ::core::ffi::c_void,
@@ -3126,9 +3077,9 @@ pub unsafe extern "C" fn u_savecommon(
                 } else {
                     ((*uep).ue_lcount != (*buf).b_ml.ml_line_count) as ::core::ffi::c_int
                 }) != 0
-                    || (*uep).ue_size > 1 as linenr_T && top >= (*uep).ue_top
-                        && top + 2 as linenr_T
-                            <= (*uep).ue_top + (*uep).ue_size + 1 as linenr_T
+                    || (*uep).ue_size > 1 as linenr_T
+                        && top >= (*uep).ue_top
+                        && top + 2 as linenr_T <= (*uep).ue_top + (*uep).ue_size + 1 as linenr_T
                 {
                     break;
                 }
@@ -3175,8 +3126,7 @@ pub unsafe extern "C" fn u_savecommon(
     }
     if size > 0 as linenr_T {
         (*uep).ue_array = xmalloc(
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul(size as size_t),
+            ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(size as size_t),
         ) as *mut *mut ::core::ffi::c_char;
         let mut lnum: linenr_T = 0;
         let mut i_0: ::core::ffi::c_int = 0;
@@ -3205,9 +3155,8 @@ pub unsafe extern "C" fn u_savecommon(
     undo_undoes = false_0 != 0;
     return OK;
 }
-pub const UF_START_MAGIC: [::core::ffi::c_char; 10] = unsafe {
-    ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"Vim\x9FUnDo\xE5\0")
-};
+pub const UF_START_MAGIC: [::core::ffi::c_char; 10] =
+    unsafe { ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"Vim\x9FUnDo\xE5\0") };
 pub const UF_START_MAGIC_LEN: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 pub const UF_HEADER_MAGIC: ::core::ffi::c_int = 0x5fd0 as ::core::ffi::c_int;
 pub const UF_HEADER_END_MAGIC: ::core::ffi::c_int = 0xe7aa as ::core::ffi::c_int;
@@ -3217,10 +3166,9 @@ pub const UF_VERSION: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const UF_LAST_SAVE_NR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const UHP_SAVE_NR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 static mut e_not_open: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E828: Cannot open undo file for writing: %s\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E828: Cannot open undo file for writing: %s\0",
+    )
 };
 #[no_mangle]
 pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
@@ -3256,12 +3204,9 @@ pub unsafe extern "C" fn u_get_undo_file_name(
         ffname = &raw mut fname_buf as *mut ::core::ffi::c_char;
     }
     let mut dir_name: [::core::ffi::c_char; 4097] = [0; 4097];
-    let mut munged_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut undo_file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut munged_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut undo_file_name: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut dirp: *mut ::core::ffi::c_char = p_udir;
     while *dirp as ::core::ffi::c_int != NUL {
         let mut dir_len: size_t = copy_option_part(
@@ -3275,8 +3220,8 @@ pub unsafe extern "C" fn u_get_undo_file_name(
                 == '.' as ::core::ffi::c_int
         {
             let ffname_len: size_t = strlen(ffname);
-            undo_file_name = xmalloc(ffname_len.wrapping_add(6 as size_t))
-                as *mut ::core::ffi::c_char;
+            undo_file_name =
+                xmalloc(ffname_len.wrapping_add(6 as size_t)) as *mut ::core::ffi::c_char;
             memmove(
                 undo_file_name as *mut ::core::ffi::c_void,
                 ffname as *const ::core::ffi::c_void,
@@ -3285,23 +3230,21 @@ pub unsafe extern "C" fn u_get_undo_file_name(
             let tail: *mut ::core::ffi::c_char = path_tail(undo_file_name);
             let tail_len: size_t = strlen(tail);
             memmove(
-                tail.offset(1 as ::core::ffi::c_int as isize)
-                    as *mut ::core::ffi::c_void,
+                tail.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
                 tail as *const ::core::ffi::c_void,
                 tail_len.wrapping_add(1 as size_t),
             );
             *tail = '.' as ::core::ffi::c_char;
             memmove(
-                tail.offset(tail_len as isize).offset(1 as ::core::ffi::c_int as isize)
+                tail.offset(tail_len as isize)
+                    .offset(1 as ::core::ffi::c_int as isize)
                     as *mut ::core::ffi::c_void,
-                b".un~\0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b".un~\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<[::core::ffi::c_char; 5]>(),
             );
         } else {
             dir_name[dir_len as usize] = NUL as ::core::ffi::c_char;
-            let mut p: *mut ::core::ffi::c_char = (&raw mut dir_name
-                as *mut ::core::ffi::c_char)
+            let mut p: *mut ::core::ffi::c_char = (&raw mut dir_name as *mut ::core::ffi::c_char)
                 .offset(dir_len.wrapping_sub(1 as size_t) as isize);
             while dir_len > 1 as size_t
                 && vim_ispathsep(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
@@ -3310,14 +3253,11 @@ pub unsafe extern "C" fn u_get_undo_file_name(
                 p = p.offset(-1);
                 *c2rust_fresh1 = NUL as ::core::ffi::c_char;
             }
-            let mut has_directory: bool = os_isdir(
-                &raw mut dir_name as *mut ::core::ffi::c_char,
-            );
+            let mut has_directory: bool = os_isdir(&raw mut dir_name as *mut ::core::ffi::c_char);
             if !has_directory && *dirp as ::core::ffi::c_int == NUL && !reading {
                 let mut ret: ::core::ffi::c_int = 0;
-                let mut failed_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                    ::core::ffi::c_char,
-                >();
+                let mut failed_dir: *mut ::core::ffi::c_char =
+                    ::core::ptr::null_mut::<::core::ffi::c_char>();
                 ret = os_mkdir_recurse(
                     &raw mut dir_name as *mut ::core::ffi::c_char,
                     0o755 as int32_t,
@@ -3327,8 +3267,8 @@ pub unsafe extern "C" fn u_get_undo_file_name(
                 if ret != 0 as ::core::ffi::c_int {
                     semsg(
                         gettext(
-                            b"E5003: Unable to create directory \"%s\" for undo file: %s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"E5003: Unable to create directory \"%s\" for undo file: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         failed_dir,
                         uv_strerror(ret),
@@ -3361,8 +3301,8 @@ pub unsafe extern "C" fn u_get_undo_file_name(
         {
             break;
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut undo_file_name
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut undo_file_name as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -3375,10 +3315,7 @@ unsafe extern "C" fn corruption_error(
     file_name: *const ::core::ffi::c_char,
 ) {
     semsg(
-        gettext(
-            b"E825: Corrupted undo file (%s): %s\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
+        gettext(b"E825: Corrupted undo file (%s): %s\0".as_ptr() as *const ::core::ffi::c_char),
         mesg,
         file_name,
     );
@@ -3392,10 +3329,7 @@ unsafe extern "C" fn u_free_uhp(mut uhp: *mut u_header_T) {
     }
     xfree(uhp as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn serialize_header(
-    mut bi: *mut bufinfo_T,
-    mut hash: *mut uint8_t,
-) -> bool {
+unsafe extern "C" fn serialize_header(mut bi: *mut bufinfo_T, mut hash: *mut uint8_t) -> bool {
     let mut buf: *mut buf_T = (*bi).bi_buf;
     let mut fp: *mut FILE = (*bi).bi_fp;
     if fwrite(
@@ -3442,10 +3376,7 @@ unsafe extern "C" fn serialize_header(
     undo_write_bytes(bi, 0 as uintmax_t, 1 as size_t);
     return true_0 != 0;
 }
-unsafe extern "C" fn serialize_uhp(
-    mut bi: *mut bufinfo_T,
-    mut uhp: *mut u_header_T,
-) -> bool {
+unsafe extern "C" fn serialize_uhp(mut bi: *mut bufinfo_T, mut uhp: *mut u_header_T) -> bool {
     if !undo_write_bytes(bi, UF_HEADER_MAGIC as uintmax_t, 2 as size_t) {
         return false_0 != 0;
     }
@@ -3497,8 +3428,7 @@ unsafe extern "C" fn unserialize_uhp(
     mut bi: *mut bufinfo_T,
     mut file_name: *const ::core::ffi::c_char,
 ) -> *mut u_header_T {
-    let mut uhp: *mut u_header_T = xmalloc(::core::mem::size_of::<u_header_T>())
-        as *mut u_header_T;
+    let mut uhp: *mut u_header_T = xmalloc(::core::mem::size_of::<u_header_T>()) as *mut u_header_T;
     memset(
         uhp as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -3510,7 +3440,10 @@ unsafe extern "C" fn unserialize_uhp(
     (*uhp).uh_alt_prev.seq = undo_read_4c(bi);
     (*uhp).uh_seq = undo_read_4c(bi);
     if (*uhp).uh_seq <= 0 as ::core::ffi::c_int {
-        corruption_error(b"uh_seq\0".as_ptr() as *const ::core::ffi::c_char, file_name);
+        corruption_error(
+            b"uh_seq\0".as_ptr() as *const ::core::ffi::c_char,
+            file_name,
+        );
         xfree(uhp as *mut ::core::ffi::c_void);
         return ::core::ptr::null_mut::<u_header_T>();
     }
@@ -3522,8 +3455,7 @@ unsafe extern "C" fn unserialize_uhp(
     while i < NMARKS as size_t {
         unserialize_pos(
             bi,
-            &raw mut (*(&raw mut (*uhp).uh_namedm as *mut fmark_T).offset(i as isize))
-                .mark,
+            &raw mut (*(&raw mut (*uhp).uh_namedm as *mut fmark_T).offset(i as isize)).mark,
         );
         (*uhp).uh_namedm[i as usize].timestamp = cur_timestamp;
         (*uhp).uh_namedm[i as usize].fnum = 0 as ::core::ffi::c_int;
@@ -3549,15 +3481,13 @@ unsafe extern "C" fn unserialize_uhp(
             UHP_SAVE_NR => {
                 (*uhp).uh_save_nr = undo_read_4c(bi);
             }
-            _ => {
-                loop {
-                    len -= 1;
-                    if len < 0 as ::core::ffi::c_int {
-                        break;
-                    }
-                    undo_read_byte(bi);
+            _ => loop {
+                len -= 1;
+                if len < 0 as ::core::ffi::c_int {
+                    break;
                 }
-            }
+                undo_read_byte(bi);
+            },
         }
     }
     let mut last_uep: *mut u_entry_T = ::core::ptr::null_mut::<u_entry_T>();
@@ -3597,11 +3527,8 @@ unsafe extern "C" fn unserialize_uhp(
             break;
         }
         let mut error_0: bool = false_0 != 0;
-        let mut extup: *mut ExtmarkUndoObject = unserialize_extmark(
-            bi,
-            &raw mut error_0,
-            file_name,
-        );
+        let mut extup: *mut ExtmarkUndoObject =
+            unserialize_extmark(bi, &raw mut error_0, file_name);
         if error_0 {
             xfree((*uhp).uh_extmark.items as *mut ::core::ffi::c_void);
             (*uhp).uh_extmark.capacity = 0 as size_t;
@@ -3621,7 +3548,8 @@ unsafe extern "C" fn unserialize_uhp(
                 ::core::mem::size_of::<ExtmarkUndoObject>()
                     .wrapping_mul((*uhp).uh_extmark.capacity),
             ) as *mut ExtmarkUndoObject;
-        } else {};
+        } else {
+        };
         let c2rust_fresh3 = (*uhp).uh_extmark.size;
         (*uhp).uh_extmark.size = (*uhp).uh_extmark.size.wrapping_add(1);
         *(*uhp).uh_extmark.items.offset(c2rust_fresh3 as isize) = *extup;
@@ -3674,9 +3602,8 @@ unsafe extern "C" fn unserialize_extmark(
     mut filename: *const ::core::ffi::c_char,
 ) -> *mut ExtmarkUndoObject {
     let mut buf: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-    let mut extup: *mut ExtmarkUndoObject = xmalloc(
-        ::core::mem::size_of::<ExtmarkUndoObject>(),
-    ) as *mut ExtmarkUndoObject;
+    let mut extup: *mut ExtmarkUndoObject =
+        xmalloc(::core::mem::size_of::<ExtmarkUndoObject>()) as *mut ExtmarkUndoObject;
     let mut type_0: UndoObjectType = undo_read_4c(bi) as UndoObjectType;
     (*extup).type_0 = type_0;
     '_error: {
@@ -3715,10 +3642,7 @@ unsafe extern "C" fn unserialize_extmark(
     *error = true_0 != 0;
     return ::core::ptr::null_mut::<ExtmarkUndoObject>();
 }
-unsafe extern "C" fn serialize_uep(
-    mut bi: *mut bufinfo_T,
-    mut uep: *mut u_entry_T,
-) -> bool {
+unsafe extern "C" fn serialize_uep(mut bi: *mut bufinfo_T, mut uep: *mut u_entry_T) -> bool {
     undo_write_bytes(bi, (*uep).ue_top as uintmax_t, 4 as size_t);
     undo_write_bytes(bi, (*uep).ue_bot as uintmax_t, 4 as size_t);
     undo_write_bytes(bi, (*uep).ue_lcount as uintmax_t, 4 as size_t);
@@ -3743,8 +3667,7 @@ unsafe extern "C" fn unserialize_uep(
     mut error: *mut bool,
     mut file_name: *const ::core::ffi::c_char,
 ) -> *mut u_entry_T {
-    let mut uep: *mut u_entry_T = xmalloc(::core::mem::size_of::<u_entry_T>())
-        as *mut u_entry_T;
+    let mut uep: *mut u_entry_T = xmalloc(::core::mem::size_of::<u_entry_T>()) as *mut u_entry_T;
     memset(
         uep as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -3754,13 +3677,11 @@ unsafe extern "C" fn unserialize_uep(
     (*uep).ue_bot = undo_read_4c(bi) as linenr_T;
     (*uep).ue_lcount = undo_read_4c(bi) as linenr_T;
     (*uep).ue_size = undo_read_4c(bi) as linenr_T;
-    let mut array: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut array: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     if (*uep).ue_size > 0 as linenr_T {
         if ((*uep).ue_size as size_t)
-            < (SIZE_MAX as usize)
-                .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+            < (SIZE_MAX as usize).wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
         {
             array = xmalloc(
                 ::core::mem::size_of::<*mut ::core::ffi::c_char>()
@@ -3778,9 +3699,7 @@ unsafe extern "C" fn unserialize_uep(
     let mut i: size_t = 0 as size_t;
     while i < (*uep).ue_size as size_t {
         let mut line_len: ::core::ffi::c_int = undo_read_4c(bi);
-        let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if line_len >= 0 as ::core::ffi::c_int {
             line = undo_read_string(bi, line_len as size_t);
         } else {
@@ -3806,7 +3725,11 @@ unsafe extern "C" fn serialize_pos(mut bi: *mut bufinfo_T, mut pos: pos_T) {
 }
 unsafe extern "C" fn unserialize_pos(mut bi: *mut bufinfo_T, mut pos: *mut pos_T) {
     (*pos).lnum = undo_read_4c(bi) as linenr_T;
-    (*pos).lnum = if (*pos).lnum > 0 as linenr_T { (*pos).lnum } else { 0 as linenr_T };
+    (*pos).lnum = if (*pos).lnum > 0 as linenr_T {
+        (*pos).lnum
+    } else {
+        0 as linenr_T
+    };
     (*pos).col = undo_read_4c(bi) as colnr_T;
     (*pos).col = (if (*pos).col > 0 as ::core::ffi::c_int {
         (*pos).col as ::core::ffi::c_int
@@ -3820,19 +3743,13 @@ unsafe extern "C" fn unserialize_pos(mut bi: *mut bufinfo_T, mut pos: *mut pos_T
         0 as ::core::ffi::c_int
     }) as colnr_T;
 }
-unsafe extern "C" fn serialize_visualinfo(
-    mut bi: *mut bufinfo_T,
-    mut info: *mut visualinfo_T,
-) {
+unsafe extern "C" fn serialize_visualinfo(mut bi: *mut bufinfo_T, mut info: *mut visualinfo_T) {
     serialize_pos(bi, (*info).vi_start);
     serialize_pos(bi, (*info).vi_end);
     undo_write_bytes(bi, (*info).vi_mode as uintmax_t, 4 as size_t);
     undo_write_bytes(bi, (*info).vi_curswant as uintmax_t, 4 as size_t);
 }
-unsafe extern "C" fn unserialize_visualinfo(
-    mut bi: *mut bufinfo_T,
-    mut info: *mut visualinfo_T,
-) {
+unsafe extern "C" fn unserialize_visualinfo(mut bi: *mut bufinfo_T, mut info: *mut visualinfo_T) {
     unserialize_pos(bi, &raw mut (*info).vi_start);
     unserialize_pos(bi, &raw mut (*info).vi_end);
     (*info).vi_mode = undo_read_4c(bi);
@@ -3916,9 +3833,7 @@ pub unsafe extern "C" fn u_write_undo(
         bi_buf: ::core::ptr::null_mut::<buf_T>(),
         bi_fp: ::core::ptr::null_mut::<FILE>(),
     };
-    let mut file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut fp: *mut FILE = ::core::ptr::null_mut::<FILE>();
     let mut write_ok: bool = false_0 != 0;
     if name.is_null() {
@@ -3930,8 +3845,8 @@ pub unsafe extern "C" fn u_write_undo(
                     0 as ::core::ffi::c_int,
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                     gettext(
-                        b"Cannot write undo file in any directory in 'undodir'\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"Cannot write undo file in any directory in 'undodir'\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     ),
                 );
                 verbose_leave();
@@ -3952,11 +3867,8 @@ pub unsafe extern "C" fn u_write_undo(
     '_theend: {
         if os_path_exists(file_name) {
             if name.is_null() || !forceit {
-                let mut fd: ::core::ffi::c_int = os_open(
-                    file_name,
-                    O_RDONLY,
-                    0 as ::core::ffi::c_int,
-                );
+                let mut fd: ::core::ffi::c_int =
+                    os_open(file_name, O_RDONLY, 0 as ::core::ffi::c_int);
                 if fd < 0 as ::core::ffi::c_int {
                     if !name.is_null() || p_verbose > 0 as OptInt {
                         if name.is_null() {
@@ -3965,8 +3877,8 @@ pub unsafe extern "C" fn u_write_undo(
                         smsg(
                             0 as ::core::ffi::c_int,
                             gettext(
-                                b"Will not overwrite with undo file, cannot read: %s\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"Will not overwrite with undo file, cannot read: %s\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                             ),
                             file_name,
                         );
@@ -3979,15 +3891,13 @@ pub unsafe extern "C" fn u_write_undo(
                     let mut mbuf: [::core::ffi::c_char; 9] = [0; 9];
                     let mut len: ssize_t = read_eintr(
                         fd,
-                        &raw mut mbuf as *mut ::core::ffi::c_char
-                            as *mut ::core::ffi::c_void,
+                        &raw mut mbuf as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
                         UF_START_MAGIC_LEN as size_t,
                     );
                     close(fd);
                     if len < UF_START_MAGIC_LEN as ssize_t
                         || memcmp(
-                            &raw mut mbuf as *mut ::core::ffi::c_char
-                                as *const ::core::ffi::c_void,
+                            &raw mut mbuf as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
                             UF_START_MAGIC.as_ptr() as *const ::core::ffi::c_void,
                             UF_START_MAGIC_LEN as size_t,
                         ) != 0 as ::core::ffi::c_int
@@ -3999,8 +3909,8 @@ pub unsafe extern "C" fn u_write_undo(
                             smsg(
                                 0 as ::core::ffi::c_int,
                                 gettext(
-                                    b"Will not overwrite, this is not an undo file: %s\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
+                                    b"Will not overwrite, this is not an undo file: %s\0".as_ptr()
+                                        as *const ::core::ffi::c_char,
                                 ),
                                 file_name,
                             );
@@ -4014,15 +3924,12 @@ pub unsafe extern "C" fn u_write_undo(
             }
             os_remove(file_name);
         }
-        if (*buf).b_u_numhead == 0 as ::core::ffi::c_int && (*buf).b_u_line_ptr.is_null()
-        {
+        if (*buf).b_u_numhead == 0 as ::core::ffi::c_int && (*buf).b_u_line_ptr.is_null() {
             if p_verbose > 0 as OptInt {
-                verb_msg(
-                    gettext(
-                        b"Skipping undo file write, nothing to undo\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                verb_msg(gettext(
+                    b"Skipping undo file write, nothing to undo\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                ));
             }
         } else {
             fd_0 = os_open(file_name, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm);
@@ -4037,10 +3944,7 @@ pub unsafe extern "C" fn u_write_undo(
                     verbose_enter();
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Writing undo file: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Writing undo file: %s\0".as_ptr() as *const ::core::ffi::c_char),
                         file_name,
                     );
                     verbose_leave();
@@ -4110,10 +4014,9 @@ pub unsafe extern "C" fn u_write_undo(
                     },
                 };
                 if !(*buf).b_ffname.is_null()
-                    && os_fileinfo((*buf).b_ffname, &raw mut file_info_old)
-                        as ::core::ffi::c_int != 0
-                    && os_fileinfo(file_name, &raw mut file_info_new)
-                        as ::core::ffi::c_int != 0
+                    && os_fileinfo((*buf).b_ffname, &raw mut file_info_old) as ::core::ffi::c_int
+                        != 0
+                    && os_fileinfo(file_name, &raw mut file_info_new) as ::core::ffi::c_int != 0
                     && file_info_old.stat.st_gid != file_info_new.stat.st_gid
                     && os_fchown(
                         fd_0,
@@ -4124,8 +4027,7 @@ pub unsafe extern "C" fn u_write_undo(
                     os_setperm(
                         file_name,
                         perm & 0o707 as ::core::ffi::c_int
-                            | (perm & 0o7 as ::core::ffi::c_int)
-                                << 3 as ::core::ffi::c_int,
+                            | (perm & 0o7 as ::core::ffi::c_int) << 3 as ::core::ffi::c_int,
                     );
                 }
                 fp = fdopen(fd_0, b"w\0".as_ptr() as *const ::core::ffi::c_char);
@@ -4184,7 +4086,8 @@ pub unsafe extern "C" fn u_write_undo(
                                 (*buf).b_p_fs
                             } else {
                                 p_fs
-                            }) != 0 && fflush(fp) == 0 as ::core::ffi::c_int
+                            }) != 0
+                                && fflush(fp) == 0 as ::core::ffi::c_int
                                 && os_fsync(fd_0) != 0 as ::core::ffi::c_int
                             {
                                 write_ok = false_0 != 0;
@@ -4245,12 +4148,8 @@ pub unsafe extern "C" fn u_read_undo(
     let mut new_idx: int16_t = 0;
     let mut cur_idx: int16_t = 0;
     let mut uhp_table: *mut *mut u_header_T = ::core::ptr::null_mut::<*mut u_header_T>();
-    let mut line_ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line_ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut file_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if name.is_null() {
         file_name = u_get_undo_file_name((*curbuf).b_ffname, true_0 != 0);
         if file_name.is_null() {
@@ -4329,10 +4228,8 @@ pub unsafe extern "C" fn u_read_undo(
                 verbose_enter();
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Not reading undo file, owner differs: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Not reading undo file, owner differs: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     file_name,
                 );
                 verbose_leave();
@@ -4351,19 +4248,14 @@ pub unsafe extern "C" fn u_read_undo(
         );
         verbose_leave();
     }
-    let mut fp: *mut FILE = os_fopen(
-        file_name,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fp: *mut FILE = os_fopen(file_name, b"r\0".as_ptr() as *const ::core::ffi::c_char);
     '_theend: {
         '_error: {
             if fp.is_null() {
                 if !name.is_null() || p_verbose > 0 as OptInt {
                     semsg(
-                        gettext(
-                            b"E822: Cannot open undo file for reading: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E822: Cannot open undo file for reading: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         file_name,
                     );
                 }
@@ -4374,8 +4266,7 @@ pub unsafe extern "C" fn u_read_undo(
                 };
                 magic_buf = [0; 9];
                 if fread(
-                    &raw mut magic_buf as *mut ::core::ffi::c_char
-                        as *mut ::core::ffi::c_void,
+                    &raw mut magic_buf as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
                     UF_START_MAGIC_LEN as size_t,
                     1 as size_t,
                     fp,
@@ -4389,8 +4280,7 @@ pub unsafe extern "C" fn u_read_undo(
                 {
                     semsg(
                         gettext(
-                            b"E823: Not an undo file: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"E823: Not an undo file: %s\0".as_ptr() as *const ::core::ffi::c_char
                         ),
                         file_name,
                     );
@@ -4398,10 +4288,8 @@ pub unsafe extern "C" fn u_read_undo(
                     version = get2c(fp);
                     if version != UF_VERSION {
                         semsg(
-                            gettext(
-                                b"E824: Incompatible undo file: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E824: Incompatible undo file: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             file_name,
                         );
                     } else {
@@ -4419,8 +4307,7 @@ pub unsafe extern "C" fn u_read_undo(
                             line_count = undo_read_4c(&raw mut bi) as linenr_T;
                             if memcmp(
                                 hash as *const ::core::ffi::c_void,
-                                &raw mut read_hash as *mut uint8_t
-                                    as *const ::core::ffi::c_void,
+                                &raw mut read_hash as *mut uint8_t as *const ::core::ffi::c_void,
                                 UNDO_HASH_SIZE as ::core::ffi::c_int as size_t,
                             ) != 0 as ::core::ffi::c_int
                                 || line_count != (*curbuf).b_ml.ml_line_count
@@ -4431,7 +4318,8 @@ pub unsafe extern "C" fn u_read_undo(
                                     }
                                     give_warning(
                                         gettext(
-                                            b"File contents changed, cannot use undo info\0".as_ptr()
+                                            b"File contents changed, cannot use undo info\0"
+                                                .as_ptr()
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         true_0 != 0,
@@ -4453,7 +4341,8 @@ pub unsafe extern "C" fn u_read_undo(
                                         || line_colnr < 0 as ::core::ffi::c_int
                                     {
                                         corruption_error(
-                                            b"line lnum/col\0".as_ptr() as *const ::core::ffi::c_char,
+                                            b"line lnum/col\0".as_ptr()
+                                                as *const ::core::ffi::c_char,
                                             file_name,
                                         );
                                     } else {
@@ -4466,39 +4355,37 @@ pub unsafe extern "C" fn u_read_undo(
                                         seq_time = undo_read_time(&raw mut bi);
                                         last_save_nr = 0 as ::core::ffi::c_int;
                                         loop {
-                                            let mut len: ::core::ffi::c_int = undo_read_byte(
-                                                &raw mut bi,
-                                            );
+                                            let mut len: ::core::ffi::c_int =
+                                                undo_read_byte(&raw mut bi);
                                             if len == 0 as ::core::ffi::c_int || len == EOF {
                                                 break;
                                             }
-                                            let mut what: ::core::ffi::c_int = undo_read_byte(
-                                                &raw mut bi,
-                                            );
+                                            let mut what: ::core::ffi::c_int =
+                                                undo_read_byte(&raw mut bi);
                                             match what {
                                                 UF_LAST_SAVE_NR => {
                                                     last_save_nr = undo_read_4c(&raw mut bi);
                                                 }
-                                                _ => {
-                                                    loop {
-                                                        len -= 1;
-                                                        if len < 0 as ::core::ffi::c_int {
-                                                            break;
-                                                        }
-                                                        undo_read_byte(&raw mut bi);
+                                                _ => loop {
+                                                    len -= 1;
+                                                    if len < 0 as ::core::ffi::c_int {
+                                                        break;
                                                     }
-                                                }
+                                                    undo_read_byte(&raw mut bi);
+                                                },
                                             }
                                         }
                                         if num_head > 0 as ::core::ffi::c_int {
                                             if (num_head as size_t)
-                                                < (SIZE_MAX as usize)
-                                                    .wrapping_div(::core::mem::size_of::<*mut u_header_T>())
+                                                < (SIZE_MAX as usize).wrapping_div(
+                                                    ::core::mem::size_of::<*mut u_header_T>(),
+                                                )
                                             {
-                                                uhp_table = xmalloc(
-                                                    (num_head as size_t)
-                                                        .wrapping_mul(::core::mem::size_of::<*mut u_header_T>()),
-                                                ) as *mut *mut u_header_T;
+                                                uhp_table =
+                                                    xmalloc((num_head as size_t).wrapping_mul(
+                                                        ::core::mem::size_of::<*mut u_header_T>(),
+                                                    ))
+                                                        as *mut *mut u_header_T;
                                             }
                                         }
                                         num_read_uhps = 0 as ::core::ffi::c_int;
@@ -4516,10 +4403,8 @@ pub unsafe extern "C" fn u_read_undo(
                                                 );
                                                 break '_error;
                                             } else {
-                                                let mut uhp: *mut u_header_T = unserialize_uhp(
-                                                    &raw mut bi,
-                                                    file_name,
-                                                );
+                                                let mut uhp: *mut u_header_T =
+                                                    unserialize_uhp(&raw mut bi, file_name);
                                                 if uhp.is_null() {
                                                     break '_error;
                                                 }
@@ -4532,12 +4417,14 @@ pub unsafe extern "C" fn u_read_undo(
                                         }
                                         if num_read_uhps != num_head {
                                             corruption_error(
-                                                b"num_head\0".as_ptr() as *const ::core::ffi::c_char,
+                                                b"num_head\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                                 file_name,
                                             );
                                         } else if c != UF_HEADER_END_MAGIC {
                                             corruption_error(
-                                                b"end marker\0".as_ptr() as *const ::core::ffi::c_char,
+                                                b"end marker\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                                 file_name,
                                             );
                                         } else {
@@ -4546,14 +4433,19 @@ pub unsafe extern "C" fn u_read_undo(
                                             cur_idx = -1 as int16_t;
                                             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                                             while i < num_head {
-                                                let mut uhp_0: *mut u_header_T = *uhp_table
-                                                    .offset(i as isize);
+                                                let mut uhp_0: *mut u_header_T =
+                                                    *uhp_table.offset(i as isize);
                                                 if !uhp_0.is_null() {
-                                                    let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                                                    let mut j: ::core::ffi::c_int =
+                                                        0 as ::core::ffi::c_int;
                                                     while j < num_head {
-                                                        if !(*uhp_table.offset(j as isize)).is_null() && i != j
-                                                            && (**uhp_table.offset(i as isize)).uh_seq
-                                                                == (**uhp_table.offset(j as isize)).uh_seq
+                                                        if !(*uhp_table.offset(j as isize))
+                                                            .is_null()
+                                                            && i != j
+                                                            && (**uhp_table.offset(i as isize))
+                                                                .uh_seq
+                                                                == (**uhp_table.offset(j as isize))
+                                                                    .uh_seq
                                                         {
                                                             corruption_error(
                                                                 b"duplicate uh_seq\0".as_ptr()
@@ -4565,72 +4457,98 @@ pub unsafe extern "C" fn u_read_undo(
                                                             j += 1;
                                                         }
                                                     }
-                                                    let seq: ::core::ffi::c_int = (*uhp_0).uh_next.seq;
-                                                    (*uhp_0).uh_next.ptr = ::core::ptr::null_mut::<
-                                                        u_header_T,
-                                                    >();
-                                                    let mut j_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                                                    let seq: ::core::ffi::c_int =
+                                                        (*uhp_0).uh_next.seq;
+                                                    (*uhp_0).uh_next.ptr =
+                                                        ::core::ptr::null_mut::<u_header_T>();
+                                                    let mut j_0: ::core::ffi::c_int =
+                                                        0 as ::core::ffi::c_int;
                                                     while j_0 < num_head {
-                                                        if !(*uhp_table.offset(j_0 as isize)).is_null() && i != j_0
-                                                            && (**uhp_table.offset(j_0 as isize)).uh_seq == seq
+                                                        if !(*uhp_table.offset(j_0 as isize))
+                                                            .is_null()
+                                                            && i != j_0
+                                                            && (**uhp_table.offset(j_0 as isize))
+                                                                .uh_seq
+                                                                == seq
                                                         {
-                                                            (*uhp_0).uh_next.ptr = *uhp_table.offset(j_0 as isize);
+                                                            (*uhp_0).uh_next.ptr =
+                                                                *uhp_table.offset(j_0 as isize);
                                                             break;
                                                         } else {
                                                             j_0 += 1;
                                                         }
                                                     }
-                                                    let seq_0: ::core::ffi::c_int = (*uhp_0).uh_prev.seq;
-                                                    (*uhp_0).uh_prev.ptr = ::core::ptr::null_mut::<
-                                                        u_header_T,
-                                                    >();
-                                                    let mut j_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                                                    let seq_0: ::core::ffi::c_int =
+                                                        (*uhp_0).uh_prev.seq;
+                                                    (*uhp_0).uh_prev.ptr =
+                                                        ::core::ptr::null_mut::<u_header_T>();
+                                                    let mut j_1: ::core::ffi::c_int =
+                                                        0 as ::core::ffi::c_int;
                                                     while j_1 < num_head {
-                                                        if !(*uhp_table.offset(j_1 as isize)).is_null() && i != j_1
-                                                            && (**uhp_table.offset(j_1 as isize)).uh_seq == seq_0
+                                                        if !(*uhp_table.offset(j_1 as isize))
+                                                            .is_null()
+                                                            && i != j_1
+                                                            && (**uhp_table.offset(j_1 as isize))
+                                                                .uh_seq
+                                                                == seq_0
                                                         {
-                                                            (*uhp_0).uh_prev.ptr = *uhp_table.offset(j_1 as isize);
+                                                            (*uhp_0).uh_prev.ptr =
+                                                                *uhp_table.offset(j_1 as isize);
                                                             break;
                                                         } else {
                                                             j_1 += 1;
                                                         }
                                                     }
-                                                    let seq_1: ::core::ffi::c_int = (*uhp_0).uh_alt_next.seq;
-                                                    (*uhp_0).uh_alt_next.ptr = ::core::ptr::null_mut::<
-                                                        u_header_T,
-                                                    >();
-                                                    let mut j_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                                                    let seq_1: ::core::ffi::c_int =
+                                                        (*uhp_0).uh_alt_next.seq;
+                                                    (*uhp_0).uh_alt_next.ptr =
+                                                        ::core::ptr::null_mut::<u_header_T>();
+                                                    let mut j_2: ::core::ffi::c_int =
+                                                        0 as ::core::ffi::c_int;
                                                     while j_2 < num_head {
-                                                        if !(*uhp_table.offset(j_2 as isize)).is_null() && i != j_2
-                                                            && (**uhp_table.offset(j_2 as isize)).uh_seq == seq_1
+                                                        if !(*uhp_table.offset(j_2 as isize))
+                                                            .is_null()
+                                                            && i != j_2
+                                                            && (**uhp_table.offset(j_2 as isize))
+                                                                .uh_seq
+                                                                == seq_1
                                                         {
-                                                            (*uhp_0).uh_alt_next.ptr = *uhp_table.offset(j_2 as isize);
+                                                            (*uhp_0).uh_alt_next.ptr =
+                                                                *uhp_table.offset(j_2 as isize);
                                                             break;
                                                         } else {
                                                             j_2 += 1;
                                                         }
                                                     }
-                                                    let seq_2: ::core::ffi::c_int = (*uhp_0).uh_alt_prev.seq;
-                                                    (*uhp_0).uh_alt_prev.ptr = ::core::ptr::null_mut::<
-                                                        u_header_T,
-                                                    >();
-                                                    let mut j_3: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                                                    let seq_2: ::core::ffi::c_int =
+                                                        (*uhp_0).uh_alt_prev.seq;
+                                                    (*uhp_0).uh_alt_prev.ptr =
+                                                        ::core::ptr::null_mut::<u_header_T>();
+                                                    let mut j_3: ::core::ffi::c_int =
+                                                        0 as ::core::ffi::c_int;
                                                     while j_3 < num_head {
-                                                        if !(*uhp_table.offset(j_3 as isize)).is_null() && i != j_3
-                                                            && (**uhp_table.offset(j_3 as isize)).uh_seq == seq_2
+                                                        if !(*uhp_table.offset(j_3 as isize))
+                                                            .is_null()
+                                                            && i != j_3
+                                                            && (**uhp_table.offset(j_3 as isize))
+                                                                .uh_seq
+                                                                == seq_2
                                                         {
-                                                            (*uhp_0).uh_alt_prev.ptr = *uhp_table.offset(j_3 as isize);
+                                                            (*uhp_0).uh_alt_prev.ptr =
+                                                                *uhp_table.offset(j_3 as isize);
                                                             break;
                                                         } else {
                                                             j_3 += 1;
                                                         }
                                                     }
                                                     if old_header_seq > 0 as ::core::ffi::c_int
-                                                        && (old_idx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int
+                                                        && (old_idx as ::core::ffi::c_int)
+                                                            < 0 as ::core::ffi::c_int
                                                         && (*uhp_0).uh_seq == old_header_seq
                                                     {
                                                         '_c2rust_label: {
-                                                            if i <= 32767 as ::core::ffi::c_int {} else {
+                                                            if i <= 32767 as ::core::ffi::c_int {
+                                                            } else {
                                                                 __assert_fail(
                                                                     b"i <= INT16_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                                                                     b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0"
@@ -4644,11 +4562,13 @@ pub unsafe extern "C" fn u_read_undo(
                                                         old_idx = i as int16_t;
                                                     }
                                                     if new_header_seq > 0 as ::core::ffi::c_int
-                                                        && (new_idx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int
+                                                        && (new_idx as ::core::ffi::c_int)
+                                                            < 0 as ::core::ffi::c_int
                                                         && (*uhp_0).uh_seq == new_header_seq
                                                     {
                                                         '_c2rust_label_0: {
-                                                            if i <= 32767 as ::core::ffi::c_int {} else {
+                                                            if i <= 32767 as ::core::ffi::c_int {
+                                                            } else {
                                                                 __assert_fail(
                                                                     b"i <= INT16_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                                                                     b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0"
@@ -4662,11 +4582,13 @@ pub unsafe extern "C" fn u_read_undo(
                                                         new_idx = i as int16_t;
                                                     }
                                                     if cur_header_seq > 0 as ::core::ffi::c_int
-                                                        && (cur_idx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int
+                                                        && (cur_idx as ::core::ffi::c_int)
+                                                            < 0 as ::core::ffi::c_int
                                                         && (*uhp_0).uh_seq == cur_header_seq
                                                     {
                                                         '_c2rust_label_1: {
-                                                            if i <= 32767 as ::core::ffi::c_int {} else {
+                                                            if i <= 32767 as ::core::ffi::c_int {
+                                                            } else {
                                                                 __assert_fail(
                                                                     b"i <= INT16_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                                                                     b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0"
@@ -4683,21 +4605,24 @@ pub unsafe extern "C" fn u_read_undo(
                                                 i += 1;
                                             }
                                             u_blockfree(curbuf);
-                                            (*curbuf).b_u_oldhead = if (old_idx as ::core::ffi::c_int)
+                                            (*curbuf).b_u_oldhead = if (old_idx
+                                                as ::core::ffi::c_int)
                                                 < 0 as ::core::ffi::c_int
                                             {
                                                 ::core::ptr::null_mut::<u_header_T>()
                                             } else {
                                                 *uhp_table.offset(old_idx as isize)
                                             };
-                                            (*curbuf).b_u_newhead = if (new_idx as ::core::ffi::c_int)
+                                            (*curbuf).b_u_newhead = if (new_idx
+                                                as ::core::ffi::c_int)
                                                 < 0 as ::core::ffi::c_int
                                             {
                                                 ::core::ptr::null_mut::<u_header_T>()
                                             } else {
                                                 *uhp_table.offset(new_idx as isize)
                                             };
-                                            (*curbuf).b_u_curhead = if (cur_idx as ::core::ffi::c_int)
+                                            (*curbuf).b_u_curhead = if (cur_idx
+                                                as ::core::ffi::c_int)
                                                 < 0 as ::core::ffi::c_int
                                             {
                                                 ::core::ptr::null_mut::<u_header_T>()
@@ -4759,8 +4684,12 @@ unsafe extern "C" fn undo_write(
     mut ptr: *mut uint8_t,
     mut len: size_t,
 ) -> bool {
-    return fwrite(ptr as *const ::core::ffi::c_void, len, 1 as size_t, (*bi).bi_fp)
-        == 1 as ::core::ffi::c_ulong;
+    return fwrite(
+        ptr as *const ::core::ffi::c_void,
+        len,
+        1 as size_t,
+        (*bi).bi_fp,
+    ) == 1 as ::core::ffi::c_ulong;
 }
 unsafe extern "C" fn undo_write_bytes(
     mut bi: *mut bufinfo_T,
@@ -4768,7 +4697,8 @@ unsafe extern "C" fn undo_write_bytes(
     mut len: size_t,
 ) -> bool {
     '_c2rust_label: {
-        if len > 0 as size_t {} else {
+        if len > 0 as size_t {
+        } else {
             __assert_fail(
                 b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0".as_ptr()
@@ -4791,10 +4721,10 @@ unsafe extern "C" fn undo_write_bytes(
 }
 unsafe extern "C" fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_header_T) {
     '_c2rust_label: {
-        if uhp.is_null() || (*uhp).uh_seq >= 0 as ::core::ffi::c_int {} else {
+        if uhp.is_null() || (*uhp).uh_seq >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
-                b"uhp == NULL || uhp->uh_seq >= 0\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"uhp == NULL || uhp->uh_seq >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/undo.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1722 as ::core::ffi::c_uint,
@@ -4805,8 +4735,11 @@ unsafe extern "C" fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_head
     };
     undo_write_bytes(
         bi,
-        (if !uhp.is_null() { (*uhp).uh_seq } else { 0 as ::core::ffi::c_int })
-            as uintmax_t,
+        (if !uhp.is_null() {
+            (*uhp).uh_seq
+        } else {
+            0 as ::core::ffi::c_int
+        }) as uintmax_t,
         4 as size_t,
     );
 }
@@ -4834,7 +4767,11 @@ unsafe extern "C" fn undo_read(
         (*bi).bi_fp,
     ) == 1 as ::core::ffi::c_ulong;
     if !retval {
-        memset(buffer as *mut ::core::ffi::c_void, 0 as ::core::ffi::c_int, size);
+        memset(
+            buffer as *mut ::core::ffi::c_void,
+            0 as ::core::ffi::c_int,
+            size,
+        );
     }
     return retval;
 }
@@ -4906,7 +4843,11 @@ pub unsafe extern "C" fn u_undo_and_forget(
     if (*curbuf).b_u_seq_last == (*to_forget).uh_seq {
         (*curbuf).b_u_seq_last -= 1;
     }
-    u_freebranch(curbuf, to_forget, ::core::ptr::null_mut::<*mut u_header_T>());
+    u_freebranch(
+        curbuf,
+        to_forget,
+        ::core::ptr::null_mut::<*mut u_header_T>(),
+    );
     return true_0 != 0;
 }
 unsafe extern "C" fn u_doit(
@@ -4937,16 +4878,13 @@ unsafe extern "C" fn u_doit(
             } else if get_undolevel(curbuf) > 0 as OptInt {
                 (*curbuf).b_u_curhead = (*(*curbuf).b_u_curhead).uh_next.ptr;
             }
-            if (*curbuf).b_u_numhead == 0 as ::core::ffi::c_int
-                || (*curbuf).b_u_curhead.is_null()
-            {
+            if (*curbuf).b_u_numhead == 0 as ::core::ffi::c_int || (*curbuf).b_u_curhead.is_null() {
                 (*curbuf).b_u_curhead = (*curbuf).b_u_oldhead;
                 beep_flush();
                 if count == startcount - 1 as ::core::ffi::c_int {
                     msg(
                         gettext(
-                            b"Already at oldest change\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"Already at oldest change\0".as_ptr() as *const ::core::ffi::c_char
                         ),
                         0 as ::core::ffi::c_int,
                     );
@@ -4956,15 +4894,11 @@ unsafe extern "C" fn u_doit(
             } else {
                 u_undoredo(true_0 != 0, do_buf_event);
             }
-        } else if (*curbuf).b_u_curhead.is_null() || get_undolevel(curbuf) <= 0 as OptInt
-        {
+        } else if (*curbuf).b_u_curhead.is_null() || get_undolevel(curbuf) <= 0 as OptInt {
             beep_flush();
             if count == startcount - 1 as ::core::ffi::c_int {
                 msg(
-                    gettext(
-                        b"Already at newest change\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Already at newest change\0".as_ptr() as *const ::core::ffi::c_char),
                     0 as ::core::ffi::c_int,
                 );
                 return;
@@ -5086,8 +5020,7 @@ pub unsafe extern "C" fn undo_time(
                     (*uhp).uh_seq
                 };
                 if round == 1 as ::core::ffi::c_int
-                    && !(dofile as ::core::ffi::c_int != 0
-                        && val == 0 as ::core::ffi::c_int)
+                    && !(dofile as ::core::ffi::c_int != 0 && val == 0 as ::core::ffi::c_int)
                 {
                     if (if step < 0 as ::core::ffi::c_int {
                         ((*uhp).uh_seq <= (*curbuf).b_u_seq_cur) as ::core::ffi::c_int
@@ -5158,8 +5091,7 @@ pub unsafe extern "C" fn undo_time(
             if absolute {
                 semsg(
                     gettext(
-                        b"E830: Undo number %ld not found\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"E830: Undo number %ld not found\0".as_ptr() as *const ::core::ffi::c_char
                     ),
                     step as int64_t,
                 );
@@ -5169,16 +5101,14 @@ pub unsafe extern "C" fn undo_time(
                 if step < 0 as ::core::ffi::c_int {
                     msg(
                         gettext(
-                            b"Already at oldest change\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"Already at oldest change\0".as_ptr() as *const ::core::ffi::c_char
                         ),
                         0 as ::core::ffi::c_int,
                     );
                 } else {
                     msg(
                         gettext(
-                            b"Already at newest change\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"Already at newest change\0".as_ptr() as *const ::core::ffi::c_char
                         ),
                         0 as ::core::ffi::c_int,
                     );
@@ -5222,8 +5152,7 @@ pub unsafe extern "C" fn undo_time(
                 if uhp.is_null() {
                     break;
                 }
-                while !(*uhp).uh_alt_prev.ptr.is_null()
-                    && (*(*uhp).uh_alt_prev.ptr).uh_walk == mark
+                while !(*uhp).uh_alt_prev.ptr.is_null() && (*(*uhp).uh_alt_prev.ptr).uh_walk == mark
                 {
                     uhp = (*uhp).uh_alt_prev.ptr;
                 }
@@ -5238,9 +5167,7 @@ pub unsafe extern "C" fn undo_time(
                         uhp = (*uhp).uh_alt_prev.ptr;
                     }
                     if !(*last).uh_alt_next.ptr.is_null() {
-                        (*(*last).uh_alt_next.ptr).uh_alt_prev.ptr = (*last)
-                            .uh_alt_prev
-                            .ptr;
+                        (*(*last).uh_alt_next.ptr).uh_alt_prev.ptr = (*last).uh_alt_prev.ptr;
                     }
                     (*(*last).uh_alt_prev.ptr).uh_alt_next.ptr = (*last).uh_alt_next.ptr;
                     (*last).uh_alt_prev.ptr = ::core::ptr::null_mut::<u_header_T>();
@@ -5275,9 +5202,7 @@ pub unsafe extern "C" fn undo_time(
                     if !(uhp.is_null() || (*uhp).uh_walk != mark) {
                         continue;
                     }
-                    internal_error(
-                        b"undo_time()\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    internal_error(b"undo_time()\0".as_ptr() as *const ::core::ffi::c_char);
                     break;
                 }
             }
@@ -5286,9 +5211,8 @@ pub unsafe extern "C" fn undo_time(
     u_undo_end(did_undo, absolute, false_0 != 0);
 }
 unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
-    let mut newarray: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut newarray: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut newlnum: linenr_T = MAXLNUM as ::core::ffi::c_int as linenr_T;
     let mut new_curpos: pos_T = (*curwin).w_cursor;
     let mut nuep: *mut u_entry_T = ::core::ptr::null_mut::<u_entry_T>();
@@ -5314,12 +5238,11 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         UH_CHANGED as ::core::ffi::c_int
     } else {
         0 as ::core::ffi::c_int
-    })
-        | (if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
-            UH_EMPTYBUF as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) | old_flags & UH_RELOAD as ::core::ffi::c_int;
+    }) | (if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
+        UH_EMPTYBUF as ::core::ffi::c_int
+    } else {
+        0 as ::core::ffi::c_int
+    }) | old_flags & UH_RELOAD as ::core::ffi::c_int;
     setpcmark();
     zero_fmark_additional_data(&raw mut (*curbuf).b_namedm as *mut fmark_T);
     memmove(
@@ -5339,16 +5262,14 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         if bot == 0 as linenr_T {
             bot = (*curbuf).b_ml.ml_line_count + 1 as linenr_T;
         }
-        if top > (*curbuf).b_ml.ml_line_count || top >= bot
+        if top > (*curbuf).b_ml.ml_line_count
+            || top >= bot
             || bot > (*curbuf).b_ml.ml_line_count + 1 as linenr_T
         {
             unblock_autocmds();
-            iemsg(
-                gettext(
-                    b"E438: u_undo: line numbers wrong\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            iemsg(gettext(
+                b"E438: u_undo: line numbers wrong\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             changed(curbuf);
             return;
         }
@@ -5385,8 +5306,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         let mut empty_buffer: bool = false_0 != 0;
         if oldsize > 0 as linenr_T {
             newarray = xmalloc(
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                    .wrapping_mul(oldsize as size_t),
+                ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(oldsize as size_t),
             ) as *mut *mut ::core::ffi::c_char;
             let mut i_0: ::core::ffi::c_int = 0;
             let mut lnum_0: linenr_T = 0;
@@ -5484,9 +5404,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         newlist = uep;
         uep = nuep;
     }
-    (*curbuf).b_op_start.lnum = if (*curbuf).b_op_start.lnum
-        < (*curbuf).b_ml.ml_line_count
-    {
+    (*curbuf).b_op_start.lnum = if (*curbuf).b_op_start.lnum < (*curbuf).b_ml.ml_line_count {
         (*curbuf).b_op_start.lnum
     } else {
         (*curbuf).b_ml.ml_line_count
@@ -5497,8 +5415,8 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         (*curbuf).b_ml.ml_line_count
     };
     if undo {
-        let mut i_2: ::core::ffi::c_int = (*curhead).uh_extmark.size
-            as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+        let mut i_2: ::core::ffi::c_int =
+            (*curhead).uh_extmark.size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
         while i_2 > -1 as ::core::ffi::c_int {
             extmark_apply_undo(*(*curhead).uh_extmark.items.offset(i_2 as isize), undo);
             i_2 -= 1;
@@ -5539,8 +5457,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
         if namedm[i_4 as usize].mark.lnum != 0 as linenr_T {
             (*curhead).uh_namedm[i_4 as usize] = namedm[i_4 as usize];
         } else {
-            (*curhead).uh_namedm[i_4 as usize].mark.lnum = 0 as ::core::ffi::c_int
-                as linenr_T;
+            (*curhead).uh_namedm[i_4 as usize].mark.lnum = 0 as ::core::ffi::c_int as linenr_T;
         }
         i_4 += 1;
     }
@@ -5589,11 +5506,7 @@ unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: bool) {
     (*curbuf).b_u_time_cur = (*curhead).uh_time;
     unblock_autocmds();
 }
-unsafe extern "C" fn u_undo_end(
-    mut did_undo: bool,
-    mut absolute: bool,
-    mut quiet: bool,
-) {
+unsafe extern "C" fn u_undo_end(mut did_undo: bool, mut absolute: bool, mut quiet: bool) {
     if fdo_flags & kOptFdoFlagUndo as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && KeyTyped as ::core::ffi::c_int != 0
     {
@@ -5606,36 +5519,28 @@ unsafe extern "C" fn u_undo_end(
         u_newcount -= 1;
     }
     u_oldcount -= u_newcount;
-    let mut msgstr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut msgstr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if u_oldcount == -1 as ::core::ffi::c_int {
-        msgstr = b"more line\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        msgstr = b"more line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else if u_oldcount < 0 as ::core::ffi::c_int {
-        msgstr = b"more lines\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        msgstr = b"more lines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else if u_oldcount == 1 as ::core::ffi::c_int {
-        msgstr = b"line less\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        msgstr = b"line less\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else if u_oldcount > 1 as ::core::ffi::c_int {
-        msgstr = b"fewer lines\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        msgstr =
+            b"fewer lines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else {
         u_oldcount = u_newcount;
         if u_newcount == 1 as ::core::ffi::c_int {
-            msgstr = b"change\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            msgstr = b"change\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            msgstr = b"changes\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            msgstr =
+                b"changes\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     }
     let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
     if !(*curbuf).b_u_curhead.is_null() {
-        if absolute as ::core::ffi::c_int != 0
-            && !(*(*curbuf).b_u_curhead).uh_next.ptr.is_null()
-        {
+        if absolute as ::core::ffi::c_int != 0 && !(*(*curbuf).b_u_curhead).uh_next.ptr.is_null() {
             uhp = (*(*curbuf).b_u_curhead).uh_next.ptr;
             did_undo = false_0 != 0;
         } else if did_undo {
@@ -5684,7 +5589,11 @@ unsafe extern "C" fn u_undo_end(
         } else {
             gettext(b"after\0".as_ptr() as *const ::core::ffi::c_char)
         },
-        if uhp.is_null() { 0 as int64_t } else { (*uhp).uh_seq as int64_t },
+        if uhp.is_null() {
+            0 as int64_t
+        } else {
+            (*uhp).uh_seq as int64_t
+        },
         &raw mut msgbuf as *mut ::core::ffi::c_char,
     );
 }
@@ -5711,8 +5620,8 @@ pub unsafe extern "C" fn undo_fmt_time(
         os_localtime_r(&raw mut tt, &raw mut curtime);
         let mut n: size_t = 0;
         if time(::core::ptr::null_mut::<time_t>()) - tt
-            < (60 as ::core::ffi::c_int * 60 as ::core::ffi::c_int
-                * 12 as ::core::ffi::c_int) as time_t
+            < (60 as ::core::ffi::c_int * 60 as ::core::ffi::c_int * 12 as ::core::ffi::c_int)
+                as time_t
         {
             n = strftime(
                 buf,
@@ -5732,8 +5641,8 @@ pub unsafe extern "C" fn undo_fmt_time(
             *buf.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
         }
     } else {
-        let mut seconds: int64_t = time(::core::ptr::null_mut::<time_t>()) as int64_t
-            - tt as int64_t;
+        let mut seconds: int64_t =
+            time(::core::ptr::null_mut::<time_t>()) as int64_t - tt as int64_t;
         vim_snprintf(
             buf,
             buflen,
@@ -5781,9 +5690,7 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
     );
     let mut uhp: *mut u_header_T = (*curbuf).b_u_oldhead;
     while !uhp.is_null() {
-        if (*uhp).uh_prev.ptr.is_null() && (*uhp).uh_walk != nomark
-            && (*uhp).uh_walk != mark
-        {
+        if (*uhp).uh_prev.ptr.is_null() && (*uhp).uh_walk != nomark && (*uhp).uh_walk != mark {
             vim_snprintf(
                 &raw mut IObuff as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
@@ -5793,16 +5700,13 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
             );
             undo_fmt_time(
                 (&raw mut IObuff as *mut ::core::ffi::c_char)
-                    .offset(
-                        strlen(&raw mut IObuff as *mut ::core::ffi::c_char) as isize,
-                    ),
+                    .offset(strlen(&raw mut IObuff as *mut ::core::ffi::c_char) as isize),
                 (IOSIZE as size_t)
                     .wrapping_sub(strlen(&raw mut IObuff as *mut ::core::ffi::c_char)),
                 (*uhp).uh_time,
             );
             if (*uhp).uh_save_nr > 0 as ::core::ffi::c_int {
-                while strlen(&raw mut IObuff as *mut ::core::ffi::c_char) < 33 as size_t
-                {
+                while strlen(&raw mut IObuff as *mut ::core::ffi::c_char) < 33 as size_t {
                     xstrlcat(
                         &raw mut IObuff as *mut ::core::ffi::c_char,
                         b" \0".as_ptr() as *const ::core::ffi::c_char,
@@ -5817,13 +5721,13 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
                 );
             }
             ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-            *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = xstrdup(
-                &raw mut IObuff as *mut ::core::ffi::c_char,
-            );
+            *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) =
+                xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
             ga.ga_len += 1;
         }
         (*uhp).uh_walk = mark;
-        if !(*uhp).uh_prev.ptr.is_null() && (*(*uhp).uh_prev.ptr).uh_walk != nomark
+        if !(*uhp).uh_prev.ptr.is_null()
+            && (*(*uhp).uh_prev.ptr).uh_walk != nomark
             && (*(*uhp).uh_prev.ptr).uh_walk != mark
         {
             uhp = (*uhp).uh_prev.ptr;
@@ -5833,7 +5737,8 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
             && (*(*uhp).uh_alt_next.ptr).uh_walk != mark
         {
             uhp = (*uhp).uh_alt_next.ptr;
-        } else if !(*uhp).uh_next.ptr.is_null() && (*uhp).uh_alt_prev.ptr.is_null()
+        } else if !(*uhp).uh_next.ptr.is_null()
+            && (*uhp).uh_alt_prev.ptr.is_null()
             && (*(*uhp).uh_next.ptr).uh_walk != nomark
             && (*(*uhp).uh_next.ptr).uh_walk != mark
         {
@@ -5859,10 +5764,8 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
         sort_strings(ga.ga_data as *mut *mut ::core::ffi::c_char, ga.ga_len);
         msg_start();
         msg_puts_hl(
-            gettext(
-                b"number changes  when               saved\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"number changes  when               saved\0".as_ptr()
+                as *const ::core::ffi::c_char),
             HLF_T as ::core::ffi::c_int,
             false_0 != 0,
         );
@@ -5872,9 +5775,7 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
             if got_int {
                 break;
             }
-            msg_puts(
-                *(ga.ga_data as *mut *const ::core::ffi::c_char).offset(i as isize),
-            );
+            msg_puts(*(ga.ga_data as *mut *const ::core::ffi::c_char).offset(i as isize));
             i += 1;
         }
         msg_end();
@@ -5887,12 +5788,9 @@ pub unsafe extern "C" fn ex_undojoin(mut eap: *mut exarg_T) {
         return;
     }
     if !(*curbuf).b_u_curhead.is_null() {
-        emsg(
-            gettext(
-                b"E790: undojoin is not allowed after undo\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E790: undojoin is not allowed after undo\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
         return;
     }
     if !(*curbuf).b_u_synced {
@@ -5963,7 +5861,9 @@ unsafe extern "C" fn u_unch_branch(mut uhp: *mut u_header_T) {
 }
 unsafe extern "C" fn u_get_headentry(mut buf: *mut buf_T) -> *mut u_entry_T {
     if (*buf).b_u_newhead.is_null() || (*(*buf).b_u_newhead).uh_entry.is_null() {
-        iemsg(gettext(&raw const e_undo_list_corrupt as *const ::core::ffi::c_char));
+        iemsg(gettext(
+            &raw const e_undo_list_corrupt as *const ::core::ffi::c_char,
+        ));
         return ::core::ptr::null_mut::<u_entry_T>();
     }
     return (*(*buf).b_u_newhead).uh_entry;
@@ -5978,7 +5878,9 @@ unsafe extern "C" fn u_getbot(mut buf: *mut buf_T) {
         let mut extra: linenr_T = (*buf).b_ml.ml_line_count - (*uep).ue_lcount;
         (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 as linenr_T + extra;
         if (*uep).ue_bot < 1 as linenr_T || (*uep).ue_bot > (*buf).b_ml.ml_line_count {
-            iemsg(gettext(&raw const e_undo_line_missing as *const ::core::ffi::c_char));
+            iemsg(gettext(
+                &raw const e_undo_line_missing as *const ::core::ffi::c_char,
+            ));
             (*uep).ue_bot = (*uep).ue_top + 1 as linenr_T;
         }
         (*(*buf).b_u_newhead).uh_getbot_entry = ::core::ptr::null_mut::<u_entry_T>();
@@ -5994,9 +5896,7 @@ unsafe extern "C" fn u_freeheader(
         u_freebranch(buf, (*uhp).uh_alt_next.ptr, uhpp);
     }
     if !(*uhp).uh_alt_prev.ptr.is_null() {
-        (*(*uhp).uh_alt_prev.ptr).uh_alt_next.ptr = ::core::ptr::null_mut::<
-            u_header_T,
-        >();
+        (*(*uhp).uh_alt_prev.ptr).uh_alt_next.ptr = ::core::ptr::null_mut::<u_header_T>();
     }
     if (*uhp).uh_next.ptr.is_null() {
         (*buf).b_u_oldhead = (*uhp).uh_prev.ptr;
@@ -6026,9 +5926,7 @@ unsafe extern "C" fn u_freebranch(
         return;
     }
     if !(*uhp).uh_alt_prev.ptr.is_null() {
-        (*(*uhp).uh_alt_prev.ptr).uh_alt_next.ptr = ::core::ptr::null_mut::<
-            u_header_T,
-        >();
+        (*(*uhp).uh_alt_prev.ptr).uh_alt_next.ptr = ::core::ptr::null_mut::<u_header_T>();
     }
     let mut next: *mut u_header_T = uhp;
     while !next.is_null() {
@@ -6096,7 +5994,8 @@ pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
             ::core::ptr::null_mut::<*mut u_header_T>(),
         );
         '_c2rust_label: {
-            if (*buf).b_u_oldhead != previous_oldhead {} else {
+            if (*buf).b_u_oldhead != previous_oldhead {
+            } else {
                 __assert_fail(
                     b"buf->b_u_oldhead != previous_oldhead\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -6136,8 +6035,8 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
     if (*buf).b_u_line_ptr.is_null() {
         return;
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*buf).b_u_line_ptr
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*buf).b_u_line_ptr as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -6145,9 +6044,7 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn u_undoline() {
-    if (*curbuf).b_u_line_ptr.is_null()
-        || (*curbuf).b_u_line_lnum > (*curbuf).b_ml.ml_line_count
-    {
+    if (*curbuf).b_u_line_ptr.is_null() || (*curbuf).b_u_line_lnum > (*curbuf).b_ml.ml_line_count {
         beep_flush();
         return;
     }
@@ -6217,13 +6114,8 @@ pub unsafe extern "C" fn anyBufIsChanged() -> bool {
 pub unsafe extern "C" fn curbufIsChanged() -> bool {
     return bufIsChanged(curbuf);
 }
-unsafe extern "C" fn u_eval_tree(
-    buf: *mut buf_T,
-    first_uhp: *const u_header_T,
-) -> *mut list_T {
-    let list: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
+unsafe extern "C" fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) -> *mut list_T {
+    let list: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let mut uhp: *const u_header_T = first_uhp;
     while !uhp.is_null() {
         let dict: *mut dict_T = tv_dict_alloc();
@@ -6243,8 +6135,7 @@ unsafe extern "C" fn u_eval_tree(
             tv_dict_add_nr(
                 dict,
                 b"newhead\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 1 as varnumber_T,
             );
         }
@@ -6252,8 +6143,7 @@ unsafe extern "C" fn u_eval_tree(
             tv_dict_add_nr(
                 dict,
                 b"curhead\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 1 as varnumber_T,
             );
         }
@@ -6261,8 +6151,7 @@ unsafe extern "C" fn u_eval_tree(
             tv_dict_add_nr(
                 dict,
                 b"save\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
                 (*uhp).uh_save_nr as varnumber_T,
             );
         }
@@ -6270,8 +6159,7 @@ unsafe extern "C" fn u_eval_tree(
             tv_dict_add_list(
                 dict,
                 b"alt\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                 u_eval_tree(buf, (*uhp).uh_alt_next.ptr),
             );
         }
@@ -6287,9 +6175,8 @@ pub unsafe extern "C" fn f_undofile(
     mut fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
-    let fname: *const ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let fname: *const ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     if *fname as ::core::ffi::c_int == NUL {
         (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     } else {
@@ -6363,9 +6250,7 @@ pub unsafe extern "C" fn f_undotree(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn u_force_get_undo_header(
-    mut buf: *mut buf_T,
-) -> *mut u_header_T {
+pub unsafe extern "C" fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_header_T {
     let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
     if !(*buf).b_u_curhead.is_null() {
         uhp = (*buf).b_u_curhead;
@@ -6373,7 +6258,13 @@ pub unsafe extern "C" fn u_force_get_undo_header(
         uhp = (*buf).b_u_newhead;
     }
     if uhp.is_null() {
-        u_savecommon(buf, 0 as linenr_T, 1 as linenr_T, 1 as linenr_T, true_0 != 0);
+        u_savecommon(
+            buf,
+            0 as linenr_T,
+            1 as linenr_T,
+            1 as linenr_T,
+            true_0 != 0,
+        );
         uhp = (*buf).b_u_curhead;
         if uhp.is_null() {
             uhp = (*buf).b_u_newhead;

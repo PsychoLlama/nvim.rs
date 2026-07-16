@@ -44,10 +44,7 @@ extern "C" {
         front_attr: ::core::ffi::c_int,
         through: *mut bool,
     ) -> ::core::ffi::c_int;
-    fn syn_check_group(
-        name: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
+    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     static mut msg_grid: ScreenGrid;
     fn os_sleep(ms: uint64_t);
@@ -1822,9 +1819,7 @@ pub struct C2Rust_Unnamed_15 {
     pub capacity: size_t,
     pub items: *mut *mut ScreenGrid,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: C2Rust_Unnamed_15 = C2Rust_Unnamed_15 {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -1862,7 +1857,8 @@ pub unsafe extern "C" fn ui_comp_init() {
             layers.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*mut ScreenGrid>().wrapping_mul(layers.capacity),
         ) as *mut *mut ScreenGrid;
-    } else {};
+    } else {
+    };
     let c2rust_fresh0 = layers.size;
     layers.size = layers.size.wrapping_add(1);
     let c2rust_lvalue_ptr = &raw mut *layers.items.offset(c2rust_fresh0 as isize);
@@ -1897,13 +1893,13 @@ pub unsafe extern "C" fn ui_comp_attach(mut ui: *mut RemoteUI) {
 pub unsafe extern "C" fn ui_comp_detach(mut ui: *mut RemoteUI) {
     composed_uis -= 1;
     if composed_uis == 0 as ::core::ffi::c_int {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut linebuf
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut linebuf as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut attrbuf
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut attrbuf as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
         *ptr__0;
@@ -1913,8 +1909,7 @@ pub unsafe extern "C" fn ui_comp_detach(mut ui: *mut RemoteUI) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_should_draw() -> bool {
-    return composed_uis != 0 as ::core::ffi::c_int
-        && valid_screen as ::core::ffi::c_int != 0;
+    return composed_uis != 0 as ::core::ffi::c_int && valid_screen as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise: bool) {
@@ -1923,29 +1918,31 @@ pub unsafe extern "C" fn ui_comp_layers_adjust(mut layer_idx: size_t, mut raise:
     if raise {
         while layer_idx < size.wrapping_sub(1 as size_t)
             && (*layer).zindex
-                > (**layers.items.offset(layer_idx.wrapping_add(1 as size_t) as isize))
-                    .zindex
+                > (**layers
+                    .items
+                    .offset(layer_idx.wrapping_add(1 as size_t) as isize))
+                .zindex
         {
             *layers.items.offset(layer_idx as isize) = *layers
                 .items
                 .offset(layer_idx.wrapping_add(1 as size_t) as isize);
             (**layers.items.offset(layer_idx as isize)).comp_index = layer_idx;
-            (**layers.items.offset(layer_idx as isize)).pending_comp_index_update = true_0
-                != 0;
+            (**layers.items.offset(layer_idx as isize)).pending_comp_index_update = true_0 != 0;
             layer_idx = layer_idx.wrapping_add(1);
         }
     } else {
         while layer_idx > 0 as size_t
             && (*layer).zindex
-                < (**layers.items.offset(layer_idx.wrapping_sub(1 as size_t) as isize))
-                    .zindex
+                < (**layers
+                    .items
+                    .offset(layer_idx.wrapping_sub(1 as size_t) as isize))
+                .zindex
         {
             *layers.items.offset(layer_idx as isize) = *layers
                 .items
                 .offset(layer_idx.wrapping_sub(1 as size_t) as isize);
             (**layers.items.offset(layer_idx as isize)).comp_index = layer_idx;
-            (**layers.items.offset(layer_idx as isize)).pending_comp_index_update = true_0
-                != 0;
+            (**layers.items.offset(layer_idx as isize)).pending_comp_index_update = true_0 != 0;
             layer_idx = layer_idx.wrapping_sub(1);
         }
     }
@@ -1977,8 +1974,11 @@ pub unsafe extern "C" fn ui_comp_put_grid(
             );
             if (*grid).comp_col < col {
                 compose_area(
-                    (if row > (*grid).comp_row { row } else { (*grid).comp_row })
-                        as Integer,
+                    (if row > (*grid).comp_row {
+                        row
+                    } else {
+                        (*grid).comp_row
+                    }) as Integer,
                     (if row + height < (*grid).comp_row + (*grid).comp_height {
                         row + height
                     } else {
@@ -1990,8 +1990,11 @@ pub unsafe extern "C" fn ui_comp_put_grid(
             }
             if col + width < (*grid).comp_col + (*grid).comp_width {
                 compose_area(
-                    (if row > (*grid).comp_row { row } else { (*grid).comp_row })
-                        as Integer,
+                    (if row > (*grid).comp_row {
+                        row
+                    } else {
+                        (*grid).comp_row
+                    }) as Integer,
                     (if row + height < (*grid).comp_row + (*grid).comp_height {
                         row + height
                     } else {
@@ -2022,16 +2025,25 @@ pub unsafe extern "C" fn ui_comp_put_grid(
         }
         let mut insert_at: size_t = layers.size;
         while insert_at > 0 as size_t
-            && (**layers.items.offset(insert_at.wrapping_sub(1 as size_t) as isize))
-                .zindex > (*grid).zindex
+            && (**layers
+                .items
+                .offset(insert_at.wrapping_sub(1 as size_t) as isize))
+            .zindex
+                > (*grid).zindex
         {
             insert_at = insert_at.wrapping_sub(1);
         }
         if !curwin.is_null()
-            && *layers.items.offset(insert_at.wrapping_sub(1 as size_t) as isize)
+            && *layers
+                .items
+                .offset(insert_at.wrapping_sub(1 as size_t) as isize)
                 == &raw mut (*curwin).w_grid_alloc
-            && (**layers.items.offset(insert_at.wrapping_sub(1 as size_t) as isize))
-                .zindex == (*grid).zindex && !on_top
+            && (**layers
+                .items
+                .offset(insert_at.wrapping_sub(1 as size_t) as isize))
+            .zindex
+                == (*grid).zindex
+            && !on_top
         {
             insert_at = insert_at.wrapping_sub(1);
         }
@@ -2045,16 +2057,15 @@ pub unsafe extern "C" fn ui_comp_put_grid(
                 layers.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<*mut ScreenGrid>().wrapping_mul(layers.capacity),
             ) as *mut *mut ScreenGrid;
-        } else {};
+        } else {
+        };
         layers.size = layers.size.wrapping_add(1);
         let mut i_0: size_t = layers.size.wrapping_sub(1 as size_t);
         while i_0 > insert_at {
-            *layers.items.offset(i_0 as isize) = *layers
-                .items
-                .offset(i_0.wrapping_sub(1 as size_t) as isize);
+            *layers.items.offset(i_0 as isize) =
+                *layers.items.offset(i_0.wrapping_sub(1 as size_t) as isize);
             (**layers.items.offset(i_0 as isize)).comp_index = i_0;
-            (**layers.items.offset(i_0 as isize)).pending_comp_index_update = true_0
-                != 0;
+            (**layers.items.offset(i_0 as isize)).pending_comp_index_update = true_0 != 0;
             i_0 = i_0.wrapping_sub(1);
         }
         *layers.items.offset(insert_at as isize) = grid;
@@ -2065,7 +2076,8 @@ pub unsafe extern "C" fn ui_comp_put_grid(
     }
     (*grid).comp_height = height;
     (*grid).comp_width = width;
-    if moved as ::core::ffi::c_int != 0 && valid as ::core::ffi::c_int != 0
+    if moved as ::core::ffi::c_int != 0
+        && valid as ::core::ffi::c_int != 0
         && ui_comp_should_draw() as ::core::ffi::c_int != 0
     {
         compose_area(
@@ -2080,14 +2092,14 @@ pub unsafe extern "C" fn ui_comp_put_grid(
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
     '_c2rust_label: {
-        if grid != &raw mut default_grid {} else {
+        if grid != &raw mut default_grid {
+        } else {
             __assert_fail(
                 b"grid != &default_grid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                217 as ::core::ffi::c_uint,
-                b"void ui_comp_remove_grid(ScreenGrid *)\0".as_ptr()
+                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
+                217 as ::core::ffi::c_uint,
+                b"void ui_comp_remove_grid(ScreenGrid *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2099,9 +2111,8 @@ pub unsafe extern "C" fn ui_comp_remove_grid(mut grid: *mut ScreenGrid) {
     }
     let mut i: size_t = (*grid).comp_index;
     while i < layers.size.wrapping_sub(1 as size_t) {
-        *layers.items.offset(i as isize) = *layers
-            .items
-            .offset(i.wrapping_add(1 as size_t) as isize);
+        *layers.items.offset(i as isize) =
+            *layers.items.offset(i.wrapping_add(1 as size_t) as isize);
         (**layers.items.offset(i as isize)).comp_index = i;
         (**layers.items.offset(i as isize)).pending_comp_index_update = true_0 != 0;
         i = i.wrapping_add(1);
@@ -2133,16 +2144,12 @@ pub unsafe extern "C" fn ui_comp_set_grid(mut handle: handle_T) -> bool {
     return false_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_comp_raise_grid(
-    mut grid: *mut ScreenGrid,
-    mut new_index: size_t,
-) {
+pub unsafe extern "C" fn ui_comp_raise_grid(mut grid: *mut ScreenGrid, mut new_index: size_t) {
     let mut old_index: size_t = (*grid).comp_index;
     let mut i: size_t = old_index;
     while i < new_index {
-        *layers.items.offset(i as isize) = *layers
-            .items
-            .offset(i.wrapping_add(1 as size_t) as isize);
+        *layers.items.offset(i as isize) =
+            *layers.items.offset(i.wrapping_add(1 as size_t) as isize);
         (**layers.items.offset(i as isize)).comp_index = i;
         (**layers.items.offset(i as isize)).pending_comp_index_update = true_0 != 0;
         i = i.wrapping_add(1);
@@ -2158,13 +2165,12 @@ pub unsafe extern "C" fn ui_comp_raise_grid(
         } else {
             (*grid2).comp_col
         };
-        let mut endcol: ::core::ffi::c_int = if (*grid).comp_col + (*grid).cols
-            < (*grid2).comp_col + (*grid2).cols
-        {
-            (*grid).comp_col + (*grid).cols
-        } else {
-            (*grid2).comp_col + (*grid2).cols
-        };
+        let mut endcol: ::core::ffi::c_int =
+            if (*grid).comp_col + (*grid).cols < (*grid2).comp_col + (*grid2).cols {
+                (*grid).comp_col + (*grid).cols
+            } else {
+                (*grid2).comp_col + (*grid2).cols
+            };
         compose_area(
             (if (*grid).comp_row > (*grid2).comp_row {
                 (*grid).comp_row
@@ -2191,10 +2197,8 @@ pub unsafe extern "C" fn ui_comp_grid_cursor_goto(
     if !ui_comp_set_grid(grid_handle as handle_T) {
         return;
     }
-    let mut cursor_row: ::core::ffi::c_int = (*curgrid).comp_row
-        + r as ::core::ffi::c_int;
-    let mut cursor_col: ::core::ffi::c_int = (*curgrid).comp_col
-        + c as ::core::ffi::c_int;
+    let mut cursor_row: ::core::ffi::c_int = (*curgrid).comp_row + r as ::core::ffi::c_int;
+    let mut cursor_col: ::core::ffi::c_int = (*curgrid).comp_col + c as ::core::ffi::c_int;
     if curgrid != &raw mut default_grid {
         let mut new_index: size_t = layers.size.wrapping_sub(1 as size_t);
         while new_index > 1 as size_t
@@ -2209,11 +2213,7 @@ pub unsafe extern "C" fn ui_comp_grid_cursor_goto(
     if cursor_col >= default_grid.cols || cursor_row >= default_grid.rows {
         return;
     }
-    ui_composed_call_grid_cursor_goto(
-        1 as Integer,
-        cursor_row as Integer,
-        cursor_col as Integer,
-    );
+    ui_composed_call_grid_cursor_goto(1 as Integer, cursor_row as Integer, cursor_col as Integer);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_mouse_focus(
@@ -2223,8 +2223,10 @@ pub unsafe extern "C" fn ui_comp_mouse_focus(
     let mut i: ssize_t = layers.size as ssize_t - 1 as ssize_t;
     while i > 0 as ssize_t {
         let mut grid: *mut ScreenGrid = *layers.items.offset(i as isize);
-        if (*grid).mouse_enabled as ::core::ffi::c_int != 0 && row >= (*grid).comp_row
-            && row < (*grid).comp_row + (*grid).rows && col >= (*grid).comp_col
+        if (*grid).mouse_enabled as ::core::ffi::c_int != 0
+            && row >= (*grid).comp_row
+            && row < (*grid).comp_row + (*grid).rows
+            && col >= (*grid).comp_col
             && col < (*grid).comp_col + (*grid).cols
         {
             return grid;
@@ -2240,8 +2242,10 @@ pub unsafe extern "C" fn ui_comp_mouse_focus(
         while !wp.is_null() {
             let mut grid_0: *mut ScreenGrid = &raw mut (*wp).w_grid_alloc;
             if (*grid_0).mouse_enabled as ::core::ffi::c_int != 0
-                && row >= (*wp).w_winrow && row < (*wp).w_winrow + (*grid_0).rows
-                && col >= (*wp).w_wincol && col < (*wp).w_wincol + (*grid_0).cols
+                && row >= (*wp).w_winrow
+                && row < (*wp).w_winrow + (*grid_0).rows
+                && col >= (*wp).w_wincol
+                && col < (*wp).w_wincol + (*grid_0).cols
             {
                 return grid_0;
             }
@@ -2258,8 +2262,10 @@ pub unsafe extern "C" fn ui_comp_get_grid_at_coord(
     let mut i: ssize_t = layers.size as ssize_t - 1 as ssize_t;
     while i > 0 as ssize_t {
         let mut grid: *mut ScreenGrid = *layers.items.offset(i as isize);
-        if row >= (*grid).comp_row && row < (*grid).comp_row + (*grid).rows
-            && col >= (*grid).comp_col && col < (*grid).comp_col + (*grid).cols
+        if row >= (*grid).comp_row
+            && row < (*grid).comp_row + (*grid).rows
+            && col >= (*grid).comp_col
+            && col < (*grid).comp_col + (*grid).cols
         {
             return grid;
         }
@@ -2272,8 +2278,10 @@ pub unsafe extern "C" fn ui_comp_get_grid_at_coord(
     };
     while !wp.is_null() {
         let mut grid_0: *mut ScreenGrid = &raw mut (*wp).w_grid_alloc;
-        if row >= (*grid_0).comp_row && row < (*grid_0).comp_row + (*grid_0).rows
-            && col >= (*grid_0).comp_col && col < (*grid_0).comp_col + (*grid_0).cols
+        if row >= (*grid_0).comp_row
+            && row < (*grid_0).comp_row + (*grid_0).rows
+            && col >= (*grid_0).comp_col
+            && col < (*grid_0).comp_col + (*grid_0).cols
             && !(*wp).w_config.hide
         {
             return grid_0;
@@ -2288,7 +2296,11 @@ unsafe extern "C" fn compose_line(
     mut endcol: Integer,
     mut flags: LineFlags,
 ) {
-    startcol = if startcol > 0 as Integer { startcol } else { 0 as Integer };
+    startcol = if startcol > 0 as Integer {
+        startcol
+    } else {
+        0 as Integer
+    };
     let mut skipstart: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut skipend: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if startcol > 0 as Integer
@@ -2305,18 +2317,12 @@ unsafe extern "C" fn compose_line(
     }
     let mut col: ::core::ffi::c_int = startcol as ::core::ffi::c_int;
     let mut grid: *mut ScreenGrid = ::core::ptr::null_mut::<ScreenGrid>();
-    let mut bg_line: *mut schar_T = default_grid
-        .chars
-        .offset(
-            (*default_grid.line_offset.offset(row as isize))
-                .wrapping_add(startcol as size_t) as isize,
-        );
-    let mut bg_attrs: *mut sattr_T = default_grid
-        .attrs
-        .offset(
-            (*default_grid.line_offset.offset(row as isize))
-                .wrapping_add(startcol as size_t) as isize,
-        );
+    let mut bg_line: *mut schar_T = default_grid.chars.offset(
+        (*default_grid.line_offset.offset(row as isize)).wrapping_add(startcol as size_t) as isize,
+    );
+    let mut bg_attrs: *mut sattr_T = default_grid.attrs.offset(
+        (*default_grid.line_offset.offset(row as isize)).wrapping_add(startcol as size_t) as isize,
+    );
     while (col as Integer) < endcol {
         let mut until: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut i: size_t = 0 as size_t;
@@ -2340,7 +2346,11 @@ unsafe extern "C" fn compose_line(
                     grid = g;
                     until = (*g).comp_col + grid_width;
                 } else if (*g).comp_col > col {
-                    until = if until < (*g).comp_col { until } else { (*g).comp_col };
+                    until = if until < (*g).comp_col {
+                        until
+                    } else {
+                        (*g).comp_col
+                    };
                 }
             }
             i = i.wrapping_add(1);
@@ -2351,11 +2361,12 @@ unsafe extern "C" fn compose_line(
             endcol as ::core::ffi::c_int
         };
         '_c2rust_label: {
-            if !grid.is_null() {} else {
+            if !grid.is_null() {
+            } else {
                 __assert_fail(
                     b"grid != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     408 as ::core::ffi::c_uint,
                     b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2363,11 +2374,12 @@ unsafe extern "C" fn compose_line(
             }
         };
         '_c2rust_label_0: {
-            if until > col {} else {
+            if until > col {
+            } else {
                 __assert_fail(
                     b"until > col\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     409 as ::core::ffi::c_uint,
                     b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2375,12 +2387,12 @@ unsafe extern "C" fn compose_line(
             }
         };
         '_c2rust_label_1: {
-            if until <= default_grid.cols {} else {
+            if until <= default_grid.cols {
+            } else {
                 __assert_fail(
-                    b"until <= default_grid.cols\0".as_ptr()
+                    b"until <= default_grid.cols\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     410 as ::core::ffi::c_uint,
                     b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2390,8 +2402,8 @@ unsafe extern "C" fn compose_line(
         let mut n: size_t = (until - col) as size_t;
         if row == msg_sep_row as Integer && (*grid).comp_index <= msg_grid.comp_index {
             grid = &raw mut msg_grid;
-            let mut msg_sep_attr: sattr_T = *hl_attr_active
-                .offset(HLF_MSGSEP as ::core::ffi::c_int as isize) as sattr_T;
+            let mut msg_sep_attr: sattr_T =
+                *hl_attr_active.offset(HLF_MSGSEP as ::core::ffi::c_int as isize) as sattr_T;
             let mut i_0: ::core::ffi::c_int = col;
             while i_0 < until {
                 *linebuf.offset((i_0 as Integer - startcol) as isize) = msg_sep_char;
@@ -2402,16 +2414,14 @@ unsafe extern "C" fn compose_line(
             let mut off: size_t = (*(*grid)
                 .line_offset
                 .offset((row - (*grid).comp_row as Integer) as isize))
-                .wrapping_add((col - (*grid).comp_col) as size_t);
+            .wrapping_add((col - (*grid).comp_col) as size_t);
             memcpy(
-                linebuf.offset((col as Integer - startcol) as isize)
-                    as *mut ::core::ffi::c_void,
+                linebuf.offset((col as Integer - startcol) as isize) as *mut ::core::ffi::c_void,
                 (*grid).chars.offset(off as isize) as *const ::core::ffi::c_void,
                 n.wrapping_mul(::core::mem::size_of::<schar_T>()),
             );
             memcpy(
-                attrbuf.offset((col as Integer - startcol) as isize)
-                    as *mut ::core::ffi::c_void,
+                attrbuf.offset((col as Integer - startcol) as isize) as *mut ::core::ffi::c_void,
                 (*grid).attrs.offset(off as isize) as *const ::core::ffi::c_void,
                 n.wrapping_mul(::core::mem::size_of::<sattr_T>()),
             );
@@ -2419,10 +2429,8 @@ unsafe extern "C" fn compose_line(
                 && *(*grid).chars.offset(off.wrapping_add(n) as isize) == NUL as schar_T
             {
                 *linebuf
-                    .offset(
-                        ((until - 1 as ::core::ffi::c_int) as Integer - startcol)
-                            as isize,
-                    ) = ' ' as ::core::ffi::c_int as schar_T;
+                    .offset(((until - 1 as ::core::ffi::c_int) as Integer - startcol) as isize) =
+                    ' ' as ::core::ffi::c_int as schar_T;
                 if col as Integer == startcol && n == 1 as size_t {
                     skipstart = 0 as ::core::ffi::c_int;
                 }
@@ -2435,12 +2443,10 @@ unsafe extern "C" fn compose_line(
                 width = 1 as ::core::ffi::c_int;
                 let mut thru: bool = (*linebuf.offset(i_1 as isize)
                     == ' ' as ::core::ffi::c_int as schar_T
-                    || *linebuf.offset(i_1 as isize)
-                        == schar_from_char('⠀' as ::core::ffi::c_int))
+                    || *linebuf.offset(i_1 as isize) == schar_from_char('⠀' as ::core::ffi::c_int))
                     && *bg_line.offset(i_1 as isize) != NUL as schar_T;
                 if ((i_1 + 1 as ::core::ffi::c_int) as Integer) < endcol - startcol
-                    && *bg_line.offset((i_1 + 1 as ::core::ffi::c_int) as isize)
-                        == NUL as schar_T
+                    && *bg_line.offset((i_1 + 1 as ::core::ffi::c_int) as isize) == NUL as schar_T
                 {
                     width = 2 as ::core::ffi::c_int;
                     thru = thru as ::core::ffi::c_int
@@ -2448,7 +2454,8 @@ unsafe extern "C" fn compose_line(
                             == ' ' as ::core::ffi::c_int as schar_T
                             || *linebuf.offset((i_1 + 1 as ::core::ffi::c_int) as isize)
                                 == schar_from_char('⠀' as ::core::ffi::c_int))
-                            as ::core::ffi::c_int != 0;
+                            as ::core::ffi::c_int
+                        != 0;
                 }
                 *attrbuf.offset(i_1 as isize) = hl_blend_attrs(
                     *bg_attrs.offset(i_1 as isize) as ::core::ffi::c_int,
@@ -2462,7 +2469,8 @@ unsafe extern "C" fn compose_line(
                         *attrbuf.offset((i_1 + 1 as ::core::ffi::c_int) as isize)
                             as ::core::ffi::c_int,
                         &raw mut thru,
-                    ) as sattr_T;
+                    )
+                        as sattr_T;
                 }
                 if thru {
                     memcpy(
@@ -2475,12 +2483,13 @@ unsafe extern "C" fn compose_line(
             }
         }
         if *linebuf.offset((col as Integer - startcol) as isize) == NUL as schar_T {
-            *linebuf.offset((col as Integer - startcol) as isize) = ' '
-                as ::core::ffi::c_int as schar_T;
+            *linebuf.offset((col as Integer - startcol) as isize) =
+                ' ' as ::core::ffi::c_int as schar_T;
             if col as Integer == endcol - 1 as Integer {
                 skipend = 0 as ::core::ffi::c_int;
             }
-        } else if col as Integer == startcol && n > 1 as size_t
+        } else if col as Integer == startcol
+            && n > 1 as size_t
             && *linebuf.offset(1 as ::core::ffi::c_int as isize) == NUL as schar_T
         {
             skipstart = 0 as ::core::ffi::c_int;
@@ -2491,11 +2500,12 @@ unsafe extern "C" fn compose_line(
         skipend = 0 as ::core::ffi::c_int;
     }
     '_c2rust_label_2: {
-        if endcol <= chk_width as Integer {} else {
+        if endcol <= chk_width as Integer {
+        } else {
             __assert_fail(
                 b"endcol <= chk_width\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 477 as ::core::ffi::c_uint,
                 b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2503,11 +2513,12 @@ unsafe extern "C" fn compose_line(
         }
     };
     '_c2rust_label_3: {
-        if row < chk_height as Integer {} else {
+        if row < chk_height as Integer {
+        } else {
             __assert_fail(
                 b"row < chk_height\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 478 as ::core::ffi::c_uint,
                 b"void compose_line(Integer, Integer, Integer, LineFlags)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2518,15 +2529,12 @@ unsafe extern "C" fn compose_line(
         && (grid == &raw mut default_grid
             || (*grid).comp_col == 0 as ::core::ffi::c_int && (*grid).cols == Columns))
     {
-        flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int))
-            as LineFlags;
+        flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int)) as LineFlags;
     }
     let mut i_2: ::core::ffi::c_int = skipstart;
     while (i_2 as Integer) < endcol - skipend as Integer - startcol {
         if *attrbuf.offset(i_2 as isize) < 0 as sattr_T {
-            if rdb_flags
-                & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            {
+            if rdb_flags & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
                 abort();
             } else {
                 *attrbuf.offset(i_2 as isize) = 0 as ::core::ffi::c_int as sattr_T;
@@ -2554,8 +2562,8 @@ unsafe extern "C" fn compose_debug(
     mut syn_id: ::core::ffi::c_int,
     mut delay: bool,
 ) {
-    if rdb_flags & kOptRdbFlagCompositor as ::core::ffi::c_int as ::core::ffi::c_uint
-        == 0 || startcol >= endcol
+    if rdb_flags & kOptRdbFlagCompositor as ::core::ffi::c_int as ::core::ffi::c_uint == 0
+        || startcol >= endcol
     {
         return;
     }
@@ -2601,7 +2609,11 @@ unsafe extern "C" fn debug_delay(mut lines: Integer) {
         5 as Integer
     }) > 1 as Integer
     {
-        if lines < 5 as Integer { lines } else { 5 as Integer }
+        if lines < 5 as Integer {
+            lines
+        } else {
+            5 as Integer
+        }
     } else {
         1 as Integer
     }) as uint64_t;
@@ -2613,7 +2625,14 @@ unsafe extern "C" fn compose_area(
     mut startcol: Integer,
     mut endcol: Integer,
 ) {
-    compose_debug(startrow, endrow, startcol, endcol, dbghl_recompose, true_0 != 0);
+    compose_debug(
+        startrow,
+        endrow,
+        startcol,
+        endcol,
+        dbghl_recompose,
+        true_0 != 0,
+    );
     endrow = if endrow < default_grid.rows as Integer {
         endrow
     } else {
@@ -2669,11 +2688,11 @@ pub unsafe extern "C" fn ui_comp_raw_line(
     endcol += (*curgrid).comp_col as Integer;
     clearcol += (*curgrid).comp_col as Integer;
     if curgrid != &raw mut default_grid {
-        flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int))
-            as LineFlags;
+        flags = (flags as ::core::ffi::c_int & !(kLineFlagWrap as ::core::ffi::c_int)) as LineFlags;
     }
     '_c2rust_label: {
-        if endcol <= clearcol {} else {
+        if endcol <= clearcol {
+        } else {
             __assert_fail(
                 b"endcol <= clearcol\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
@@ -2691,8 +2710,7 @@ pub unsafe extern "C" fn ui_comp_raw_line(
             b"ui_comp_raw_line\0".as_ptr() as *const ::core::ffi::c_char,
             580 as ::core::ffi::c_int,
             true_0 != 0,
-            b"compositor: invalid row %ld on grid %ld\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"compositor: invalid row %ld on grid %ld\0".as_ptr() as *const ::core::ffi::c_char,
             row,
             grid,
         );
@@ -2750,7 +2768,8 @@ pub unsafe extern "C" fn ui_comp_raw_line(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (i as Integer) < endcol - startcol {
             '_c2rust_label_0: {
-                if *attrs.offset(i as isize) >= 0 as sattr_T {} else {
+                if *attrs.offset(i as isize) >= 0 as sattr_T {
+                } else {
                     __assert_fail(
                         b"attrs[i] >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/ui_compositor.c\0"
@@ -2804,9 +2823,7 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
     } else {
         msg_sep_row = -1 as ::core::ffi::c_int;
     }
-    if row > msg_current_row as Integer
-        && ui_comp_should_draw() as ::core::ffi::c_int != 0
-    {
+    if row > msg_current_row as Integer && ui_comp_should_draw() as ::core::ffi::c_int != 0 {
         compose_area(
             (if msg_current_row - 1 as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
                 msg_current_row - 1 as ::core::ffi::c_int
@@ -2819,8 +2836,7 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
         );
     } else if row < msg_current_row as Integer
         && ui_comp_should_draw() as ::core::ffi::c_int != 0
-        && (msg_current_row < Rows
-            || scrolled as ::core::ffi::c_int != 0 && !msg_was_scrolled)
+        && (msg_current_row < Rows || scrolled as ::core::ffi::c_int != 0 && !msg_was_scrolled)
     {
         let mut delta: ::core::ffi::c_int = msg_current_row - row as ::core::ffi::c_int;
         if msg_grid.blending {
@@ -2829,7 +2845,8 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
                     1 as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
-                }) > 0 as ::core::ffi::c_int
+                })
+                > 0 as ::core::ffi::c_int
             {
                 row as ::core::ffi::c_int
                     - (if scrolled as ::core::ffi::c_int != 0 {
@@ -2852,7 +2869,8 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
                     1 as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
-                }) > 0 as ::core::ffi::c_int
+                })
+                > 0 as ::core::ffi::c_int
             {
                 row as ::core::ffi::c_int
                     - (if msg_was_scrolled as ::core::ffi::c_int != 0 {
@@ -2872,9 +2890,7 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
                 delta as Integer,
                 0 as Integer,
             );
-            if scrolled as ::core::ffi::c_int != 0 && !msg_was_scrolled
-                && row > 0 as Integer
-            {
+            if scrolled as ::core::ffi::c_int != 0 && !msg_was_scrolled && row > 0 as Integer {
                 compose_area(row - 1 as Integer, row, 0 as Integer, Columns as Integer);
             }
         }
@@ -2885,7 +2901,8 @@ pub unsafe extern "C" fn ui_comp_msg_set_pos(
 unsafe extern "C" fn curgrid_covered_above(mut row: ::core::ffi::c_int) -> bool {
     let mut above_msg: bool = *layers
         .items
-        .offset(layers.size.wrapping_sub(1 as size_t) as isize) == &raw mut msg_grid
+        .offset(layers.size.wrapping_sub(1 as size_t) as isize)
+        == &raw mut msg_grid
         && row
             < msg_current_row
                 - (if msg_was_scrolled as ::core::ffi::c_int != 0 {
@@ -2893,15 +2910,13 @@ unsafe extern "C" fn curgrid_covered_above(mut row: ::core::ffi::c_int) -> bool 
                 } else {
                     0 as ::core::ffi::c_int
                 });
-    return layers
-        .size
-        .wrapping_sub(
-            (if above_msg as ::core::ffi::c_int != 0 {
-                1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as size_t,
-        ) > (*curgrid).comp_index.wrapping_add(1 as size_t);
+    return layers.size.wrapping_sub(
+        (if above_msg as ::core::ffi::c_int != 0 {
+            1 as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        }) as size_t,
+    ) > (*curgrid).comp_index.wrapping_add(1 as size_t);
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_grid_scroll(
@@ -2921,26 +2936,35 @@ pub unsafe extern "C" fn ui_comp_grid_scroll(
     left += (*curgrid).comp_col as Integer;
     right += (*curgrid).comp_col as Integer;
     let mut covered: bool = curgrid_covered_above(
-        (bot - (if rows > 0 as Integer { rows } else { 0 as Integer }))
-            as ::core::ffi::c_int,
+        (bot - (if rows > 0 as Integer {
+            rows
+        } else {
+            0 as Integer
+        })) as ::core::ffi::c_int,
     );
-    if covered as ::core::ffi::c_int != 0
-        || (*curgrid).blending as ::core::ffi::c_int != 0
-    {
+    if covered as ::core::ffi::c_int != 0 || (*curgrid).blending as ::core::ffi::c_int != 0 {
         compose_debug(top, bot, left, right, dbghl_recompose, true_0 != 0);
         let mut r: ::core::ffi::c_int = (top
-            + (if -rows > 0 as Integer { -rows } else { 0 as Integer }))
-            as ::core::ffi::c_int;
+            + (if -rows > 0 as Integer {
+                -rows
+            } else {
+                0 as Integer
+            })) as ::core::ffi::c_int;
         while (r as Integer)
-            < bot - (if rows > 0 as Integer { rows } else { 0 as Integer })
+            < bot
+                - (if rows > 0 as Integer {
+                    rows
+                } else {
+                    0 as Integer
+                })
         {
-            if *(*curgrid)
-                .attrs
-                .offset(
-                    (*(*curgrid).line_offset.offset((r - (*curgrid).comp_row) as isize))
-                        .wrapping_add(left as size_t)
-                        .wrapping_sub((*curgrid).comp_col as size_t) as isize,
-                ) >= 0 as sattr_T
+            if *(*curgrid).attrs.offset(
+                (*(*curgrid)
+                    .line_offset
+                    .offset((r - (*curgrid).comp_row) as isize))
+                .wrapping_add(left as size_t)
+                .wrapping_sub((*curgrid).comp_col as size_t) as isize,
+            ) >= 0 as sattr_T
             {
                 compose_line(r as Integer, left, right, 0 as LineFlags);
             }
@@ -2948,9 +2972,7 @@ pub unsafe extern "C" fn ui_comp_grid_scroll(
         }
     } else {
         ui_composed_call_grid_scroll(1 as Integer, top, bot, left, right, rows, cols);
-        if rdb_flags & kOptRdbFlagCompositor as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
-        {
+        if rdb_flags & kOptRdbFlagCompositor as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
             debug_delay(2 as Integer);
         }
     };
@@ -2969,12 +2991,10 @@ pub unsafe extern "C" fn ui_comp_grid_resize(
         if bufsize != new_bufsize {
             xfree(linebuf as *mut ::core::ffi::c_void);
             xfree(attrbuf as *mut ::core::ffi::c_void);
-            linebuf = xmalloc(
-                new_bufsize.wrapping_mul(::core::mem::size_of::<schar_T>()),
-            ) as *mut schar_T;
-            attrbuf = xmalloc(
-                new_bufsize.wrapping_mul(::core::mem::size_of::<sattr_T>()),
-            ) as *mut sattr_T;
+            linebuf = xmalloc(new_bufsize.wrapping_mul(::core::mem::size_of::<schar_T>()))
+                as *mut schar_T;
+            attrbuf = xmalloc(new_bufsize.wrapping_mul(::core::mem::size_of::<sattr_T>()))
+                as *mut sattr_T;
             bufsize = new_bufsize;
         }
     }

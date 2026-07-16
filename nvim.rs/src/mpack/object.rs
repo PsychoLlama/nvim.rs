@@ -123,12 +123,8 @@ pub struct mpack_parser_t {
     pub tokbuf: mpack_tokbuf_t,
     pub items: [mpack_node_t; 33],
 }
-pub type mpack_walk_cb = Option<
-    unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
->;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub type mpack_walk_cb = Option<unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MPACK_MAX_OBJECT_DEPTH: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn mpack_parser_init(
@@ -150,8 +146,7 @@ pub unsafe extern "C" fn mpack_parser_init(
         ::core::mem::size_of::<mpack_node_t>()
             .wrapping_mul((*parser).capacity.wrapping_add(1 as mpack_uint32_t) as size_t),
     );
-    (*parser).items[0 as ::core::ffi::c_int as usize].pos = -1 as ::core::ffi::c_int
-        as size_t;
+    (*parser).items[0 as ::core::ffi::c_int as usize].pos = -1 as ::core::ffi::c_int as size_t;
     (*parser).status = 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -306,12 +301,7 @@ pub unsafe extern "C" fn mpack_unparse(
         };
         let mut tb: *mut mpack_tokbuf_t = &raw mut (*parser).tokbuf;
         if (*tb).plen == 0 {
-            (*parser).status = mpack_unparse_tok(
-                parser,
-                &raw mut tok,
-                enter_cb,
-                exit_cb,
-            );
+            (*parser).status = mpack_unparse_tok(parser, &raw mut tok, enter_cb, exit_cb);
         }
         if (*parser).status == MPACK_EXCEPTION as ::core::ffi::c_int {
             return MPACK_EXCEPTION as ::core::ffi::c_int;
@@ -322,25 +312,26 @@ pub unsafe extern "C" fn mpack_unparse(
         }
         if (*parser).exiting != 0 {
             write_status = mpack_write(tb, buf, buflen, &raw mut tok);
-            status = if write_status != 0 { write_status } else { status };
+            status = if write_status != 0 {
+                write_status
+            } else {
+                status
+            };
         }
     }
     return status;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_parser_copy(
-    mut d: *mut mpack_parser_t,
-    mut s: *mut mpack_parser_t,
-) {
+pub unsafe extern "C" fn mpack_parser_copy(mut d: *mut mpack_parser_t, mut s: *mut mpack_parser_t) {
     let mut dst: *mut mpack_one_parser_t = d as *mut mpack_one_parser_t;
     let mut src: *mut mpack_one_parser_t = s as *mut mpack_one_parser_t;
     let mut i: mpack_uint32_t = 0;
     let mut dst_capacity: mpack_uint32_t = (*dst).capacity;
     '_c2rust_label: {
-        if (*src).capacity <= dst_capacity {} else {
+        if (*src).capacity <= dst_capacity {
+        } else {
             __assert_fail(
-                b"src->capacity <= dst_capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src->capacity <= dst_capacity\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/object.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 135 as ::core::ffi::c_uint,
@@ -358,25 +349,22 @@ pub unsafe extern "C" fn mpack_parser_copy(
     (*dst).capacity = dst_capacity;
     i = 0 as mpack_uint32_t;
     while i <= (*src).capacity {
-        *(&raw mut (*dst).items as *mut mpack_node_t).offset(i as isize) = *(&raw mut (*src)
-            .items as *mut mpack_node_t)
-            .offset(i as isize);
+        *(&raw mut (*dst).items as *mut mpack_node_t).offset(i as isize) =
+            *(&raw mut (*src).items as *mut mpack_node_t).offset(i as isize);
         i = i.wrapping_add(1);
     }
 }
-unsafe extern "C" fn mpack_parser_full(
-    mut parser: *mut mpack_parser_t,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn mpack_parser_full(mut parser: *mut mpack_parser_t) -> ::core::ffi::c_int {
     return ((*parser).size == (*parser).capacity) as ::core::ffi::c_int;
 }
 unsafe extern "C" fn mpack_parser_push(mut p: *mut mpack_parser_t) -> *mut mpack_node_t {
     let mut parser: *mut mpack_one_parser_t = p as *mut mpack_one_parser_t;
     let mut top: *mut mpack_node_t = ::core::ptr::null_mut::<mpack_node_t>();
     '_c2rust_label: {
-        if (*parser).size < (*parser).capacity {} else {
+        if (*parser).size < (*parser).capacity {
+        } else {
             __assert_fail(
-                b"parser->size < parser->capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"parser->size < parser->capacity\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/object.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 155 as ::core::ffi::c_uint,
@@ -400,7 +388,8 @@ unsafe extern "C" fn mpack_parser_pop(mut p: *mut mpack_parser_t) -> *mut mpack_
     let mut top: *mut mpack_node_t = ::core::ptr::null_mut::<mpack_node_t>();
     let mut parent: *mut mpack_node_t = ::core::ptr::null_mut::<mpack_node_t>();
     '_c2rust_label: {
-        if (*parser).size != 0 {} else {
+        if (*parser).size != 0 {
+        } else {
             __assert_fail(
                 b"parser->size\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/object.c\0".as_ptr()
@@ -411,8 +400,7 @@ unsafe extern "C" fn mpack_parser_pop(mut p: *mut mpack_parser_t) -> *mut mpack_
             );
         }
     };
-    top = (&raw mut (*parser).items as *mut mpack_node_t)
-        .offset((*parser).size as isize);
+    top = (&raw mut (*parser).items as *mut mpack_node_t).offset((*parser).size as isize);
     if (*top).tok.type_0 as ::core::ffi::c_uint
         > MPACK_TOKEN_CHUNK as ::core::ffi::c_int as ::core::ffi::c_uint
         && (*top).pos < (*top).tok.length as size_t

@@ -146,11 +146,9 @@ pub struct func_line {
     pub len: ::core::ffi::c_long,
     pub buf: [::core::ffi::c_char; 80],
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const XDL_EMIT_NO_HUNK_HDR: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 1 as ::core::ffi::c_int;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const XDL_EMIT_NO_HUNK_HDR: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
 unsafe extern "C" fn xdl_get_rec(
     mut xdf: *mut xdfile_t,
     mut ri: ::core::ffi::c_long,
@@ -182,8 +180,8 @@ pub unsafe extern "C" fn xdl_get_hunk(
     let mut xch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
     let mut xchp: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
     let mut lxch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut max_common: ::core::ffi::c_long = 2 as ::core::ffi::c_long * (*xecfg).ctxlen
-        + (*xecfg).interhunkctxlen;
+    let mut max_common: ::core::ffi::c_long =
+        2 as ::core::ffi::c_long * (*xecfg).ctxlen + (*xecfg).interhunkctxlen;
     let mut max_ignorable: ::core::ffi::c_long = (*xecfg).ctxlen;
     let mut ignored: ::core::ffi::c_ulong = 0 as ::core::ffi::c_ulong;
     xchp = *xscr;
@@ -212,8 +210,8 @@ pub unsafe extern "C" fn xdl_get_hunk(
             ignored = ignored.wrapping_add((*xch).chg2 as ::core::ffi::c_ulong);
         } else {
             if lxch != xchp
-                && (*xch).i1 + ignored as ::core::ffi::c_long
-                    - ((*lxch).i1 + (*lxch).chg1) > max_common
+                && (*xch).i1 + ignored as ::core::ffi::c_long - ((*lxch).i1 + (*lxch).chg1)
+                    > max_common
             {
                 break;
             }
@@ -243,7 +241,10 @@ pub unsafe extern "C" fn xdl_emit_diff(
     let mut lctx: ::core::ffi::c_long = 0;
     let mut xch: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
     let mut xche: *mut xdchange_t = ::core::ptr::null_mut::<xdchange_t>();
-    let mut func_line: func_line = func_line { len: 0, buf: [0; 80] };
+    let mut func_line: func_line = func_line {
+        len: 0,
+        buf: [0; 80],
+    };
     func_line.len = 0 as ::core::ffi::c_long;
     xch = xscr;
     while !xch.is_null() {

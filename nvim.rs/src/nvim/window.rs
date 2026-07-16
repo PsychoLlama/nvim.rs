@@ -35,10 +35,7 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrlcpy(
         dst: *mut ::core::ffi::c_char,
         src: *const ::core::ffi::c_char,
@@ -68,12 +65,7 @@ extern "C" {
     fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn alist_unlink(al: *mut alist_T);
     static mut autocmd_busy: bool;
     static mut au_pending_free_win: *mut win_T;
@@ -167,11 +159,7 @@ extern "C" {
     fn check_cursor_lnum(win: *mut win_T);
     fn check_cursor(wp: *mut win_T);
     fn clear_virttext(text: *mut VirtText);
-    fn decor_conceal_line(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-        check_cursor_0: bool,
-    ) -> bool;
+    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor_0: bool) -> bool;
     fn diff_clear(tp: *mut tabpage_T);
     fn diffopt_closeoff() -> bool;
     static mut diff_need_scrollbind: bool;
@@ -229,17 +217,9 @@ extern "C" {
         key_len: size_t,
         dict: *mut dict_T,
     ) -> ::core::ffi::c_int;
-    fn tv_dict_extend(
-        d1: *mut dict_T,
-        d2: *mut dict_T,
-        action: *const ::core::ffi::c_char,
-    );
+    fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char);
     fn tv_dict_set_keys_readonly(dict: *mut dict_T);
-    fn init_var_dict(
-        dict: *mut dict_T,
-        dict_var: *mut ScopeDictDictItem,
-        scope: ScopeType,
-    );
+    fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem, scope: ScopeType);
     fn unref_var_dict(dict: *mut dict_T);
     fn vars_clear(ht: *mut hashtab_T);
     fn win_has_winnr(wp: *mut win_T, tp: *mut tabpage_T) -> bool;
@@ -291,11 +271,7 @@ extern "C" {
     fn foldInitWin(new_win: *mut win_T);
     fn deleteFoldRecurse(bp: *mut buf_T, gap: *mut garray_T);
     fn getDeepestNesting(wp: *mut win_T) -> ::core::ffi::c_int;
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn beep_flush();
     fn typebuf_maplen() -> ::core::ffi::c_int;
@@ -422,11 +398,7 @@ extern "C" {
         q: *const ::core::ffi::c_char,
         maxlen: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn plines_win(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        limit_winheight: bool,
-    ) -> ::core::ffi::c_int;
+    fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> ::core::ffi::c_int;
     fn plines_win_nofill(
         wp: *mut win_T,
         lnum: linenr_T,
@@ -466,10 +438,7 @@ extern "C" {
     );
     fn virtual_active(wp: *mut win_T) -> bool;
     fn get_real_state() -> ::core::ffi::c_int;
-    fn stl_clear_click_defs(
-        click_defs: *mut StlClickDefinition,
-        click_defs_size: size_t,
-    );
+    fn stl_clear_click_defs(click_defs: *mut StlClickDefinition, click_defs_size: size_t);
     fn reset_synblock(wp: *mut win_T);
     fn tagstack_clear_entry(item: *mut taggy_T);
     fn ui_check_cursor_grid(grid_handle: handle_T);
@@ -532,12 +501,8 @@ extern "C" {
     static mut tabpage_move_disallowed: ::core::ffi::c_int;
     fn u_sync(force: bool);
     fn bufIsChanged(buf: *mut buf_T) -> bool;
-    fn win_new_float(
-        wp: *mut win_T,
-        last: bool,
-        fconfig: WinConfig,
-        err: *mut Error,
-    ) -> *mut win_T;
+    fn win_new_float(wp: *mut win_T, last: bool, fconfig: WinConfig, err: *mut Error)
+        -> *mut win_T;
     fn win_border_height(wp: *mut win_T) -> ::core::ffi::c_int;
     fn win_border_width(wp: *mut win_T) -> ::core::ffi::c_int;
     fn win_config_float(wp: *mut win_T, fconfig: WinConfig);
@@ -3732,12 +3697,8 @@ pub const WEE_TRIGGER_NEW_AUTOCMDS: C2Rust_Unnamed_35 = 4;
 pub const WEE_CURWIN_INVALID: C2Rust_Unnamed_35 = 2;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
@@ -3823,19 +3784,17 @@ pub const K_BS: ::core::ffi::c_int = -25195;
 pub const K_KENTER: ::core::ffi::c_int = -16715;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
 static mut e_cannot_close_last_window: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E444: Cannot close last window\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E444: Cannot close last window\0",
+    )
 };
 static mut e_cannot_split_window_when_closing_buffer: [::core::ffi::c_char; 53] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 53],
-        [::core::ffi::c_char; 53],
-    >(*b"E1159: Cannot split a window when closing the buffer\0")
+    ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
+        *b"E1159: Cannot split a window when closing the buffer\0",
+    )
 };
-static mut m_onlyone: *mut ::core::ffi::c_char = b"Already only one window\0".as_ptr()
-    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+static mut m_onlyone: *mut ::core::ffi::c_char =
+    b"Already only one window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 static mut split_disallowed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut close_disallowed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut frame_locked: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3867,13 +3826,8 @@ pub unsafe extern "C" fn window_layout_locked(mut cmd: cmdidx_T) -> bool {
     return locked;
 }
 #[no_mangle]
-pub unsafe extern "C" fn window_layout_locked_err(
-    mut cmd: cmdidx_T,
-    mut err: *mut Error,
-) -> bool {
-    if split_disallowed > 0 as ::core::ffi::c_int
-        || close_disallowed > 0 as ::core::ffi::c_int
-    {
+pub unsafe extern "C" fn window_layout_locked_err(mut cmd: cmdidx_T, mut err: *mut Error) -> bool {
+    if split_disallowed > 0 as ::core::ffi::c_int || close_disallowed > 0 as ::core::ffi::c_int {
         if close_disallowed == 0 as ::core::ffi::c_int
             && cmd as ::core::ffi::c_int == CMD_tabnew as ::core::ffi::c_int
         {
@@ -3881,8 +3835,7 @@ pub unsafe extern "C" fn window_layout_locked_err(
                 err,
                 kErrorTypeException,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                &raw const e_cannot_split_window_when_closing_buffer
-                    as *const ::core::ffi::c_char,
+                &raw const e_cannot_split_window_when_closing_buffer as *const ::core::ffi::c_char,
             );
         } else {
             api_set_error(
@@ -3900,25 +3853,19 @@ pub unsafe extern "C" fn window_layout_locked_err(
 #[no_mangle]
 pub unsafe extern "C" fn check_can_set_curbuf_disabled() -> bool {
     if (*curwin).w_onebuf_opt.wo_wfb != 0 {
-        emsg(
-            gettext(
-                &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
+        ));
         return false_0 != 0;
     }
     return true_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn check_can_set_curbuf_forceit(
-    mut forceit: ::core::ffi::c_int,
-) -> bool {
+pub unsafe extern "C" fn check_can_set_curbuf_forceit(mut forceit: ::core::ffi::c_int) -> bool {
     if forceit == 0 && (*curwin).w_onebuf_opt.wo_wfb != 0 {
-        emsg(
-            gettext(
-                &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
+        ));
         return false_0 != 0;
     }
     return true_0 != 0;
@@ -3941,8 +3888,7 @@ pub unsafe extern "C" fn swbuf_goto_win_with_buf(mut buf: *mut buf_T) -> *mut wi
         wp = buf_jump_open_win(buf);
     }
     if wp.is_null()
-        && swb_flags & kOptSwbFlagUsetab as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
+        && swb_flags & kOptSwbFlagUsetab as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         wp = buf_jump_open_tab(buf);
     }
@@ -4014,9 +3960,7 @@ pub unsafe extern "C" fn do_window(
                     match nchar {
                         83 | Ctrl_S | 115 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
@@ -4029,9 +3973,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_V | 118 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
@@ -4044,25 +3986,19 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_HAT | 94 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
-                            if buflist_findnr(
-                                    if Prenum == 0 as ::core::ffi::c_int {
-                                        (*curwin).w_alt_fnum
-                                    } else {
-                                        Prenum
-                                    },
-                                )
-                                .is_null()
+                            if buflist_findnr(if Prenum == 0 as ::core::ffi::c_int {
+                                (*curwin).w_alt_fnum
+                            } else {
+                                Prenum
+                            })
+                            .is_null()
                             {
                                 if Prenum == 0 as ::core::ffi::c_int {
-                                    emsg(
-                                        gettext(&raw const e_noalt as *const ::core::ffi::c_char),
-                                    );
+                                    emsg(gettext(&raw const e_noalt as *const ::core::ffi::c_char));
                                 } else {
                                     semsg(
                                         gettext(
@@ -4075,10 +4011,8 @@ pub unsafe extern "C" fn do_window(
                                 break 's_1675;
                             } else {
                                 if !curbuf_locked()
-                                    && win_split(
-                                        0 as ::core::ffi::c_int,
-                                        0 as ::core::ffi::c_int,
-                                    ) == OK
+                                    && win_split(0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int)
+                                        == OK
                                 {
                                     buflist_getfile(
                                         if Prenum == 0 as ::core::ffi::c_int {
@@ -4096,9 +4030,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_N | 110 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
@@ -4130,15 +4062,11 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_Z | 122 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
-                            do_cmdline_cmd(
-                                b"pclose\0".as_ptr() as *const ::core::ffi::c_char,
-                            );
+                            do_cmdline_cmd(b"pclose\0".as_ptr() as *const ::core::ffi::c_char);
                             break 's_1675;
                         }
                         80 => {
@@ -4157,12 +4085,8 @@ pub unsafe extern "C" fn do_window(
                                 }
                             }
                             if wp.is_null() {
-                                emsg(
-                                    gettext(
-                                        b"E441: There is no preview window\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                );
+                                emsg(gettext(b"E441: There is no preview window\0".as_ptr()
+                                    as *const ::core::ffi::c_char));
                             } else {
                                 win_goto(wp);
                             }
@@ -4170,9 +4094,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_O | 111 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
@@ -4188,9 +4110,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_W | 119 | 87 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             if firstwin == lastwin && Prenum != 1 as ::core::ffi::c_int {
@@ -4207,7 +4127,8 @@ pub unsafe extern "C" fn do_window(
                                         }
                                         if !(*wp_0).w_floating
                                             || !(*wp_0).w_config.hide
-                                                && (*wp_0).w_config.focusable as ::core::ffi::c_int != 0
+                                                && (*wp_0).w_config.focusable as ::core::ffi::c_int
+                                                    != 0
                                         {
                                             last_focusable = wp_0;
                                         }
@@ -4257,9 +4178,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         106 | K_DOWN | Ctrl_J => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             win_goto_ver(false_0 != 0, Prenum1);
@@ -4267,9 +4186,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         107 | K_UP | Ctrl_K => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             win_goto_ver(true_0 != 0, Prenum1);
@@ -4277,9 +4194,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         104 | K_LEFT | Ctrl_H | K_BS => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             win_goto_hor(true_0 != 0, Prenum1);
@@ -4287,9 +4202,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         108 | K_RIGHT | Ctrl_L => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             win_goto_hor(false_0 != 0, Prenum1);
@@ -4297,9 +4210,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         84 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             if one_window(curwin, ::core::ptr::null_mut::<tabpage_T>()) {
@@ -4308,12 +4219,12 @@ pub unsafe extern "C" fn do_window(
                                 let mut oldtab: *mut tabpage_T = curtab;
                                 let mut wp_1: *mut win_T = curwin;
                                 if !win_new_tabpage(
-                                        Prenum,
-                                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                        true_0 != 0,
-                                        ::core::ptr::null_mut::<*mut win_T>(),
-                                    )
-                                    .is_null()
+                                    Prenum,
+                                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                                    true_0 != 0,
+                                    ::core::ptr::null_mut::<*mut win_T>(),
+                                )
+                                .is_null()
                                     && valid_tabpage(oldtab) as ::core::ffi::c_int != 0
                                 {
                                     let mut newtab: *mut tabpage_T = curtab;
@@ -4340,9 +4251,7 @@ pub unsafe extern "C" fn do_window(
                             break 's_1675;
                         }
                         98 | Ctrl_B => {
-                            win_goto(
-                                lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()),
-                            );
+                            win_goto(lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()));
                             break 's_1675;
                         }
                         112 | Ctrl_P => {
@@ -4358,9 +4267,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         120 | Ctrl_X => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             win_exchange(Prenum);
@@ -4368,9 +4275,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         Ctrl_R | 114 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
@@ -4379,9 +4284,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         82 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             reset_VIsual_and_resel();
@@ -4390,37 +4293,33 @@ pub unsafe extern "C" fn do_window(
                         }
                         75 | 74 | 72 | 76 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             if one_window(curwin, ::core::ptr::null_mut::<tabpage_T>()) {
                                 beep_flush();
                             } else {
-                                let dir: ::core::ffi::c_int = (if nchar
-                                    == 'H' as ::core::ffi::c_int
+                                let dir: ::core::ffi::c_int = (if nchar == 'H' as ::core::ffi::c_int
                                     || nchar == 'L' as ::core::ffi::c_int
                                 {
                                     WSP_VERT as ::core::ffi::c_int
                                 } else {
                                     0 as ::core::ffi::c_int
-                                })
-                                    | (if nchar == 'H' as ::core::ffi::c_int
-                                        || nchar == 'K' as ::core::ffi::c_int
-                                    {
-                                        WSP_TOP as ::core::ffi::c_int
-                                    } else {
-                                        WSP_BOT as ::core::ffi::c_int
-                                    });
+                                }) | (if nchar
+                                    == 'H' as ::core::ffi::c_int
+                                    || nchar == 'K' as ::core::ffi::c_int
+                                {
+                                    WSP_TOP as ::core::ffi::c_int
+                                } else {
+                                    WSP_BOT as ::core::ffi::c_int
+                                });
                                 win_splitmove(curwin, Prenum, dir);
                             }
                             break 's_1675;
                         }
                         61 => {
                             let mut mod_0: ::core::ffi::c_int = cmdmod.cmod_split
-                                & (WSP_VERT as ::core::ffi::c_int
-                                    | WSP_HOR as ::core::ffi::c_int);
+                                & (WSP_VERT as ::core::ffi::c_int | WSP_HOR as ::core::ffi::c_int);
                             win_equal(
                                 ::core::ptr::null_mut::<win_T>(),
                                 false_0 != 0,
@@ -4443,13 +4342,11 @@ pub unsafe extern "C" fn do_window(
                             break 's_1675;
                         }
                         Ctrl__ | 95 => {
-                            win_setheight(
-                                if Prenum != 0 {
-                                    Prenum
-                                } else {
-                                    Rows - min_set_ch as ::core::ffi::c_int
-                                },
-                            );
+                            win_setheight(if Prenum != 0 {
+                                Prenum
+                            } else {
+                                Rows - min_set_ch as ::core::ffi::c_int
+                            });
                             break 's_1675;
                         }
                         62 => {
@@ -4461,20 +4358,16 @@ pub unsafe extern "C" fn do_window(
                             break 's_1675;
                         }
                         124 => {
-                            win_setwidth(
-                                if Prenum != 0 as ::core::ffi::c_int {
-                                    Prenum
-                                } else {
-                                    Columns
-                                },
-                            );
+                            win_setwidth(if Prenum != 0 as ::core::ffi::c_int {
+                                Prenum
+                            } else {
+                                Columns
+                            });
                             break 's_1675;
                         }
                         125 => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             if Prenum != 0 {
@@ -4502,9 +4395,7 @@ pub unsafe extern "C" fn do_window(
                         }
                         103 | Ctrl_G => {
                             if cmdwin_type != 0 as ::core::ffi::c_int {
-                                emsg(
-                                    gettext(&raw const e_cmdwin as *const ::core::ffi::c_char),
-                                );
+                                emsg(gettext(&raw const e_cmdwin as *const ::core::ffi::c_char));
                                 return;
                             }
                             no_mapping += 1;
@@ -4512,19 +4403,20 @@ pub unsafe extern "C" fn do_window(
                             if xchar == NUL {
                                 xchar = plain_vgetc();
                             }
-                            if *p_langmap as ::core::ffi::c_int != 0 && true
+                            if *p_langmap as ::core::ffi::c_int != 0
+                                && true
                                 && (p_lrm != 0
                                     || (if vgetc_busy != 0 {
                                         (typebuf_maplen() == 0 as ::core::ffi::c_int)
                                             as ::core::ffi::c_int
                                     } else {
                                         KeyTyped as ::core::ffi::c_int
-                                    }) != 0) && KeyStuffed == 0
+                                    }) != 0)
+                                && KeyStuffed == 0
                                 && xchar >= 0 as ::core::ffi::c_int
                             {
                                 if xchar < 256 as ::core::ffi::c_int {
-                                    xchar = langmap_mapchar[xchar as usize]
-                                        as ::core::ffi::c_int;
+                                    xchar = langmap_mapchar[xchar as usize] as ::core::ffi::c_int;
                                 } else {
                                     xchar = langmap_adjust_mb(xchar);
                                 }
@@ -4543,8 +4435,8 @@ pub unsafe extern "C" fn do_window(
                                 }
                                 93 | Ctrl_RSB => {}
                                 102 | 70 => {
-                                    cmdmod.cmod_tab = tabpage_index(curtab)
-                                        + 1 as ::core::ffi::c_int;
+                                    cmdmod.cmod_tab =
+                                        tabpage_index(curtab) + 1 as ::core::ffi::c_int;
                                     nchar = xchar;
                                     break '_wingotofile;
                                 }
@@ -4654,9 +4546,8 @@ pub unsafe extern "C" fn do_window(
                         return;
                     }
                     let mut len: size_t = 0;
-                    let mut ptr_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut ptr_0: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                     len = find_ident_under_cursor(
                         &raw mut ptr_0,
                         FIND_IDENT as ::core::ffi::c_int,
@@ -4710,10 +4601,7 @@ pub unsafe extern "C" fn do_window(
                 break 's_1675;
             } else {
                 let mut lnum: linenr_T = -1 as linenr_T;
-                let mut ptr: *mut ::core::ffi::c_char = grab_file_name(
-                    Prenum1,
-                    &raw mut lnum,
-                );
+                let mut ptr: *mut ::core::ffi::c_char = grab_file_name(Prenum1, &raw mut lnum);
                 if !ptr.is_null() {
                     let mut oldtab_0: *mut tabpage_T = curtab;
                     let mut oldwin: *mut win_T = curwin;
@@ -4722,14 +4610,14 @@ pub unsafe extern "C" fn do_window(
                     if swb_flags
                         & (kOptSwbFlagUseopen as ::core::ffi::c_int
                             | kOptSwbFlagUsetab as ::core::ffi::c_int)
-                            as ::core::ffi::c_uint != 0
+                            as ::core::ffi::c_uint
+                        != 0
                         && cmdmod.cmod_tab == 0 as ::core::ffi::c_int
                     {
                         wp_2 = swbuf_goto_win_with_buf(buflist_findname_exp(ptr));
                     }
                     if wp_2.is_null()
-                        && win_split(0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int)
-                            == OK
+                        && win_split(0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int) == OK
                     {
                         (*curwin).w_onebuf_opt.wo_scb = false_0;
                         (*curwin).w_onebuf_opt.wo_crb = false_0;
@@ -4749,14 +4637,13 @@ pub unsafe extern "C" fn do_window(
                             wp_2 = curwin;
                         }
                     }
-                    if !wp_2.is_null() && nchar == 'F' as ::core::ffi::c_int
+                    if !wp_2.is_null()
+                        && nchar == 'F' as ::core::ffi::c_int
                         && lnum >= 0 as linenr_T
                     {
                         (*curwin).w_cursor.lnum = lnum;
                         check_cursor_lnum(curwin);
-                        beginline(
-                            BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
-                        );
+                        beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
                     }
                     xfree(ptr as *mut ::core::ffi::c_void);
                 }
@@ -4766,8 +4653,7 @@ pub unsafe extern "C" fn do_window(
         if Prenum != 0 {
             vim_snprintf(
                 &raw mut cbuf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 40]>()
-                    .wrapping_sub(5 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 40]>().wrapping_sub(5 as size_t),
                 b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
                 Prenum as int64_t,
             );
@@ -4866,11 +4752,15 @@ pub unsafe extern "C" fn win_set_buf(
 #[no_mangle]
 pub unsafe extern "C" fn win_fdccol_count(mut wp: *mut win_T) -> ::core::ffi::c_int {
     let mut fdc: *const ::core::ffi::c_char = (*wp).w_onebuf_opt.wo_fdc;
-    if strncmp(fdc, b"auto\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        fdc,
+        b"auto\0".as_ptr() as *const ::core::ffi::c_char,
+        4 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         let fdccol: ::core::ffi::c_int = if *fdc.offset(4 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+            as ::core::ffi::c_int
+            == ':' as ::core::ffi::c_int
         {
             *fdc.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 - '0' as ::core::ffi::c_int
@@ -4878,7 +4768,11 @@ pub unsafe extern "C" fn win_fdccol_count(mut wp: *mut win_T) -> ::core::ffi::c_
             1 as ::core::ffi::c_int
         };
         let mut needed_fdccols: ::core::ffi::c_int = getDeepestNesting(wp);
-        return if fdccol < needed_fdccols { fdccol } else { needed_fdccols };
+        return if fdccol < needed_fdccols {
+            fdccol
+        } else {
+            needed_fdccols
+        };
     }
     return *fdc.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         - '0' as ::core::ffi::c_int;
@@ -4894,10 +4788,7 @@ pub unsafe extern "C" fn merge_win_config(mut dst: *mut WinConfig, src: WinConfi
     *dst = src;
 }
 #[no_mangle]
-pub unsafe extern "C" fn clear_float_config(
-    mut fconfig: *mut WinConfig,
-    mut free_fields: bool,
-) {
+pub unsafe extern "C" fn clear_float_config(mut fconfig: *mut WinConfig, mut free_fields: bool) {
     let mut saved_style: WinStyle = (*fconfig).style;
     let mut saved_cmdline_offset: ::core::ffi::c_int = (*fconfig)._cmdline_offset;
     if free_fields {
@@ -5039,11 +4930,7 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
                 let mut row_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 let mut col_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 win_grid_alloc(win);
-                grid = grid_adjust(
-                    &raw mut (*win).w_grid,
-                    &raw mut row_off,
-                    &raw mut col_off,
-                );
+                grid = grid_adjust(&raw mut (*win).w_grid, &raw mut row_off, &raw mut col_off);
                 row += row_off as Float;
                 col += col_off as Float;
                 if c.bufpos.lnum >= 0 as linenr_T {
@@ -5079,9 +4966,7 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
         } else if c.relative as ::core::ffi::c_uint
             == kFloatRelativeLaststatus as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            row
-                += (Rows - p_ch as ::core::ffi::c_int - last_stl_height(false_0 != 0))
-                    as Float;
+            row += (Rows - p_ch as ::core::ffi::c_int - last_stl_height(false_0 != 0)) as Float;
         } else if c.relative as ::core::ffi::c_uint
             == kFloatRelativeTabline as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -5089,8 +4974,8 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
         }
         let mut resort: bool = (*wp).w_grid_alloc.comp_index != 0 as size_t
             && (*wp).w_grid_alloc.zindex != (*wp).w_config.zindex;
-        let mut raise: bool = resort as ::core::ffi::c_int != 0
-            && (*wp).w_grid_alloc.zindex < (*wp).w_config.zindex;
+        let mut raise: bool =
+            resort as ::core::ffi::c_int != 0 && (*wp).w_grid_alloc.zindex < (*wp).w_config.zindex;
         (*wp).w_grid_alloc.zindex = (*wp).w_config.zindex;
         if resort {
             ui_comp_layers_adjust((*wp).w_grid_alloc.comp_index, raise);
@@ -5101,10 +4986,10 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
             (*wp).w_pos_changed = true_0 != 0;
             return;
         }
-        let mut east: bool = c.anchor as ::core::ffi::c_int
-            & kFloatAnchorEast as ::core::ffi::c_int != 0;
-        let mut south: bool = c.anchor as ::core::ffi::c_int
-            & kFloatAnchorSouth as ::core::ffi::c_int != 0;
+        let mut east: bool =
+            c.anchor as ::core::ffi::c_int & kFloatAnchorEast as ::core::ffi::c_int != 0;
+        let mut south: bool =
+            c.anchor as ::core::ffi::c_int & kFloatAnchorSouth as ::core::ffi::c_int != 0;
         let mut comp_row: ::core::ffi::c_int = row as ::core::ffi::c_int
             - (if south as ::core::ffi::c_int != 0 {
                 (*wp).w_height_outer
@@ -5117,13 +5002,12 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
             } else {
                 0 as ::core::ffi::c_int
             });
-        let mut above_ch: ::core::ffi::c_int = if (*wp).w_config.zindex
-            < kZIndexMessages as ::core::ffi::c_int
-        {
-            p_ch as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        };
+        let mut above_ch: ::core::ffi::c_int =
+            if (*wp).w_config.zindex < kZIndexMessages as ::core::ffi::c_int {
+                p_ch as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            };
         comp_row += (*grid).comp_row;
         comp_col_0 += (*grid).comp_col;
         comp_row = if (if comp_row < Rows - (*wp).w_height_outer - above_ch {
@@ -5200,10 +5084,7 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
             ui_comp_remove_grid(&raw mut (*wp).w_grid_alloc);
         }
     } else {
-        ui_call_win_external_pos(
-            (*wp).w_grid_alloc.handle as Integer,
-            (*wp).handle as Window,
-        );
+        ui_call_win_external_pos((*wp).w_grid_alloc.handle as Integer, (*wp).handle as Window);
     };
 }
 #[no_mangle]
@@ -5226,8 +5107,8 @@ pub unsafe extern "C" fn ui_ext_win_viewport(mut wp: *mut win_T) {
         let mut delta: int64_t = 0 as int64_t;
         let mut last_topline: linenr_T = (*wp).w_viewport_last_topline;
         let mut last_botline: linenr_T = (*wp).w_viewport_last_botline;
-        let mut last_topfill: ::core::ffi::c_int = (*wp).w_viewport_last_topfill
-            as ::core::ffi::c_int;
+        let mut last_topfill: ::core::ffi::c_int =
+            (*wp).w_viewport_last_topfill as ::core::ffi::c_int;
         let mut last_skipcol: int64_t = (*wp).w_viewport_last_skipcol as int64_t;
         if last_topline > line_count {
             delta -= (last_topline - line_count) as int64_t;
@@ -5235,7 +5116,11 @@ pub unsafe extern "C" fn ui_ext_win_viewport(mut wp: *mut win_T) {
             last_topfill = 0 as ::core::ffi::c_int;
             last_skipcol = MAXCOL as ::core::ffi::c_int as int64_t;
         }
-        last_botline = if last_botline < line_count { last_botline } else { line_count };
+        last_botline = if last_botline < line_count {
+            last_botline
+        } else {
+            line_count
+        };
         if cur_topline < last_topline
             || cur_topline == last_topline && ((*wp).w_skipcol as int64_t) < last_skipcol
         {
@@ -5246,16 +5131,15 @@ pub unsafe extern "C" fn ui_ext_win_viewport(mut wp: *mut win_T) {
                 lnume = cur_botline;
                 vcole = 0 as int64_t;
             }
-            delta
-                -= win_text_height(
-                    wp,
-                    cur_topline,
-                    (*wp).w_skipcol as int64_t,
-                    &raw mut lnume,
-                    &raw mut vcole,
-                    ::core::ptr::null_mut::<int64_t>(),
-                    INT64_MAX as int64_t,
-                );
+            delta -= win_text_height(
+                wp,
+                cur_topline,
+                (*wp).w_skipcol as int64_t,
+                &raw mut lnume,
+                &raw mut vcole,
+                ::core::ptr::null_mut::<int64_t>(),
+                INT64_MAX as int64_t,
+            );
         } else if cur_topline > last_topline
             || cur_topline == last_topline && (*wp).w_skipcol as int64_t > last_skipcol
         {
@@ -5266,22 +5150,20 @@ pub unsafe extern "C" fn ui_ext_win_viewport(mut wp: *mut win_T) {
                 lnume_0 = last_botline;
                 vcole_0 = 0 as int64_t;
             }
-            delta
-                += win_text_height(
-                    wp,
-                    last_topline,
-                    last_skipcol,
-                    &raw mut lnume_0,
-                    &raw mut vcole_0,
-                    ::core::ptr::null_mut::<int64_t>(),
-                    INT64_MAX as int64_t,
-                );
+            delta += win_text_height(
+                wp,
+                last_topline,
+                last_skipcol,
+                &raw mut lnume_0,
+                &raw mut vcole_0,
+                ::core::ptr::null_mut::<int64_t>(),
+                INT64_MAX as int64_t,
+            );
         }
         delta += last_topfill as int64_t;
         delta -= (*wp).w_topfill as int64_t;
         let mut ev_botline: linenr_T = (*wp).w_botline;
-        if ev_botline == line_count + 1 as linenr_T
-            && (*wp).w_empty_rows == 0 as ::core::ffi::c_int
+        if ev_botline == line_count + 1 as linenr_T && (*wp).w_empty_rows == 0 as ::core::ffi::c_int
         {
             ev_botline = line_count;
         }
@@ -5303,9 +5185,7 @@ pub unsafe extern "C" fn ui_ext_win_viewport(mut wp: *mut win_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn check_split_disallowed(
-    mut wp: *const win_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn check_split_disallowed(mut wp: *const win_T) -> ::core::ffi::c_int {
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5315,7 +5195,11 @@ pub unsafe extern "C" fn check_split_disallowed(
         emsg(gettext(err.msg));
         api_clear_error(&raw mut err);
     }
-    return if ok as ::core::ffi::c_int != 0 { OK } else { FAIL };
+    return if ok as ::core::ffi::c_int != 0 {
+        OK
+    } else {
+        FAIL
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn check_split_disallowed_err(
@@ -5336,8 +5220,7 @@ pub unsafe extern "C" fn check_split_disallowed_err(
             err,
             kErrorTypeException,
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw const e_cannot_split_window_when_closing_buffer
-                as *const ::core::ffi::c_char,
+            &raw const e_cannot_split_window_when_closing_buffer as *const ::core::ffi::c_char,
         );
         return false_0 != 0;
     }
@@ -5355,15 +5238,11 @@ pub unsafe extern "C" fn win_split(
         return OK;
     }
     flags |= cmdmod.cmod_split;
-    if flags & WSP_TOP as ::core::ffi::c_int != 0
-        && flags & WSP_BOT as ::core::ffi::c_int != 0
-    {
-        emsg(
-            gettext(
-                b"E442: Can't split topleft and botright at the same time\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+    if flags & WSP_TOP as ::core::ffi::c_int != 0 && flags & WSP_BOT as ::core::ffi::c_int != 0 {
+        emsg(gettext(
+            b"E442: Can't split topleft and botright at the same time\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
     if flags & WSP_HELP as ::core::ffi::c_int != 0 {
@@ -5377,13 +5256,13 @@ pub unsafe extern "C" fn win_split(
         clear_snapshot(curtab, SNAP_QUICKFIX_IDX);
     }
     return if win_split_ins(
-            size,
-            flags,
-            ::core::ptr::null_mut::<win_T>(),
-            0 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<frame_T>(),
-        )
-        .is_null()
+        size,
+        flags,
+        ::core::ptr::null_mut::<win_T>(),
+        0 as ::core::ffi::c_int,
+        ::core::ptr::null_mut::<frame_T>(),
+    )
+    .is_null()
     {
         FAIL
     } else {
@@ -5418,10 +5297,10 @@ pub unsafe extern "C" fn win_split_ins(
     let mut need_status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut new_size: ::core::ffi::c_int = size;
     let mut vertical: bool = flags & WSP_VERT as ::core::ffi::c_int != 0;
-    let mut toplevel: bool = flags
-        & (WSP_TOP as ::core::ffi::c_int | WSP_BOT as ::core::ffi::c_int) != 0;
-    if one_window(firstwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
-        != 0 && p_ls == 1 as OptInt
+    let mut toplevel: bool =
+        flags & (WSP_TOP as ::core::ffi::c_int | WSP_BOT as ::core::ffi::c_int) != 0;
+    if one_window(firstwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
+        && p_ls == 1 as OptInt
         && (*oldwin).w_status_height == 0 as ::core::ffi::c_int
     {
         if (*oldwin).w_height as OptInt <= p_wmh {
@@ -5510,13 +5389,16 @@ pub unsafe extern "C" fn win_split_ins(
                 oldwin,
             );
         }
-        if !do_equal && p_ea != 0 && size == 0 as ::core::ffi::c_int
+        if !do_equal
+            && p_ea != 0
+            && size == 0 as ::core::ffi::c_int
             && *p_ead as ::core::ffi::c_int != 'v' as ::core::ffi::c_int
             && !(*(*oldwin).w_frame).fr_parent.is_null()
         {
             let mut frp_0: *mut frame_T = (*(*(*oldwin).w_frame).fr_parent).fr_child;
             while !frp_0.is_null() {
-                if (*frp_0).fr_win != oldwin && !(*frp_0).fr_win.is_null()
+                if (*frp_0).fr_win != oldwin
+                    && !(*frp_0).fr_win.is_null()
                     && ((*(*frp_0).fr_win).w_width > new_size
                         || (*(*frp_0).fr_win).w_width
                             > (*oldwin).w_width - new_size - 1 as ::core::ffi::c_int)
@@ -5529,15 +5411,13 @@ pub unsafe extern "C" fn win_split_ins(
             }
         }
     } else {
-        let mut wmh1: ::core::ffi::c_int = (if p_wmh as ::core::ffi::c_int
-            > 1 as ::core::ffi::c_int
+        let mut wmh1: ::core::ffi::c_int = (if p_wmh as ::core::ffi::c_int > 1 as ::core::ffi::c_int
         {
             p_wmh as ::core::ffi::c_int
         } else {
             1 as ::core::ffi::c_int
         }) + (*oldwin).w_winbar_height;
-        let mut needed_0: ::core::ffi::c_int = wmh1
-            + STATUS_HEIGHT as ::core::ffi::c_int;
+        let mut needed_0: ::core::ffi::c_int = wmh1 + STATUS_HEIGHT as ::core::ffi::c_int;
         if flags & WSP_ROOM as ::core::ffi::c_int != 0 {
             needed_0 += p_wh as ::core::ffi::c_int - wmh1 + (*oldwin).w_winbar_height;
         }
@@ -5587,9 +5467,7 @@ pub unsafe extern "C" fn win_split_ins(
         if new_size == 0 as ::core::ffi::c_int {
             new_size = oldwin_height / 2 as ::core::ffi::c_int;
         }
-        new_size = if (if new_size
-            < available_0 - minheight - STATUS_HEIGHT as ::core::ffi::c_int
-        {
+        new_size = if (if new_size < available_0 - minheight - STATUS_HEIGHT as ::core::ffi::c_int {
             new_size
         } else {
             available_0 - minheight - STATUS_HEIGHT as ::core::ffi::c_int
@@ -5603,9 +5481,7 @@ pub unsafe extern "C" fn win_split_ins(
         } else {
             wmh1
         };
-        if ((oldwin_height - new_size - STATUS_HEIGHT as ::core::ffi::c_int) as OptInt)
-            < p_wmh
-        {
+        if ((oldwin_height - new_size - STATUS_HEIGHT as ::core::ffi::c_int) as OptInt) < p_wmh {
             do_equal = true_0 != 0;
         }
         if (*oldwin).w_onebuf_opt.wo_wfh != 0 {
@@ -5620,17 +5496,19 @@ pub unsafe extern "C" fn win_split_ins(
                 oldwin_height -= STATUS_HEIGHT as ::core::ffi::c_int;
             }
         }
-        if !do_equal && p_ea != 0 && size == 0 as ::core::ffi::c_int
+        if !do_equal
+            && p_ea != 0
+            && size == 0 as ::core::ffi::c_int
             && *p_ead as ::core::ffi::c_int != 'h' as ::core::ffi::c_int
             && !(*(*oldwin).w_frame).fr_parent.is_null()
         {
             let mut frp_2: *mut frame_T = (*(*(*oldwin).w_frame).fr_parent).fr_child;
             while !frp_2.is_null() {
-                if (*frp_2).fr_win != oldwin && !(*frp_2).fr_win.is_null()
+                if (*frp_2).fr_win != oldwin
+                    && !(*frp_2).fr_win.is_null()
                     && ((*(*frp_2).fr_win).w_height > new_size
                         || (*(*frp_2).fr_win).w_height
-                            > oldwin_height - new_size
-                                - STATUS_HEIGHT as ::core::ffi::c_int)
+                            > oldwin_height - new_size - STATUS_HEIGHT as ::core::ffi::c_int)
                 {
                     do_equal = true_0 != 0;
                     break;
@@ -5644,7 +5522,11 @@ pub unsafe extern "C" fn win_split_ins(
         && (flags & WSP_BOT as ::core::ffi::c_int != 0
             || flags & WSP_BELOW as ::core::ffi::c_int != 0
             || flags & WSP_ABOVE as ::core::ffi::c_int == 0
-                && (if vertical as ::core::ffi::c_int != 0 { p_spr } else { p_sb }) != 0)
+                && (if vertical as ::core::ffi::c_int != 0 {
+                    p_spr
+                } else {
+                    p_sb
+                }) != 0)
     {
         if new_wp.is_null() {
             wp = win_alloc(oldwin, false_0 != 0);
@@ -5723,10 +5605,8 @@ pub unsafe extern "C" fn win_split_ins(
     if (*curfrp).fr_parent.is_null()
         || (*(*curfrp).fr_parent).fr_layout as ::core::ffi::c_int != layout
     {
-        let mut frp_3: *mut frame_T = xcalloc(
-            1 as size_t,
-            ::core::mem::size_of::<frame_T>(),
-        ) as *mut frame_T;
+        let mut frp_3: *mut frame_T =
+            xcalloc(1 as size_t, ::core::mem::size_of::<frame_T>()) as *mut frame_T;
         *frp_3 = *curfrp;
         (*curfrp).fr_layout = layout as ::core::ffi::c_char;
         (*frp_3).fr_parent = curfrp;
@@ -5774,8 +5654,8 @@ pub unsafe extern "C" fn win_split_ins(
                 (*curfrp).fr_height
                     - (p_ls == 1 as OptInt || p_ls == 2 as OptInt) as ::core::ffi::c_int,
             );
-            (*wp).w_status_height = (p_ls == 1 as OptInt || p_ls == 2 as OptInt)
-                as ::core::ffi::c_int;
+            (*wp).w_status_height =
+                (p_ls == 1 as OptInt || p_ls == 2 as OptInt) as ::core::ffi::c_int;
             (*wp).w_hsep_height = 0 as ::core::ffi::c_int;
         } else {
             (*wp).w_winrow = (*oldwin).w_winrow;
@@ -5799,8 +5679,8 @@ pub unsafe extern "C" fn win_split_ins(
                 curfrp,
                 (*curfrp).fr_width
                     - (new_size
-                        + (flags & WSP_TOP as ::core::ffi::c_int
-                            != 0 as ::core::ffi::c_int) as ::core::ffi::c_int),
+                        + (flags & WSP_TOP as ::core::ffi::c_int != 0 as ::core::ffi::c_int)
+                            as ::core::ffi::c_int),
                 flags & WSP_TOP as ::core::ffi::c_int != 0,
                 false_0 != 0,
             );
@@ -5814,8 +5694,7 @@ pub unsafe extern "C" fn win_split_ins(
             (*wp).w_wincol = (*oldwin).w_wincol;
             (*oldwin).w_wincol += new_size + 1 as ::core::ffi::c_int;
         } else {
-            (*wp).w_wincol = (*oldwin).w_wincol + (*oldwin).w_width
-                + 1 as ::core::ffi::c_int;
+            (*wp).w_wincol = (*oldwin).w_wincol + (*oldwin).w_width + 1 as ::core::ffi::c_int;
         }
         frame_fix_width(oldwin);
         frame_fix_width(wp);
@@ -5883,16 +5762,14 @@ pub unsafe extern "C" fn win_split_ins(
                 (*oldwin).w_winrow += (*wp).w_height + 1 as ::core::ffi::c_int;
             } else {
                 (*wp).w_status_height = STATUS_HEIGHT as ::core::ffi::c_int;
-                (*oldwin).w_winrow
-                    += (*wp).w_height + STATUS_HEIGHT as ::core::ffi::c_int;
+                (*oldwin).w_winrow += (*wp).w_height + STATUS_HEIGHT as ::core::ffi::c_int;
             }
         } else if is_stl_global {
-            (*wp).w_winrow = (*oldwin).w_winrow + (*oldwin).w_height
-                + 1 as ::core::ffi::c_int;
+            (*wp).w_winrow = (*oldwin).w_winrow + (*oldwin).w_height + 1 as ::core::ffi::c_int;
             (*wp).w_status_height = 0 as ::core::ffi::c_int;
         } else {
-            (*wp).w_winrow = (*oldwin).w_winrow + (*oldwin).w_height
-                + STATUS_HEIGHT as ::core::ffi::c_int;
+            (*wp).w_winrow =
+                (*oldwin).w_winrow + (*oldwin).w_height + STATUS_HEIGHT as ::core::ffi::c_int;
             (*wp).w_status_height = old_status_height;
             if flags & WSP_BOT as ::core::ffi::c_int == 0 {
                 (*oldwin).w_status_height = STATUS_HEIGHT as ::core::ffi::c_int;
@@ -6016,8 +5893,8 @@ pub unsafe extern "C" fn win_init(
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*oldp).w_tagstacklen {
-        let mut tag: *mut taggy_T = (&raw mut (*newp).w_tagstack as *mut taggy_T)
-            .offset(i as isize);
+        let mut tag: *mut taggy_T =
+            (&raw mut (*newp).w_tagstack as *mut taggy_T).offset(i as isize);
         *tag = (*oldp).w_tagstack[i as usize];
         if !(*tag).tagname.is_null() {
             (*tag).tagname = xstrdup((*tag).tagname);
@@ -6087,7 +5964,11 @@ pub unsafe extern "C" fn win_valid_any_tab(mut win: *mut win_T) -> bool {
     }
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if wp == win {
                 return true_0 != 0;
@@ -6119,14 +6000,15 @@ pub unsafe extern "C" fn make_windows(
 ) -> ::core::ffi::c_int {
     let mut maxcount: ::core::ffi::c_int = 0;
     if vertical {
-        maxcount = (((*curwin).w_width + (*curwin).w_vsep_width) as OptInt
-            - (p_wiw - p_wmw)) as ::core::ffi::c_int
+        maxcount = (((*curwin).w_width + (*curwin).w_vsep_width) as OptInt - (p_wiw - p_wmw))
+            as ::core::ffi::c_int
             / (p_wmw as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
     } else {
-        maxcount = (((*curwin).w_height + (*curwin).w_hsep_height
-            + (*curwin).w_status_height) as OptInt - (p_wh - p_wmh))
-            as ::core::ffi::c_int
-            / (p_wmh as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int
+        maxcount = (((*curwin).w_height + (*curwin).w_hsep_height + (*curwin).w_status_height)
+            as OptInt
+            - (p_wh - p_wmh)) as ::core::ffi::c_int
+            / (p_wmh as ::core::ffi::c_int
+                + STATUS_HEIGHT as ::core::ffi::c_int
                 + global_winbar_height());
     }
     maxcount = if maxcount > 2 as ::core::ffi::c_int {
@@ -6183,12 +6065,10 @@ unsafe extern "C" fn win_exchange(mut Prenum: ::core::ffi::c_int) {
     let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
     if Prenum != 0 {
         frp = (*(*(*curwin).w_frame).fr_parent).fr_child;
-        while !frp.is_null()
-            && {
-                Prenum -= 1;
-                Prenum > 0 as ::core::ffi::c_int
-            }
-        {
+        while !frp.is_null() && {
+            Prenum -= 1;
+            Prenum > 0 as ::core::ffi::c_int
+        } {
             frp = (*frp).fr_next;
         }
     } else if !(*(*curwin).w_frame).fr_next.is_null() {
@@ -6247,8 +6127,7 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
         return;
     }
     if count <= 0 as ::core::ffi::c_int
-        || one_window(curwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
-            != 0
+        || one_window(curwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
     {
         beep_flush();
         return;
@@ -6257,12 +6136,10 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
     frp = (*(*(*curwin).w_frame).fr_parent).fr_child;
     while !frp.is_null() {
         if (*frp).fr_win.is_null() {
-            emsg(
-                gettext(
-                    b"E443: Cannot rotate when another window is split\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E443: Cannot rotate when another window is split\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            ));
             return;
         }
         frp = (*frp).fr_next;
@@ -6278,14 +6155,14 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
         if upwards {
             frp = (*(*(*curwin).w_frame).fr_parent).fr_child;
             '_c2rust_label: {
-                if !frp.is_null() {} else {
+                if !frp.is_null() {
+                } else {
                     __assert_fail(
                         b"frp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        2008 as ::core::ffi::c_uint,
-                        b"void win_rotate(_Bool, int)\0".as_ptr()
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
+                        2008 as ::core::ffi::c_uint,
+                        b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -6293,15 +6170,14 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
             win_remove(wp1, ::core::ptr::null_mut::<tabpage_T>());
             frame_remove(frp);
             '_c2rust_label_0: {
-                if !(*(*frp).fr_parent).fr_child.is_null() {} else {
+                if !(*(*frp).fr_parent).fr_child.is_null() {
+                } else {
                     __assert_fail(
-                        b"frp->fr_parent->fr_child\0".as_ptr()
+                        b"frp->fr_parent->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         2012 as ::core::ffi::c_uint,
-                        b"void win_rotate(_Bool, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -6321,15 +6197,14 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
             win_remove(wp1, ::core::ptr::null_mut::<tabpage_T>());
             frame_remove(frp);
             '_c2rust_label_1: {
-                if !(*(*frp).fr_parent).fr_child.is_null() {} else {
+                if !(*(*frp).fr_parent).fr_child.is_null() {
+                } else {
                     __assert_fail(
-                        b"frp->fr_parent->fr_child\0".as_ptr()
+                        b"frp->fr_parent->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         2028 as ::core::ffi::c_uint,
-                        b"void win_rotate(_Bool, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"void win_rotate(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -6370,8 +6245,7 @@ pub unsafe extern "C" fn win_splitmove(
     if one_window(wp, ::core::ptr::null_mut::<tabpage_T>()) {
         return OK;
     }
-    if is_aucmd_win(wp) as ::core::ffi::c_int != 0 || check_split_disallowed(wp) == FAIL
-    {
+    if is_aucmd_win(wp) as ::core::ffi::c_int != 0 || check_split_disallowed(wp) == FAIL {
         return FAIL;
     }
     let mut unflat_altfr: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
@@ -6385,7 +6259,8 @@ pub unsafe extern "C" fn win_splitmove(
             &raw mut unflat_altfr,
         );
         '_c2rust_label: {
-            if !unflat_altfr.is_null() {} else {
+            if !unflat_altfr.is_null() {
+            } else {
                 __assert_fail(
                     b"unflat_altfr != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -6403,11 +6278,12 @@ pub unsafe extern "C" fn win_splitmove(
     if win_split_ins(size, flags, wp, dir, unflat_altfr).is_null() {
         if !(*wp).w_floating {
             '_c2rust_label_0: {
-                if !unflat_altfr.is_null() {} else {
+                if !unflat_altfr.is_null() {
+                } else {
                     __assert_fail(
                         b"unflat_altfr != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         2092 as ::core::ffi::c_uint,
                         b"int win_splitmove(win_T *, int, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6419,8 +6295,10 @@ pub unsafe extern "C" fn win_splitmove(
         win_append((*wp).w_prev, wp, ::core::ptr::null_mut::<tabpage_T>());
         return FAIL;
     }
-    if size == 0 as ::core::ffi::c_int && flags & WSP_VERT as ::core::ffi::c_int == 0
-        && win_valid(wp) as ::core::ffi::c_int != 0 && !(*wp).w_floating
+    if size == 0 as ::core::ffi::c_int
+        && flags & WSP_VERT as ::core::ffi::c_int == 0
+        && win_valid(wp) as ::core::ffi::c_int != 0
+        && !(*wp).w_floating
     {
         win_setheight_win(height, wp);
         if p_ea != 0 {
@@ -6486,12 +6364,14 @@ unsafe extern "C" fn get_maximum_wincount(
 ) -> ::core::ffi::c_int {
     if (*fr).fr_layout as ::core::ffi::c_int != FR_COL {
         return height
-            / (p_wmh as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int
-                + (*frame2win(fr)).w_winbar_height)
+            / (p_wmh as ::core::ffi::c_int
+                + STATUS_HEIGHT as ::core::ffi::c_int
+                + (*frame2win(fr)).w_winbar_height);
     } else if global_winbar_height() != 0 {
         return height
-            / (p_wmh as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int
-                + 1 as ::core::ffi::c_int)
+            / (p_wmh as ::core::ffi::c_int
+                + STATUS_HEIGHT as ::core::ffi::c_int
+                + 1 as ::core::ffi::c_int);
     }
     let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
     let mut total_wincount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6499,19 +6379,19 @@ unsafe extern "C" fn get_maximum_wincount(
     while !frp.is_null() {
         let mut wp: *mut win_T = frame2win(frp);
         if (height as OptInt)
-            < p_wmh + STATUS_HEIGHT as ::core::ffi::c_int as OptInt
+            < p_wmh
+                + STATUS_HEIGHT as ::core::ffi::c_int as OptInt
                 + (*wp).w_winbar_height as OptInt
         {
             break;
         }
-        height
-            -= p_wmh as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int
-                + (*wp).w_winbar_height;
+        height -= p_wmh as ::core::ffi::c_int
+            + STATUS_HEIGHT as ::core::ffi::c_int
+            + (*wp).w_winbar_height;
         total_wincount += 1 as ::core::ffi::c_int;
         frp = (*frp).fr_next;
     }
-    total_wincount
-        += height / (p_wmh as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int);
+    total_wincount += height / (p_wmh as ::core::ffi::c_int + STATUS_HEIGHT as ::core::ffi::c_int);
     return total_wincount;
 }
 #[no_mangle]
@@ -6524,7 +6404,11 @@ pub unsafe extern "C" fn win_equal(
         dir = *p_ead as ::core::ffi::c_uchar as ::core::ffi::c_int;
     }
     win_equal_rec(
-        if next_curwin.is_null() { curwin } else { next_curwin },
+        if next_curwin.is_null() {
+            curwin
+        } else {
+            next_curwin
+        },
         current,
         topframe,
         dir,
@@ -6553,8 +6437,10 @@ unsafe extern "C" fn win_equal_rec(
     let mut room: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut has_next_curwin: bool = false_0 != 0;
     if (*topfr).fr_layout as ::core::ffi::c_int == FR_LEAF {
-        if (*topfr).fr_height != height || (*(*topfr).fr_win).w_winrow != row
-            || (*topfr).fr_width != width || (*(*topfr).fr_win).w_wincol != col
+        if (*topfr).fr_height != height
+            || (*(*topfr).fr_win).w_winrow != row
+            || (*topfr).fr_width != width
+            || (*(*topfr).fr_win).w_wincol != col
         {
             (*(*topfr).fr_win).w_winrow = row;
             frame_new_height(topfr, height, false_0 != 0, false_0 != 0, false_0 != 0);
@@ -6572,8 +6458,7 @@ unsafe extern "C" fn win_equal_rec(
             } else {
                 extra_sep = 0 as ::core::ffi::c_int;
             }
-            totwincount = (n + extra_sep)
-                / (p_wmw as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
+            totwincount = (n + extra_sep) / (p_wmw as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
             has_next_curwin = frame_has_win(topfr, next_curwin);
             let mut m: ::core::ffi::c_int = frame_minwidth(topfr, next_curwin);
             room = width - m;
@@ -6589,9 +6474,7 @@ unsafe extern "C" fn win_equal_rec(
                         n = frame_minwidth(fr, NOWIN);
                         let mut new_size: ::core::ffi::c_int = (*fr).fr_width;
                         if frame_has_win(fr, next_curwin) {
-                            room
-                                += p_wiw as ::core::ffi::c_int
-                                    - p_wmw as ::core::ffi::c_int;
+                            room += p_wiw as ::core::ffi::c_int - p_wmw as ::core::ffi::c_int;
                             next_curwin_size = 0 as ::core::ffi::c_int;
                             new_size = if new_size > p_wiw as ::core::ffi::c_int {
                                 new_size
@@ -6599,14 +6482,12 @@ unsafe extern "C" fn win_equal_rec(
                                 p_wiw as ::core::ffi::c_int
                             };
                         } else {
-                            totwincount
-                                -= (n
-                                    + (if (*fr).fr_next.is_null() {
-                                        extra_sep
-                                    } else {
-                                        0 as ::core::ffi::c_int
-                                    }))
-                                    / (p_wmw as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
+                            totwincount -=
+                                (n + (if (*fr).fr_next.is_null() {
+                                    extra_sep
+                                } else {
+                                    0 as ::core::ffi::c_int
+                                })) / (p_wmw as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
                         }
                         room -= new_size - n;
                         if room < 0 as ::core::ffi::c_int {
@@ -6622,12 +6503,16 @@ unsafe extern "C" fn win_equal_rec(
                         next_curwin_size = 0 as ::core::ffi::c_int;
                     } else if totwincount > 1 as ::core::ffi::c_int
                         && ((room + (totwincount - 2 as ::core::ffi::c_int))
-                            / (totwincount - 1 as ::core::ffi::c_int)) as OptInt > p_wiw
+                            / (totwincount - 1 as ::core::ffi::c_int))
+                            as OptInt
+                            > p_wiw
                     {
-                        next_curwin_size = (room as OptInt + p_wiw
+                        next_curwin_size = (room as OptInt
+                            + p_wiw
                             + (totwincount - 1 as ::core::ffi::c_int) as OptInt * p_wmw
                             + (totwincount - 1 as ::core::ffi::c_int) as OptInt)
-                            as ::core::ffi::c_int / totwincount;
+                            as ::core::ffi::c_int
+                            / totwincount;
                         room -= next_curwin_size - p_wiw as ::core::ffi::c_int;
                     } else {
                         next_curwin_size = p_wiw as ::core::ffi::c_int;
@@ -6652,8 +6537,8 @@ unsafe extern "C" fn win_equal_rec(
                 wincount = 0 as ::core::ffi::c_int;
             } else {
                 let mut n_0: ::core::ffi::c_int = frame_minwidth(fr_0, NOWIN);
-                wincount = (n_0
-                    + (if (*fr_0).fr_next.is_null() {
+                wincount =
+                    (n_0 + (if (*fr_0).fr_next.is_null() {
                         extra_sep
                     } else {
                         0 as ::core::ffi::c_int
@@ -6667,8 +6552,8 @@ unsafe extern "C" fn win_equal_rec(
                 if totwincount == 0 as ::core::ffi::c_int {
                     new_size_0 = room;
                 } else {
-                    new_size_0 = (wincount * room
-                        + totwincount / 2 as ::core::ffi::c_int) / totwincount;
+                    new_size_0 =
+                        (wincount * room + totwincount / 2 as ::core::ffi::c_int) / totwincount;
                 }
                 if hnc {
                     next_curwin_size -= p_wiw as ::core::ffi::c_int - (m_0 - n_0);
@@ -6684,8 +6569,10 @@ unsafe extern "C" fn win_equal_rec(
                 }
                 new_size_0 += n_0;
             }
-            if !current || dir != 'v' as ::core::ffi::c_int
-                || !(*topfr).fr_parent.is_null() || new_size_0 != (*fr_0).fr_width
+            if !current
+                || dir != 'v' as ::core::ffi::c_int
+                || !(*topfr).fr_parent.is_null()
+                || new_size_0 != (*fr_0).fr_width
                 || frame_has_win(fr_0, next_curwin) as ::core::ffi::c_int != 0
             {
                 win_equal_rec(
@@ -6732,8 +6619,7 @@ unsafe extern "C" fn win_equal_rec(
                         n_1 = frame_minheight(fr_1, NOWIN);
                         let mut new_size_1: ::core::ffi::c_int = (*fr_1).fr_height;
                         if frame_has_win(fr_1, next_curwin) {
-                            room
-                                += p_wh as ::core::ffi::c_int - p_wmh as ::core::ffi::c_int;
+                            room += p_wh as ::core::ffi::c_int - p_wmh as ::core::ffi::c_int;
                             next_curwin_size = 0 as ::core::ffi::c_int;
                             new_size_1 = if new_size_1 > p_wh as ::core::ffi::c_int {
                                 new_size_1
@@ -6741,16 +6627,14 @@ unsafe extern "C" fn win_equal_rec(
                                 p_wh as ::core::ffi::c_int
                             };
                         } else {
-                            totwincount
-                                -= get_maximum_wincount(
-                                    fr_1,
-                                    n_1
-                                        + (if (*fr_1).fr_next.is_null() {
-                                            extra_sep
-                                        } else {
-                                            0 as ::core::ffi::c_int
-                                        }),
-                                );
+                            totwincount -= get_maximum_wincount(
+                                fr_1,
+                                n_1 + (if (*fr_1).fr_next.is_null() {
+                                    extra_sep
+                                } else {
+                                    0 as ::core::ffi::c_int
+                                }),
+                            );
                         }
                         room -= new_size_1 - n_1;
                         if room < 0 as ::core::ffi::c_int {
@@ -6766,12 +6650,16 @@ unsafe extern "C" fn win_equal_rec(
                         next_curwin_size = 0 as ::core::ffi::c_int;
                     } else if totwincount > 1 as ::core::ffi::c_int
                         && ((room + (totwincount - 2 as ::core::ffi::c_int))
-                            / (totwincount - 1 as ::core::ffi::c_int)) as OptInt > p_wh
+                            / (totwincount - 1 as ::core::ffi::c_int))
+                            as OptInt
+                            > p_wh
                     {
-                        next_curwin_size = (room as OptInt + p_wh
+                        next_curwin_size = (room as OptInt
+                            + p_wh
                             + (totwincount - 1 as ::core::ffi::c_int) as OptInt * p_wmh
                             + (totwincount - 1 as ::core::ffi::c_int) as OptInt)
-                            as ::core::ffi::c_int / totwincount;
+                            as ::core::ffi::c_int
+                            / totwincount;
                         room -= next_curwin_size - p_wh as ::core::ffi::c_int;
                     } else {
                         next_curwin_size = p_wh as ::core::ffi::c_int;
@@ -6798,12 +6686,11 @@ unsafe extern "C" fn win_equal_rec(
                 let mut n_2: ::core::ffi::c_int = frame_minheight(fr_2, NOWIN);
                 wincount_0 = get_maximum_wincount(
                     fr_2,
-                    n_2
-                        + (if (*fr_2).fr_next.is_null() {
-                            extra_sep
-                        } else {
-                            0 as ::core::ffi::c_int
-                        }),
+                    n_2 + (if (*fr_2).fr_next.is_null() {
+                        extra_sep
+                    } else {
+                        0 as ::core::ffi::c_int
+                    }),
                 );
                 let mut m_2: ::core::ffi::c_int = frame_minheight(fr_2, next_curwin);
                 let mut hnc_0: bool = has_next_curwin as ::core::ffi::c_int != 0
@@ -6814,8 +6701,8 @@ unsafe extern "C" fn win_equal_rec(
                 if totwincount == 0 as ::core::ffi::c_int {
                     new_size_2 = room;
                 } else {
-                    new_size_2 = (wincount_0 * room
-                        + totwincount / 2 as ::core::ffi::c_int) / totwincount;
+                    new_size_2 =
+                        (wincount_0 * room + totwincount / 2 as ::core::ffi::c_int) / totwincount;
                 }
                 if hnc_0 {
                     next_curwin_size -= p_wh as ::core::ffi::c_int - (m_2 - n_2);
@@ -6826,20 +6713,13 @@ unsafe extern "C" fn win_equal_rec(
                 }
                 new_size_2 += n_2;
             }
-            if !current || dir != 'h' as ::core::ffi::c_int
-                || !(*topfr).fr_parent.is_null() || new_size_2 != (*fr_2).fr_height
+            if !current
+                || dir != 'h' as ::core::ffi::c_int
+                || !(*topfr).fr_parent.is_null()
+                || new_size_2 != (*fr_2).fr_height
                 || frame_has_win(fr_2, next_curwin) as ::core::ffi::c_int != 0
             {
-                win_equal_rec(
-                    next_curwin,
-                    current,
-                    fr_2,
-                    dir,
-                    col,
-                    row,
-                    width,
-                    new_size_2,
-                );
+                win_equal_rec(next_curwin, current, fr_2, dir, col, row, width, new_size_2);
             }
             row += new_size_2;
             height -= new_size_2;
@@ -6909,9 +6789,9 @@ pub unsafe extern "C" fn close_windows(mut buf: *mut buf_T, mut keep_curwin: boo
             && (is_aucmd_win(lastwin) as ::core::ffi::c_int != 0
                 || !one_window(wp, ::core::ptr::null_mut::<tabpage_T>()))
         {
-            if (*wp).w_buffer == buf && (!keep_curwin || wp != curwin)
-                && !(win_locked(wp) != 0
-                    || (*(*wp).w_buffer).b_locked > 0 as ::core::ffi::c_int)
+            if (*wp).w_buffer == buf
+                && (!keep_curwin || wp != curwin)
+                && !(win_locked(wp) != 0 || (*(*wp).w_buffer).b_locked > 0 as ::core::ffi::c_int)
             {
                 if window_layout_locked(CMD_SIZE) {
                     break '_theend;
@@ -6963,35 +6843,36 @@ pub unsafe extern "C" fn close_windows(mut buf: *mut buf_T, mut keep_curwin: boo
 }
 #[no_mangle]
 pub unsafe extern "C" fn last_window(mut win: *mut win_T) -> bool {
-    return one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
-        != 0 && (*first_tabpage).tp_next.is_null();
+    return one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
+        && (*first_tabpage).tp_next.is_null();
 }
 #[no_mangle]
-pub unsafe extern "C" fn one_window(
-    mut win: *mut win_T,
-    mut tp: *mut tabpage_T,
-) -> bool {
-    let mut first: *mut win_T = if !tp.is_null() { (*tp).tp_firstwin } else { firstwin };
+pub unsafe extern "C" fn one_window(mut win: *mut win_T, mut tp: *mut tabpage_T) -> bool {
+    let mut first: *mut win_T = if !tp.is_null() {
+        (*tp).tp_firstwin
+    } else {
+        firstwin
+    };
     '_c2rust_label: {
-        if (tp.is_null() || tp != curtab) && !(*first).w_floating {} else {
+        if (tp.is_null() || tp != curtab) && !(*first).w_floating {
+        } else {
             __assert_fail(
                 b"(!tp || tp != curtab) && !first->w_floating\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2665 as ::core::ffi::c_uint,
-                b"_Bool one_window(win_T *, tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"_Bool one_window(win_T *, tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     return first == win
-        && ((*win).w_next.is_null()
-            || (*(*win).w_next).w_floating as ::core::ffi::c_int != 0);
+        && ((*win).w_next.is_null() || (*(*win).w_next).w_floating as ::core::ffi::c_int != 0);
 }
 unsafe extern "C" fn can_close_floating_windows(mut tp: *mut tabpage_T) -> bool {
     '_c2rust_label: {
-        if tp != curtab && (!tp.is_null() || !is_aucmd_win(lastwin)) {} else {
+        if tp != curtab && (!tp.is_null() || !is_aucmd_win(lastwin)) {
+        } else {
             __assert_fail(
                 b"tp != curtab && (tp || !is_aucmd_win(lastwin))\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -7003,11 +6884,16 @@ unsafe extern "C" fn can_close_floating_windows(mut tp: *mut tabpage_T) -> bool 
             );
         }
     };
-    let mut wp: *mut win_T = if !tp.is_null() { (*tp).tp_lastwin } else { lastwin };
+    let mut wp: *mut win_T = if !tp.is_null() {
+        (*tp).tp_lastwin
+    } else {
+        lastwin
+    };
     while (*wp).w_floating {
         let mut buf: *mut buf_T = (*wp).w_buffer;
-        let mut need_hide: ::core::ffi::c_int = (bufIsChanged(buf) as ::core::ffi::c_int
-            != 0 && (*buf).b_nwindows <= 1 as ::core::ffi::c_int) as ::core::ffi::c_int;
+        let mut need_hide: ::core::ffi::c_int = (bufIsChanged(buf) as ::core::ffi::c_int != 0
+            && (*buf).b_nwindows <= 1 as ::core::ffi::c_int)
+            as ::core::ffi::c_int;
         if need_hide != 0 && !buf_hide(buf) {
             return false_0 != 0;
         }
@@ -7016,10 +6902,7 @@ unsafe extern "C" fn can_close_floating_windows(mut tp: *mut tabpage_T) -> bool 
     return true_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn can_close_in_cmdwin(
-    mut win: *mut win_T,
-    mut err: *mut Error,
-) -> bool {
+pub unsafe extern "C" fn can_close_in_cmdwin(mut win: *mut win_T, mut err: *mut Error) -> bool {
     if cmdwin_type != 0 as ::core::ffi::c_int {
         if win == cmdwin_win {
             cmdwin_result = Ctrl_C;
@@ -7054,7 +6937,8 @@ unsafe extern "C" fn close_last_window_tabpage(
         free_buf = false_0 != 0;
     }
     goto_tabpage_tp(alt_tabpage(), false_0 != 0, !(*win).w_buffer.is_null());
-    if curtab != prev_curtab && valid_tabpage(prev_curtab) as ::core::ffi::c_int != 0
+    if curtab != prev_curtab
+        && valid_tabpage(prev_curtab) as ::core::ffi::c_int != 0
         && (*prev_curtab).tp_firstwin == win
     {
         win_close_othertab(
@@ -7156,45 +7040,42 @@ pub unsafe extern "C" fn win_close(
     };
     let had_diffmode: bool = (*win).w_onebuf_opt.wo_diff != 0;
     if last_window(win) {
-        emsg(
-            gettext(&raw const e_cannot_close_last_window as *const ::core::ffi::c_char),
-        );
+        emsg(gettext(
+            &raw const e_cannot_close_last_window as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
     if !(*win).w_floating && window_layout_locked(CMD_close) as ::core::ffi::c_int != 0 {
         return FAIL;
     }
     if win_locked(win) != 0
-        || !(*win).w_buffer.is_null()
-            && (*(*win).w_buffer).b_locked > 0 as ::core::ffi::c_int
+        || !(*win).w_buffer.is_null() && (*(*win).w_buffer).b_locked > 0 as ::core::ffi::c_int
     {
         return FAIL;
     }
     if is_aucmd_win(win) {
-        emsg(gettext(&raw const e_autocmd_close as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_autocmd_close as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
     if (*lastwin).w_floating as ::core::ffi::c_int != 0
-        && one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
-            != 0
+        && one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
     {
         if is_aucmd_win(lastwin) {
-            emsg(
-                gettext(
-                    b"E814: Cannot close window, only autocmd window would remain\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E814: Cannot close window, only autocmd window would remain\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            ));
             return FAIL;
         }
         if force as ::core::ffi::c_int != 0
             || can_close_floating_windows(::core::ptr::null_mut::<tabpage_T>())
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
         {
             while (*lastwin).w_floating {
-                if win_close(lastwin, !buf_hide((*lastwin).w_buffer), true_0 != 0)
-                    == FAIL
-                {
+                if win_close(lastwin, !buf_hide((*lastwin).w_buffer), true_0 != 0) == FAIL {
                     return FAIL;
                 }
             }
@@ -7202,12 +7083,9 @@ pub unsafe extern "C" fn win_close(
                 return FAIL;
             }
             if last_window(win) {
-                emsg(
-                    gettext(
-                        &raw const e_cannot_close_last_window
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    &raw const e_cannot_close_last_window as *const ::core::ffi::c_char,
+                ));
                 return FAIL;
             }
         } else {
@@ -7298,15 +7176,18 @@ pub unsafe extern "C" fn win_close(
         },
         true_0 != 0,
     );
-    if win_valid(win) as ::core::ffi::c_int != 0 && (*win).w_buffer.is_null()
-        && !(*win).w_floating && last_window(win) as ::core::ffi::c_int != 0
+    if win_valid(win) as ::core::ffi::c_int != 0
+        && (*win).w_buffer.is_null()
+        && !(*win).w_floating
+        && last_window(win) as ::core::ffi::c_int != 0
     {
         if (*curwin).w_buffer.is_null() {
             (*curwin).w_buffer = curbuf;
         }
         getout(0 as ::core::ffi::c_int);
     }
-    if curtab != prev_curtab && win_valid_any_tab(win) as ::core::ffi::c_int != 0
+    if curtab != prev_curtab
+        && win_valid_any_tab(win) as ::core::ffi::c_int != 0
         && (*win).w_buffer.is_null()
     {
         win_close_othertab(win, false_0, prev_curtab, force);
@@ -7316,8 +7197,7 @@ pub unsafe extern "C" fn win_close(
         return FAIL;
     }
     if one_window(win, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
-        && ((*first_tabpage).tp_next.is_null()
-            || (*lastwin).w_floating as ::core::ffi::c_int != 0)
+        && ((*first_tabpage).tp_next.is_null() || (*lastwin).w_floating as ::core::ffi::c_int != 0)
     {
         if !(*first_tabpage).tp_next.is_null() {
             emsg(&raw const e_floatonly as *const ::core::ffi::c_char);
@@ -7336,7 +7216,8 @@ pub unsafe extern "C" fn win_close(
     if (*win).w_floating {
         ui_comp_remove_grid(&raw mut (*win).w_grid_alloc);
         '_c2rust_label: {
-            if !first_tabpage.is_null() {} else {
+            if !first_tabpage.is_null() {
+            } else {
                 __assert_fail(
                     b"first_tabpage != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -7358,24 +7239,18 @@ pub unsafe extern "C" fn win_close(
         }
     }
     set_bufref(&raw mut bufref, (*win).w_buffer);
-    let mut had_cmdline_ruler: bool = p_ru != 0 && win == curwin
-        && (*win).w_status_height == 0 as ::core::ffi::c_int;
+    let mut had_cmdline_ruler: bool =
+        p_ru != 0 && win == curwin && (*win).w_status_height == 0 as ::core::ffi::c_int;
     let mut dir: ::core::ffi::c_int = 0;
-    let mut wp_0: *mut win_T = win_free_mem(
-        win,
-        &raw mut dir,
-        ::core::ptr::null_mut::<tabpage_T>(),
-    );
-    if help_window as ::core::ffi::c_int != 0
-        || quickfix_window as ::core::ffi::c_int != 0
-    {
-        let mut prev_win: *mut win_T = get_snapshot_curwin(
-            if help_window as ::core::ffi::c_int != 0 {
+    let mut wp_0: *mut win_T =
+        win_free_mem(win, &raw mut dir, ::core::ptr::null_mut::<tabpage_T>());
+    if help_window as ::core::ffi::c_int != 0 || quickfix_window as ::core::ffi::c_int != 0 {
+        let mut prev_win: *mut win_T =
+            get_snapshot_curwin(if help_window as ::core::ffi::c_int != 0 {
                 SNAP_HELP_IDX
             } else {
                 SNAP_QUICKFIX_IDX
-            },
-        );
+            });
         if win_valid(prev_win) {
             wp_0 = prev_win;
         }
@@ -7395,7 +7270,8 @@ pub unsafe extern "C" fn win_close(
                 if wp_0 == curwin {
                     break;
                 }
-                if !((*wp_0).w_onebuf_opt.wo_pvw == 0 && !bt_quickfix((*wp_0).w_buffer)
+                if !((*wp_0).w_onebuf_opt.wo_pvw == 0
+                    && !bt_quickfix((*wp_0).w_buffer)
                     && !((*wp_0).w_floating as ::core::ffi::c_int != 0
                         && ((*wp_0).w_config.hide as ::core::ffi::c_int != 0
                             || !(*wp_0).w_config.focusable)))
@@ -7412,7 +7288,8 @@ pub unsafe extern "C" fn win_close(
     }
     if !was_floating {
         last_status(false_0 != 0);
-        if !(*curwin).w_floating && p_ea != 0
+        if !(*curwin).w_floating
+            && p_ea != 0
             && (*p_ead as ::core::ffi::c_int == 'b' as ::core::ffi::c_int
                 || *p_ead as ::core::ffi::c_int == dir)
         {
@@ -7449,8 +7326,10 @@ pub unsafe extern "C" fn win_close(
             );
         }
     }
-    if firstwin == lastwin && (*curwin).w_locked as ::core::ffi::c_int != 0
-        && (*curbuf).b_locked_split != 0 && !(*first_tabpage).tp_next.is_null()
+    if firstwin == lastwin
+        && (*curwin).w_locked as ::core::ffi::c_int != 0
+        && (*curbuf).b_locked_split != 0
+        && !(*first_tabpage).tp_next.is_null()
     {
         apply_autocmds(
             EVENT_TABLEAVE,
@@ -7461,9 +7340,7 @@ pub unsafe extern "C" fn win_close(
         );
     }
     split_disallowed -= 1;
-    if help_window as ::core::ffi::c_int != 0
-        || quickfix_window as ::core::ffi::c_int != 0
-    {
+    if help_window as ::core::ffi::c_int != 0 || quickfix_window as ::core::ffi::c_int != 0 {
         restore_snapshot(
             if help_window as ::core::ffi::c_int != 0 {
                 SNAP_HELP_IDX
@@ -7474,7 +7351,8 @@ pub unsafe extern "C" fn win_close(
         );
     }
     if diffopt_closeoff() as ::core::ffi::c_int != 0
-        && had_diffmode as ::core::ffi::c_int != 0 && curtab == prev_curtab
+        && had_diffmode as ::core::ffi::c_int != 0
+        && curtab == prev_curtab
     {
         let mut diffcount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut dwin: *mut win_T = if curtab == curtab {
@@ -7573,7 +7451,8 @@ pub unsafe extern "C" fn win_close_othertab(
     let mut free_tp_idx: ::core::ffi::c_int = 0;
     let mut dir: ::core::ffi::c_int = 0;
     '_c2rust_label: {
-        if tp != curtab {} else {
+        if tp != curtab {
+        } else {
             __assert_fail(
                 b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -7589,13 +7468,14 @@ pub unsafe extern "C" fn win_close_othertab(
         return false_0 != 0;
     }
     if win_locked(win) != 0
-        || !(*win).w_buffer.is_null()
-            && (*(*win).w_buffer).b_locked > 0 as ::core::ffi::c_int
+        || !(*win).w_buffer.is_null() && (*(*win).w_buffer).b_locked > 0 as ::core::ffi::c_int
     {
         return false_0 != 0;
     }
     if is_aucmd_win(win) {
-        emsg(gettext(&raw const e_autocmd_close as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_autocmd_close as *const ::core::ffi::c_char,
+        ));
         return false_0 != 0;
     }
     '_leave_open: {
@@ -7668,18 +7548,14 @@ pub unsafe extern "C" fn win_close_othertab(
                         if tp == first_tabpage {
                             first_tabpage = (*tp).tp_next;
                         } else {
-                            let mut ptp: *mut tabpage_T = ::core::ptr::null_mut::<
-                                tabpage_T,
-                            >();
+                            let mut ptp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
                             ptp = first_tabpage;
                             while !ptp.is_null() && (*ptp).tp_next != tp {
                                 ptp = (*ptp).tp_next;
                             }
                             if ptp.is_null() {
-                                internal_error(
-                                    b"win_close_othertab()\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
+                                internal_error(b"win_close_othertab()\0".as_ptr()
+                                    as *const ::core::ffi::c_char);
                                 return false_0 != 0;
                             }
                             (*ptp).tp_next = (*tp).tp_next;
@@ -7791,14 +7667,15 @@ pub unsafe extern "C" fn winframe_remove(
         );
     } else {
         '_c2rust_label: {
-            if *dirp == 'h' as ::core::ffi::c_int {} else {
+            if *dirp == 'h' as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"*dirp == 'h'\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     3457 as ::core::ffi::c_uint,
-                    b"win_T *winframe_remove(win_T *, int *, tabpage_T *, frame_T **)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"win_T *winframe_remove(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -7828,14 +7705,15 @@ pub unsafe extern "C" fn winframe_find_altwin(
     mut altfr: *mut *mut frame_T,
 ) -> *mut win_T {
     '_c2rust_label: {
-        if tp.is_null() || tp != curtab {} else {
+        if tp.is_null() || tp != curtab {
+        } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3492 as ::core::ffi::c_uint,
-                b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -7862,9 +7740,7 @@ pub unsafe extern "C" fn winframe_find_altwin(
                 if frp3.is_null() {
                     continue;
                 }
-                if !(*frp3).fr_win.is_null()
-                    && (*(*frp3).fr_win).w_onebuf_opt.wo_wfh == 0
-                {
+                if !(*frp3).fr_win.is_null() && (*(*frp3).fr_win).w_onebuf_opt.wo_wfh == 0 {
                     frp2 = frp3;
                     wp = (*frp3).fr_win;
                     break;
@@ -7891,9 +7767,7 @@ pub unsafe extern "C" fn winframe_find_altwin(
                 if frp3_0.is_null() {
                     continue;
                 }
-                if !(*frp3_0).fr_win.is_null()
-                    && (*(*frp3_0).fr_win).w_onebuf_opt.wo_wfw == 0
-                {
+                if !(*frp3_0).fr_win.is_null() && (*(*frp3_0).fr_win).w_onebuf_opt.wo_wfw == 0 {
                     frp2 = frp3_0;
                     wp = (*frp3_0).fr_win;
                     break;
@@ -7905,15 +7779,15 @@ pub unsafe extern "C" fn winframe_find_altwin(
         *dirp = 'h' as ::core::ffi::c_int;
     }
     '_c2rust_label_0: {
-        if wp != win && frp2 != frp_close {} else {
+        if wp != win && frp2 != frp_close {
+        } else {
             __assert_fail(
-                b"wp != win && frp2 != frp_close\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"wp != win && frp2 != frp_close\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3561 as ::core::ffi::c_uint,
-                b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"win_T *winframe_find_altwin(win_T *, int *, tabpage_T *, frame_T **)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -7945,21 +7819,20 @@ unsafe extern "C" fn frame_flatten(mut frp: *mut frame_T) {
     xfree(frp as *mut ::core::ffi::c_void);
     frp = (*frp2).fr_parent;
     if !frp.is_null()
-        && (*frp).fr_layout as ::core::ffi::c_int
-            == (*frp2).fr_layout as ::core::ffi::c_int
+        && (*frp).fr_layout as ::core::ffi::c_int == (*frp2).fr_layout as ::core::ffi::c_int
     {
         if (*frp).fr_child == frp2 {
             (*frp).fr_child = (*frp2).fr_child;
         }
         '_c2rust_label: {
-            if !(*frp2).fr_child.is_null() {} else {
+            if !(*frp2).fr_child.is_null() {
+            } else {
                 __assert_fail(
                     b"frp2->fr_child\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     3604 as ::core::ffi::c_uint,
-                    b"void frame_flatten(frame_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"void frame_flatten(frame_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -8004,9 +7877,7 @@ pub unsafe extern "C" fn winframe_restore(
     {
         frame_set_vsep((*frp).fr_prev, true_0 != 0);
     }
-    if (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL
-        && !(*frp).fr_prev.is_null()
-    {
+    if (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL && !(*frp).fr_prev.is_null() {
         if global_stl_height() == 0 as ::core::ffi::c_int
             && (*wp).w_status_height == 0 as ::core::ffi::c_int
         {
@@ -8040,12 +7911,10 @@ pub unsafe extern "C" fn winframe_restore(
         frame_comp_pos((*frp).fr_parent, &raw mut row, &raw mut col);
     }
 }
-unsafe extern "C" fn win_altframe(
-    mut win: *mut win_T,
-    mut tp: *mut tabpage_T,
-) -> *mut frame_T {
+unsafe extern "C" fn win_altframe(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut frame_T {
     '_c2rust_label: {
-        if tp.is_null() || tp != curtab {} else {
+        if tp.is_null() || tp != curtab {
+        } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -8069,23 +7938,22 @@ unsafe extern "C" fn win_altframe(
     let mut target_fr: *mut frame_T = (*frp).fr_next;
     let mut other_fr: *mut frame_T = (*frp).fr_prev;
     if !(*frp).fr_parent.is_null()
-        && (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL && p_sb != 0
-    {
-        target_fr = (*frp).fr_prev;
-        other_fr = (*frp).fr_next;
-    }
-    if !(*frp).fr_parent.is_null()
-        && (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_ROW && p_spr != 0
+        && (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL
+        && p_sb != 0
     {
         target_fr = (*frp).fr_prev;
         other_fr = (*frp).fr_next;
     }
     if !(*frp).fr_parent.is_null()
         && (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_ROW
+        && p_spr != 0
     {
-        if frame_fixed_width(target_fr) as ::core::ffi::c_int != 0
-            && !frame_fixed_width(other_fr)
-        {
+        target_fr = (*frp).fr_prev;
+        other_fr = (*frp).fr_next;
+    }
+    if !(*frp).fr_parent.is_null() && (*(*frp).fr_parent).fr_layout as ::core::ffi::c_int == FR_ROW
+    {
+        if frame_fixed_width(target_fr) as ::core::ffi::c_int != 0 && !frame_fixed_width(other_fr) {
             target_fr = other_fr;
         }
     } else if frame_fixed_height(target_fr) as ::core::ffi::c_int != 0
@@ -8103,7 +7971,8 @@ unsafe extern "C" fn alt_tabpage() -> *mut tabpage_T {
     }
     let mut forward: bool = !(*curtab).tp_next.is_null()
         && (tcl_flags & kOptTclFlagLeft as ::core::ffi::c_int as ::core::ffi::c_uint
-            == 0 as ::core::ffi::c_uint || curtab == first_tabpage);
+            == 0 as ::core::ffi::c_uint
+            || curtab == first_tabpage);
     let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     if forward {
         tp = (*curtab).tp_next;
@@ -8122,10 +7991,7 @@ pub unsafe extern "C" fn frame2win(mut frp: *mut frame_T) -> *mut win_T {
     }
     return (*frp).fr_win;
 }
-unsafe extern "C" fn frame_has_win(
-    mut frp: *const frame_T,
-    mut wp: *const win_T,
-) -> bool {
+unsafe extern "C" fn frame_has_win(mut frp: *const frame_T, mut wp: *const win_T) -> bool {
     if (*frp).fr_layout as ::core::ffi::c_int == FR_LEAF {
         return (*frp).fr_win == wp as *mut win_T;
     }
@@ -8160,13 +8026,12 @@ pub unsafe extern "C" fn frame_new_height(
     mut set_ch: bool,
 ) {
     if (*topfrp).fr_parent.is_null() && set_ch as ::core::ffi::c_int != 0 {
-        let mut new_ch: OptInt = if min_set_ch
-            > p_ch + (*topfrp).fr_height as OptInt - height as OptInt
-        {
-            min_set_ch
-        } else {
-            p_ch + (*topfrp).fr_height as OptInt - height as OptInt
-        };
+        let mut new_ch: OptInt =
+            if min_set_ch > p_ch + (*topfrp).fr_height as OptInt - height as OptInt {
+                min_set_ch
+            } else {
+                p_ch + (*topfrp).fr_height as OptInt - height as OptInt
+            };
         if new_ch != p_ch {
             let save_ch: OptInt = min_set_ch;
             set_option_value(
@@ -8179,11 +8044,13 @@ pub unsafe extern "C" fn frame_new_height(
             );
             min_set_ch = save_ch;
         }
-        height = (if (Rows as OptInt - p_ch - tabline_height() as OptInt
-            - global_stl_height() as OptInt) < height as OptInt
+        height = (if (Rows as OptInt
+            - p_ch
+            - tabline_height() as OptInt
+            - global_stl_height() as OptInt)
+            < height as OptInt
         {
-            Rows as OptInt - p_ch - tabline_height() as OptInt
-                - global_stl_height() as OptInt
+            Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt
         } else {
             height as OptInt
         }) as ::core::ffi::c_int;
@@ -8234,17 +8101,16 @@ pub unsafe extern "C" fn frame_new_height(
         let mut extra_lines: ::core::ffi::c_int = height - (*topfrp).fr_height;
         if extra_lines < 0 as ::core::ffi::c_int {
             while !frp_0.is_null() {
-                let mut h: ::core::ffi::c_int = frame_minheight(
-                    frp_0,
-                    ::core::ptr::null_mut::<win_T>(),
-                );
+                let mut h: ::core::ffi::c_int =
+                    frame_minheight(frp_0, ::core::ptr::null_mut::<win_T>());
                 if (*frp_0).fr_height + extra_lines < h {
                     extra_lines += (*frp_0).fr_height - h;
                     frame_new_height(frp_0, h, topfirst, wfh, set_ch);
                     if topfirst {
                         loop {
                             frp_0 = (*frp_0).fr_next;
-                            if !(wfh as ::core::ffi::c_int != 0 && !frp_0.is_null()
+                            if !(wfh as ::core::ffi::c_int != 0
+                                && !frp_0.is_null()
                                 && frame_fixed_height(frp_0) as ::core::ffi::c_int != 0)
                             {
                                 break;
@@ -8253,7 +8119,8 @@ pub unsafe extern "C" fn frame_new_height(
                     } else {
                         loop {
                             frp_0 = (*frp_0).fr_prev;
-                            if !(wfh as ::core::ffi::c_int != 0 && !frp_0.is_null()
+                            if !(wfh as ::core::ffi::c_int != 0
+                                && !frp_0.is_null()
                                 && frame_fixed_height(frp_0) as ::core::ffi::c_int != 0)
                             {
                                 break;
@@ -8344,8 +8211,8 @@ unsafe extern "C" fn frame_add_statusline(mut frp: *mut frame_T) {
         }
     } else {
         '_c2rust_label: {
-            if (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int
-            {} else {
+            if (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -8425,17 +8292,16 @@ unsafe extern "C" fn frame_new_width(
         let mut extra_cols: ::core::ffi::c_int = width - (*topfrp).fr_width;
         if extra_cols < 0 as ::core::ffi::c_int {
             while !frp_1.is_null() {
-                let mut w: ::core::ffi::c_int = frame_minwidth(
-                    frp_1,
-                    ::core::ptr::null_mut::<win_T>(),
-                );
+                let mut w: ::core::ffi::c_int =
+                    frame_minwidth(frp_1, ::core::ptr::null_mut::<win_T>());
                 if (*frp_1).fr_width + extra_cols < w {
                     extra_cols += (*frp_1).fr_width - w;
                     frame_new_width(frp_1, w, leftfirst, wfw);
                     if leftfirst {
                         loop {
                             frp_1 = (*frp_1).fr_next;
-                            if !(wfw as ::core::ffi::c_int != 0 && !frp_1.is_null()
+                            if !(wfw as ::core::ffi::c_int != 0
+                                && !frp_1.is_null()
                                 && frame_fixed_width(frp_1) as ::core::ffi::c_int != 0)
                             {
                                 break;
@@ -8444,7 +8310,8 @@ unsafe extern "C" fn frame_new_width(
                     } else {
                         loop {
                             frp_1 = (*frp_1).fr_prev;
-                            if !(wfw as ::core::ffi::c_int != 0 && !frp_1.is_null()
+                            if !(wfw as ::core::ffi::c_int != 0
+                                && !frp_1.is_null()
                                 && frame_fixed_width(frp_1) as ::core::ffi::c_int != 0)
                             {
                                 break;
@@ -8455,12 +8322,7 @@ unsafe extern "C" fn frame_new_width(
                         width -= extra_cols;
                     }
                 } else {
-                    frame_new_width(
-                        frp_1,
-                        (*frp_1).fr_width + extra_cols,
-                        leftfirst,
-                        wfw,
-                    );
+                    frame_new_width(frp_1, (*frp_1).fr_width + extra_cols, leftfirst, wfw);
                     break;
                 }
             }
@@ -8473,9 +8335,7 @@ unsafe extern "C" fn frame_new_width(
 unsafe extern "C" fn frame_set_vsep(mut frp: *const frame_T, mut add: bool) {
     if (*frp).fr_layout as ::core::ffi::c_int == FR_LEAF {
         let mut wp: *mut win_T = (*frp).fr_win;
-        if add as ::core::ffi::c_int != 0
-            && (*wp).w_vsep_width == 0 as ::core::ffi::c_int
-        {
+        if add as ::core::ffi::c_int != 0 && (*wp).w_vsep_width == 0 as ::core::ffi::c_int {
             if (*wp).w_width > 0 as ::core::ffi::c_int {
                 win_new_width(wp, (*wp).w_width - 1 as ::core::ffi::c_int);
             }
@@ -8492,8 +8352,8 @@ unsafe extern "C" fn frame_set_vsep(mut frp: *const frame_T, mut add: bool) {
         }
     } else {
         '_c2rust_label: {
-            if (*frp).fr_layout as ::core::ffi::c_int == 1 as ::core::ffi::c_int
-            {} else {
+            if (*frp).fr_layout as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_ROW\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -8523,8 +8383,8 @@ unsafe extern "C" fn frame_add_hsep(mut frp: *const frame_T) {
         }
     } else {
         '_c2rust_label: {
-            if (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int
-            {} else {
+            if (*frp).fr_layout as ::core::ffi::c_int == 2 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"frp->fr_layout == FR_COL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -8546,8 +8406,7 @@ unsafe extern "C" fn frame_fix_width(mut wp: *mut win_T) {
     (*(*wp).w_frame).fr_width = (*wp).w_width + (*wp).w_vsep_width;
 }
 unsafe extern "C" fn frame_fix_height(mut wp: *mut win_T) {
-    (*(*wp).w_frame).fr_height = (*wp).w_height + (*wp).w_hsep_height
-        + (*wp).w_status_height;
+    (*(*wp).w_frame).fr_height = (*wp).w_height + (*wp).w_hsep_height + (*wp).w_status_height;
 }
 unsafe extern "C" fn frame_minheight(
     mut topfrp: *mut frame_T,
@@ -8556,7 +8415,8 @@ unsafe extern "C" fn frame_minheight(
     let mut m: ::core::ffi::c_int = 0;
     if !(*topfrp).fr_win.is_null() {
         let mut extra_height: ::core::ffi::c_int = (*(*topfrp).fr_win).w_winbar_height
-            + (*(*topfrp).fr_win).w_hsep_height + (*(*topfrp).fr_win).w_status_height;
+            + (*(*topfrp).fr_win).w_hsep_height
+            + (*(*topfrp).fr_win).w_status_height;
         if (*topfrp).fr_win == next_curwin {
             m = p_wh as ::core::ffi::c_int + extra_height;
         } else {
@@ -8599,9 +8459,7 @@ unsafe extern "C" fn frame_minwidth(
             m = p_wiw as ::core::ffi::c_int + (*(*topfrp).fr_win).w_vsep_width;
         } else {
             m = p_wmw as ::core::ffi::c_int + (*(*topfrp).fr_win).w_vsep_width;
-            if p_wmw == 0 as OptInt && (*topfrp).fr_win == curwin
-                && next_curwin.is_null()
-            {
+            if p_wmw == 0 as OptInt && (*topfrp).fr_win == curwin && next_curwin.is_null() {
                 m += 1;
             }
         }
@@ -8637,8 +8495,8 @@ pub unsafe extern "C" fn close_others(
         }
         return;
     }
-    if one_window(firstwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int
-        != 0 && !(*lastwin).w_floating
+    if one_window(firstwin, ::core::ptr::null_mut::<tabpage_T>()) as ::core::ffi::c_int != 0
+        && !(*lastwin).w_floating
     {
         if message != 0 && !autocmd_busy {
             msg(gettext(m_onlyone), 0 as ::core::ffi::c_int);
@@ -8655,23 +8513,20 @@ pub unsafe extern "C" fn close_others(
         }
         's_52: {
             if wp != curwin {
-                if !buf_valid((*wp).w_buffer) && win_valid(wp) as ::core::ffi::c_int != 0
-                {
+                if !buf_valid((*wp).w_buffer) && win_valid(wp) as ::core::ffi::c_int != 0 {
                     (*wp).w_buffer = ::core::ptr::null_mut::<buf_T>();
                     win_close(wp, false_0 != 0, false_0 != 0);
                 } else {
-                    let mut r: ::core::ffi::c_int = can_abandon(
-                        (*wp).w_buffer,
-                        forceit != 0,
-                    ) as ::core::ffi::c_int;
+                    let mut r: ::core::ffi::c_int =
+                        can_abandon((*wp).w_buffer, forceit != 0) as ::core::ffi::c_int;
                     if !win_valid(wp) {
                         nextwp = firstwin;
                     } else {
                         if r == 0 {
                             if message != 0
                                 && (p_confirm != 0
-                                    || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int
-                                        != 0) && p_write != 0
+                                    || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+                                && p_write != 0
                             {
                                 dialog_changed((*wp).w_buffer, false_0 != 0);
                                 if !win_valid(wp) {
@@ -8695,12 +8550,9 @@ pub unsafe extern "C" fn close_others(
         wp = nextwp;
     }
     if message != 0 && !(firstwin == lastwin) {
-        emsg(
-            gettext(
-                b"E445: Other window contains changes\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E445: Other window contains changes\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     }
 }
 #[no_mangle]
@@ -8789,8 +8641,12 @@ pub unsafe extern "C" fn win_alloc_aucmd_win(mut idx: ::core::ffi::c_int) {
         &raw mut err,
     );
     (*(*(*aucmd_win_vec.items.offset(idx as isize)).auc_win).w_buffer).b_nwindows -= 1;
-    (*(*aucmd_win_vec.items.offset(idx as isize)).auc_win).w_onebuf_opt.wo_scb = false_0;
-    (*(*aucmd_win_vec.items.offset(idx as isize)).auc_win).w_onebuf_opt.wo_crb = false_0;
+    (*(*aucmd_win_vec.items.offset(idx as isize)).auc_win)
+        .w_onebuf_opt
+        .wo_scb = false_0;
+    (*(*aucmd_win_vec.items.offset(idx as isize)).auc_win)
+        .w_onebuf_opt
+        .wo_crb = false_0;
 }
 unsafe extern "C" fn win_alloc_firstwin(mut oldwin: *mut win_T) -> ::core::ffi::c_int {
     curwin = win_alloc(::core::ptr::null_mut::<win_T>(), false_0 != 0);
@@ -8821,23 +8677,26 @@ unsafe extern "C" fn win_alloc_firstwin(mut oldwin: *mut win_T) -> ::core::ffi::
     return OK;
 }
 unsafe extern "C" fn new_frame(mut wp: *mut win_T) {
-    let mut frp: *mut frame_T = xcalloc(1 as size_t, ::core::mem::size_of::<frame_T>())
-        as *mut frame_T;
+    let mut frp: *mut frame_T =
+        xcalloc(1 as size_t, ::core::mem::size_of::<frame_T>()) as *mut frame_T;
     (*wp).w_frame = frp;
     (*frp).fr_layout = FR_LEAF as ::core::ffi::c_char;
     (*frp).fr_win = wp;
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_init_size() {
-    (*firstwin).w_height = (Rows as OptInt - p_ch - tabline_height() as OptInt
-        - global_stl_height() as OptInt) as ::core::ffi::c_int;
-    (*firstwin).w_prev_height = (Rows as OptInt - p_ch - tabline_height() as OptInt
-        - global_stl_height() as OptInt) as ::core::ffi::c_int;
+    (*firstwin).w_height =
+        (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+            as ::core::ffi::c_int;
+    (*firstwin).w_prev_height =
+        (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+            as ::core::ffi::c_int;
     (*firstwin).w_view_height = (*firstwin).w_height - (*firstwin).w_winbar_height;
     (*firstwin).w_height_outer = (*firstwin).w_height;
     (*firstwin).w_winrow_off = (*firstwin).w_winbar_height;
-    (*topframe).fr_height = (Rows as OptInt - p_ch - tabline_height() as OptInt
-        - global_stl_height() as OptInt) as ::core::ffi::c_int;
+    (*topframe).fr_height =
+        (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+            as ::core::ffi::c_int;
     (*firstwin).w_width = Columns;
     (*firstwin).w_view_width = (*firstwin).w_width;
     (*firstwin).w_width_outer = (*firstwin).w_width;
@@ -8845,10 +8704,8 @@ pub unsafe extern "C" fn win_init_size() {
 }
 unsafe extern "C" fn alloc_tabpage() -> *mut tabpage_T {
     static mut last_tp_handle: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut tp: *mut tabpage_T = xcalloc(
-        1 as size_t,
-        ::core::mem::size_of::<tabpage_T>(),
-    ) as *mut tabpage_T;
+    let mut tp: *mut tabpage_T =
+        xcalloc(1 as size_t, ::core::mem::size_of::<tabpage_T>()) as *mut tabpage_T;
     last_tp_handle += 1;
     (*tp).handle = last_tp_handle as handle_T;
     map_put_int_ptr_t(
@@ -8908,8 +8765,9 @@ pub unsafe extern "C" fn win_new_tabpage(
         }
     } else {
         unuse_tabpage(curtab);
-        (*curtab).tp_old_Rows_avail = (Rows as OptInt - p_ch - tabline_height() as OptInt
-            - global_stl_height() as OptInt) as int64_t;
+        (*curtab).tp_old_Rows_avail =
+            (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+                as int64_t;
         firstwin = ::core::ptr::null_mut::<win_T>();
         lastwin = ::core::ptr::null_mut::<win_T>();
     }
@@ -8921,7 +8779,8 @@ pub unsafe extern "C" fn win_new_tabpage(
     curtab = newtp;
     let result: ::core::ffi::c_int = win_alloc_firstwin((*old_curtab).tp_curwin);
     '_c2rust_label: {
-        if result == 1 as ::core::ffi::c_int {} else {
+        if result == 1 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -8995,8 +8854,7 @@ pub unsafe extern "C" fn win_new_tabpage(
         use_tabpage(old_curtab);
         redraw_tabline = true_0 != 0;
         if (*curtab).tp_old_Rows_avail
-            != Rows as OptInt - p_ch - tabline_height() as OptInt
-                - global_stl_height() as OptInt
+            != Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt
         {
             win_new_screen_rows();
         }
@@ -9006,21 +8864,18 @@ pub unsafe extern "C" fn win_new_tabpage(
             sw_same_win: false,
             sw_visual_active: false,
         };
-        let sw_result: ::core::ffi::c_int = switch_win_noblock(
-            &raw mut switchwin,
-            (*newtp).tp_curwin,
-            newtp,
-            true_0 != 0,
-        );
+        let sw_result: ::core::ffi::c_int =
+            switch_win_noblock(&raw mut switchwin, (*newtp).tp_curwin, newtp, true_0 != 0);
         '_c2rust_label_0: {
-            if sw_result == 1 as ::core::ffi::c_int {} else {
+            if sw_result == 1 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"sw_result == OK\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     4582 as ::core::ffi::c_uint,
-                    b"tabpage_T *win_new_tabpage(int, char *, _Bool, win_T **)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"tabpage_T *win_new_tabpage(int, char *, _Bool, win_T **)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -9048,12 +8903,12 @@ unsafe extern "C" fn may_open_tabpage() -> ::core::ffi::c_int {
     cmdmod.cmod_tab = 0 as ::core::ffi::c_int;
     postponed_split_tab = 0 as ::core::ffi::c_int;
     let mut status: ::core::ffi::c_int = if !win_new_tabpage(
-            n,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            true_0 != 0,
-            ::core::ptr::null_mut::<*mut win_T>(),
-        )
-        .is_null()
+        n,
+        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        true_0 != 0,
+        ::core::ptr::null_mut::<*mut win_T>(),
+    )
+    .is_null()
     {
         OK
     } else {
@@ -9071,9 +8926,7 @@ unsafe extern "C" fn may_open_tabpage() -> ::core::ffi::c_int {
     return status;
 }
 #[no_mangle]
-pub unsafe extern "C" fn make_tabpages(
-    mut maxcount: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn make_tabpages(mut maxcount: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut count: ::core::ffi::c_int = maxcount;
     count = if count < p_tpm as ::core::ffi::c_int {
         count
@@ -9085,12 +8938,12 @@ pub unsafe extern "C" fn make_tabpages(
     todo = count - 1 as ::core::ffi::c_int;
     while todo > 0 as ::core::ffi::c_int {
         if win_new_tabpage(
-                0 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                true_0 != 0,
-                ::core::ptr::null_mut::<*mut win_T>(),
-            )
-            .is_null()
+            0 as ::core::ffi::c_int,
+            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            true_0 != 0,
+            ::core::ptr::null_mut::<*mut win_T>(),
+        )
+        .is_null()
         {
             break;
         }
@@ -9111,9 +8964,7 @@ pub unsafe extern "C" fn valid_tabpage(mut tpc: *mut tabpage_T) -> bool {
     return false_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn valid_tabpage_win(
-    mut tpc: *mut tabpage_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn valid_tabpage_win(mut tpc: *mut tabpage_T) -> ::core::ffi::c_int {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
         if tp == tpc {
@@ -9146,14 +8997,14 @@ pub unsafe extern "C" fn close_tabpage(mut tab: *mut tabpage_T) {
             ptp = (*ptp).tp_next;
         }
         '_c2rust_label: {
-            if !ptp.is_null() {} else {
+            if !ptp.is_null() {
+            } else {
                 __assert_fail(
                     b"ptp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     4684 as ::core::ffi::c_uint,
-                    b"void close_tabpage(tabpage_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"void close_tabpage(tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -9233,8 +9084,9 @@ unsafe extern "C" fn leave_tabpage(
     (*tp).tp_prevwin = prevwin;
     (*tp).tp_firstwin = firstwin;
     (*tp).tp_lastwin = lastwin;
-    (*tp).tp_old_Rows_avail = (Rows as OptInt - p_ch - tabline_height() as OptInt
-        - global_stl_height() as OptInt) as int64_t;
+    (*tp).tp_old_Rows_avail =
+        (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+            as int64_t;
     if (*tp).tp_old_Columns != -1 as int64_t {
         (*tp).tp_old_Columns = Columns as int64_t;
     }
@@ -9290,8 +9142,8 @@ unsafe extern "C" fn enter_tabpage(
     diff_need_scrollbind = true_0 != 0;
     reset_dragwin();
     if (*curtab).tp_old_Rows_avail
-        != Rows as OptInt - p_ch - tabline_height() as OptInt
-            - global_stl_height() as OptInt || old_off != (*firstwin).w_winrow
+        != Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt
+        || old_off != (*firstwin).w_winrow
     {
         win_new_screen_rows();
     }
@@ -9411,11 +9263,12 @@ pub unsafe extern "C" fn goto_tabpage_tp(
             return;
         }
     }
-    set_keep_msg(::core::ptr::null::<::core::ffi::c_char>(), 0 as ::core::ffi::c_int);
+    set_keep_msg(
+        ::core::ptr::null::<::core::ffi::c_char>(),
+        0 as ::core::ffi::c_int,
+    );
     skip_win_fix_scroll = true_0 != 0;
-    if tp != curtab
-        && leave_tabpage((*(*tp).tp_curwin).w_buffer, trigger_leave_autocmds) == OK
-    {
+    if tp != curtab && leave_tabpage((*(*tp).tp_curwin).w_buffer, trigger_leave_autocmds) == OK {
         if valid_tabpage(tp) {
             enter_tabpage(tp, curbuf, trigger_enter_autocmds, trigger_leave_autocmds);
         } else {
@@ -9447,7 +9300,8 @@ pub unsafe extern "C" fn goto_tabpage_win(mut tp: *mut tabpage_T, mut wp: *mut w
 #[no_mangle]
 pub unsafe extern "C" fn tabpage_move(mut nr: ::core::ffi::c_int) {
     '_c2rust_label: {
-        if !curtab.is_null() {} else {
+        if !curtab.is_null() {
+        } else {
             __assert_fail(
                 b"curtab != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -9471,8 +9325,7 @@ pub unsafe extern "C" fn tabpage_move(mut nr: ::core::ffi::c_int) {
         tp = (*tp).tp_next;
     }
     if tp == curtab
-        || nr > 0 as ::core::ffi::c_int && !(*tp).tp_next.is_null()
-            && (*tp).tp_next == curtab
+        || nr > 0 as ::core::ffi::c_int && !(*tp).tp_next.is_null() && (*tp).tp_next == curtab
     {
         return;
     }
@@ -9521,7 +9374,8 @@ pub unsafe extern "C" fn win_goto(mut wp: *mut win_T) {
     }
     win_enter(wp, true_0 != 0);
     if win_valid(owp) as ::core::ffi::c_int != 0
-        && (*owp).w_onebuf_opt.wo_cole > 0 as OptInt && msg_scrolled == 0
+        && (*owp).w_onebuf_opt.wo_cole > 0 as OptInt
+        && msg_scrolled == 0
     {
         redrawWinline(owp, (*owp).w_cursor.lnum);
     }
@@ -9533,7 +9387,11 @@ pub unsafe extern "C" fn win_goto(mut wp: *mut win_T) {
 pub unsafe extern "C" fn win_find_tabpage(mut win: *mut win_T) -> *mut tabpage_T {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if wp == win {
                 return tp as *mut tabpage_T;
@@ -9553,8 +9411,7 @@ pub unsafe extern "C" fn win_vert_neighbor(
 ) -> *mut win_T {
     let mut foundfr: *mut frame_T = (*wp).w_frame;
     if (*wp).w_floating {
-        return if win_valid(prevwin) as ::core::ffi::c_int != 0 && !(*prevwin).w_floating
-        {
+        return if win_valid(prevwin) as ::core::ffi::c_int != 0 && !(*prevwin).w_floating {
             prevwin
         } else {
             firstwin
@@ -9577,9 +9434,7 @@ pub unsafe extern "C" fn win_vert_neighbor(
             } else {
                 nfr = (*fr).fr_next;
             }
-            if (*(*fr).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL
-                && !nfr.is_null()
-            {
+            if (*(*fr).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL && !nfr.is_null() {
                 break;
             }
             fr = (*fr).fr_parent;
@@ -9598,8 +9453,7 @@ pub unsafe extern "C" fn win_vert_neighbor(
                         fr = (*fr).fr_next;
                     }
                 }
-                if (*nfr).fr_layout as ::core::ffi::c_int == FR_COL
-                    && up as ::core::ffi::c_int != 0
+                if (*nfr).fr_layout as ::core::ffi::c_int == FR_COL && up as ::core::ffi::c_int != 0
                 {
                     while !(*fr).fr_next.is_null() {
                         fr = (*fr).fr_next;
@@ -9630,8 +9484,7 @@ pub unsafe extern "C" fn win_horz_neighbor(
 ) -> *mut win_T {
     let mut foundfr: *mut frame_T = (*wp).w_frame;
     if (*wp).w_floating {
-        return if win_valid(prevwin) as ::core::ffi::c_int != 0 && !(*prevwin).w_floating
-        {
+        return if win_valid(prevwin) as ::core::ffi::c_int != 0 && !(*prevwin).w_floating {
             prevwin
         } else {
             firstwin
@@ -9654,9 +9507,7 @@ pub unsafe extern "C" fn win_horz_neighbor(
             } else {
                 nfr = (*fr).fr_next;
             }
-            if (*(*fr).fr_parent).fr_layout as ::core::ffi::c_int == FR_ROW
-                && !nfr.is_null()
-            {
+            if (*(*fr).fr_parent).fr_layout as ::core::ffi::c_int == FR_ROW && !nfr.is_null() {
                 break;
             }
             fr = (*fr).fr_parent;
@@ -9774,8 +9625,10 @@ unsafe extern "C" fn win_enter_ext(wp: *mut win_T, flags: ::core::ffi::c_int) {
     } else {
         win_fix_cursor(
             get_real_state()
-                & (MODE_NORMAL as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int
-                    | MODE_TERMINAL as ::core::ffi::c_int) != 0,
+                & (MODE_NORMAL as ::core::ffi::c_int
+                    | MODE_CMDLINE as ::core::ffi::c_int
+                    | MODE_TERMINAL as ::core::ffi::c_int)
+                != 0,
         );
     }
     win_fix_current_dir();
@@ -9821,14 +9674,16 @@ unsafe extern "C" fn win_enter_ext(wp: *mut win_T, flags: ::core::ffi::c_int) {
             redraw_later(prevwin, UPD_NOT_VALID as ::core::ffi::c_int);
         }
     }
-    if ((*curwin).w_height as OptInt) < p_wh && (*curwin).w_onebuf_opt.wo_wfh == 0
+    if ((*curwin).w_height as OptInt) < p_wh
+        && (*curwin).w_onebuf_opt.wo_wfh == 0
         && !(*curwin).w_floating
     {
         win_setheight(p_wh as ::core::ffi::c_int);
     } else if (*curwin).w_height == 0 as ::core::ffi::c_int {
         win_setheight(1 as ::core::ffi::c_int);
     }
-    if ((*curwin).w_width as OptInt) < p_wiw && (*curwin).w_onebuf_opt.wo_wfw == 0
+    if ((*curwin).w_width as OptInt) < p_wiw
+        && (*curwin).w_onebuf_opt.wo_wfw == 0
         && !(*curwin).w_floating
     {
         win_setwidth(p_wiw as ::core::ffi::c_int);
@@ -9893,25 +9748,15 @@ pub unsafe extern "C" fn win_fix_current_dir() {
             -1 as ::core::ffi::c_int,
         ) != 0 as ::core::ffi::c_int;
         if p_acd == 0 && dir_differs_0 as ::core::ffi::c_int != 0 {
-            do_autocmd_dirchanged(
-                globaldir,
-                kCdScopeGlobal,
-                kCdCauseWindow,
-                true_0 != 0,
-            );
+            do_autocmd_dirchanged(globaldir, kCdScopeGlobal, kCdCauseWindow, true_0 != 0);
         }
         if os_chdir(globaldir) == 0 as ::core::ffi::c_int {
             if p_acd == 0 && dir_differs_0 as ::core::ffi::c_int != 0 {
-                do_autocmd_dirchanged(
-                    globaldir,
-                    kCdScopeGlobal,
-                    kCdCauseWindow,
-                    false_0 != 0,
-                );
+                do_autocmd_dirchanged(globaldir, kCdScopeGlobal, kCdCauseWindow, false_0 != 0);
             }
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut globaldir
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut globaldir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -9968,15 +9813,12 @@ pub unsafe extern "C" fn buf_jump_open_tab(mut buf: *mut buf_T) -> *mut win_T {
     }
     return ::core::ptr::null_mut::<win_T>();
 }
-static mut last_win_id: ::core::ffi::c_int = LOWEST_WIN_ID as ::core::ffi::c_int
-    - 1 as ::core::ffi::c_int;
+static mut last_win_id: ::core::ffi::c_int =
+    LOWEST_WIN_ID as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn win_alloc(
-    mut after: *mut win_T,
-    mut hidden: bool,
-) -> *mut win_T {
-    let mut new_wp: *mut win_T = xcalloc(1 as size_t, ::core::mem::size_of::<win_T>())
-        as *mut win_T;
+pub unsafe extern "C" fn win_alloc(mut after: *mut win_T, mut hidden: bool) -> *mut win_T {
+    let mut new_wp: *mut win_T =
+        xcalloc(1 as size_t, ::core::mem::size_of::<win_T>()) as *mut win_T;
     last_win_id += 1;
     (*new_wp).handle = last_win_id as handle_T;
     map_put_int_ptr_t(
@@ -10108,9 +9950,7 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
     xfree((*wp).w_lines as *mut ::core::ffi::c_void);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*wp).w_tagstacklen {
-        tagstack_clear_entry(
-            (&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize),
-        );
+        tagstack_clear_entry((&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize));
         i += 1;
     }
     xfree((*wp).w_localdir as *mut ::core::ffi::c_void);
@@ -10160,20 +10000,20 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
                 (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_sub(1 as size_t);
                 (pos_delete < (*buf).b_wininfo.size
                     && !memmove(
-                            (*buf).b_wininfo.items.offset(pos_delete as isize)
-                                as *mut ::core::ffi::c_void,
-                            (*buf)
-                                .b_wininfo
-                                .items
-                                .offset(pos_delete.wrapping_add(1 as size_t) as isize)
-                                as *const ::core::ffi::c_void,
-                            (*buf)
-                                .b_wininfo
-                                .size
-                                .wrapping_sub(pos_delete)
-                                .wrapping_mul(::core::mem::size_of::<*mut WinInfo>()),
-                        )
-                        .is_null()) as ::core::ffi::c_int;
+                        (*buf).b_wininfo.items.offset(pos_delete as isize)
+                            as *mut ::core::ffi::c_void,
+                        (*buf)
+                            .b_wininfo
+                            .items
+                            .offset(pos_delete.wrapping_add(1 as size_t) as isize)
+                            as *const ::core::ffi::c_void,
+                        (*buf)
+                            .b_wininfo
+                            .size
+                            .wrapping_sub(pos_delete)
+                            .wrapping_mul(::core::mem::size_of::<*mut WinInfo>()),
+                    )
+                    .is_null()) as ::core::ffi::c_int;
             }
         }
         buf = (*buf).b_next;
@@ -10219,7 +10059,8 @@ pub unsafe extern "C" fn win_append(
     mut tp: *mut tabpage_T,
 ) {
     '_c2rust_label: {
-        if tp.is_null() || tp != curtab {} else {
+        if tp.is_null() || tp != curtab {
+        } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -10240,7 +10081,11 @@ pub unsafe extern "C" fn win_append(
     } else {
         &raw mut (*tp).tp_lastwin
     };
-    let mut before: *mut win_T = if after.is_null() { *first } else { (*after).w_next };
+    let mut before: *mut win_T = if after.is_null() {
+        *first
+    } else {
+        (*after).w_next
+    };
     (*wp).w_next = before;
     (*wp).w_prev = after;
     if after.is_null() {
@@ -10257,14 +10102,14 @@ pub unsafe extern "C" fn win_append(
 #[no_mangle]
 pub unsafe extern "C" fn win_remove(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
     '_c2rust_label: {
-        if tp.is_null() || tp != curtab {} else {
+        if tp.is_null() || tp != curtab {
+        } else {
             __assert_fail(
                 b"tp == NULL || tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 5702 as ::core::ffi::c_uint,
-                b"void win_remove(win_T *, tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void win_remove(win_T *, tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -10336,16 +10181,16 @@ pub unsafe extern "C" fn win_new_screen_rows() {
     if firstwin.is_null() {
         return;
     }
-    let mut h: ::core::ffi::c_int = if (Rows as OptInt - p_ch
-        - tabline_height() as OptInt - global_stl_height() as OptInt)
-        as ::core::ffi::c_int
-        > frame_minheight(topframe, ::core::ptr::null_mut::<win_T>())
-    {
-        (Rows as OptInt - p_ch - tabline_height() as OptInt
-            - global_stl_height() as OptInt) as ::core::ffi::c_int
-    } else {
-        frame_minheight(topframe, ::core::ptr::null_mut::<win_T>())
-    };
+    let mut h: ::core::ffi::c_int =
+        if (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+            as ::core::ffi::c_int
+            > frame_minheight(topframe, ::core::ptr::null_mut::<win_T>())
+        {
+            (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+                as ::core::ffi::c_int
+        } else {
+            frame_minheight(topframe, ::core::ptr::null_mut::<win_T>())
+        };
     frame_new_height(topframe, h, false_0 != 0, true_0 != 0, false_0 != 0);
     if !frame_check_height(topframe, h) {
         frame_new_height(topframe, h, false_0 != 0, false_0 != 0, false_0 != 0);
@@ -10430,8 +10275,7 @@ unsafe extern "C" fn make_win_info_dict(
             if tv_dict_add_tv(
                 d,
                 b"topline\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 &raw mut tv,
             ) != FAIL
             {
@@ -10439,8 +10283,7 @@ unsafe extern "C" fn make_win_info_dict(
                 if tv_dict_add_tv(
                     d,
                     b"topfill\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                        .wrapping_sub(1 as size_t),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                     &raw mut tv,
                 ) != FAIL
                 {
@@ -10491,9 +10334,7 @@ unsafe extern "C" fn check_window_scroll_resize(
         (*curtab).tp_firstwin
     };
     while !wp.is_null() {
-        if (*wp).w_floating as ::core::ffi::c_int != 0
-            && (*wp).w_last_topline == 0 as linenr_T
-        {
+        if (*wp).w_floating as ::core::ffi::c_int != 0 && (*wp).w_last_topline == 0 as linenr_T {
             (*wp).w_last_topline = (*wp).w_topline;
             (*wp).w_last_topfill = (*wp).w_topfill;
             (*wp).w_last_leftcol = (*wp).w_leftcol;
@@ -10501,16 +10342,9 @@ unsafe extern "C" fn check_window_scroll_resize(
             (*wp).w_last_width = (*wp).w_width;
             (*wp).w_last_height = (*wp).w_height;
         } else {
-            let ignore_scroll: bool = event_ignored(
-                EVENT_WINSCROLLED,
-                (*wp).w_onebuf_opt.wo_eiw,
-            );
-            let size_changed: bool = !event_ignored(
-                EVENT_WINRESIZED,
-                (*wp).w_onebuf_opt.wo_eiw,
-            )
-                && ((*wp).w_last_width != (*wp).w_width
-                    || (*wp).w_last_height != (*wp).w_height);
+            let ignore_scroll: bool = event_ignored(EVENT_WINSCROLLED, (*wp).w_onebuf_opt.wo_eiw);
+            let size_changed: bool = !event_ignored(EVENT_WINRESIZED, (*wp).w_onebuf_opt.wo_eiw)
+                && ((*wp).w_last_width != (*wp).w_width || (*wp).w_last_height != (*wp).w_height);
             if size_changed {
                 if !winlist.is_null() {
                     let mut tv: typval_T = typval_T {
@@ -10523,8 +10357,8 @@ unsafe extern "C" fn check_window_scroll_resize(
                     tv_list_append_owned_tv(winlist, tv);
                 } else if !size_count.is_null() {
                     '_c2rust_label: {
-                        if !first_size_win.is_null() && !first_scroll_win.is_null()
-                        {} else {
+                        if !first_size_win.is_null() && !first_scroll_win.is_null() {
+                        } else {
                             __assert_fail(
                                 b"first_size_win != NULL && first_scroll_win != NULL\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
@@ -10550,33 +10384,27 @@ unsafe extern "C" fn check_window_scroll_resize(
                     || (*wp).w_last_topfill != (*wp).w_topfill
                     || (*wp).w_last_leftcol != (*wp).w_leftcol
                     || (*wp).w_last_skipcol != (*wp).w_skipcol);
-            if scroll_changed as ::core::ffi::c_int != 0 && !first_scroll_win.is_null()
+            if scroll_changed as ::core::ffi::c_int != 0
+                && !first_scroll_win.is_null()
                 && (*first_scroll_win).is_null()
             {
                 *first_scroll_win = wp;
             }
             if (size_changed as ::core::ffi::c_int != 0
-                || scroll_changed as ::core::ffi::c_int != 0) && !v_event.is_null()
+                || scroll_changed as ::core::ffi::c_int != 0)
+                && !v_event.is_null()
             {
                 let mut width: ::core::ffi::c_int = (*wp).w_width - (*wp).w_last_width;
-                let mut height: ::core::ffi::c_int = (*wp).w_height
-                    - (*wp).w_last_height;
-                let mut topline: ::core::ffi::c_int = (*wp).w_topline
-                    as ::core::ffi::c_int - (*wp).w_last_topline as ::core::ffi::c_int;
-                let mut topfill: ::core::ffi::c_int = (*wp).w_topfill
-                    - (*wp).w_last_topfill;
-                let mut leftcol: ::core::ffi::c_int = (*wp).w_leftcol
-                    as ::core::ffi::c_int - (*wp).w_last_leftcol as ::core::ffi::c_int;
-                let mut skipcol: ::core::ffi::c_int = (*wp).w_skipcol
-                    as ::core::ffi::c_int - (*wp).w_last_skipcol as ::core::ffi::c_int;
-                let mut d: *mut dict_T = make_win_info_dict(
-                    width,
-                    height,
-                    topline,
-                    topfill,
-                    leftcol,
-                    skipcol,
-                );
+                let mut height: ::core::ffi::c_int = (*wp).w_height - (*wp).w_last_height;
+                let mut topline: ::core::ffi::c_int = (*wp).w_topline as ::core::ffi::c_int
+                    - (*wp).w_last_topline as ::core::ffi::c_int;
+                let mut topfill: ::core::ffi::c_int = (*wp).w_topfill - (*wp).w_last_topfill;
+                let mut leftcol: ::core::ffi::c_int = (*wp).w_leftcol as ::core::ffi::c_int
+                    - (*wp).w_last_leftcol as ::core::ffi::c_int;
+                let mut skipcol: ::core::ffi::c_int = (*wp).w_skipcol as ::core::ffi::c_int
+                    - (*wp).w_last_skipcol as ::core::ffi::c_int;
+                let mut d: *mut dict_T =
+                    make_win_info_dict(width, height, topline, topfill, leftcol, skipcol);
                 if d.is_null() {
                     break;
                 }
@@ -10622,8 +10450,7 @@ unsafe extern "C" fn check_window_scroll_resize(
             if tv_dict_add_dict(
                 v_event,
                 b"all\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                 alldict,
             ) == FAIL
             {
@@ -10640,8 +10467,8 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
     let do_resize: bool = has_event(EVENT_WINRESIZED);
     let do_scroll: bool = has_event(EVENT_WINSCROLLED);
     if recursive as ::core::ffi::c_int != 0
-        || !(do_scroll as ::core::ffi::c_int != 0
-            || do_resize as ::core::ffi::c_int != 0) || !did_initial_scroll_size_snapshot
+        || !(do_scroll as ::core::ffi::c_int != 0 || do_resize as ::core::ffi::c_int != 0)
+        || !did_initial_scroll_size_snapshot
     {
         return;
     }
@@ -10655,10 +10482,10 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         ::core::ptr::null_mut::<list_T>(),
         ::core::ptr::null_mut::<dict_T>(),
     );
-    let mut trigger_resize: bool = do_resize as ::core::ffi::c_int != 0
-        && size_count > 0 as ::core::ffi::c_int;
-    let mut trigger_scroll: bool = do_scroll as ::core::ffi::c_int != 0
-        && !first_scroll_win.is_null();
+    let mut trigger_resize: bool =
+        do_resize as ::core::ffi::c_int != 0 && size_count > 0 as ::core::ffi::c_int;
+    let mut trigger_scroll: bool =
+        do_scroll as ::core::ffi::c_int != 0 && !first_scroll_win.is_null();
     if !trigger_resize && !trigger_scroll {
         return;
     }
@@ -10742,13 +10569,12 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         ) == OK
         {
             tv_dict_set_keys_readonly(v_event);
-            let mut buf: *mut buf_T = if bufref_valid(&raw mut resize_bufref)
-                as ::core::ffi::c_int != 0
-            {
-                resize_bufref.br_buf
-            } else {
-                curbuf
-            };
+            let mut buf: *mut buf_T =
+                if bufref_valid(&raw mut resize_bufref) as ::core::ffi::c_int != 0 {
+                    resize_bufref.br_buf
+                } else {
+                    curbuf
+                };
             apply_autocmds(
                 EVENT_WINRESIZED,
                 &raw mut resize_winid as *mut ::core::ffi::c_char,
@@ -10783,13 +10609,12 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         );
         tv_dict_set_keys_readonly(v_event_0);
         tv_dict_unref(scroll_dict);
-        let mut buf_0: *mut buf_T = if bufref_valid(&raw mut scroll_bufref)
-            as ::core::ffi::c_int != 0
-        {
-            scroll_bufref.br_buf
-        } else {
-            curbuf
-        };
+        let mut buf_0: *mut buf_T =
+            if bufref_valid(&raw mut scroll_bufref) as ::core::ffi::c_int != 0 {
+                scroll_bufref.br_buf
+            } else {
+                curbuf
+            };
         apply_autocmds(
             EVENT_WINSCROLLED,
             &raw mut scroll_winid as *mut ::core::ffi::c_char,
@@ -10808,12 +10633,17 @@ pub unsafe extern "C" fn win_size_save(mut gap: *mut garray_T) {
         ::core::mem::size_of::<::core::ffi::c_int>() as ::core::ffi::c_int,
         1 as ::core::ffi::c_int,
     );
-    ga_grow(gap, win_count() * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int);
+    ga_grow(
+        gap,
+        win_count() * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
+    );
     let c2rust_fresh3 = (*gap).ga_len;
     (*gap).ga_len = (*gap).ga_len + 1;
-    *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh3 as isize) = (Rows
-        as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
-        as ::core::ffi::c_int + global_stl_height() - last_stl_height(false_0 != 0);
+    *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh3 as isize) =
+        (Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt)
+            as ::core::ffi::c_int
+            + global_stl_height()
+            - last_stl_height(false_0 != 0);
     let mut wp: *mut win_T = if curtab == curtab {
         firstwin
     } else {
@@ -10822,22 +10652,22 @@ pub unsafe extern "C" fn win_size_save(mut gap: *mut garray_T) {
     while !wp.is_null() {
         let c2rust_fresh4 = (*gap).ga_len;
         (*gap).ga_len = (*gap).ga_len + 1;
-        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh4 as isize) = (*wp)
-            .w_width + (*wp).w_vsep_width;
+        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh4 as isize) =
+            (*wp).w_width + (*wp).w_vsep_width;
         let c2rust_fresh5 = (*gap).ga_len;
         (*gap).ga_len = (*gap).ga_len + 1;
-        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh5 as isize) = (*wp)
-            .w_height;
+        *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh5 as isize) =
+            (*wp).w_height;
         wp = (*wp).w_next;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_size_restore(mut gap: *mut garray_T) {
     if win_count() * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int == (*gap).ga_len
-        && *((*gap).ga_data as *mut ::core::ffi::c_int)
-            .offset(0 as ::core::ffi::c_int as isize) as OptInt
-            == Rows as OptInt - p_ch - tabline_height() as OptInt
-                - global_stl_height() as OptInt + global_stl_height() as OptInt
+        && *((*gap).ga_data as *mut ::core::ffi::c_int).offset(0 as ::core::ffi::c_int as isize)
+            as OptInt
+            == Rows as OptInt - p_ch - tabline_height() as OptInt - global_stl_height() as OptInt
+                + global_stl_height() as OptInt
                 - last_stl_height(false_0 != 0) as OptInt
     {
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -10851,14 +10681,12 @@ pub unsafe extern "C" fn win_size_restore(mut gap: *mut garray_T) {
             while !wp.is_null() {
                 let c2rust_fresh6 = i;
                 i = i + 1;
-                let mut width: ::core::ffi::c_int = *((*gap).ga_data
-                    as *mut ::core::ffi::c_int)
-                    .offset(c2rust_fresh6 as isize);
+                let mut width: ::core::ffi::c_int =
+                    *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh6 as isize);
                 let c2rust_fresh7 = i;
                 i = i + 1;
-                let mut height: ::core::ffi::c_int = *((*gap).ga_data
-                    as *mut ::core::ffi::c_int)
-                    .offset(c2rust_fresh7 as isize);
+                let mut height: ::core::ffi::c_int =
+                    *((*gap).ga_data as *mut ::core::ffi::c_int).offset(c2rust_fresh7 as isize);
                 if !(*wp).w_floating {
                     frame_setwidth((*wp).w_frame, width);
                     win_setheight_win(height, wp);
@@ -10900,9 +10728,12 @@ unsafe extern "C" fn frame_comp_pos(
             (*wp).w_redr_status = true_0 != 0;
             (*wp).w_pos_changed = true_0 != 0;
         }
-        let h: ::core::ffi::c_int = (*wp).w_height + (*wp).w_hsep_height
-            + (*wp).w_status_height;
-        *row += if h > (*topfrp).fr_height { (*topfrp).fr_height } else { h };
+        let h: ::core::ffi::c_int = (*wp).w_height + (*wp).w_hsep_height + (*wp).w_status_height;
+        *row += if h > (*topfrp).fr_height {
+            (*topfrp).fr_height
+        } else {
+            h
+        };
         *col += (*wp).w_width + (*wp).w_vsep_width;
     } else {
         let mut startrow: ::core::ffi::c_int = *row;
@@ -10925,24 +10756,31 @@ pub unsafe extern "C" fn win_setheight(mut height: ::core::ffi::c_int) {
     win_setheight_win(height, curwin);
 }
 #[no_mangle]
-pub unsafe extern "C" fn win_setheight_win(
-    mut height: ::core::ffi::c_int,
-    mut win: *mut win_T,
-) {
+pub unsafe extern "C" fn win_setheight_win(mut height: ::core::ffi::c_int, mut win: *mut win_T) {
     height = if height
         > (if win == curwin {
-            (if p_wmh > 1 as OptInt { p_wmh } else { 1 as OptInt })
+            (if p_wmh > 1 as OptInt {
+                p_wmh
+            } else {
+                1 as OptInt
+            })
         } else {
             p_wmh
-        }) as ::core::ffi::c_int + (*win).w_winbar_height
+        }) as ::core::ffi::c_int
+            + (*win).w_winbar_height
     {
         height
     } else {
         (if win == curwin {
-            (if p_wmh > 1 as OptInt { p_wmh } else { 1 as OptInt })
+            (if p_wmh > 1 as OptInt {
+                p_wmh
+            } else {
+                1 as OptInt
+            })
         } else {
             p_wmh
-        }) as ::core::ffi::c_int + (*win).w_winbar_height
+        }) as ::core::ffi::c_int
+            + (*win).w_winbar_height
     };
     if (*win).w_floating {
         (*win).w_config.height = if height > 1 as ::core::ffi::c_int {
@@ -10963,10 +10801,7 @@ pub unsafe extern "C" fn win_setheight_win(
         redraw_cmdline = true_0 != 0;
     };
 }
-unsafe extern "C" fn frame_setheight(
-    mut curfrp: *mut frame_T,
-    mut height: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn frame_setheight(mut curfrp: *mut frame_T, mut height: ::core::ffi::c_int) {
     if (*curfrp).fr_height == height {
         return;
     }
@@ -10975,10 +10810,8 @@ unsafe extern "C" fn frame_setheight(
             frame_new_height(curfrp, height, false_0 != 0, false_0 != 0, true_0 != 0);
         }
     } else if (*(*curfrp).fr_parent).fr_layout as ::core::ffi::c_int == FR_ROW {
-        let mut h: ::core::ffi::c_int = frame_minheight(
-            (*curfrp).fr_parent,
-            ::core::ptr::null_mut::<win_T>(),
-        );
+        let mut h: ::core::ffi::c_int =
+            frame_minheight((*curfrp).fr_parent, ::core::ptr::null_mut::<win_T>());
         height = if height > h { height } else { h };
         frame_setheight((*curfrp).fr_parent, height);
     } else {
@@ -10992,7 +10825,8 @@ unsafe extern "C" fn frame_setheight(
             let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
             frp = (*(*curfrp).fr_parent).fr_child;
             while !frp.is_null() {
-                if frp != curfrp && !(*frp).fr_win.is_null()
+                if frp != curfrp
+                    && !(*frp).fr_win.is_null()
                     && (*(*frp).fr_win).w_onebuf_opt.wo_wfh != 0
                 {
                     room_reserved += (*frp).fr_height;
@@ -11006,11 +10840,13 @@ unsafe extern "C" fn frame_setheight(
             if (*curfrp).fr_width != Columns {
                 room_cmdline = 0 as ::core::ffi::c_int;
             } else {
-                let mut wp: *mut win_T = lastwin_nofloating(
-                    ::core::ptr::null_mut::<tabpage_T>(),
-                );
-                room_cmdline = Rows - p_ch as ::core::ffi::c_int - global_stl_height()
-                    - ((*wp).w_winrow + (*wp).w_height + (*wp).w_hsep_height
+                let mut wp: *mut win_T = lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>());
+                room_cmdline = Rows
+                    - p_ch as ::core::ffi::c_int
+                    - global_stl_height()
+                    - ((*wp).w_winrow
+                        + (*wp).w_height
+                        + (*wp).w_hsep_height
                         + (*wp).w_status_height);
                 room_cmdline = if room_cmdline > 0 as ::core::ffi::c_int {
                     room_cmdline
@@ -11028,7 +10864,8 @@ unsafe extern "C" fn frame_setheight(
                 frame_setheight(
                     (*curfrp).fr_parent,
                     height + frame_minheight((*curfrp).fr_parent, NOWIN)
-                        - p_wmh as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                        - p_wmh as ::core::ffi::c_int
+                        - 1 as ::core::ffi::c_int,
                 );
                 run += 1;
             }
@@ -11037,12 +10874,15 @@ unsafe extern "C" fn frame_setheight(
         if height > room + room_cmdline - room_reserved {
             room_reserved = room + room_cmdline - height;
         }
-        if take < 0 as ::core::ffi::c_int && room - (*curfrp).fr_height <= room_reserved
-        {
+        if take < 0 as ::core::ffi::c_int && room - (*curfrp).fr_height <= room_reserved {
             room_reserved = 0 as ::core::ffi::c_int;
         }
         if take > 0 as ::core::ffi::c_int && room_cmdline > 0 as ::core::ffi::c_int {
-            room_cmdline = (if room_cmdline < take { room_cmdline } else { take });
+            room_cmdline = (if room_cmdline < take {
+                room_cmdline
+            } else {
+                take
+            });
             take -= room_cmdline;
             (*topframe).fr_height += room_cmdline;
         }
@@ -11055,11 +10895,10 @@ unsafe extern "C" fn frame_setheight(
                 (*curfrp).fr_prev
             };
             while !frp_0.is_null() && take != 0 as ::core::ffi::c_int {
-                let mut h_0: ::core::ffi::c_int = frame_minheight(
-                    frp_0,
-                    ::core::ptr::null_mut::<win_T>(),
-                );
-                if room_reserved > 0 as ::core::ffi::c_int && !(*frp_0).fr_win.is_null()
+                let mut h_0: ::core::ffi::c_int =
+                    frame_minheight(frp_0, ::core::ptr::null_mut::<win_T>());
+                if room_reserved > 0 as ::core::ffi::c_int
+                    && !(*frp_0).fr_win.is_null()
                     && (*(*frp_0).fr_win).w_onebuf_opt.wo_wfh != 0
                 {
                     if room_reserved >= (*frp_0).fr_height {
@@ -11080,13 +10919,7 @@ unsafe extern "C" fn frame_setheight(
                     }
                 } else if (*frp_0).fr_height - take < h_0 {
                     take -= (*frp_0).fr_height - h_0;
-                    frame_new_height(
-                        frp_0,
-                        h_0,
-                        false_0 != 0,
-                        false_0 != 0,
-                        true_0 != 0,
-                    );
+                    frame_new_height(frp_0, h_0, false_0 != 0, false_0 != 0, true_0 != 0);
                 } else {
                     frame_new_height(
                         frp_0,
@@ -11112,10 +10945,7 @@ pub unsafe extern "C" fn win_setwidth(mut width: ::core::ffi::c_int) {
     win_setwidth_win(width, curwin);
 }
 #[no_mangle]
-pub unsafe extern "C" fn win_setwidth_win(
-    mut width: ::core::ffi::c_int,
-    mut wp: *mut win_T,
-) {
+pub unsafe extern "C" fn win_setwidth_win(mut width: ::core::ffi::c_int, mut wp: *mut win_T) {
     if wp == curwin {
         width = if (if width > p_wmw as ::core::ffi::c_int {
             width
@@ -11144,10 +10974,7 @@ pub unsafe extern "C" fn win_setwidth_win(
         redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
     };
 }
-unsafe extern "C" fn frame_setwidth(
-    mut curfrp: *mut frame_T,
-    mut width: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn frame_setwidth(mut curfrp: *mut frame_T, mut width: ::core::ffi::c_int) {
     if (*curfrp).fr_width == width {
         return;
     }
@@ -11155,10 +10982,8 @@ unsafe extern "C" fn frame_setwidth(
         return;
     }
     if (*(*curfrp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL {
-        let mut w: ::core::ffi::c_int = frame_minwidth(
-            (*curfrp).fr_parent,
-            ::core::ptr::null_mut::<win_T>(),
-        );
+        let mut w: ::core::ffi::c_int =
+            frame_minwidth((*curfrp).fr_parent, ::core::ptr::null_mut::<win_T>());
         width = if width > w { width } else { w };
         frame_setwidth((*curfrp).fr_parent, width);
     } else {
@@ -11171,7 +10996,8 @@ unsafe extern "C" fn frame_setwidth(
             let mut frp: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
             frp = (*(*curfrp).fr_parent).fr_child;
             while !frp.is_null() {
-                if frp != curfrp && !(*frp).fr_win.is_null()
+                if frp != curfrp
+                    && !(*frp).fr_win.is_null()
                     && (*(*frp).fr_win).w_onebuf_opt.wo_wfw != 0
                 {
                     room_reserved += (*frp).fr_width;
@@ -11187,7 +11013,9 @@ unsafe extern "C" fn frame_setwidth(
             }
             if run == 2 as ::core::ffi::c_int
                 || (*curfrp).fr_height as OptInt
-                    >= Rows as OptInt - p_ch - tabline_height() as OptInt
+                    >= Rows as OptInt
+                        - p_ch
+                        - tabline_height() as OptInt
                         - global_stl_height() as OptInt
             {
                 width = room;
@@ -11196,7 +11024,8 @@ unsafe extern "C" fn frame_setwidth(
                 frame_setwidth(
                     (*curfrp).fr_parent,
                     width + frame_minwidth((*curfrp).fr_parent, NOWIN)
-                        - p_wmw as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                        - p_wmw as ::core::ffi::c_int
+                        - 1 as ::core::ffi::c_int,
                 );
                 run += 1;
             }
@@ -11217,11 +11046,10 @@ unsafe extern "C" fn frame_setwidth(
                 (*curfrp).fr_prev
             };
             while !frp_0.is_null() && take != 0 as ::core::ffi::c_int {
-                let mut w_0: ::core::ffi::c_int = frame_minwidth(
-                    frp_0,
-                    ::core::ptr::null_mut::<win_T>(),
-                );
-                if room_reserved > 0 as ::core::ffi::c_int && !(*frp_0).fr_win.is_null()
+                let mut w_0: ::core::ffi::c_int =
+                    frame_minwidth(frp_0, ::core::ptr::null_mut::<win_T>());
+                if room_reserved > 0 as ::core::ffi::c_int
+                    && !(*frp_0).fr_win.is_null()
                     && (*(*frp_0).fr_win).w_onebuf_opt.wo_wfw != 0
                 {
                     if room_reserved >= (*frp_0).fr_width {
@@ -11231,24 +11059,14 @@ unsafe extern "C" fn frame_setwidth(
                             room_reserved = (*frp_0).fr_width - take;
                         }
                         take -= (*frp_0).fr_width - room_reserved;
-                        frame_new_width(
-                            frp_0,
-                            room_reserved,
-                            false_0 != 0,
-                            false_0 != 0,
-                        );
+                        frame_new_width(frp_0, room_reserved, false_0 != 0, false_0 != 0);
                         room_reserved = 0 as ::core::ffi::c_int;
                     }
                 } else if (*frp_0).fr_width - take < w_0 {
                     take -= (*frp_0).fr_width - w_0;
                     frame_new_width(frp_0, w_0, false_0 != 0, false_0 != 0);
                 } else {
-                    frame_new_width(
-                        frp_0,
-                        (*frp_0).fr_width - take,
-                        false_0 != 0,
-                        false_0 != 0,
-                    );
+                    frame_new_width(frp_0, (*frp_0).fr_width - take, false_0 != 0, false_0 != 0);
                     take = 0 as ::core::ffi::c_int;
                 }
                 if run_0 == 0 as ::core::ffi::c_int {
@@ -11287,10 +11105,7 @@ pub unsafe extern "C" fn did_set_winminwidth(
     let mut first: bool = true_0 != 0;
     while p_wmw > 0 as OptInt {
         let room: ::core::ffi::c_int = Columns;
-        let needed: ::core::ffi::c_int = frame_minwidth(
-            topframe,
-            ::core::ptr::null_mut::<win_T>(),
-        );
+        let needed: ::core::ffi::c_int = frame_minwidth(topframe, ::core::ptr::null_mut::<win_T>());
         if room >= needed {
             break;
         }
@@ -11332,15 +11147,12 @@ pub unsafe extern "C" fn win_drag_status_line(
     if up {
         offset = -offset;
         if fr == curfr {
-            room = (*fr).fr_height
-                - frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
+            room = (*fr).fr_height - frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
         } else {
             room = 0 as ::core::ffi::c_int;
             fr = (*fr).fr_child;
             loop {
-                room
-                    += (*fr).fr_height
-                        - frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
+                room += (*fr).fr_height - frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
                 if fr == curfr {
                     break;
                 }
@@ -11362,9 +11174,7 @@ pub unsafe extern "C" fn win_drag_status_line(
         };
         fr = (*curfr).fr_next;
         while !fr.is_null() {
-            room
-                += (*fr).fr_height
-                    - frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
+            room += (*fr).fr_height - frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
             fr = (*fr).fr_next;
         }
         fr = curfr;
@@ -11382,10 +11192,7 @@ pub unsafe extern "C" fn win_drag_status_line(
         fr = (*curfr).fr_next;
     }
     while !fr.is_null() && offset > 0 as ::core::ffi::c_int {
-        let mut n: ::core::ffi::c_int = frame_minheight(
-            fr,
-            ::core::ptr::null_mut::<win_T>(),
-        );
+        let mut n: ::core::ffi::c_int = frame_minheight(fr, ::core::ptr::null_mut::<win_T>());
         if (*fr).fr_height - offset <= n {
             offset -= (*fr).fr_height - n;
             frame_new_height(fr, n, !up, false_0 != 0, true_0 != 0);
@@ -11395,13 +11202,7 @@ pub unsafe extern "C" fn win_drag_status_line(
                 fr = (*fr).fr_next;
             }
         } else {
-            frame_new_height(
-                fr,
-                (*fr).fr_height - offset,
-                !up,
-                false_0 != 0,
-                true_0 != 0,
-            );
+            frame_new_height(fr, (*fr).fr_height - offset, !up, false_0 != 0, true_0 != 0);
             break;
         }
     }
@@ -11446,8 +11247,7 @@ pub unsafe extern "C" fn win_drag_vsep_line(
         room = 0 as ::core::ffi::c_int;
         fr = (*fr).fr_child;
         loop {
-            room
-                += (*fr).fr_width - frame_minwidth(fr, ::core::ptr::null_mut::<win_T>());
+            room += (*fr).fr_width - frame_minwidth(fr, ::core::ptr::null_mut::<win_T>());
             if fr == curfr {
                 break;
             }
@@ -11458,8 +11258,7 @@ pub unsafe extern "C" fn win_drag_vsep_line(
         room = 0 as ::core::ffi::c_int;
         fr = (*curfr).fr_next;
         while !fr.is_null() {
-            room
-                += (*fr).fr_width - frame_minwidth(fr, ::core::ptr::null_mut::<win_T>());
+            room += (*fr).fr_width - frame_minwidth(fr, ::core::ptr::null_mut::<win_T>());
             fr = (*fr).fr_next;
         }
         fr = curfr;
@@ -11478,10 +11277,7 @@ pub unsafe extern "C" fn win_drag_vsep_line(
         fr = (*curfr).fr_next;
     }
     while !fr.is_null() && offset > 0 as ::core::ffi::c_int {
-        let mut n: ::core::ffi::c_int = frame_minwidth(
-            fr,
-            ::core::ptr::null_mut::<win_T>(),
-        );
+        let mut n: ::core::ffi::c_int = frame_minwidth(fr, ::core::ptr::null_mut::<win_T>());
         if (*fr).fr_width - offset <= n {
             offset -= (*fr).fr_width - n;
             frame_new_width(fr, n, !left, false_0 != 0);
@@ -11502,8 +11298,8 @@ pub const FRACTION_MULT: ::core::ffi::c_int = 16384 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn set_fraction(mut wp: *mut win_T) {
     if (*wp).w_view_height > 1 as ::core::ffi::c_int {
-        (*wp).w_fraction = ((*wp).w_wrow * FRACTION_MULT
-            + FRACTION_MULT / 2 as ::core::ffi::c_int) / (*wp).w_view_height;
+        (*wp).w_fraction = ((*wp).w_wrow * FRACTION_MULT + FRACTION_MULT / 2 as ::core::ffi::c_int)
+            / (*wp).w_view_height;
     }
 }
 #[no_mangle]
@@ -11522,11 +11318,10 @@ pub unsafe extern "C" fn win_fix_scroll(mut resize: bool) {
             (*wp).w_do_win_fix_cursor = true_0 != 0;
             if *p_spk as ::core::ffi::c_int == 's' as ::core::ffi::c_int
                 && (*wp).w_winrow != (*wp).w_prev_winrow
-                && (*wp).w_botline - 1 as linenr_T
-                    <= (*(*wp).w_buffer).b_ml.ml_line_count
+                && (*wp).w_botline - 1 as linenr_T <= (*(*wp).w_buffer).b_ml.ml_line_count
             {
-                let mut diff: ::core::ffi::c_int = (*wp).w_winrow - (*wp).w_prev_winrow
-                    + ((*wp).w_height - (*wp).w_prev_height);
+                let mut diff: ::core::ffi::c_int =
+                    (*wp).w_winrow - (*wp).w_prev_winrow + ((*wp).w_height - (*wp).w_prev_height);
                 let mut cursor: pos_T = (*wp).w_cursor;
                 (*wp).w_cursor.lnum = (*wp).w_botline - 1 as linenr_T;
                 if diff > 0 as ::core::ffi::c_int {
@@ -11550,8 +11345,10 @@ pub unsafe extern "C" fn win_fix_scroll(mut resize: bool) {
     }
     skip_update_topline = false_0 != 0;
     if get_real_state()
-        & (MODE_NORMAL as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int
-            | MODE_TERMINAL as ::core::ffi::c_int) == 0
+        & (MODE_NORMAL as ::core::ffi::c_int
+            | MODE_CMDLINE as ::core::ffi::c_int
+            | MODE_TERMINAL as ::core::ffi::c_int)
+        == 0
     {
         win_fix_cursor(false_0 != 0);
     } else if resize {
@@ -11560,14 +11357,16 @@ pub unsafe extern "C" fn win_fix_scroll(mut resize: bool) {
 }
 unsafe extern "C" fn win_fix_cursor(mut normal: bool) {
     let mut wp: *mut win_T = curwin;
-    if skip_win_fix_cursor as ::core::ffi::c_int != 0 || !(*wp).w_do_win_fix_cursor
+    if skip_win_fix_cursor as ::core::ffi::c_int != 0
+        || !(*wp).w_do_win_fix_cursor
         || (*(*wp).w_buffer).b_ml.ml_line_count < (*wp).w_view_height as linenr_T
     {
         return;
     }
     (*wp).w_do_win_fix_cursor = false_0 != 0;
     let mut so: ::core::ffi::c_int = (if (((*wp).w_view_height / 2 as ::core::ffi::c_int)
-        as int64_t) < get_scrolloff_value(wp)
+        as int64_t)
+        < get_scrolloff_value(wp)
     {
         ((*wp).w_view_height / 2 as ::core::ffi::c_int) as int64_t
     } else {
@@ -11582,9 +11381,7 @@ unsafe extern "C" fn win_fix_cursor(mut normal: bool) {
     let mut bot: linenr_T = (*wp).w_cursor.lnum;
     (*wp).w_cursor.lnum = lnum;
     let mut nlnum: linenr_T = 0 as linenr_T;
-    if lnum > bot
-        && (*wp).w_botline - (*(*wp).w_buffer).b_ml.ml_line_count != 1 as linenr_T
-    {
+    if lnum > bot && (*wp).w_botline - (*(*wp).w_buffer).b_ml.ml_line_count != 1 as linenr_T {
         nlnum = bot;
     } else if lnum < top && (*wp).w_topline != 1 as linenr_T {
         nlnum = if so == (*wp).w_view_height / 2 as ::core::ffi::c_int {
@@ -11609,10 +11406,7 @@ unsafe extern "C" fn win_fix_cursor(mut normal: bool) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn win_new_height(
-    mut wp: *mut win_T,
-    mut height: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn win_new_height(mut wp: *mut win_T, mut height: ::core::ffi::c_int) {
     height = if height > 0 as ::core::ffi::c_int {
         height
     } else {
@@ -11637,14 +11431,15 @@ pub unsafe extern "C" fn scroll_to_fraction(
             || (*wp).w_topline > 1 as linenr_T)
     {
         let mut lnum: linenr_T = (*wp).w_cursor.lnum;
-        lnum = if lnum > 1 as linenr_T { lnum } else { 1 as linenr_T };
-        (*wp).w_wrow = ((*wp).w_fraction * height - 1 as ::core::ffi::c_int)
-            / FRACTION_MULT;
-        let mut line_size: ::core::ffi::c_int = plines_win_col(
-            wp,
-            lnum,
-            (*wp).w_cursor.col as ::core::ffi::c_long,
-        ) - 1 as ::core::ffi::c_int;
+        lnum = if lnum > 1 as linenr_T {
+            lnum
+        } else {
+            1 as linenr_T
+        };
+        (*wp).w_wrow = ((*wp).w_fraction * height - 1 as ::core::ffi::c_int) / FRACTION_MULT;
+        let mut line_size: ::core::ffi::c_int =
+            plines_win_col(wp, lnum, (*wp).w_cursor.col as ::core::ffi::c_long)
+                - 1 as ::core::ffi::c_int;
         let mut sline: ::core::ffi::c_int = (*wp).w_wrow - line_size;
         if sline >= 0 as ::core::ffi::c_int {
             let rows: ::core::ffi::c_int = plines_win(wp, lnum, false_0 != 0);
@@ -11661,8 +11456,7 @@ pub unsafe extern "C" fn scroll_to_fraction(
                 (*wp).w_skipcol += (*wp).w_view_width - win_col_off(wp);
                 (*wp).w_wrow -= 1;
                 while (*wp).w_wrow >= (*wp).w_view_height {
-                    (*wp).w_skipcol
-                        += (*wp).w_view_width - win_col_off(wp) + win_col_off2(wp);
+                    (*wp).w_skipcol += (*wp).w_view_width - win_col_off(wp) + win_col_off2(wp);
                     (*wp).w_wrow -= 1;
                 }
             }
@@ -11680,8 +11474,7 @@ pub unsafe extern "C" fn scroll_to_fraction(
                 } else {
                     lnum -= 1;
                     if lnum == (*wp).w_topline {
-                        line_size = plines_win_nofill(wp, lnum, true_0 != 0)
-                            + (*wp).w_topfill;
+                        line_size = plines_win_nofill(wp, lnum, true_0 != 0) + (*wp).w_topfill;
                     } else {
                         line_size = plines_win(wp, lnum, true_0 != 0);
                     }
@@ -11740,7 +11533,8 @@ pub unsafe extern "C" fn win_set_inner_size(mut wp: *mut win_T, mut valid_cursor
         }
         (*wp).w_view_height = height;
         win_comp_scroll(wp);
-        if valid_cursor as ::core::ffi::c_int != 0 && !exiting
+        if valid_cursor as ::core::ffi::c_int != 0
+            && !exiting
             && (*p_spk as ::core::ffi::c_int == 'c' as ::core::ffi::c_int
                 || (*wp).w_floating as ::core::ffi::c_int != 0)
         {
@@ -11767,18 +11561,17 @@ pub unsafe extern "C" fn win_set_inner_size(mut wp: *mut win_T, mut valid_cursor
     if !(*(*wp).w_buffer).terminal.is_null() {
         terminal_check_size((*(*wp).w_buffer).terminal);
     }
-    let mut float_stl_height: ::core::ffi::c_int = if (*wp).w_floating
-        as ::core::ffi::c_int != 0 && (*wp).w_status_height != 0
-    {
-        STATUS_HEIGHT as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    (*wp).w_height_outer = (*wp).w_view_height + win_border_height(wp)
-        + (*wp).w_winbar_height + float_stl_height;
+    let mut float_stl_height: ::core::ffi::c_int =
+        if (*wp).w_floating as ::core::ffi::c_int != 0 && (*wp).w_status_height != 0 {
+            STATUS_HEIGHT as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        };
+    (*wp).w_height_outer =
+        (*wp).w_view_height + win_border_height(wp) + (*wp).w_winbar_height + float_stl_height;
     (*wp).w_width_outer = (*wp).w_view_width + win_border_width(wp);
-    (*wp).w_winrow_off = (*wp).w_border_adj[0 as ::core::ffi::c_int as usize]
-        + (*wp).w_winbar_height;
+    (*wp).w_winrow_off =
+        (*wp).w_border_adj[0 as ::core::ffi::c_int as usize] + (*wp).w_winbar_height;
     (*wp).w_wincol_off = (*wp).w_border_adj[3 as ::core::ffi::c_int as usize];
     if ui_has(kUIMultigrid) {
         ui_call_win_viewport_margins(
@@ -11793,10 +11586,7 @@ pub unsafe extern "C" fn win_set_inner_size(mut wp: *mut win_T, mut valid_cursor
     (*wp).w_redr_status = true_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn win_new_width(
-    mut wp: *mut win_T,
-    mut width: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn win_new_width(mut wp: *mut win_T, mut width: ::core::ffi::c_int) {
     (*wp).w_width = if width < 0 as ::core::ffi::c_int {
         0 as ::core::ffi::c_int
     } else {
@@ -11818,27 +11608,21 @@ pub unsafe extern "C" fn win_comp_scroll(mut wp: *mut win_T) {
     let old_w_p_scr: OptInt = (*wp).w_onebuf_opt.wo_scr;
     (*wp).w_onebuf_opt.wo_scr = win_default_scroll(wp);
     if (*wp).w_onebuf_opt.wo_scr != old_w_p_scr {
-        (*wp)
-            .w_onebuf_opt
-            .wo_script_ctx[kWinOptScroll as ::core::ffi::c_int as usize]
-            .sc_sid = SID_WINLAYOUT as scid_T;
-        (*wp)
-            .w_onebuf_opt
-            .wo_script_ctx[kWinOptScroll as ::core::ffi::c_int as usize]
-            .sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
+        (*wp).w_onebuf_opt.wo_script_ctx[kWinOptScroll as ::core::ffi::c_int as usize].sc_sid =
+            SID_WINLAYOUT as scid_T;
+        (*wp).w_onebuf_opt.wo_script_ctx[kWinOptScroll as ::core::ffi::c_int as usize].sc_lnum =
+            0 as ::core::ffi::c_int as linenr_T;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn command_height() {
     let mut old_p_ch: ::core::ffi::c_int = (*curtab).tp_ch_used as ::core::ffi::c_int;
-    let mut frp: *mut frame_T = (*lastwin_nofloating(
-        ::core::ptr::null_mut::<tabpage_T>(),
-    ))
-        .w_frame;
+    let mut frp: *mut frame_T = (*lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>())).w_frame;
     while (*frp).fr_width != Columns && !(*frp).fr_parent.is_null() {
         frp = (*frp).fr_parent;
     }
-    while !(*frp).fr_prev.is_null() && (*frp).fr_layout as ::core::ffi::c_int == FR_LEAF
+    while !(*frp).fr_prev.is_null()
+        && (*frp).fr_layout as ::core::ffi::c_int == FR_LEAF
         && (*(*frp).fr_win).w_onebuf_opt.wo_wfh != 0
     {
         frp = (*frp).fr_prev;
@@ -11849,10 +11633,8 @@ pub unsafe extern "C" fn command_height() {
             p_ch = old_p_ch as OptInt;
             break;
         } else {
-            let mut h: ::core::ffi::c_int = if ((p_ch - old_p_ch as OptInt)
-                as ::core::ffi::c_int)
-                < (*frp).fr_height
-                    - frame_minheight(frp, ::core::ptr::null_mut::<win_T>())
+            let mut h: ::core::ffi::c_int = if ((p_ch - old_p_ch as OptInt) as ::core::ffi::c_int)
+                < (*frp).fr_height - frame_minheight(frp, ::core::ptr::null_mut::<win_T>())
             {
                 (p_ch - old_p_ch as OptInt) as ::core::ffi::c_int
             } else {
@@ -11863,7 +11645,8 @@ pub unsafe extern "C" fn command_height() {
             frp = (*frp).fr_prev;
         }
     }
-    if p_ch < old_p_ch as OptInt && command_frame_height as ::core::ffi::c_int != 0
+    if p_ch < old_p_ch as OptInt
+        && command_frame_height as ::core::ffi::c_int != 0
         && !frp.is_null()
     {
         frame_add_height(frp, (old_p_ch as OptInt - p_ch) as ::core::ffi::c_int);
@@ -11871,8 +11654,7 @@ pub unsafe extern "C" fn command_height() {
     win_comp_pos();
     cmdline_row = Rows - p_ch as ::core::ffi::c_int;
     redraw_cmdline = true_0 != 0;
-    if msg_scrolled == 0 as ::core::ffi::c_int && full_screen as ::core::ffi::c_int != 0
-    {
+    if msg_scrolled == 0 as ::core::ffi::c_int && full_screen as ::core::ffi::c_int != 0 {
         let mut grid: *mut GridView = &raw mut default_gridview;
         if !ui_has(kUIMessages) {
             msg_grid_validate();
@@ -11905,7 +11687,7 @@ unsafe extern "C" fn frame_add_height(mut frp: *mut frame_T, mut n: ::core::ffi:
             break;
         }
         (*frp).fr_height += n;
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn last_status(mut morewin: bool) {
@@ -11937,16 +11719,13 @@ pub unsafe extern "C" fn win_remove_status_line(mut wp: *mut win_T, mut add_hsep
     (*wp).w_status_click_defs_size = 0 as size_t;
     (*wp).w_status_click_defs = ::core::ptr::null_mut::<StlClickDefinition>();
 }
-unsafe extern "C" fn find_horizontally_resizable_frame(
-    mut fr: *mut frame_T,
-) -> *mut frame_T {
+unsafe extern "C" fn find_horizontally_resizable_frame(mut fr: *mut frame_T) -> *mut frame_T {
     let mut fp: *mut frame_T = fr;
     while (*fp).fr_height <= frame_minheight(fp, ::core::ptr::null_mut::<win_T>()) {
         if fp == topframe {
             return ::core::ptr::null_mut::<frame_T>();
         }
-        if (*(*fp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL
-            && !(*fp).fr_prev.is_null()
+        if (*(*fp).fr_parent).fr_layout as ::core::ffi::c_int == FR_COL && !(*fp).fr_prev.is_null()
         {
             fp = (*fp).fr_prev;
         } else {
@@ -12008,7 +11787,8 @@ unsafe extern "C" fn last_status_rec(
                 && (!statusline || is_stl_global as ::core::ffi::c_int != 0)
             {
                 win_remove_status_line(wp, false_0 != 0);
-            } else if (*wp).w_status_height == 0 as ::core::ffi::c_int && !is_stl_global
+            } else if (*wp).w_status_height == 0 as ::core::ffi::c_int
+                && !is_stl_global
                 && statusline as ::core::ffi::c_int != 0
             {
                 (*wp).w_status_height = STATUS_HEIGHT as ::core::ffi::c_int;
@@ -12044,9 +11824,7 @@ pub unsafe extern "C" fn set_winbar_win(
     mut make_room: bool,
     mut valid_cursor: bool,
 ) -> ::core::ffi::c_int {
-    let mut winbar_height: ::core::ffi::c_int = if (*wp).w_floating as ::core::ffi::c_int
-        != 0
-    {
+    let mut winbar_height: ::core::ffi::c_int = if (*wp).w_floating as ::core::ffi::c_int != 0 {
         if *(*wp).w_onebuf_opt.wo_wbr as ::core::ffi::c_int != NUL {
             1 as ::core::ffi::c_int
         } else {
@@ -12067,16 +11845,13 @@ pub unsafe extern "C" fn set_winbar_win(
                 emsg(gettext(&raw const e_noroom as *const ::core::ffi::c_char));
                 return NOTDONE;
             } else if !make_room || !resize_frame_for_winbar((*wp).w_frame) {
-                return FAIL
+                return FAIL;
             }
         }
         (*wp).w_winbar_height = winbar_height;
         win_set_inner_size(wp, valid_cursor);
         if winbar_height == 0 as ::core::ffi::c_int {
-            stl_clear_click_defs(
-                (*wp).w_winbar_click_defs,
-                (*wp).w_winbar_click_defs_size,
-            );
+            stl_clear_click_defs((*wp).w_winbar_click_defs, (*wp).w_winbar_click_defs_size);
             xfree((*wp).w_winbar_click_defs as *mut ::core::ffi::c_void);
             (*wp).w_winbar_click_defs_size = 0 as size_t;
             (*wp).w_winbar_click_defs = ::core::ptr::null_mut::<StlClickDefinition>();
@@ -12104,7 +11879,8 @@ pub unsafe extern "C" fn tabline_height() -> ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if !first_tabpage.is_null() {} else {
+        if !first_tabpage.is_null() {
+        } else {
             __assert_fail(
                 b"first_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
@@ -12160,10 +11936,8 @@ pub unsafe extern "C" fn min_rows(mut tp: *mut tabpage_T) -> ::core::ffi::c_int 
     if firstwin.is_null() {
         return MIN_LINES as ::core::ffi::c_int;
     }
-    let mut total: ::core::ffi::c_int = frame_minheight(
-        (*tp).tp_topframe,
-        ::core::ptr::null_mut::<win_T>(),
-    );
+    let mut total: ::core::ffi::c_int =
+        frame_minheight((*tp).tp_topframe, ::core::ptr::null_mut::<win_T>());
     total += tabline_height() + global_stl_height();
     if (if tp == curtab { p_ch } else { (*tp).tp_ch_used }) > 0 as OptInt {
         total += 1;
@@ -12178,10 +11952,8 @@ pub unsafe extern "C" fn min_rows_for_all_tabpages() -> ::core::ffi::c_int {
     let mut total: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut n: ::core::ffi::c_int = frame_minheight(
-            (*tp).tp_topframe,
-            ::core::ptr::null_mut::<win_T>(),
-        );
+        let mut n: ::core::ffi::c_int =
+            frame_minheight((*tp).tp_topframe, ::core::ptr::null_mut::<win_T>());
         if (if tp == curtab { p_ch } else { (*tp).tp_ch_used }) > 0 as OptInt {
             n += 1;
         }
@@ -12206,7 +11978,9 @@ pub unsafe extern "C" fn only_one_window() -> bool {
         if !(*wp).w_buffer.is_null()
             && (!(bt_help((*wp).w_buffer) as ::core::ffi::c_int != 0 && !bt_help(curbuf)
                 || (*wp).w_floating as ::core::ffi::c_int != 0
-                || (*wp).w_onebuf_opt.wo_pvw != 0) || wp == curwin) && !is_aucmd_win(wp)
+                || (*wp).w_onebuf_opt.wo_pvw != 0)
+                || wp == curwin)
+            && !is_aucmd_win(wp)
         {
             count += 1;
         }
@@ -12217,18 +11991,18 @@ pub unsafe extern "C" fn only_one_window() -> bool {
 unsafe extern "C" fn check_lnums_both(mut do_curwin: bool, mut nested: bool) {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
-            if (do_curwin as ::core::ffi::c_int != 0 || wp != curwin)
-                && (*wp).w_buffer == curbuf
-            {
+            if (do_curwin as ::core::ffi::c_int != 0 || wp != curwin) && (*wp).w_buffer == curbuf {
                 if !nested {
                     (*wp).w_save_cursor.w_cursor_save = (*wp).w_cursor;
-                    (*wp).w_save_cursor.w_topline_save = (*wp).w_topline
-                        as ::core::ffi::c_int;
+                    (*wp).w_save_cursor.w_topline_save = (*wp).w_topline as ::core::ffi::c_int;
                 }
-                let mut need_adjust: bool = (*wp).w_cursor.lnum
-                    > (*curbuf).b_ml.ml_line_count;
+                let mut need_adjust: bool = (*wp).w_cursor.lnum > (*curbuf).b_ml.ml_line_count;
                 if need_adjust {
                     (*wp).w_cursor.lnum = (*curbuf).b_ml.ml_line_count;
                 }
@@ -12240,8 +12014,7 @@ unsafe extern "C" fn check_lnums_both(mut do_curwin: bool, mut nested: bool) {
                     (*wp).w_topline = (*curbuf).b_ml.ml_line_count;
                 }
                 if need_adjust as ::core::ffi::c_int != 0 || !nested {
-                    (*wp).w_save_cursor.w_topline_corr = (*wp).w_topline
-                        as ::core::ffi::c_int;
+                    (*wp).w_save_cursor.w_topline_corr = (*wp).w_topline as ::core::ffi::c_int;
                 }
             }
             wp = (*wp).w_next;
@@ -12261,11 +12034,15 @@ pub unsafe extern "C" fn check_lnums_nested(mut do_curwin: bool) {
 pub unsafe extern "C" fn reset_lnums() {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*wp).w_buffer == curbuf {
-                if equalpos((*wp).w_save_cursor.w_cursor_corr, (*wp).w_cursor)
-                    as ::core::ffi::c_int != 0
+                if equalpos((*wp).w_save_cursor.w_cursor_corr, (*wp).w_cursor) as ::core::ffi::c_int
+                    != 0
                     && (*wp).w_save_cursor.w_cursor_save.lnum != 0 as linenr_T
                 {
                     (*wp).w_cursor = (*wp).w_save_cursor.w_cursor_save;
@@ -12295,10 +12072,7 @@ pub unsafe extern "C" fn make_snapshot(mut idx: ::core::ffi::c_int) {
             as *mut *mut frame_T,
     );
 }
-unsafe extern "C" fn make_snapshot_rec(
-    mut fr: *mut frame_T,
-    mut frp: *mut *mut frame_T,
-) {
+unsafe extern "C" fn make_snapshot_rec(mut fr: *mut frame_T, mut frp: *mut *mut frame_T) {
     *frp = xcalloc(1 as size_t, ::core::mem::size_of::<frame_T>()) as *mut frame_T;
     (**frp).fr_layout = (*fr).fr_layout;
     (**frp).fr_width = (*fr).fr_width;
@@ -12313,10 +12087,7 @@ unsafe extern "C" fn make_snapshot_rec(
         (**frp).fr_win = curwin;
     }
 }
-unsafe extern "C" fn clear_snapshot(
-    mut tp: *mut tabpage_T,
-    mut idx: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn clear_snapshot(mut tp: *mut tabpage_T, mut idx: ::core::ffi::c_int) {
     clear_snapshot_rec((*tp).tp_snapshot[idx as usize] as *mut frame_T);
     (*tp).tp_snapshot[idx as usize] = ::core::ptr::null_mut::<frame_T>();
 }
@@ -12384,10 +12155,8 @@ unsafe extern "C" fn check_snapshot_rec(
             != (*fr).fr_next.is_null() as ::core::ffi::c_int
         || (*sn).fr_child.is_null() as ::core::ffi::c_int
             != (*fr).fr_child.is_null() as ::core::ffi::c_int
-        || !(*sn).fr_next.is_null()
-            && check_snapshot_rec((*sn).fr_next, (*fr).fr_next) == FAIL
-        || !(*sn).fr_child.is_null()
-            && check_snapshot_rec((*sn).fr_child, (*fr).fr_child) == FAIL
+        || !(*sn).fr_next.is_null() && check_snapshot_rec((*sn).fr_next, (*fr).fr_next) == FAIL
+        || !(*sn).fr_child.is_null() && check_snapshot_rec((*sn).fr_child, (*fr).fr_child) == FAIL
         || !(*sn).fr_win.is_null() && !win_valid((*sn).fr_win)
     {
         return FAIL;
@@ -12402,7 +12171,13 @@ unsafe extern "C" fn restore_snapshot_rec(
     (*fr).fr_height = (*sn).fr_height;
     (*fr).fr_width = (*sn).fr_width;
     if (*fr).fr_layout as ::core::ffi::c_int == FR_LEAF {
-        frame_new_height(fr, (*fr).fr_height, false_0 != 0, false_0 != 0, false_0 != 0);
+        frame_new_height(
+            fr,
+            (*fr).fr_height,
+            false_0 != 0,
+            false_0 != 0,
+            false_0 != 0,
+        );
         frame_new_width(fr, (*fr).fr_width, false_0 != 0, false_0 != 0);
         wp = (*sn).fr_win;
     }
@@ -12480,8 +12255,7 @@ pub unsafe extern "C" fn check_colorcolumn(
     if !wp.is_null() && (*wp).w_buffer.is_null() {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    let mut s: *mut ::core::ffi::c_char = &raw mut empty_string_option
-        as *mut ::core::ffi::c_char;
+    let mut s: *mut ::core::ffi::c_char = &raw mut empty_string_option as *mut ::core::ffi::c_char;
     if !cc.is_null() {
         s = cc;
     } else if !wp.is_null() {
@@ -12510,8 +12284,7 @@ pub unsafe extern "C" fn check_colorcolumn(
                 if !ascii_isdigit(*s as ::core::ffi::c_int) {
                     return &raw const e_invarg as *const ::core::ffi::c_char;
                 }
-                col = col
-                    * getdigits_int(&raw mut s, true_0 != 0, 0 as ::core::ffi::c_int);
+                col = col * getdigits_int(&raw mut s, true_0 != 0, 0 as ::core::ffi::c_int);
                 if tw == 0 as OptInt {
                     break '_skip;
                 } else {
@@ -12519,14 +12292,16 @@ pub unsafe extern "C" fn check_colorcolumn(
                         if col >= 0 as ::core::ffi::c_int
                             && tw <= (2147483647 as ::core::ffi::c_int - col) as OptInt
                             && tw + col as OptInt
-                                >= (-2147483647 as ::core::ffi::c_int
-                                    - 1 as ::core::ffi::c_int) as OptInt
+                                >= (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                                    as OptInt
                             || col < 0 as ::core::ffi::c_int
                                 && tw
                                     >= (-2147483647 as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int - col) as OptInt
+                                        - 1 as ::core::ffi::c_int
+                                        - col) as OptInt
                                 && tw + col as OptInt <= 2147483647 as OptInt
-                        {} else {
+                        {
+                        } else {
                             __assert_fail(
                                 b"(col >= 0 && tw <= INT_MAX - col && tw + col >= INT_MIN) || (col < 0 && tw >= INT_MIN - col && tw + col <= INT_MAX)\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
@@ -12546,7 +12321,7 @@ pub unsafe extern "C" fn check_colorcolumn(
             } else if ascii_isdigit(*s as ::core::ffi::c_int) {
                 col = getdigits_int(&raw mut s, true_0 != 0, 0 as ::core::ffi::c_int);
             } else {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
             let c2rust_fresh8 = count;
             count = count.wrapping_add(1);
@@ -12590,13 +12365,14 @@ pub unsafe extern "C" fn check_colorcolumn(
         let mut i: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
         while i < count {
             if j == 0 as ::core::ffi::c_int
-                || *(*wp).w_p_cc_cols.offset((j - 1 as ::core::ffi::c_int) as isize)
+                || *(*wp)
+                    .w_p_cc_cols
+                    .offset((j - 1 as ::core::ffi::c_int) as isize)
                     != color_cols[i as usize]
             {
                 let c2rust_fresh9 = j;
                 j = j + 1;
-                *(*wp).w_p_cc_cols.offset(c2rust_fresh9 as isize) = color_cols[i
-                    as usize];
+                *(*wp).w_p_cc_cols.offset(c2rust_fresh9 as isize) = color_cols[i as usize];
             }
             i = i.wrapping_add(1);
         }
@@ -12624,7 +12400,11 @@ pub unsafe extern "C" fn win_get_tabwin(
     let mut wnum: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*wp).handle == id {
                 if win_has_winnr(wp, tp as *mut tabpage_T) {
@@ -12645,11 +12425,15 @@ pub unsafe extern "C" fn win_get_tabwin(
 pub unsafe extern "C" fn win_ui_flush(mut validate: bool) {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if ((*wp).w_pos_changed as ::core::ffi::c_int != 0
-                || (*wp).w_grid_alloc.pending_comp_index_update as ::core::ffi::c_int
-                    != 0) && !(*wp).w_grid_alloc.chars.is_null()
+                || (*wp).w_grid_alloc.pending_comp_index_update as ::core::ffi::c_int != 0)
+                && !(*wp).w_grid_alloc.chars.is_null()
             {
                 if tp == curtab {
                     ui_ext_win_position(wp, validate);
@@ -12672,18 +12456,22 @@ pub unsafe extern "C" fn win_ui_flush(mut validate: bool) {
 #[no_mangle]
 pub unsafe extern "C" fn lastwin_nofloating(mut tp: *mut tabpage_T) -> *mut win_T {
     '_c2rust_label: {
-        if tp != curtab || tp.is_null() {} else {
+        if tp != curtab || tp.is_null() {
+        } else {
             __assert_fail(
                 b"tp != curtab || !tp\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/window.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 7858 as ::core::ffi::c_uint,
-                b"win_T *lastwin_nofloating(tabpage_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"win_T *lastwin_nofloating(tabpage_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    let mut res: *mut win_T = if !tp.is_null() { (*tp).tp_lastwin } else { lastwin };
+    let mut res: *mut win_T = if !tp.is_null() {
+        (*tp).tp_lastwin
+    } else {
+        lastwin
+    };
     while (*res).w_floating {
         res = (*res).w_prev;
     }

@@ -237,9 +237,7 @@ pub struct listwatch_S {
     pub lw_item: *mut listitem_T,
     pub lw_next: *mut listwatch_T,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub static mut gc_first_dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
 #[no_mangle]

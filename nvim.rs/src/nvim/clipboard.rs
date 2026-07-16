@@ -22,11 +22,7 @@ extern "C" {
     fn redirecting() -> ::core::ffi::c_int;
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     static mut cb_flags: ::core::ffi::c_uint;
     fn get_y_register(reg: ::core::ffi::c_int) -> *mut yankreg_T;
     fn get_y_previous() -> *mut yankreg_T;
@@ -314,9 +310,7 @@ pub struct yankreg_T {
 pub const kOptCbFlagUnnamed: C2Rust_Unnamed_1 = 1;
 pub const kOptCbFlagUnnamedplus: C2Rust_Unnamed_1 = 2;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22;
 static mut batch_change_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -330,8 +324,8 @@ pub unsafe extern "C" fn adjust_clipboard_name(
     mut writing: bool,
 ) -> *mut yankreg_T {
     let mut target: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-    let mut explicit_cb_reg: bool = *name == '*' as ::core::ffi::c_int
-        || *name == '+' as ::core::ffi::c_int;
+    let mut explicit_cb_reg: bool =
+        *name == '*' as ::core::ffi::c_int || *name == '+' as ::core::ffi::c_int;
     let mut implicit_cb_reg: bool = *name == NUL
         && cb_flags
             & (kOptCbFlagUnnamed as ::core::ffi::c_int
@@ -342,7 +336,8 @@ pub unsafe extern "C" fn adjust_clipboard_name(
             b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
             false_0 != 0,
         ) {
-            if batch_change_count <= 1 as ::core::ffi::c_int && !quiet
+            if batch_change_count <= 1 as ::core::ffi::c_int
+                && !quiet
                 && (!clipboard_didwarn
                     || explicit_cb_reg as ::core::ffi::c_int != 0 && redirecting() == 0)
             {
@@ -350,20 +345,19 @@ pub unsafe extern "C" fn adjust_clipboard_name(
                 msg(MSG_NO_CLIP.as_ptr(), 0 as ::core::ffi::c_int);
             }
         } else if explicit_cb_reg {
-            target = get_y_register(
-                if *name == '*' as ::core::ffi::c_int {
-                    STAR_REGISTER as ::core::ffi::c_int
-                } else {
-                    PLUS_REGISTER as ::core::ffi::c_int
-                },
-            );
+            target = get_y_register(if *name == '*' as ::core::ffi::c_int {
+                STAR_REGISTER as ::core::ffi::c_int
+            } else {
+                PLUS_REGISTER as ::core::ffi::c_int
+            });
             if writing as ::core::ffi::c_int != 0
                 && cb_flags
                     & (if *name == '*' as ::core::ffi::c_int {
                         kOptCbFlagUnnamed as ::core::ffi::c_int
                     } else {
                         kOptCbFlagUnnamedplus as ::core::ffi::c_int
-                    }) as ::core::ffi::c_uint != 0
+                    }) as ::core::ffi::c_uint
+                    != 0
             {
                 clipboard_needs_update = false_0 != 0;
             }
@@ -372,11 +366,9 @@ pub unsafe extern "C" fn adjust_clipboard_name(
         {
             clipboard_needs_update = true_0 != 0;
         } else if !(!writing && clipboard_needs_update as ::core::ffi::c_int != 0) {
-            if cb_flags
-                & kOptCbFlagUnnamedplus as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            {
-                *name = if cb_flags
-                    & kOptCbFlagUnnamed as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            if cb_flags & kOptCbFlagUnnamedplus as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+                *name = if cb_flags & kOptCbFlagUnnamed as ::core::ffi::c_int as ::core::ffi::c_uint
+                    != 0
                     && writing as ::core::ffi::c_int != 0
                 {
                     '"' as ::core::ffi::c_int
@@ -393,10 +385,9 @@ pub unsafe extern "C" fn adjust_clipboard_name(
     return target;
 }
 pub const MSG_NO_CLIP: [::core::ffi::c_char; 62] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 62],
-        [::core::ffi::c_char; 62],
-    >(*b"clipboard: No provider. Try \":checkhealth\" or \":h clipboard\".\0")
+    ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
+        *b"clipboard: No provider. Try \":checkhealth\" or \":h clipboard\".\0",
+    )
 };
 #[no_mangle]
 pub unsafe extern "C" fn get_clipboard(
@@ -408,11 +399,7 @@ pub unsafe extern "C" fn get_clipboard(
     let mut lines: *mut list_T = ::core::ptr::null_mut::<list_T>();
     let mut tv_idx: size_t = 0;
     let mut errmsg: bool = true_0 != 0;
-    let mut reg: *mut yankreg_T = adjust_clipboard_name(
-        &raw mut name,
-        quiet,
-        false_0 != 0,
-    );
+    let mut reg: *mut yankreg_T = adjust_clipboard_name(&raw mut name, quiet, false_0 != 0);
     if reg.is_null() {
         return false_0 != 0;
     }
@@ -421,8 +408,7 @@ pub unsafe extern "C" fn get_clipboard(
     let regname: ::core::ffi::c_char = name as ::core::ffi::c_char;
     tv_list_append_string(args, &raw const regname, 1 as ssize_t);
     let mut result: typval_T = eval_call_provider(
-        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"get\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
         false_0 != 0,
@@ -450,10 +436,8 @@ pub unsafe extern "C" fn get_clipboard(
                 {
                     break '_err;
                 } else {
-                    let mut regtype: *mut ::core::ffi::c_char = (*tv_list_last(res))
-                        .li_tv
-                        .vval
-                        .v_string;
+                    let mut regtype: *mut ::core::ffi::c_char =
+                        (*tv_list_last(res)).li_tv.vval.v_string;
                     if regtype.is_null() || strlen(regtype) > 1 as size_t {
                         break '_err;
                     } else {
@@ -504,19 +488,15 @@ pub unsafe extern "C" fn get_clipboard(
                         {
                             break '_err;
                         }
-                        let mut s: *const ::core::ffi::c_char = (*li)
-                            .li_tv
-                            .vval
-                            .v_string;
+                        let mut s: *const ::core::ffi::c_char = (*li).li_tv.vval.v_string;
                         let c2rust_fresh0 = tv_idx;
                         tv_idx = tv_idx.wrapping_add(1);
-                        *(*reg).y_array.offset(c2rust_fresh0 as isize) = cstr_to_string(
-                            if !s.is_null() {
+                        *(*reg).y_array.offset(c2rust_fresh0 as isize) =
+                            cstr_to_string(if !s.is_null() {
                                 s
                             } else {
                                 b"\0".as_ptr() as *const ::core::ffi::c_char
-                            },
-                        );
+                            });
                         li = (*li).li_next;
                     }
                 }
@@ -525,27 +505,22 @@ pub unsafe extern "C" fn get_clipboard(
                 && (*(*reg)
                     .y_array
                     .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
-                    .size == 0 as size_t
+                .size
+                    == 0 as size_t
             {
-                if (*reg).y_type as ::core::ffi::c_int
-                    != kMTCharWise as ::core::ffi::c_int
-                {
+                if (*reg).y_type as ::core::ffi::c_int != kMTCharWise as ::core::ffi::c_int {
                     xfree(
                         (*(*reg)
                             .y_array
                             .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
-                            .data as *mut ::core::ffi::c_void,
+                        .data as *mut ::core::ffi::c_void,
                     );
                     (*reg).y_size = (*reg).y_size.wrapping_sub(1);
-                    if (*reg).y_type as ::core::ffi::c_int
-                        == kMTUnknown as ::core::ffi::c_int
-                    {
+                    if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
                         (*reg).y_type = kMTLineWise;
                     }
                 }
-            } else if (*reg).y_type as ::core::ffi::c_int
-                == kMTUnknown as ::core::ffi::c_int
-            {
+            } else if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
                 (*reg).y_type = kMTCharWise;
             }
             update_yankreg_width(reg);
@@ -566,19 +541,13 @@ pub unsafe extern "C" fn get_clipboard(
     (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
     (*reg).timestamp = 0 as Timestamp;
     if errmsg {
-        emsg(
-            b"clipboard: provider returned invalid data\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+        emsg(b"clipboard: provider returned invalid data\0".as_ptr() as *const ::core::ffi::c_char);
     }
     *target = reg;
     return false_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn set_clipboard(
-    mut name: ::core::ffi::c_int,
-    mut reg: *mut yankreg_T,
-) {
+pub unsafe extern "C" fn set_clipboard(mut name: ::core::ffi::c_int, mut reg: *mut yankreg_T) {
     if adjust_clipboard_name(&raw mut name, false_0 != 0, true_0 != 0).is_null() {
         return;
     }
@@ -632,8 +601,7 @@ pub unsafe extern "C" fn set_clipboard(
         1 as ssize_t,
     );
     eval_call_provider(
-        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"set\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
         true_0 != 0,
@@ -673,7 +641,8 @@ pub unsafe extern "C" fn save_batch_count() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn restore_batch_count(mut save_count: ::core::ffi::c_int) {
     '_c2rust_label: {
-        if batch_change_count == 0 as ::core::ffi::c_int {} else {
+        if batch_change_count == 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"batch_change_count == 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/clipboard.c\0".as_ptr()

@@ -87,9 +87,7 @@ pub unsafe extern "C" fn mpack_pack_nil() -> mpack_token_t {
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_pack_boolean(
-    mut v: ::core::ffi::c_uint,
-) -> mpack_token_t {
+pub unsafe extern "C" fn mpack_pack_boolean(mut v: ::core::ffi::c_uint) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -116,8 +114,7 @@ pub unsafe extern "C" fn mpack_pack_uint(mut v: mpack_uintmax_t) -> mpack_token_
         },
     };
     rv.data.value.lo = (v & 0xffffffff as mpack_uintmax_t) as mpack_uint32_t;
-    rv.data.value.hi = (v >> 31 as ::core::ffi::c_int >> 1 as ::core::ffi::c_int)
-        as mpack_uint32_t;
+    rv.data.value.hi = (v >> 31 as ::core::ffi::c_int >> 1 as ::core::ffi::c_int) as mpack_uint32_t;
     rv.type_0 = MPACK_TOKEN_UINT;
     return rv;
 }
@@ -142,9 +139,7 @@ pub unsafe extern "C" fn mpack_pack_sint(mut v: mpack_sintmax_t) -> mpack_token_
     return mpack_pack_uint(v as mpack_uintmax_t);
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_pack_float_compat(
-    mut v: ::core::ffi::c_double,
-) -> mpack_token_t {
+pub unsafe extern "C" fn mpack_pack_float_compat(mut v: ::core::ffi::c_double) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -154,26 +149,16 @@ pub unsafe extern "C" fn mpack_pack_float_compat(
     };
     if mpack_fits_single(v) != 0 {
         rv.length = 4 as mpack_uint32_t;
-        rv.data.value = mpack_pack_ieee754(
-            v,
-            23 as ::core::ffi::c_uint,
-            8 as ::core::ffi::c_uint,
-        );
+        rv.data.value = mpack_pack_ieee754(v, 23 as ::core::ffi::c_uint, 8 as ::core::ffi::c_uint);
     } else {
         rv.length = 8 as mpack_uint32_t;
-        rv.data.value = mpack_pack_ieee754(
-            v,
-            52 as ::core::ffi::c_uint,
-            11 as ::core::ffi::c_uint,
-        );
+        rv.data.value = mpack_pack_ieee754(v, 52 as ::core::ffi::c_uint, 11 as ::core::ffi::c_uint);
     }
     rv.type_0 = MPACK_TOKEN_FLOAT;
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_pack_float_fast(
-    mut v: ::core::ffi::c_double,
-) -> mpack_token_t {
+pub unsafe extern "C" fn mpack_pack_float_fast(mut v: ::core::ffi::c_double) -> mpack_token_t {
     let mut rv: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -202,9 +187,7 @@ pub unsafe extern "C" fn mpack_pack_float_fast(
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_pack_number(
-    mut v: ::core::ffi::c_double,
-) -> mpack_token_t {
+pub unsafe extern "C" fn mpack_pack_number(mut v: ::core::ffi::c_double) -> mpack_token_t {
     let mut tok: mpack_token_t = mpack_token_t {
         type_0: 0 as mpack_token_type_t,
         length: 0,
@@ -213,29 +196,30 @@ pub unsafe extern "C" fn mpack_pack_number(
         },
     };
     let mut vabs: ::core::ffi::c_double = 0.;
-    vabs = if v < 0 as ::core::ffi::c_int as ::core::ffi::c_double { -v } else { v };
+    vabs = if v < 0 as ::core::ffi::c_int as ::core::ffi::c_double {
+        -v
+    } else {
+        v
+    };
     '_c2rust_label: {
-        if v <= 9007199254740991.0f64 && v >= -9007199254740991.0f64 {} else {
+        if v <= 9007199254740991.0f64 && v >= -9007199254740991.0f64 {
+        } else {
             __assert_fail(
                 b"v <= 9007199254740991. && v >= -9007199254740991.\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 113 as ::core::ffi::c_uint,
-                b"mpack_token_t mpack_pack_number(double)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"mpack_token_t mpack_pack_number(double)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     tok.data.value.hi = (vabs
-        / (((1 as ::core::ffi::c_int)
-            << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+        / (((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
             as ::core::ffi::c_double
-            * ((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+            * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                 as ::core::ffi::c_double
-            * ((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
+            * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
                 as ::core::ffi::c_double)) as mpack_uint32_t;
     tok.data.value.lo = mpack_fmod_pow2_32(vabs) as mpack_uint32_t;
     if v < 0 as ::core::ffi::c_int as ::core::ffi::c_double {
@@ -245,9 +229,7 @@ pub unsafe extern "C" fn mpack_pack_number(
         if tok.data.value.lo == 0 {
             tok.data.value.hi = tok.data.value.hi.wrapping_add(1);
         }
-        if tok.data.value.lo == 0 as mpack_uint32_t
-            && tok.data.value.hi == 0 as mpack_uint32_t
-        {
+        if tok.data.value.lo == 0 as mpack_uint32_t && tok.data.value.hi == 0 as mpack_uint32_t {
             tok.length = 1 as mpack_uint32_t;
         } else if tok.data.value.lo < 0x80000000 as ::core::ffi::c_uint {
             tok.length = 8 as mpack_uint32_t;
@@ -368,7 +350,8 @@ pub unsafe extern "C" fn mpack_unpack_boolean(mut t: mpack_token_t) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn mpack_unpack_uint(mut t: mpack_token_t) -> mpack_uintmax_t {
     return ((t.data.value.hi as mpack_uintmax_t) << 31 as ::core::ffi::c_int)
-        << 1 as ::core::ffi::c_int | t.data.value.lo as mpack_uintmax_t;
+        << 1 as ::core::ffi::c_int
+        | t.data.value.lo as mpack_uintmax_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintmax_t {
@@ -376,10 +359,10 @@ pub unsafe extern "C" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintma
     let mut lo: mpack_uint32_t = t.data.value.lo;
     let mut rv: mpack_uintmax_t = lo as mpack_uintmax_t;
     '_c2rust_label: {
-        if t.length as usize <= ::core::mem::size_of::<mpack_sintmax_t>() {} else {
+        if t.length as usize <= ::core::mem::size_of::<mpack_sintmax_t>() {
+        } else {
             __assert_fail(
-                b"t.length <= sizeof(mpack_sintmax_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"t.length <= sizeof(mpack_sintmax_t)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 210 as ::core::ffi::c_uint,
@@ -389,25 +372,19 @@ pub unsafe extern "C" fn mpack_unpack_sint(mut t: mpack_token_t) -> mpack_sintma
         }
     };
     if t.length == 8 as mpack_uint32_t {
-        rv
-            |= ((hi as mpack_uintmax_t) << 31 as ::core::ffi::c_int)
-                << 1 as ::core::ffi::c_int;
+        rv |= ((hi as mpack_uintmax_t) << 31 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
     }
     rv = (!rv
         & ((1 as ::core::ffi::c_int as mpack_uintmax_t)
-            << t
-                .length
+            << t.length
                 .wrapping_mul(8 as mpack_uint32_t)
                 .wrapping_sub(1 as mpack_uint32_t))
-            .wrapping_sub(1 as mpack_uintmax_t))
-        .wrapping_add(1 as mpack_uintmax_t);
-    return -(rv.wrapping_sub(1 as mpack_uintmax_t) as mpack_sintmax_t)
-        - 1 as mpack_sintmax_t;
+        .wrapping_sub(1 as mpack_uintmax_t))
+    .wrapping_add(1 as mpack_uintmax_t);
+    return -(rv.wrapping_sub(1 as mpack_uintmax_t) as mpack_sintmax_t) - 1 as mpack_sintmax_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_unpack_float_compat(
-    mut t: mpack_token_t,
-) -> ::core::ffi::c_double {
+pub unsafe extern "C" fn mpack_unpack_float_compat(mut t: mpack_token_t) -> ::core::ffi::c_double {
     let mut sign: mpack_uint32_t = 0;
     let mut exponent: mpack_sint32_t = 0;
     let mut bias: mpack_sint32_t = 0;
@@ -429,39 +406,33 @@ pub unsafe extern "C" fn mpack_unpack_float_compat(
     if mantbits == 52 as ::core::ffi::c_uint {
         sign = t.data.value.hi >> 31 as ::core::ffi::c_int;
         exponent = (t.data.value.hi >> 20 as ::core::ffi::c_int
-            & (((1 as ::core::ffi::c_int) << 11 as ::core::ffi::c_int)
-                - 1 as ::core::ffi::c_int) as mpack_uint32_t) as mpack_sint32_t;
+            & (((1 as ::core::ffi::c_int) << 11 as ::core::ffi::c_int) - 1 as ::core::ffi::c_int)
+                as mpack_uint32_t) as mpack_sint32_t;
         mant = (t.data.value.hi
-            & (((1 as ::core::ffi::c_int) << 20 as ::core::ffi::c_int)
-                - 1 as ::core::ffi::c_int) as mpack_uint32_t) as ::core::ffi::c_double
-            * (((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+            & (((1 as ::core::ffi::c_int) << 20 as ::core::ffi::c_int) - 1 as ::core::ffi::c_int)
+                as mpack_uint32_t) as ::core::ffi::c_double
+            * (((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                 as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+                * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                     as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
+                * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
                     as ::core::ffi::c_double);
         mant += t.data.value.lo as ::core::ffi::c_double;
     } else {
         sign = t.data.value.lo >> 31 as ::core::ffi::c_int;
         exponent = (t.data.value.lo >> 23 as ::core::ffi::c_int
-            & (((1 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)
-                - 1 as ::core::ffi::c_int) as mpack_uint32_t) as mpack_sint32_t;
+            & (((1 as ::core::ffi::c_int) << 8 as ::core::ffi::c_int) - 1 as ::core::ffi::c_int)
+                as mpack_uint32_t) as mpack_sint32_t;
         mant = (t.data.value.lo
-            & (((1 as ::core::ffi::c_int) << 23 as ::core::ffi::c_int)
-                - 1 as ::core::ffi::c_int) as mpack_uint32_t) as ::core::ffi::c_double;
+            & (((1 as ::core::ffi::c_int) << 23 as ::core::ffi::c_int) - 1 as ::core::ffi::c_int)
+                as mpack_uint32_t) as ::core::ffi::c_double;
     }
-    mant
-        /= ((1 as ::core::ffi::c_int) << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
+    mant /= ((1 as ::core::ffi::c_int) << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
+        as ::core::ffi::c_double
+        * ((1 as ::core::ffi::c_int) << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
             as ::core::ffi::c_double
-            * ((1 as ::core::ffi::c_int)
-                << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
-                as ::core::ffi::c_double
-            * ((1 as ::core::ffi::c_int)
-                << mantbits.wrapping_rem(2 as ::core::ffi::c_uint))
-                as ::core::ffi::c_double;
+        * ((1 as ::core::ffi::c_int) << mantbits.wrapping_rem(2 as ::core::ffi::c_uint))
+            as ::core::ffi::c_double;
     if exponent != 0 {
         mant += 1.0f64;
     } else {
@@ -477,13 +448,14 @@ pub unsafe extern "C" fn mpack_unpack_float_compat(
         exponent += 1;
     }
     return mant
-        * (if sign != 0 { -1 as ::core::ffi::c_int } else { 1 as ::core::ffi::c_int })
-            as ::core::ffi::c_double;
+        * (if sign != 0 {
+            -1 as ::core::ffi::c_int
+        } else {
+            1 as ::core::ffi::c_int
+        }) as ::core::ffi::c_double;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_unpack_float_fast(
-    mut t: mpack_token_t,
-) -> ::core::ffi::c_double {
+pub unsafe extern "C" fn mpack_unpack_float_fast(mut t: mpack_token_t) -> ::core::ffi::c_double {
     if t.length == 4 as mpack_uint32_t {
         let mut conv: C2Rust_Unnamed_4 = C2Rust_Unnamed_4 { f: 0. };
         conv.m = t.data.value.lo;
@@ -500,9 +472,7 @@ pub unsafe extern "C" fn mpack_unpack_float_fast(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_unpack_number(
-    mut t: mpack_token_t,
-) -> ::core::ffi::c_double {
+pub unsafe extern "C" fn mpack_unpack_number(mut t: mpack_token_t) -> ::core::ffi::c_double {
     let mut rv: ::core::ffi::c_double = 0.;
     let mut hi: mpack_uint32_t = 0;
     let mut lo: mpack_uint32_t = 0;
@@ -516,7 +486,8 @@ pub unsafe extern "C" fn mpack_unpack_number(
             == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint
             || t.type_0 as ::core::ffi::c_uint
                 == MPACK_TOKEN_SINT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"t.type == MPACK_TOKEN_UINT || t.type == MPACK_TOKEN_SINT\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -535,11 +506,12 @@ pub unsafe extern "C" fn mpack_unpack_number(
     {
         if hi == 0 {
             '_c2rust_label_0: {
-                if t.length <= 4 as mpack_uint32_t {} else {
+                if t.length <= 4 as mpack_uint32_t {
+                } else {
                     __assert_fail(
                         b"t.length <= 4\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/mpack/conv.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         300 as ::core::ffi::c_uint,
                         b"double mpack_unpack_number(mpack_token_t)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -548,11 +520,10 @@ pub unsafe extern "C" fn mpack_unpack_number(
             };
             lo = !lo
                 & ((1 as ::core::ffi::c_int as mpack_uint32_t)
-                    << t
-                        .length
+                    << t.length
                         .wrapping_mul(8 as mpack_uint32_t)
                         .wrapping_sub(1 as mpack_uint32_t))
-                    .wrapping_sub(1 as mpack_uint32_t);
+                .wrapping_sub(1 as mpack_uint32_t);
         } else {
             hi = !hi;
             lo = !lo;
@@ -563,15 +534,13 @@ pub unsafe extern "C" fn mpack_unpack_number(
         }
     }
     rv = lo as ::core::ffi::c_double
-        + ((1 as ::core::ffi::c_int)
-            << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+        + ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
             as ::core::ffi::c_double
-            * ((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+            * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                 as ::core::ffi::c_double
-            * ((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
-                as ::core::ffi::c_double * hi as ::core::ffi::c_double;
+            * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
+                as ::core::ffi::c_double
+            * hi as ::core::ffi::c_double;
     return if t.type_0 as ::core::ffi::c_uint
         == MPACK_TOKEN_SINT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -580,11 +549,8 @@ pub unsafe extern "C" fn mpack_unpack_number(
         rv
     };
 }
-unsafe extern "C" fn mpack_fits_single(
-    mut v: ::core::ffi::c_double,
-) -> ::core::ffi::c_int {
-    return (v as ::core::ffi::c_float as ::core::ffi::c_double == v)
-        as ::core::ffi::c_int;
+unsafe extern "C" fn mpack_fits_single(mut v: ::core::ffi::c_double) -> ::core::ffi::c_int {
+    return (v as ::core::ffi::c_float as ::core::ffi::c_double == v) as ::core::ffi::c_int;
 }
 unsafe extern "C" fn mpack_pack_ieee754(
     mut v: ::core::ffi::c_double,
@@ -597,7 +563,8 @@ unsafe extern "C" fn mpack_pack_ieee754(
     };
     let mut exponent: mpack_sint32_t = 0;
     let mut bias: mpack_sint32_t = ((1 as mpack_sint32_t)
-        << expbits.wrapping_sub(1 as ::core::ffi::c_uint)) - 1 as mpack_sint32_t;
+        << expbits.wrapping_sub(1 as ::core::ffi::c_uint))
+        - 1 as mpack_sint32_t;
     let mut sign: mpack_uint32_t = 0;
     let mut mant: ::core::ffi::c_double = 0.;
     if v == 0 as ::core::ffi::c_int as ::core::ffi::c_double {
@@ -616,9 +583,7 @@ unsafe extern "C" fn mpack_pack_ieee754(
             mant /= 2.0f64;
             exponent += 1;
         }
-        while mant < 1.0f64
-            && exponent > -(bias as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-        {
+        while mant < 1.0f64 && exponent > -(bias as ::core::ffi::c_int - 1 as ::core::ffi::c_int) {
             mant *= 2.0f64;
             exponent -= 1;
         }
@@ -628,20 +593,15 @@ unsafe extern "C" fn mpack_pack_ieee754(
             mant = mant - 1.0f64;
         }
         exponent += bias;
-        mant
-            *= ((1 as ::core::ffi::c_int)
-                << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
+        mant *= ((1 as ::core::ffi::c_int) << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
+            as ::core::ffi::c_double
+            * ((1 as ::core::ffi::c_int) << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
                 as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << mantbits.wrapping_div(2 as ::core::ffi::c_uint))
-                    as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << mantbits.wrapping_rem(2 as ::core::ffi::c_uint))
-                    as ::core::ffi::c_double;
+            * ((1 as ::core::ffi::c_int) << mantbits.wrapping_rem(2 as ::core::ffi::c_uint))
+                as ::core::ffi::c_double;
         if mantbits == 52 as ::core::ffi::c_uint {
             rv.hi = (mant
-                / (((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+                / (((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                     as ::core::ffi::c_double
                     * ((1 as ::core::ffi::c_int)
                         << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
@@ -660,15 +620,13 @@ unsafe extern "C" fn mpack_pack_ieee754(
                         * ((1 as ::core::ffi::c_int)
                             << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
                             as ::core::ffi::c_double)) as mpack_uint32_t;
-            rv.hi
-                |= (exponent as mpack_uint32_t) << 20 as ::core::ffi::c_int
-                    | sign << 31 as ::core::ffi::c_int;
+            rv.hi |= (exponent as mpack_uint32_t) << 20 as ::core::ffi::c_int
+                | sign << 31 as ::core::ffi::c_int;
         } else if mantbits == 23 as ::core::ffi::c_uint {
             rv.hi = 0 as mpack_uint32_t;
             rv.lo = mant as mpack_uint32_t;
-            rv.lo
-                |= (exponent as mpack_uint32_t) << 23 as ::core::ffi::c_int
-                    | sign << 31 as ::core::ffi::c_int;
+            rv.lo |= (exponent as mpack_uint32_t) << 23 as ::core::ffi::c_int
+                | sign << 31 as ::core::ffi::c_int;
         }
     }
     return rv;
@@ -679,27 +637,18 @@ unsafe extern "C" fn mpack_is_be() -> ::core::ffi::c_int {
     return (test.c[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
         == 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
-unsafe extern "C" fn mpack_fmod_pow2_32(
-    mut a: ::core::ffi::c_double,
-) -> ::core::ffi::c_double {
+unsafe extern "C" fn mpack_fmod_pow2_32(mut a: ::core::ffi::c_double) -> ::core::ffi::c_double {
     return a
-        - (a
-            / (((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+        - (a / (((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+            as ::core::ffi::c_double
+            * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                 as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
-                    as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
-                    as ::core::ffi::c_double)) as mpack_uint32_t as ::core::ffi::c_double
-            * (((1 as ::core::ffi::c_int)
-                << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+            * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
+                as ::core::ffi::c_double)) as mpack_uint32_t as ::core::ffi::c_double
+            * (((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                 as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
+                * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int / 2 as ::core::ffi::c_int)
                     as ::core::ffi::c_double
-                * ((1 as ::core::ffi::c_int)
-                    << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
+                * ((1 as ::core::ffi::c_int) << 32 as ::core::ffi::c_int % 2 as ::core::ffi::c_int)
                     as ::core::ffi::c_double);
 }

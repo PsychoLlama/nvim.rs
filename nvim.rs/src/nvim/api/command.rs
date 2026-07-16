@@ -42,24 +42,15 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn arena_alloc(
-        arena: *mut Arena,
-        size: size_t,
-        align: bool,
-    ) -> *mut ::core::ffi::c_void;
+    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_memdupz(
         arena: *mut Arena,
         buf: *const ::core::ffi::c_char,
         size: size_t,
     ) -> *mut ::core::ffi::c_char;
-    fn KeyDict_cmd_magic_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_cmd_mods_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_cmd_magic_get_field(str: *const ::core::ffi::c_char, len: size_t)
+        -> *mut KeySetLink;
+    fn KeyDict_cmd_mods_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn KeyDict_cmd_mods_filter_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
@@ -87,12 +78,7 @@ extern "C" {
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     fn api_dict_to_keydict(
         retval: *mut ::core::ffi::c_void,
@@ -152,18 +138,11 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn getargcmd(argp: *mut *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn getargopt(eap: *mut exarg_T) -> ::core::ffi::c_int;
-    fn get_command_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_command_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn is_map_cmd(cmdidx: cmdidx_T) -> bool;
     fn aborting() -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     static mut ucmds: garray_T;
     fn get_user_command_name(
         idx: ::core::ffi::c_int,
@@ -1861,9 +1840,8 @@ pub struct KeySetLink {
     pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
-pub type FieldHashfn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
->;
+pub type FieldHashfn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_empty {
@@ -2970,23 +2948,15 @@ pub const WSP_NOENTER: C2Rust_Unnamed_19 = 512;
 pub const WSP_NEWLOC: C2Rust_Unnamed_19 = 256;
 pub const WSP_HELP: C2Rust_Unnamed_19 = 32;
 pub const WSP_ROOM: C2Rust_Unnamed_19 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_user_command__addr: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_user_command__count: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_user_command__force: ::core::ffi::c_int = 6
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_user_command__nargs: ::core::ffi::c_int = 7
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_user_command__range: ::core::ffi::c_int = 8
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_user_command__preview: ::core::ffi::c_int = 9
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_user_command__complete: ::core::ffi::c_int = 10
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_user_command__count: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_user_command__force: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_user_command__nargs: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_user_command__range: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_user_command__preview: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_user_command__complete: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd__cmd: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd__reg: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd__bang: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -3004,8 +2974,7 @@ pub const KEYSET_OPTIDX_cmd_mods__tab: ::core::ffi::c_int = 1 as ::core::ffi::c_
 pub const KEYSET_OPTIDX_cmd_mods__split: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd_mods__filter: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd_mods__verbose: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_cmd_mods_filter__pattern: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_cmd_mods_filter__pattern: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
@@ -3028,10 +2997,9 @@ pub const EX_SBOXOK: ::core::ffi::c_uint = 0x40000 as ::core::ffi::c_uint;
 pub const EX_KEEPSCRIPT: ::core::ffi::c_uint = 0x4000000 as ::core::ffi::c_uint;
 pub const EX_PREVIEW: ::core::ffi::c_uint = 0x8000000 as ::core::ffi::c_uint;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 66] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 66],
-        [::core::ffi::c_char; 66],
-    >(*b"void build_cmdline_str(char **, exarg_T *, CmdParseInfo *, Array)\0")
+    ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
+        *b"void build_cmdline_str(char **, exarg_T *, CmdParseInfo *, Array)\0",
+    )
 };
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3080,13 +3048,9 @@ pub unsafe extern "C" fn nvim_parse_cmd(
     };
     let mut length: size_t = 0;
     let mut cmd: *mut ucmd_T = ::core::ptr::null_mut::<ucmd_T>();
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut nargs: [::core::ffi::c_char; 2] = [0; 2];
-    let mut addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut mods: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -3097,9 +3061,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
         capacity: 0,
         items: ::core::ptr::null_mut::<KeyValuePair>(),
     };
-    let mut split: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut split: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut magic: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -3214,9 +3176,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
         },
     };
     let mut cmdline: *mut ::core::ffi::c_char = arena_memdupz(arena, str.data, str.size);
-    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if !parse_cmdline(
         &raw mut cmdline,
         &raw mut ea,
@@ -3264,21 +3224,13 @@ pub unsafe extern "C" fn nvim_parse_cmd(
         } else {
             let mut end: size_t = 0 as size_t;
             let mut len: size_t = 0 as size_t;
-            let mut buf: *mut ::core::ffi::c_char = arena_alloc(
-                arena,
-                length.wrapping_add(1 as size_t),
-                false_0 != 0,
-            ) as *mut ::core::ffi::c_char;
+            let mut buf: *mut ::core::ffi::c_char =
+                arena_alloc(arena, length.wrapping_add(1 as size_t), false_0 != 0)
+                    as *mut ::core::ffi::c_char;
             let mut done: bool = false_0 != 0;
             args = arena_array(arena, uc_nargs_upper_bound(ea.arg, length));
             while !done {
-                done = uc_split_args_iter(
-                    ea.arg,
-                    length,
-                    &raw mut end,
-                    buf,
-                    &raw mut len,
-                );
+                done = uc_split_args_iter(ea.arg, length, &raw mut end, buf, &raw mut len);
                 if len > 0 as size_t {
                     let c2rust_fresh1 = args.size;
                     args.size = args.size.wrapping_add(1);
@@ -3311,10 +3263,10 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             }) as *const ::core::ffi::c_char
         }) as *mut ::core::ffi::c_char;
         result.is_set__cmd_ = (result.is_set__cmd_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd__cmd) as OptionalKeys;
+            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd__cmd)
+            as OptionalKeys;
         result.cmd = cstr_as_string(name);
-        if ea.argt & EX_RANGE as uint32_t != 0 && ea.addr_count > 0 as ::core::ffi::c_int
-        {
+        if ea.argt & EX_RANGE as uint32_t != 0 && ea.addr_count > 0 as ::core::ffi::c_int {
             let mut range: Array = arena_array(arena, 2 as size_t);
             if ea.addr_count > 1 as ::core::ffi::c_int {
                 let c2rust_fresh2 = range.size;
@@ -3410,40 +3362,31 @@ pub unsafe extern "C" fn nvim_parse_cmd(
         addr = ::core::ptr::null_mut::<::core::ffi::c_char>();
         match ea.addr_type as ::core::ffi::c_uint {
             0 => {
-                addr = b"line\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             2 => {
-                addr = b"arg\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"arg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             4 => {
-                addr = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             3 => {
-                addr = b"load\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"load\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             1 => {
-                addr = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             5 => {
-                addr = b"tab\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             8 => {
-                addr = b"qf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"qf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             11 => {
-                addr = b"none\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"none\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             _ => {
-                addr = b"?\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                addr = b"?\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
         }
         result.is_set__cmd_ = (result.is_set__cmd_ as ::core::ffi::c_ulonglong
@@ -3463,10 +3406,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
-                    string: arena_string(
-                        arena,
-                        cstr_as_string(cmdinfo.cmdmod.cmod_filter_pat),
-                    ),
+                    string: arena_string(arena, cstr_as_string(cmdinfo.cmdmod.cmod_filter_pat)),
                 },
             },
         };
@@ -3497,8 +3437,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_SILENT as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_SILENT as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3509,8 +3448,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_ERRSILENT as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3521,8 +3459,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_UNSILENT as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_UNSILENT as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3533,8 +3470,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_SANDBOX as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3545,8 +3481,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_NOAUTOCMD as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_NOAUTOCMD as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3557,8 +3492,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
-                    integer: (cmdinfo.cmdmod.cmod_tab - 1 as ::core::ffi::c_int)
-                        as Integer,
+                    integer: (cmdinfo.cmdmod.cmod_tab - 1 as ::core::ffi::c_int) as Integer,
                 },
             },
         };
@@ -3569,8 +3503,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
-                    integer: (cmdinfo.cmdmod.cmod_verbose - 1 as ::core::ffi::c_int)
-                        as Integer,
+                    integer: (cmdinfo.cmdmod.cmod_verbose - 1 as ::core::ffi::c_int) as Integer,
                 },
             },
         };
@@ -3581,8 +3514,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_BROWSE as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_BROWSE as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3593,8 +3525,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_CONFIRM as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3605,8 +3536,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_HIDE as ::core::ffi::c_int
-                        != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_HIDE as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3617,8 +3547,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_KEEPALT as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3629,8 +3558,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3641,22 +3569,19 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_KEEPMARKS as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_KEEPMARKS as ::core::ffi::c_int != 0,
                 },
             },
         };
         let c2rust_fresh20 = mods.size;
         mods.size = mods.size.wrapping_add(1);
         *mods.items.offset(c2rust_fresh20 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int
+                        != 0,
                 },
             },
         };
@@ -3667,8 +3592,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_LOCKMARKS as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3679,8 +3603,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_flags
-                        & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0,
+                    boolean: cmdinfo.cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3691,8 +3614,7 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_split & WSP_VERT as ::core::ffi::c_int
-                        != 0,
+                    boolean: cmdinfo.cmdmod.cmod_split & WSP_VERT as ::core::ffi::c_int != 0,
                 },
             },
         };
@@ -3703,27 +3625,24 @@ pub unsafe extern "C" fn nvim_parse_cmd(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed {
-                    boolean: cmdinfo.cmdmod.cmod_split & WSP_HOR as ::core::ffi::c_int
-                        != 0,
+                    boolean: cmdinfo.cmdmod.cmod_split & WSP_HOR as ::core::ffi::c_int != 0,
                 },
             },
         };
         split = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if cmdinfo.cmdmod.cmod_split & WSP_BOT as ::core::ffi::c_int != 0 {
-            split = b"botright\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            split =
+                b"botright\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if cmdinfo.cmdmod.cmod_split & WSP_TOP as ::core::ffi::c_int != 0 {
-            split = b"topleft\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            split = b"topleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if cmdinfo.cmdmod.cmod_split & WSP_BELOW as ::core::ffi::c_int != 0 {
-            split = b"belowright\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            split =
+                b"belowright\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if cmdinfo.cmdmod.cmod_split & WSP_ABOVE as ::core::ffi::c_int != 0 {
-            split = b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            split =
+                b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            split = b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            split = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         let c2rust_fresh25 = mods.size;
         mods.size = mods.size.wrapping_add(1);
@@ -3866,12 +3785,8 @@ pub unsafe extern "C" fn nvim_cmd(
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<CmdParseInfo>(),
     );
-    let mut cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut cmdname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut cmdname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut args: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -3888,12 +3803,13 @@ pub unsafe extern "C" fn nvim_cmd(
         {
             api_err_required(err, b"cmd\0".as_ptr() as *const ::core::ffi::c_char);
         } else {
-            if *(*cmd).cmd.data.offset(0 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int == NUL
+            if *(*cmd).cmd.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                == NUL
             {
                 if !((*cmd).is_set__cmd_ as ::core::ffi::c_ulonglong
                     & (1 as ::core::ffi::c_ulonglong) << 10 as ::core::ffi::c_int
-                    != 0 as ::core::ffi::c_ulonglong && (*cmd).range.size > 0 as size_t
+                    != 0 as ::core::ffi::c_ulonglong
+                    && (*cmd).range.size > 0 as size_t
                     || (*cmd).is_set__cmd_ as ::core::ffi::c_ulonglong
                         & (1 as ::core::ffi::c_ulonglong) << 5 as ::core::ffi::c_int
                         != 0 as ::core::ffi::c_ulonglong)
@@ -3909,10 +3825,7 @@ pub unsafe extern "C" fn nvim_cmd(
             }
             cmdname = arena_string(arena, (*cmd).cmd).data;
             ea.cmd = cmdname;
-            p = find_ex_command(
-                &raw mut ea,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            );
+            p = find_ex_command(&raw mut ea, ::core::ptr::null_mut::<::core::ffi::c_int>());
             if !p.is_null()
                 && ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
                 && (*ea.cmd as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
@@ -3928,24 +3841,21 @@ pub unsafe extern "C" fn nvim_cmd(
                     ::core::ptr::null_mut::<buf_T>(),
                 ) as ::core::ffi::c_int;
                 p = if ret != 0 && !aborting() {
-                    find_ex_command(
-                        &raw mut ea,
-                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                    )
+                    find_ex_command(&raw mut ea, ::core::ptr::null_mut::<::core::ffi::c_int>())
                 } else {
                     ea.cmd
                 };
             }
-            range_only = ea.cmdidx as ::core::ffi::c_int
-                == CMD_SIZE as ::core::ffi::c_int
-                && *(*cmd).cmd.data.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == NUL
+            range_only = ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
+                && *(*cmd).cmd.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == NUL
                 && (*cmd).is_set__cmd_ as ::core::ffi::c_ulonglong
                     & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd__range
-                    != 0 as ::core::ffi::c_ulonglong && (*cmd).range.size > 0 as size_t;
+                    != 0 as ::core::ffi::c_ulonglong
+                && (*cmd).range.size > 0 as size_t;
             if !(ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
-                && *(*cmd).cmd.data.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == NUL
+                && *(*cmd).cmd.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == NUL
                 && (!((*cmd).is_set__cmd_ as ::core::ffi::c_ulonglong
                     & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd__range
                     != 0 as ::core::ffi::c_ulonglong)
@@ -3961,43 +3871,33 @@ pub unsafe extern "C" fn nvim_cmd(
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"Command not found: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"Command not found: %s\0".as_ptr() as *const ::core::ffi::c_char,
                         cmdname,
                     );
-                } else if !(range_only as ::core::ffi::c_int != 0
-                    || !is_cmd_ni(ea.cmdidx))
-                {
+                } else if !(range_only as ::core::ffi::c_int != 0 || !is_cmd_ni(ea.cmdidx)) {
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"Command not implemented: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"Command not implemented: %s\0".as_ptr() as *const ::core::ffi::c_char,
                         cmdname,
                     );
                 } else {
                     if !range_only {
-                        let mut fullname: *const ::core::ffi::c_char = if (ea.cmdidx
-                            as ::core::ffi::c_int) < 0 as ::core::ffi::c_int
-                        {
-                            get_user_command_name(
-                                ea.useridx,
-                                ea.cmdidx as ::core::ffi::c_int,
-                            )
-                        } else {
-                            get_command_name(
-                                ::core::ptr::null_mut::<expand_T>(),
-                                ea.cmdidx as ::core::ffi::c_int,
-                            )
-                        };
-                        if !(strncmp(fullname, cmdname, strlen(cmdname))
-                            == 0 as ::core::ffi::c_int)
+                        let mut fullname: *const ::core::ffi::c_char =
+                            if (ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
+                                get_user_command_name(ea.useridx, ea.cmdidx as ::core::ffi::c_int)
+                            } else {
+                                get_command_name(
+                                    ::core::ptr::null_mut::<expand_T>(),
+                                    ea.cmdidx as ::core::ffi::c_int,
+                                )
+                            };
+                        if !(strncmp(fullname, cmdname, strlen(cmdname)) == 0 as ::core::ffi::c_int)
                         {
                             api_set_error(
                                 err,
                                 kErrorTypeValidation,
-                                b"Invalid command: \"%s\"\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"Invalid command: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
                                 cmdname,
                             );
                             break '_end;
@@ -4005,9 +3905,7 @@ pub unsafe extern "C" fn nvim_cmd(
                     }
                     if range_only {
                         ea.argt = (EX_RANGE | EX_SBOXOK) as uint32_t;
-                    } else if !((ea.cmdidx as ::core::ffi::c_int)
-                        < 0 as ::core::ffi::c_int)
-                    {
+                    } else if !((ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
                         ea.argt = excmd_get_argt(ea.cmdidx);
                     }
                     count_from_first_arg = false_0 != 0;
@@ -4019,40 +3917,33 @@ pub unsafe extern "C" fn nvim_cmd(
                             && ea.argt & EX_COUNT as uint32_t != 0
                             && ea.argt & EX_EXTRA as uint32_t == 0
                         {
-                            let mut first_arg: Object = *(*cmd)
-                                .args
-                                .items
-                                .offset(0 as ::core::ffi::c_int as isize);
+                            let mut first_arg: Object =
+                                *(*cmd).args.items.offset(0 as ::core::ffi::c_int as isize);
                             let mut is_numeric: bool = false_0 != 0;
                             let mut count_value: int64_t = 0 as int64_t;
                             if first_arg.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeInteger as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 is_numeric = true_0 != 0;
                                 count_value = first_arg.data.integer as int64_t;
                             } else if first_arg.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeString as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
-                                let mut endptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                                    ::core::ffi::c_char,
-                                >();
+                                let mut endptr: *mut ::core::ffi::c_char =
+                                    ::core::ptr::null_mut::<::core::ffi::c_char>();
                                 let mut val: ::core::ffi::c_long = strtol(
                                     first_arg.data.string.data,
                                     &raw mut endptr,
                                     10 as ::core::ffi::c_int,
                                 );
-                                if *endptr as ::core::ffi::c_int
-                                    == '\0' as ::core::ffi::c_int
+                                if *endptr as ::core::ffi::c_int == '\0' as ::core::ffi::c_int
                                     && first_arg.data.string.size > 0 as size_t
                                 {
                                     is_numeric = true_0 != 0;
                                     count_value = val as int64_t;
                                 }
                             }
-                            if is_numeric as ::core::ffi::c_int != 0
-                                && count_value >= 0 as int64_t
+                            if is_numeric as ::core::ffi::c_int != 0 && count_value >= 0 as int64_t
                             {
                                 count_from_first_arg = true_0 != 0;
                                 ea.addr_count = 1 as ::core::ffi::c_int;
@@ -4065,27 +3956,22 @@ pub unsafe extern "C" fn nvim_cmd(
                             args = arena_array(arena, (*cmd).args.size);
                             let mut i: size_t = 0 as size_t;
                             while i < (*cmd).args.size {
-                                let mut elem: Object = *(*cmd)
-                                    .args
-                                    .items
-                                    .offset(i as isize);
-                                let mut data_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                                    ::core::ffi::c_char,
-                                >();
+                                let mut elem: Object = *(*cmd).args.items.offset(i as isize);
+                                let mut data_str: *mut ::core::ffi::c_char =
+                                    ::core::ptr::null_mut::<::core::ffi::c_char>();
                                 match elem.type_0 as ::core::ffi::c_uint {
                                     1 => {
                                         data_str = arena_alloc(arena, 2 as size_t, false_0 != 0)
                                             as *mut ::core::ffi::c_char;
-                                        *data_str.offset(0 as ::core::ffi::c_int as isize) = (if elem
-                                            .data
-                                            .boolean as ::core::ffi::c_int != 0
-                                        {
-                                            '1' as ::core::ffi::c_int
-                                        } else {
-                                            '0' as ::core::ffi::c_int
-                                        }) as ::core::ffi::c_char;
-                                        *data_str.offset(1 as ::core::ffi::c_int as isize) = NUL
-                                            as ::core::ffi::c_char;
+                                        *data_str.offset(0 as ::core::ffi::c_int as isize) =
+                                            (if elem.data.boolean as ::core::ffi::c_int != 0 {
+                                                '1' as ::core::ffi::c_int
+                                            } else {
+                                                '0' as ::core::ffi::c_int
+                                            })
+                                                as ::core::ffi::c_char;
+                                        *data_str.offset(1 as ::core::ffi::c_int as isize) =
+                                            NUL as ::core::ffi::c_char;
                                         let c2rust_fresh30 = args.size;
                                         args.size = args.size.wrapping_add(1);
                                         *args.items.offset(c2rust_fresh30 as isize) = object {
@@ -4100,7 +3986,8 @@ pub unsafe extern "C" fn nvim_cmd(
                                             arena,
                                             NUMBUFLEN as ::core::ffi::c_int as size_t,
                                             false_0 != 0,
-                                        ) as *mut ::core::ffi::c_char;
+                                        )
+                                            as *mut ::core::ffi::c_char;
                                         snprintf(
                                             data_str,
                                             NUMBUFLEN as ::core::ffi::c_int as size_t,
@@ -4120,8 +4007,10 @@ pub unsafe extern "C" fn nvim_cmd(
                                         if string_iswhite(elem.data.string) {
                                             api_err_exp(
                                                 err,
-                                                b"command arg\0".as_ptr() as *const ::core::ffi::c_char,
-                                                b"non-whitespace\0".as_ptr() as *const ::core::ffi::c_char,
+                                                b"command arg\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
+                                                b"non-whitespace\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                                 ::core::ptr::null::<::core::ffi::c_char>(),
                                             );
                                             break '_end;
@@ -4135,8 +4024,10 @@ pub unsafe extern "C" fn nvim_cmd(
                                         if true {
                                             api_err_exp(
                                                 err,
-                                                b"command arg\0".as_ptr() as *const ::core::ffi::c_char,
-                                                b"valid type\0".as_ptr() as *const ::core::ffi::c_char,
+                                                b"command arg\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
+                                                b"valid type\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                                 api_typename(elem.type_0),
                                             );
                                             break '_end;
@@ -4147,7 +4038,8 @@ pub unsafe extern "C" fn nvim_cmd(
                             }
                             let mut argc_valid: bool = false;
                             match ea.argt
-                                & (EX_EXTRA as uint32_t | EX_NOSPC as uint32_t
+                                & (EX_EXTRA as uint32_t
+                                    | EX_NOSPC as uint32_t
                                     | EX_NEEDARG as uint32_t)
                             {
                                 148 => {
@@ -4237,16 +4129,14 @@ pub unsafe extern "C" fn nvim_cmd(
                                 }
                             }
                             if range.size > 0 as size_t {
-                                ea.line1 = (*range
-                                    .items
-                                    .offset(0 as ::core::ffi::c_int as isize))
+                                ea.line1 = (*range.items.offset(0 as ::core::ffi::c_int as isize))
                                     .data
                                     .integer as linenr_T;
                                 ea.line2 = (*range
                                     .items
                                     .offset(range.size.wrapping_sub(1 as size_t) as isize))
-                                    .data
-                                    .integer as linenr_T;
+                                .data
+                                .integer as linenr_T;
                             }
                             if !invalid_range(&raw mut ea).is_null() {
                                 api_err_invalid(
@@ -4282,8 +4172,8 @@ pub unsafe extern "C" fn nvim_cmd(
                                 err,
                                 kErrorTypeValidation,
                                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"Cannot specify both 'count' and numeric argument\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"Cannot specify both 'count' and numeric argument\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                             break '_end;
                         } else if ea.argt & 0x400 as uint32_t == 0 {
@@ -4300,17 +4190,12 @@ pub unsafe extern "C" fn nvim_cmd(
                             api_err_exp(
                                 err,
                                 b"count\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"non-negative Integer\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"non-negative Integer\0".as_ptr() as *const ::core::ffi::c_char,
                                 ::core::ptr::null::<::core::ffi::c_char>(),
                             );
                             break '_end;
                         } else {
-                            set_cmd_count(
-                                &raw mut ea,
-                                (*cmd).count as linenr_T,
-                                true_0 != 0,
-                            );
+                            set_cmd_count(&raw mut ea, (*cmd).count as linenr_T, true_0 != 0);
                         }
                     }
                     if (*cmd).is_set__cmd_ as ::core::ffi::c_ulonglong
@@ -4331,19 +4216,14 @@ pub unsafe extern "C" fn nvim_cmd(
                             api_err_exp(
                                 err,
                                 b"reg\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"single character\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"single character\0".as_ptr() as *const ::core::ffi::c_char,
                                 (*cmd).reg.data,
                             );
                             break '_end;
                         } else {
-                            let mut regname: ::core::ffi::c_char = *(*cmd)
-                                .reg
-                                .data
-                                .offset(0 as ::core::ffi::c_int as isize);
-                            if !(regname as ::core::ffi::c_int
-                                != '=' as ::core::ffi::c_int)
-                            {
+                            let mut regname: ::core::ffi::c_char =
+                                *(*cmd).reg.data.offset(0 as ::core::ffi::c_int as isize);
+                            if !(regname as ::core::ffi::c_int != '=' as ::core::ffi::c_int) {
                                 api_set_error(
                                     err,
                                     kErrorTypeValidation,
@@ -4354,8 +4234,7 @@ pub unsafe extern "C" fn nvim_cmd(
                                 break '_end;
                             } else if !valid_yank_reg(
                                 regname as ::core::ffi::c_int,
-                                !((ea.cmdidx as ::core::ffi::c_int)
-                                    < 0 as ::core::ffi::c_int)
+                                !((ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
                                     && ea.cmdidx as ::core::ffi::c_int
                                         != CMD_put as ::core::ffi::c_int
                                     && ea.cmdidx as ::core::ffi::c_int
@@ -4389,13 +4268,11 @@ pub unsafe extern "C" fn nvim_cmd(
                             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd__magic
                             != 0 as ::core::ffi::c_ulonglong
                         {
-                            let mut magic: [KeyDict_cmd_magic; 1] = [
-                                KeyDict_cmd_magic {
-                                    is_set__cmd_magic_: 0 as OptionalKeys,
-                                    file: false,
-                                    bar: false,
-                                },
-                            ];
+                            let mut magic: [KeyDict_cmd_magic; 1] = [KeyDict_cmd_magic {
+                                is_set__cmd_magic_: 0 as OptionalKeys,
+                                file: false,
+                                bar: false,
+                            }];
                             if !api_dict_to_keydict(
                                 &raw mut magic as *mut KeyDict_cmd_magic
                                     as *mut ::core::ffi::c_void,
@@ -4404,7 +4281,8 @@ pub unsafe extern "C" fn nvim_cmd(
                                         as unsafe extern "C" fn(
                                             *const ::core::ffi::c_char,
                                             size_t,
-                                        ) -> *mut KeySetLink,
+                                        )
+                                            -> *mut KeySetLink,
                                 ),
                                 (*cmd).magic,
                                 err,
@@ -4413,34 +4291,33 @@ pub unsafe extern "C" fn nvim_cmd(
                             } else {
                                 cmdinfo.magic.file = if (*(&raw mut magic
                                     as *mut KeyDict_cmd_magic))
-                                    .is_set__cmd_magic_ as ::core::ffi::c_ulonglong
+                                    .is_set__cmd_magic_
+                                    as ::core::ffi::c_ulonglong
                                     & (1 as ::core::ffi::c_ulonglong)
                                         << KEYSET_OPTIDX_cmd_magic__file
                                     != 0 as ::core::ffi::c_ulonglong
                                 {
-                                    (*(&raw mut magic as *mut KeyDict_cmd_magic)).file
-                                        as uint32_t
+                                    (*(&raw mut magic as *mut KeyDict_cmd_magic)).file as uint32_t
                                 } else {
                                     ea.argt & EX_XFILE as uint32_t
                                 } != 0;
-                                cmdinfo.magic.bar = if (*(&raw mut magic
-                                    as *mut KeyDict_cmd_magic))
-                                    .is_set__cmd_magic_ as ::core::ffi::c_ulonglong
+                                cmdinfo.magic.bar = if (*(&raw mut magic as *mut KeyDict_cmd_magic))
+                                    .is_set__cmd_magic_
+                                    as ::core::ffi::c_ulonglong
                                     & (1 as ::core::ffi::c_ulonglong)
                                         << KEYSET_OPTIDX_cmd_magic__bar
                                     != 0 as ::core::ffi::c_ulonglong
                                 {
-                                    (*(&raw mut magic as *mut KeyDict_cmd_magic)).bar
-                                        as uint32_t
+                                    (*(&raw mut magic as *mut KeyDict_cmd_magic)).bar as uint32_t
                                 } else {
                                     ea.argt & EX_TRLBAR as uint32_t
                                 } != 0;
                                 if cmdinfo.magic.file {
-                                    ea.argt = (ea.argt as ::core::ffi::c_uint | EX_XFILE)
-                                        as uint32_t;
+                                    ea.argt =
+                                        (ea.argt as ::core::ffi::c_uint | EX_XFILE) as uint32_t;
                                 } else {
-                                    ea.argt = (ea.argt as ::core::ffi::c_uint & !EX_XFILE)
-                                        as uint32_t;
+                                    ea.argt =
+                                        (ea.argt as ::core::ffi::c_uint & !EX_XFILE) as uint32_t;
                                 }
                             }
                         } else {
@@ -4451,69 +4328,67 @@ pub unsafe extern "C" fn nvim_cmd(
                             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd__mods
                             != 0 as ::core::ffi::c_ulonglong
                         {
-                            let mut mods: [KeyDict_cmd_mods; 1] = [
-                                KeyDict_cmd_mods {
-                                    is_set__cmd_mods_: 0 as OptionalKeys,
-                                    silent: false,
-                                    emsg_silent: false,
-                                    unsilent: false,
-                                    filter: Dict {
-                                        size: 0,
-                                        capacity: 0,
-                                        items: ::core::ptr::null_mut::<KeyValuePair>(),
-                                    },
-                                    sandbox: false,
-                                    noautocmd: false,
-                                    browse: false,
-                                    confirm: false,
-                                    hide: false,
-                                    horizontal: false,
-                                    keepalt: false,
-                                    keepjumps: false,
-                                    keepmarks: false,
-                                    keeppatterns: false,
-                                    lockmarks: false,
-                                    noswapfile: false,
-                                    tab: 0,
-                                    verbose: 0,
-                                    vertical: false,
-                                    split: String_0 {
-                                        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                        size: 0,
-                                    },
+                            let mut mods: [KeyDict_cmd_mods; 1] = [KeyDict_cmd_mods {
+                                is_set__cmd_mods_: 0 as OptionalKeys,
+                                silent: false,
+                                emsg_silent: false,
+                                unsilent: false,
+                                filter: Dict {
+                                    size: 0,
+                                    capacity: 0,
+                                    items: ::core::ptr::null_mut::<KeyValuePair>(),
                                 },
-                            ];
+                                sandbox: false,
+                                noautocmd: false,
+                                browse: false,
+                                confirm: false,
+                                hide: false,
+                                horizontal: false,
+                                keepalt: false,
+                                keepjumps: false,
+                                keepmarks: false,
+                                keeppatterns: false,
+                                lockmarks: false,
+                                noswapfile: false,
+                                tab: 0,
+                                verbose: 0,
+                                vertical: false,
+                                split: String_0 {
+                                    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                                    size: 0,
+                                },
+                            }];
                             if !api_dict_to_keydict(
-                                &raw mut mods as *mut KeyDict_cmd_mods
-                                    as *mut ::core::ffi::c_void,
+                                &raw mut mods as *mut KeyDict_cmd_mods as *mut ::core::ffi::c_void,
                                 Some(
                                     KeyDict_cmd_mods_get_field
                                         as unsafe extern "C" fn(
                                             *const ::core::ffi::c_char,
                                             size_t,
-                                        ) -> *mut KeySetLink,
+                                        )
+                                            -> *mut KeySetLink,
                                 ),
                                 (*cmd).mods,
                                 err,
                             ) {
                                 break '_end;
                             } else {
-                                if (*(&raw mut mods as *mut KeyDict_cmd_mods))
-                                    .is_set__cmd_mods_ as ::core::ffi::c_ulonglong
+                                if (*(&raw mut mods as *mut KeyDict_cmd_mods)).is_set__cmd_mods_
+                                    as ::core::ffi::c_ulonglong
                                     & (1 as ::core::ffi::c_ulonglong)
                                         << KEYSET_OPTIDX_cmd_mods__filter
                                     != 0 as ::core::ffi::c_ulonglong
                                 {
-                                    let mut filter: [KeyDict_cmd_mods_filter; 1] = [
-                                        KeyDict_cmd_mods_filter {
+                                    let mut filter: [KeyDict_cmd_mods_filter; 1] =
+                                        [KeyDict_cmd_mods_filter {
                                             is_set__cmd_mods_filter_: 0 as OptionalKeys,
                                             pattern: String_0 {
-                                                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                                                data: ::core::ptr::null_mut::<::core::ffi::c_char>(
+                                                ),
                                                 size: 0,
                                             },
                                             force: false,
-                                        },
-                                    ];
+                                        }];
                                     if !api_dict_to_keydict(
                                         &raw mut filter as *mut ::core::ffi::c_void,
                                         Some(
@@ -4521,129 +4396,152 @@ pub unsafe extern "C" fn nvim_cmd(
                                                 as unsafe extern "C" fn(
                                                     *const ::core::ffi::c_char,
                                                     size_t,
-                                                ) -> *mut KeySetLink,
+                                                )
+                                                    -> *mut KeySetLink,
                                         ),
                                         (*(&raw mut mods as *mut KeyDict_cmd_mods)).filter,
                                         err,
                                     ) {
                                         break '_end;
-                                    } else if (*(&raw mut filter
-                                        as *mut KeyDict_cmd_mods_filter))
-                                        .is_set__cmd_mods_filter_ as ::core::ffi::c_ulonglong
+                                    } else if (*(&raw mut filter as *mut KeyDict_cmd_mods_filter))
+                                        .is_set__cmd_mods_filter_
+                                        as ::core::ffi::c_ulonglong
                                         & (1 as ::core::ffi::c_ulonglong)
                                             << KEYSET_OPTIDX_cmd_mods_filter__pattern
                                         != 0 as ::core::ffi::c_ulonglong
                                     {
                                         cmdinfo.cmdmod.cmod_filter_force = (*(&raw mut filter
                                             as *mut KeyDict_cmd_mods_filter))
-                                            .force as bool;
+                                            .force
+                                            as bool;
                                         if *(*(&raw mut filter as *mut KeyDict_cmd_mods_filter))
                                             .pattern
-                                            .data as ::core::ffi::c_int != NUL
-                                            || cmdinfo.cmdmod.cmod_filter_force as ::core::ffi::c_int
+                                            .data
+                                            as ::core::ffi::c_int
+                                            != NUL
+                                            || cmdinfo.cmdmod.cmod_filter_force
+                                                as ::core::ffi::c_int
                                                 != 0
                                         {
                                             cmdinfo.cmdmod.cmod_filter_pat = string_to_cstr(
-                                                (*(&raw mut filter as *mut KeyDict_cmd_mods_filter)).pattern,
+                                                (*(&raw mut filter
+                                                    as *mut KeyDict_cmd_mods_filter))
+                                                    .pattern,
                                             );
-                                            cmdinfo.cmdmod.cmod_filter_regmatch.regprog = vim_regcomp(
-                                                cmdinfo.cmdmod.cmod_filter_pat,
-                                                RE_MAGIC,
-                                            );
+                                            cmdinfo.cmdmod.cmod_filter_regmatch.regprog =
+                                                vim_regcomp(
+                                                    cmdinfo.cmdmod.cmod_filter_pat,
+                                                    RE_MAGIC,
+                                                );
                                         }
                                     }
                                 }
-                                if (*(&raw mut mods as *mut KeyDict_cmd_mods))
-                                    .is_set__cmd_mods_ as ::core::ffi::c_ulonglong
-                                    & (1 as ::core::ffi::c_ulonglong)
-                                        << KEYSET_OPTIDX_cmd_mods__tab
+                                if (*(&raw mut mods as *mut KeyDict_cmd_mods)).is_set__cmd_mods_
+                                    as ::core::ffi::c_ulonglong
+                                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_cmd_mods__tab
                                     != 0 as ::core::ffi::c_ulonglong
                                 {
                                     if (*(&raw mut mods as *mut KeyDict_cmd_mods)).tab
-                                        as ::core::ffi::c_int >= 0 as ::core::ffi::c_int
+                                        as ::core::ffi::c_int
+                                        >= 0 as ::core::ffi::c_int
                                     {
-                                        cmdinfo.cmdmod.cmod_tab = (*(&raw mut mods
-                                            as *mut KeyDict_cmd_mods))
-                                            .tab as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+                                        cmdinfo.cmdmod.cmod_tab =
+                                            (*(&raw mut mods as *mut KeyDict_cmd_mods)).tab
+                                                as ::core::ffi::c_int
+                                                + 1 as ::core::ffi::c_int;
                                     }
                                 }
-                                if (*(&raw mut mods as *mut KeyDict_cmd_mods))
-                                    .is_set__cmd_mods_ as ::core::ffi::c_ulonglong
+                                if (*(&raw mut mods as *mut KeyDict_cmd_mods)).is_set__cmd_mods_
+                                    as ::core::ffi::c_ulonglong
                                     & (1 as ::core::ffi::c_ulonglong)
                                         << KEYSET_OPTIDX_cmd_mods__verbose
                                     != 0 as ::core::ffi::c_ulonglong
                                 {
                                     if (*(&raw mut mods as *mut KeyDict_cmd_mods)).verbose
-                                        as ::core::ffi::c_int >= 0 as ::core::ffi::c_int
+                                        as ::core::ffi::c_int
+                                        >= 0 as ::core::ffi::c_int
                                     {
-                                        cmdinfo.cmdmod.cmod_verbose = (*(&raw mut mods
-                                            as *mut KeyDict_cmd_mods))
-                                            .verbose as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+                                        cmdinfo.cmdmod.cmod_verbose =
+                                            (*(&raw mut mods as *mut KeyDict_cmd_mods)).verbose
+                                                as ::core::ffi::c_int
+                                                + 1 as ::core::ffi::c_int;
                                     }
                                 }
-                                cmdinfo.cmdmod.cmod_split
-                                    |= if (*(&raw mut mods as *mut KeyDict_cmd_mods)).vertical
-                                        as ::core::ffi::c_int != 0
+                                cmdinfo.cmdmod.cmod_split |=
+                                    if (*(&raw mut mods as *mut KeyDict_cmd_mods)).vertical
+                                        as ::core::ffi::c_int
+                                        != 0
                                     {
                                         WSP_VERT as ::core::ffi::c_int
                                     } else {
                                         0 as ::core::ffi::c_int
                                     };
-                                cmdinfo.cmdmod.cmod_split
-                                    |= if (*(&raw mut mods as *mut KeyDict_cmd_mods)).horizontal
-                                        as ::core::ffi::c_int != 0
+                                cmdinfo.cmdmod.cmod_split |=
+                                    if (*(&raw mut mods as *mut KeyDict_cmd_mods)).horizontal
+                                        as ::core::ffi::c_int
+                                        != 0
                                     {
                                         WSP_HOR as ::core::ffi::c_int
                                     } else {
                                         0 as ::core::ffi::c_int
                                     };
-                                if (*(&raw mut mods as *mut KeyDict_cmd_mods))
-                                    .is_set__cmd_mods_ as ::core::ffi::c_ulonglong
+                                if (*(&raw mut mods as *mut KeyDict_cmd_mods)).is_set__cmd_mods_
+                                    as ::core::ffi::c_ulonglong
                                     & (1 as ::core::ffi::c_ulonglong)
                                         << KEYSET_OPTIDX_cmd_mods__split
                                     != 0 as ::core::ffi::c_ulonglong
                                 {
                                     if *(*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data
-                                        as ::core::ffi::c_int != NUL
+                                        as ::core::ffi::c_int
+                                        != NUL
                                     {
                                         if strcmp(
                                             (*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data,
                                             b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char,
                                         ) == 0 as ::core::ffi::c_int
                                             || strcmp(
-                                                (*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data,
-                                                b"leftabove\0".as_ptr() as *const ::core::ffi::c_char,
+                                                (*(&raw mut mods as *mut KeyDict_cmd_mods))
+                                                    .split
+                                                    .data,
+                                                b"leftabove\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                             ) == 0 as ::core::ffi::c_int
                                         {
-                                            cmdinfo.cmdmod.cmod_split
-                                                |= WSP_ABOVE as ::core::ffi::c_int;
+                                            cmdinfo.cmdmod.cmod_split |=
+                                                WSP_ABOVE as ::core::ffi::c_int;
                                         } else if strcmp(
                                             (*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data,
                                             b"belowright\0".as_ptr() as *const ::core::ffi::c_char,
                                         ) == 0 as ::core::ffi::c_int
                                             || strcmp(
-                                                (*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data,
-                                                b"rightbelow\0".as_ptr() as *const ::core::ffi::c_char,
+                                                (*(&raw mut mods as *mut KeyDict_cmd_mods))
+                                                    .split
+                                                    .data,
+                                                b"rightbelow\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                             ) == 0 as ::core::ffi::c_int
                                         {
-                                            cmdinfo.cmdmod.cmod_split
-                                                |= WSP_BELOW as ::core::ffi::c_int;
+                                            cmdinfo.cmdmod.cmod_split |=
+                                                WSP_BELOW as ::core::ffi::c_int;
                                         } else if strcmp(
                                             (*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data,
                                             b"topleft\0".as_ptr() as *const ::core::ffi::c_char,
                                         ) == 0 as ::core::ffi::c_int
                                         {
-                                            cmdinfo.cmdmod.cmod_split |= WSP_TOP as ::core::ffi::c_int;
+                                            cmdinfo.cmdmod.cmod_split |=
+                                                WSP_TOP as ::core::ffi::c_int;
                                         } else if strcmp(
                                             (*(&raw mut mods as *mut KeyDict_cmd_mods)).split.data,
                                             b"botright\0".as_ptr() as *const ::core::ffi::c_char,
                                         ) == 0 as ::core::ffi::c_int
                                         {
-                                            cmdinfo.cmdmod.cmod_split |= WSP_BOT as ::core::ffi::c_int;
+                                            cmdinfo.cmdmod.cmod_split |=
+                                                WSP_BOT as ::core::ffi::c_int;
                                         } else if true {
                                             api_err_invalid(
                                                 err,
-                                                b"mods.split\0".as_ptr() as *const ::core::ffi::c_char,
+                                                b"mods.split\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
                                                 b"\0".as_ptr() as *const ::core::ffi::c_char,
                                                 0 as int64_t,
                                                 true_0 != 0,
@@ -4653,70 +4551,62 @@ pub unsafe extern "C" fn nvim_cmd(
                                     }
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).silent {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_SILENT as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_SILENT as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).emsg_silent {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_ERRSILENT as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_ERRSILENT as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).unsilent {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_UNSILENT as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_UNSILENT as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).sandbox {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_SANDBOX as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_SANDBOX as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).noautocmd {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_NOAUTOCMD as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_NOAUTOCMD as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).browse {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_BROWSE as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_BROWSE as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).confirm {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_CONFIRM as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_CONFIRM as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).hide {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_HIDE as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_HIDE as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).keepalt {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_KEEPALT as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_KEEPALT as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).keepjumps {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_KEEPJUMPS as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_KEEPJUMPS as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).keepmarks {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_KEEPMARKS as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_KEEPMARKS as ::core::ffi::c_int;
                                 }
-                                if (*(&raw mut mods as *mut KeyDict_cmd_mods)).keeppatterns
-                                {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_KEEPPATTERNS as ::core::ffi::c_int;
+                                if (*(&raw mut mods as *mut KeyDict_cmd_mods)).keeppatterns {
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_KEEPPATTERNS as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).lockmarks {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_LOCKMARKS as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_LOCKMARKS as ::core::ffi::c_int;
                                 }
                                 if (*(&raw mut mods as *mut KeyDict_cmd_mods)).noswapfile {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_NOSWAPFILE as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |=
+                                        CMOD_NOSWAPFILE as ::core::ffi::c_int;
                                 }
-                                if cmdinfo.cmdmod.cmod_flags
-                                    & CMOD_ERRSILENT as ::core::ffi::c_int != 0
+                                if cmdinfo.cmdmod.cmod_flags & CMOD_ERRSILENT as ::core::ffi::c_int
+                                    != 0
                                 {
-                                    cmdinfo.cmdmod.cmod_flags
-                                        |= CMOD_SILENT as ::core::ffi::c_int;
+                                    cmdinfo.cmdmod.cmod_flags |= CMOD_SILENT as ::core::ffi::c_int;
                                 }
-                                if cmdinfo.cmdmod.cmod_flags
-                                    & CMOD_SANDBOX as ::core::ffi::c_int != 0
+                                if cmdinfo.cmdmod.cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int
+                                    != 0
                                     && ea.argt & 0x40000 as uint32_t == 0
                                 {
                                     api_set_error(
@@ -4730,20 +4620,17 @@ pub unsafe extern "C" fn nvim_cmd(
                                 }
                             }
                         }
-                        build_cmdline_str(
-                            &raw mut cmdline,
-                            &raw mut ea,
-                            &raw mut cmdinfo,
-                            args,
-                        );
+                        build_cmdline_str(&raw mut cmdline, &raw mut ea, &raw mut cmdinfo, args);
                         ea.cmdlinep = &raw mut cmdline;
                         's_1442: {
                             if ea.argt & EX_ARGOPT as uint32_t != 0 {
                                 loop {
                                     if !(*ea.arg.offset(0 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int == '+' as ::core::ffi::c_int
+                                        as ::core::ffi::c_int
+                                        == '+' as ::core::ffi::c_int
                                         && *ea.arg.offset(1 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == '+' as ::core::ffi::c_int)
+                                            as ::core::ffi::c_int
+                                            == '+' as ::core::ffi::c_int)
                                     {
                                         break 's_1442;
                                     }
@@ -4826,7 +4713,8 @@ pub unsafe extern "C" fn nvim_cmd(
                                     },
                                 );
                                 if *retv.data.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == '\n' as ::core::ffi::c_int
                                 {
                                     retv.data = retv.data.offset(1);
                                     retv.size = retv.size.wrapping_sub(1);
@@ -4850,7 +4738,7 @@ unsafe extern "C" fn string_iswhite(mut str: String_0) -> bool {
     let mut i: size_t = 0 as size_t;
     while i < str.size {
         if !ascii_iswhite(*str.data.offset(i as isize) as ::core::ffi::c_int) {
-            return false_0 != 0
+            return false_0 != 0;
         } else {
             if *str.data.offset(i as isize) as ::core::ffi::c_int == NUL {
                 break;
@@ -4896,15 +4784,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -4915,16 +4799,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         852 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -4932,33 +4816,24 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"silent! \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"silent! \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"silent! \0".as_ptr() as *const ::core::ffi::c_char));
         }
     } else if (*cmdinfo).cmdmod.cmod_flags & CMOD_SILENT as ::core::ffi::c_int != 0 {
         if strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -4969,16 +4844,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_0: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         854 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -4986,18 +4861,13 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"silent \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"silent \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"silent \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_UNSILENT as ::core::ffi::c_int != 0 {
@@ -5005,15 +4875,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5024,16 +4890,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_1: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         858 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5041,44 +4907,31 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"unsilent \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"unsilent \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"unsilent \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     match (*cmdinfo).cmdmod.cmod_split
-        & (WSP_ABOVE as ::core::ffi::c_int | WSP_BELOW as ::core::ffi::c_int
-            | WSP_TOP as ::core::ffi::c_int | WSP_BOT as ::core::ffi::c_int)
+        & (WSP_ABOVE as ::core::ffi::c_int
+            | WSP_BELOW as ::core::ffi::c_int
+            | WSP_TOP as ::core::ffi::c_int
+            | WSP_BOT as ::core::ffi::c_int)
     {
         128 => {
-            if strlen(b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char)
-                > 0 as size_t
-            {
+            if strlen(b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
                 if cmdline.capacity
-                    < cmdline
-                        .size
-                        .wrapping_add(
-                            strlen(
-                                b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
-                        )
+                    < cmdline.size.wrapping_add(strlen(
+                        b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
+                    ))
                 {
-                    cmdline.capacity = cmdline
-                        .size
-                        .wrapping_add(
-                            strlen(
-                                b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
-                        );
+                    cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                        b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
+                    ));
                     cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                     cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5094,7 +4947,8 @@ unsafe extern "C" fn build_cmdline_str(
                     ) as *mut ::core::ffi::c_char;
                 }
                 '_c2rust_label_2: {
-                    if !cmdline.items.is_null() {} else {
+                    if !cmdline.items.is_null() {
+                    } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
@@ -5105,44 +4959,28 @@ unsafe extern "C" fn build_cmdline_str(
                     }
                 };
                 memcpy(
-                    cmdline.items.offset(cmdline.size as isize)
-                        as *mut ::core::ffi::c_void,
+                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                     b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
                         as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(
-                            strlen(
-                                b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
-                        ),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                        b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char,
+                    )),
                 );
-                cmdline.size = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.size = cmdline.size.wrapping_add(strlen(
+                    b"aboveleft \0".as_ptr() as *const ::core::ffi::c_char
+                ));
             }
         }
         64 => {
-            if strlen(b"belowright \0".as_ptr() as *const ::core::ffi::c_char)
-                > 0 as size_t
-            {
+            if strlen(b"belowright \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
                 if cmdline.capacity
-                    < cmdline
-                        .size
-                        .wrapping_add(
-                            strlen(
-                                b"belowright \0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
-                        )
+                    < cmdline.size.wrapping_add(strlen(
+                        b"belowright \0".as_ptr() as *const ::core::ffi::c_char
+                    ))
                 {
-                    cmdline.capacity = cmdline
-                        .size
-                        .wrapping_add(
-                            strlen(
-                                b"belowright \0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
-                        );
+                    cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                        b"belowright \0".as_ptr() as *const ::core::ffi::c_char
+                    ));
                     cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                     cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5158,7 +4996,8 @@ unsafe extern "C" fn build_cmdline_str(
                     ) as *mut ::core::ffi::c_char;
                 }
                 '_c2rust_label_3: {
-                    if !cmdline.items.is_null() {} else {
+                    if !cmdline.items.is_null() {
+                    } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
@@ -5169,39 +5008,28 @@ unsafe extern "C" fn build_cmdline_str(
                     }
                 };
                 memcpy(
-                    cmdline.items.offset(cmdline.size as isize)
-                        as *mut ::core::ffi::c_void,
+                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                     b"belowright \0".as_ptr() as *const ::core::ffi::c_char
                         as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(
-                            strlen(
-                                b"belowright \0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
-                        ),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                        b"belowright \0".as_ptr() as *const ::core::ffi::c_char,
+                    )),
                 );
-                cmdline.size = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"belowright \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.size = cmdline.size.wrapping_add(strlen(
+                    b"belowright \0".as_ptr() as *const ::core::ffi::c_char
+                ));
             }
         }
         8 => {
-            if strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t
-            {
+            if strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
                 if cmdline.capacity
                     < cmdline
                         .size
-                        .wrapping_add(
-                            strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char),
-                        )
+                        .wrapping_add(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char))
                 {
                     cmdline.capacity = cmdline
                         .size
-                        .wrapping_add(
-                            strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char),
-                        );
+                        .wrapping_add(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char));
                     cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                     cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5217,7 +5045,8 @@ unsafe extern "C" fn build_cmdline_str(
                     ) as *mut ::core::ffi::c_char;
                 }
                 '_c2rust_label_4: {
-                    if !cmdline.items.is_null() {} else {
+                    if !cmdline.items.is_null() {
+                    } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
@@ -5228,38 +5057,27 @@ unsafe extern "C" fn build_cmdline_str(
                     }
                 };
                 memcpy(
-                    cmdline.items.offset(cmdline.size as isize)
-                        as *mut ::core::ffi::c_void,
+                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                     b"topleft \0".as_ptr() as *const ::core::ffi::c_char
                         as *const ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(
-                            strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char),
-                        ),
+                        .wrapping_mul(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char)),
                 );
                 cmdline.size = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"topleft \0".as_ptr() as *const ::core::ffi::c_char));
             }
         }
         16 => {
-            if strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char)
-                > 0 as size_t
-            {
+            if strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
                 if cmdline.capacity
                     < cmdline
                         .size
-                        .wrapping_add(
-                            strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char),
-                        )
+                        .wrapping_add(strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char))
                 {
-                    cmdline.capacity = cmdline
-                        .size
-                        .wrapping_add(
-                            strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char),
-                        );
+                    cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                        b"botright \0".as_ptr() as *const ::core::ffi::c_char
+                    ));
                     cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                     cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                     cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5275,7 +5093,8 @@ unsafe extern "C" fn build_cmdline_str(
                     ) as *mut ::core::ffi::c_char;
                 }
                 '_c2rust_label_5: {
-                    if !cmdline.items.is_null() {} else {
+                    if !cmdline.items.is_null() {
+                    } else {
                         __assert_fail(
                             b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
@@ -5286,20 +5105,16 @@ unsafe extern "C" fn build_cmdline_str(
                     }
                 };
                 memcpy(
-                    cmdline.items.offset(cmdline.size as isize)
-                        as *mut ::core::ffi::c_void,
+                    cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                     b"botright \0".as_ptr() as *const ::core::ffi::c_char
                         as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(
-                            strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char),
-                        ),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                        b"botright \0".as_ptr() as *const ::core::ffi::c_char,
+                    )),
                 );
                 cmdline.size = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"botright \0".as_ptr() as *const ::core::ffi::c_char));
             }
         }
         _ => {}
@@ -5309,15 +5124,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5328,16 +5139,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_6: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         885 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5345,35 +5156,25 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"vertical \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"vertical \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"vertical \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     if (*cmdinfo).cmdmod.cmod_split & WSP_HOR as ::core::ffi::c_int != 0 {
-        if strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t
-        {
+        if strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5384,16 +5185,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_7: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         886 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5403,16 +5204,13 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"horizontal \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"horizontal \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"horizontal \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0 {
@@ -5420,15 +5218,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5439,16 +5233,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_8: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         887 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5456,34 +5250,25 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"sandbox \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"sandbox \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"sandbox \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_NOAUTOCMD as ::core::ffi::c_int != 0 {
         if strlen(b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5494,16 +5279,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_9: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         888 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5513,16 +5298,13 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"noautocmd \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_BROWSE as ::core::ffi::c_int != 0 {
@@ -5530,15 +5312,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5549,16 +5327,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_10: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         889 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5566,18 +5344,13 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"browse \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"browse \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"browse \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0 {
@@ -5585,15 +5358,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5604,16 +5373,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_11: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         890 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5621,18 +5390,13 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"confirm \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"confirm \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"confirm \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_HIDE as ::core::ffi::c_int != 0 {
@@ -5640,15 +5404,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5659,16 +5419,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_12: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         891 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5676,12 +5436,9 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"hide \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"hide \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"hide \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
@@ -5693,15 +5450,11 @@ unsafe extern "C" fn build_cmdline_str(
             if cmdline.capacity
                 < cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                    .wrapping_add(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char))
             {
                 cmdline.capacity = cmdline
                     .size
-                    .wrapping_add(
-                        strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                    .wrapping_add(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5712,16 +5465,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_13: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         892 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5729,34 +5482,25 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"keepalt \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"keepalt \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                    .wrapping_mul(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char)),
             );
             cmdline.size = cmdline
                 .size
-                .wrapping_add(
-                    strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+                .wrapping_add(strlen(b"keepalt \0".as_ptr() as *const ::core::ffi::c_char));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0 {
         if strlen(b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5767,16 +5511,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_14: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         893 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5786,32 +5530,25 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"keepjumps \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPMARKS as ::core::ffi::c_int != 0 {
         if strlen(b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5822,16 +5559,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_15: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         894 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5841,34 +5578,25 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"keepmarks \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_KEEPPATTERNS as ::core::ffi::c_int != 0 {
-        if strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char)
-            > 0 as size_t
-        {
+        if strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5879,16 +5607,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_16: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         895 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5898,32 +5626,25 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"keeppatterns \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
         if strlen(b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5934,16 +5655,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_17: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         896 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -5953,33 +5674,25 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"lockmarks \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*cmdinfo).cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
-        if strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t
-        {
+        if strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
             if cmdline.capacity
-                < cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char),
-                    )
+                < cmdline.size.wrapping_add(strlen(
+                    b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
+                ))
             {
-                cmdline.capacity = cmdline
-                    .size
-                    .wrapping_add(
-                        strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char),
-                    );
+                cmdline.capacity = cmdline.size.wrapping_add(strlen(
+                    b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 cmdline.capacity = cmdline.capacity.wrapping_sub(1);
                 cmdline.capacity |= cmdline.capacity >> 1 as ::core::ffi::c_int;
                 cmdline.capacity |= cmdline.capacity >> 2 as ::core::ffi::c_int;
@@ -5990,16 +5703,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_18: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         897 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -6009,16 +5722,13 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
                 b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
                     as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(
-                        strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char),
-                    ),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen(
+                    b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char,
+                )),
             );
-            cmdline.size = cmdline
-                .size
-                .wrapping_add(
-                    strlen(b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char),
-                );
+            cmdline.size = cmdline.size.wrapping_add(strlen(
+                b"noswapfile \0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     if (*eap).argt & EX_RANGE as uint32_t != 0 {
@@ -6052,16 +5762,16 @@ unsafe extern "C" fn build_cmdline_str(
             cmdline.capacity = cmdline.capacity;
             cmdline.items = xrealloc(
                 cmdline.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul(cmdline.capacity),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
             ) as *mut ::core::ffi::c_char;
         }
         '_c2rust_label_19: {
-            if !cmdline.items.is_null() {} else {
+            if !cmdline.items.is_null() {
+            } else {
                 __assert_fail(
                     b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     912 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -6070,8 +5780,7 @@ unsafe extern "C" fn build_cmdline_str(
         memcpy(
             cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
             (*eap).cmd as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>()
-                .wrapping_mul(strlen((*eap).cmd)),
+            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(strlen((*eap).cmd)),
         );
         cmdline.size = cmdline.size.wrapping_add(strlen((*eap).cmd));
     }
@@ -6095,16 +5804,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_20: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         916 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -6112,8 +5821,7 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b"!\0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"!\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
                     .wrapping_mul(strlen(b"!\0".as_ptr() as *const ::core::ffi::c_char)),
             );
@@ -6159,16 +5867,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_21: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         930 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -6176,8 +5884,7 @@ unsafe extern "C" fn build_cmdline_str(
             };
             memcpy(
                 cmdline.items.offset(cmdline.size as isize) as *mut ::core::ffi::c_void,
-                b" \0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b" \0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>()
                     .wrapping_mul(strlen(b" \0".as_ptr() as *const ::core::ffi::c_char)),
             );
@@ -6198,16 +5905,16 @@ unsafe extern "C" fn build_cmdline_str(
                 cmdline.capacity = cmdline.capacity;
                 cmdline.items = xrealloc(
                     cmdline.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(cmdline.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label_22: {
-                if !cmdline.items.is_null() {} else {
+                if !cmdline.items.is_null() {
+                } else {
                     __assert_fail(
                         b"(cmdline).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/command.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         931 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -6232,7 +5939,8 @@ unsafe extern "C" fn build_cmdline_str(
             cmdline.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),
         ) as *mut ::core::ffi::c_char;
-    } else {};
+    } else {
+    };
     let c2rust_fresh33 = cmdline.size;
     cmdline.size = cmdline.size.wrapping_add(1);
     *cmdline.items.offset(c2rust_fresh33 as isize) = '\0' as ::core::ffi::c_char;
@@ -6262,13 +5970,13 @@ unsafe extern "C" fn build_cmdline_str(
     let mut p: *mut ::core::ffi::c_char = replace_makeprg(eap, (*eap).arg, cmdlinep);
     if p != (*eap).arg {
         (*eap).arg = p;
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*eap).args
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*eap).args as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*eap).arglens
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut (*eap).arglens as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
         *ptr__0;
@@ -6339,10 +6047,8 @@ pub unsafe extern "C" fn nvim_buf_del_user_command(
             if i < (*gap).ga_len {
                 memmove(
                     cmd as *mut ::core::ffi::c_void,
-                    cmd.offset(1 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
-                    (((*gap).ga_len - i) as size_t)
-                        .wrapping_mul(::core::mem::size_of::<ucmd_T>()),
+                    cmd.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                    (((*gap).ga_len - i) as size_t).wrapping_mul(::core::mem::size_of::<ucmd_T>()),
                 );
             }
             return;
@@ -6370,9 +6076,7 @@ pub unsafe extern "C" fn create_user_command(
     let mut def: int64_t = -1 as int64_t;
     let mut addr_type_arg: cmd_addr_T = ADDR_NONE;
     let mut context: ::core::ffi::c_int = EXPAND_NOTHING as ::core::ffi::c_int;
-    let mut compl_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut compl_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut rep: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut luaref: LuaRef = LUA_NOREF;
     let mut compl_luaref: LuaRef = LUA_NOREF;
@@ -6387,7 +6091,7 @@ pub unsafe extern "C" fn create_user_command(
                 true_0 != 0,
             );
         } else if mb_islower(
-            *name.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
+            *name.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         ) {
             api_err_invalid(
                 err,
@@ -6408,8 +6112,7 @@ pub unsafe extern "C" fn create_user_command(
                 err,
                 kErrorTypeValidation,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"Cannot use both 'range' and 'count'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Cannot use both 'range' and 'count'\0".as_ptr() as *const ::core::ffi::c_char,
             );
         } else {
             if (*opts).nargs.type_0 as ::core::ffi::c_uint
@@ -6418,8 +6121,8 @@ pub unsafe extern "C" fn create_user_command(
                 match (*opts).nargs.data.integer {
                     0 => {}
                     1 => {
-                        argt = (argt as ::core::ffi::c_uint
-                            | (EX_EXTRA | EX_NOSPC | EX_NEEDARG)) as uint32_t;
+                        argt = (argt as ::core::ffi::c_uint | (EX_EXTRA | EX_NOSPC | EX_NEEDARG))
+                            as uint32_t;
                     }
                     _ => {
                         if true {
@@ -6452,18 +6155,19 @@ pub unsafe extern "C" fn create_user_command(
                         .data
                         .string
                         .data
-                        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        .offset(0 as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                     {
                         42 => {
                             argt = (argt as ::core::ffi::c_uint | EX_EXTRA) as uint32_t;
                         }
                         63 => {
-                            argt = (argt as ::core::ffi::c_uint | (EX_EXTRA | EX_NOSPC))
-                                as uint32_t;
+                            argt =
+                                (argt as ::core::ffi::c_uint | (EX_EXTRA | EX_NOSPC)) as uint32_t;
                         }
                         43 => {
-                            argt = (argt as ::core::ffi::c_uint
-                                | (EX_EXTRA | EX_NEEDARG)) as uint32_t;
+                            argt =
+                                (argt as ::core::ffi::c_uint | (EX_EXTRA | EX_NEEDARG)) as uint32_t;
                         }
                         _ => {
                             if true {
@@ -6496,14 +6200,14 @@ pub unsafe extern "C" fn create_user_command(
             }
             if !(!((*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
                 & (1 as ::core::ffi::c_ulonglong) << 10 as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_ulonglong) || argt != 0)
+                != 0 as ::core::ffi::c_ulonglong)
+                || argt != 0)
             {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"'complete' used without 'nargs'\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"'complete' used without 'nargs'\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             } else {
                 if (*opts).range.type_0 as ::core::ffi::c_uint
@@ -6521,7 +6225,8 @@ pub unsafe extern "C" fn create_user_command(
                         .data
                         .string
                         .data
-                        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        .offset(0 as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         == '%' as ::core::ffi::c_int
                         && (*opts).range.data.string.size == 1 as size_t)
                     {
@@ -6534,20 +6239,17 @@ pub unsafe extern "C" fn create_user_command(
                         );
                         break '_err;
                     } else {
-                        argt = (argt as ::core::ffi::c_uint | (EX_RANGE | EX_DFLALL))
-                            as uint32_t;
+                        argt = (argt as ::core::ffi::c_uint | (EX_RANGE | EX_DFLALL)) as uint32_t;
                         addr_type_arg = ADDR_LINES;
                     }
                 } else if (*opts).range.type_0 as ::core::ffi::c_uint
                     == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    argt = (argt as ::core::ffi::c_uint | (EX_RANGE | EX_ZEROR))
-                        as uint32_t;
+                    argt = (argt as ::core::ffi::c_uint | (EX_RANGE | EX_ZEROR)) as uint32_t;
                     def = (*opts).range.data.integer as int64_t;
                     addr_type_arg = ADDR_LINES;
                 } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_user_command__range
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__range
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     if true {
@@ -6565,21 +6267,20 @@ pub unsafe extern "C" fn create_user_command(
                     == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     if (*opts).count.data.boolean {
-                        argt = (argt as ::core::ffi::c_uint
-                            | (EX_COUNT | EX_ZEROR | EX_RANGE)) as uint32_t;
+                        argt = (argt as ::core::ffi::c_uint | (EX_COUNT | EX_ZEROR | EX_RANGE))
+                            as uint32_t;
                         addr_type_arg = ADDR_OTHER;
                         def = 0 as int64_t;
                     }
                 } else if (*opts).count.type_0 as ::core::ffi::c_uint
                     == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    argt = (argt as ::core::ffi::c_uint
-                        | (EX_COUNT | EX_ZEROR | EX_RANGE)) as uint32_t;
+                    argt = (argt as ::core::ffi::c_uint | (EX_COUNT | EX_ZEROR | EX_RANGE))
+                        as uint32_t;
                     addr_type_arg = ADDR_OTHER;
                     def = (*opts).count.data.integer as int64_t;
                 } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_user_command__count
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__count
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     if true {
@@ -6644,17 +6345,14 @@ pub unsafe extern "C" fn create_user_command(
                     argt = (argt as ::core::ffi::c_uint | EX_KEEPSCRIPT) as uint32_t;
                 }
                 force = if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_user_command__force
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__force
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     (*opts).force as ::core::ffi::c_int
                 } else {
                     true_0
                 } != 0;
-                if (*err).type_0 as ::core::ffi::c_int
-                    == kErrorTypeNone as ::core::ffi::c_int
-                {
+                if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                     if (*opts).complete.type_0 as ::core::ffi::c_uint
                         == kObjectTypeLuaRef as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
@@ -6683,24 +6381,21 @@ pub unsafe extern "C" fn create_user_command(
                             break '_err;
                         }
                     } else if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_user_command__complete
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__complete
                         != 0 as ::core::ffi::c_ulonglong
                     {
                         if true {
                             api_err_exp(
                                 err,
                                 b"complete\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"Function or String\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"Function or String\0".as_ptr() as *const ::core::ffi::c_char,
                                 ::core::ptr::null::<::core::ffi::c_char>(),
                             );
                             break '_err;
                         }
                     }
                     if (*opts).is_set__user_command_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_user_command__preview
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_user_command__preview
                         != 0 as ::core::ffi::c_ulonglong
                     {
                         if kObjectTypeLuaRef as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -6714,8 +6409,7 @@ pub unsafe extern "C" fn create_user_command(
                             );
                             break '_err;
                         } else {
-                            argt = (argt as ::core::ffi::c_uint | EX_PREVIEW)
-                                as uint32_t;
+                            argt = (argt as ::core::ffi::c_uint | EX_PREVIEW) as uint32_t;
                             preview_luaref = (*opts).preview.data.luaref;
                             (*opts).preview.data.luaref = LUA_NOREF as LuaRef;
                         }
@@ -6724,8 +6418,7 @@ pub unsafe extern "C" fn create_user_command(
                         7 => {
                             luaref = api_new_luaref(cmd.data.luaref);
                             if (*opts).desc.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeString as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 rep = (*opts).desc.data.string.data;
                             } else {
@@ -6740,8 +6433,7 @@ pub unsafe extern "C" fn create_user_command(
                                 api_err_exp(
                                     err,
                                     b"command\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"Function or String\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"Function or String\0".as_ptr() as *const ::core::ffi::c_char,
                                     ::core::ptr::null::<::core::ffi::c_char>(),
                                 );
                                 break '_err;

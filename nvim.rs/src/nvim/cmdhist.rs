@@ -41,10 +41,7 @@ extern "C" {
         dsize: size_t,
     ) -> size_t;
     static mut p_hi: OptInt;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -100,11 +97,7 @@ extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
 pub type int32_t = i32;
@@ -1113,9 +1106,7 @@ pub struct histentry_T {
     pub timestamp: Timestamp,
     pub additional_data: *mut AdditionalData,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
@@ -1150,9 +1141,7 @@ pub unsafe extern "C" fn get_hislen() -> ::core::ffi::c_int {
     return hislen;
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_histentry(
-    mut hist_type: ::core::ffi::c_int,
-) -> *mut histentry_T {
+pub unsafe extern "C" fn get_histentry(mut hist_type: ::core::ffi::c_int) -> *mut histentry_T {
     return history[hist_type as usize] as *mut histentry_T;
 }
 #[no_mangle]
@@ -1163,15 +1152,11 @@ pub unsafe extern "C" fn set_histentry(
     history[hist_type as usize] = entry as *mut histentry_T;
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_hisidx(
-    mut hist_type: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_int {
+pub unsafe extern "C" fn get_hisidx(mut hist_type: ::core::ffi::c_int) -> *mut ::core::ffi::c_int {
     return (&raw mut hisidx as *mut ::core::ffi::c_int).offset(hist_type as isize);
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_hisnum(
-    mut hist_type: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_int {
+pub unsafe extern "C" fn get_hisnum(mut hist_type: ::core::ffi::c_int) -> *mut ::core::ffi::c_int {
     return (&raw mut hisnum as *mut ::core::ffi::c_int).offset(hist_type as isize);
 }
 #[no_mangle]
@@ -1198,40 +1183,36 @@ pub unsafe extern "C" fn get_history_arg(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut short_names: *const ::core::ffi::c_char = b":=@>?/\0".as_ptr()
-        as *const ::core::ffi::c_char;
-    let short_names_count: ::core::ffi::c_int = strlen(short_names)
-        as ::core::ffi::c_int;
-    let history_name_count: ::core::ffi::c_int = ::core::mem::size_of::<
-        [*mut ::core::ffi::c_char; 6],
-    >()
-        .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-        .wrapping_div(
-            (::core::mem::size_of::<[*mut ::core::ffi::c_char; 6]>()
-                .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>()) == 0)
-                as ::core::ffi::c_int as usize,
-        )
-        .wrapping_sub(1 as usize) as ::core::ffi::c_int;
+    let mut short_names: *const ::core::ffi::c_char =
+        b":=@>?/\0".as_ptr() as *const ::core::ffi::c_char;
+    let short_names_count: ::core::ffi::c_int = strlen(short_names) as ::core::ffi::c_int;
+    let history_name_count: ::core::ffi::c_int =
+        ::core::mem::size_of::<[*mut ::core::ffi::c_char; 6]>()
+            .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+            .wrapping_div(
+                (::core::mem::size_of::<[*mut ::core::ffi::c_char; 6]>()
+                    .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
+            .wrapping_sub(1 as usize) as ::core::ffi::c_int;
     if idx < short_names_count {
-        (*xp).xp_buf[0 as ::core::ffi::c_int as usize] = *short_names
-            .offset(idx as isize);
+        (*xp).xp_buf[0 as ::core::ffi::c_int as usize] = *short_names.offset(idx as isize);
         (*xp).xp_buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         return &raw mut (*xp).xp_buf as *mut ::core::ffi::c_char;
     }
     if idx < short_names_count + history_name_count {
-        return history_names[(idx - short_names_count) as usize]
-            as *mut ::core::ffi::c_char;
+        return history_names[(idx - short_names_count) as usize] as *mut ::core::ffi::c_char;
     }
     if idx == short_names_count + history_name_count {
-        return b"all\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn init_history() {
     '_c2rust_label: {
-        if p_hi >= 0 as OptInt && p_hi <= 2147483647 as OptInt {} else {
+        if p_hi >= 0 as OptInt && p_hi <= 2147483647 as OptInt {
+        } else {
             __assert_fail(
                 b"p_hi >= 0 && p_hi <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0".as_ptr()
@@ -1249,9 +1230,7 @@ pub unsafe extern "C" fn init_history() {
     let mut type_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while type_0 < HIST_COUNT as ::core::ffi::c_int {
         let mut temp: *mut histentry_T = (if newlen > 0 as ::core::ffi::c_int {
-            xmalloc(
-                (newlen as size_t).wrapping_mul(::core::mem::size_of::<histentry_T>()),
-            )
+            xmalloc((newlen as size_t).wrapping_mul(::core::mem::size_of::<histentry_T>()))
         } else {
             NULL
         }) as *mut histentry_T;
@@ -1262,11 +1241,7 @@ pub unsafe extern "C" fn init_history() {
             } else {
                 newlen
             };
-            let mut l2: ::core::ffi::c_int = (if newlen < oldlen {
-                newlen
-            } else {
-                oldlen
-            }) - l1;
+            let mut l2: ::core::ffi::c_int = (if newlen < oldlen { newlen } else { oldlen }) - l1;
             let mut i1: ::core::ffi::c_int = j + 1 as ::core::ffi::c_int - l1;
             let mut i2: ::core::ffi::c_int = if l1 > oldlen - newlen + l1 {
                 l1
@@ -1275,17 +1250,14 @@ pub unsafe extern "C" fn init_history() {
             };
             if newlen != 0 {
                 memcpy(
-                    temp.offset(0 as ::core::ffi::c_int as isize)
-                        as *mut ::core::ffi::c_void,
-                    (*(&raw mut history as *mut *mut histentry_T)
-                        .offset(type_0 as isize))
+                    temp.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
+                    (*(&raw mut history as *mut *mut histentry_T).offset(type_0 as isize))
                         .offset(i2 as isize) as *const ::core::ffi::c_void,
                     (l2 as size_t).wrapping_mul(::core::mem::size_of::<histentry_T>()),
                 );
                 memcpy(
                     temp.offset(l2 as isize) as *mut ::core::ffi::c_void,
-                    (*(&raw mut history as *mut *mut histentry_T)
-                        .offset(type_0 as isize))
+                    (*(&raw mut history as *mut *mut histentry_T).offset(type_0 as isize))
                         .offset(i1 as isize) as *const ::core::ffi::c_void,
                     (l1 as size_t).wrapping_mul(::core::mem::size_of::<histentry_T>()),
                 );
@@ -1312,8 +1284,7 @@ pub unsafe extern "C" fn init_history() {
             memset(
                 temp.offset(l3 as isize) as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((newlen - l3) as size_t)
-                    .wrapping_mul(::core::mem::size_of::<histentry_T>()),
+                ((newlen - l3) as size_t).wrapping_mul(::core::mem::size_of::<histentry_T>()),
             );
         }
         hisidx[type_0 as usize] = l3 - 1 as ::core::ffi::c_int;
@@ -1349,21 +1320,21 @@ unsafe extern "C" fn in_history(
     }
     let mut i: ::core::ffi::c_int = hisidx[type_0 as usize];
     loop {
-        if (*history[type_0 as usize].offset(i as isize)).hisstr.is_null() {
+        if (*history[type_0 as usize].offset(i as isize))
+            .hisstr
+            .is_null()
+        {
             return false_0;
         }
-        let mut p: *mut ::core::ffi::c_char = (*history[type_0 as usize]
-            .offset(i as isize))
-            .hisstr;
+        let mut p: *mut ::core::ffi::c_char = (*history[type_0 as usize].offset(i as isize)).hisstr;
         if strcmp(str, p) == 0 as ::core::ffi::c_int
             && (type_0 != HIST_SEARCH as ::core::ffi::c_int
                 || sep
-                    == *p
-                        .offset(
-                            (*history[type_0 as usize].offset(i as isize))
-                                .hisstrlen
-                                .wrapping_add(1 as size_t) as isize,
-                        ) as ::core::ffi::c_int)
+                    == *p.offset(
+                        (*history[type_0 as usize].offset(i as isize))
+                            .hisstrlen
+                            .wrapping_add(1 as size_t) as isize,
+                    ) as ::core::ffi::c_int)
         {
             if move_to_front == 0 {
                 return true_0;
@@ -1383,20 +1354,18 @@ unsafe extern "C" fn in_history(
     if last_i < 0 as ::core::ffi::c_int {
         return false_0;
     }
-    let mut ad: *mut AdditionalData = (*history[type_0 as usize].offset(i as isize))
-        .additional_data;
-    let save_hisstr: *mut ::core::ffi::c_char = (*history[type_0 as usize]
-        .offset(i as isize))
-        .hisstr;
-    let save_hisstrlen: size_t = (*history[type_0 as usize].offset(i as isize))
-        .hisstrlen;
+    let mut ad: *mut AdditionalData =
+        (*history[type_0 as usize].offset(i as isize)).additional_data;
+    let save_hisstr: *mut ::core::ffi::c_char =
+        (*history[type_0 as usize].offset(i as isize)).hisstr;
+    let save_hisstrlen: size_t = (*history[type_0 as usize].offset(i as isize)).hisstrlen;
     while i != hisidx[type_0 as usize] {
         i += 1;
         if i >= hislen {
             i = 0 as ::core::ffi::c_int;
         }
-        *history[type_0 as usize].offset(last_i as isize) = *history[type_0 as usize]
-            .offset(i as isize);
+        *history[type_0 as usize].offset(last_i as isize) =
+            *history[type_0 as usize].offset(i as isize);
         last_i = i;
     }
     xfree(ad as *mut ::core::ffi::c_void);
@@ -1405,9 +1374,8 @@ unsafe extern "C" fn in_history(
     (*history[type_0 as usize].offset(i as isize)).hisstr = save_hisstr;
     (*history[type_0 as usize].offset(i as isize)).hisstrlen = save_hisstrlen;
     (*history[type_0 as usize].offset(i as isize)).timestamp = os_time();
-    (*history[type_0 as usize].offset(i as isize)).additional_data = ::core::ptr::null_mut::<
-        AdditionalData,
-    >();
+    (*history[type_0 as usize].offset(i as isize)).additional_data =
+        ::core::ptr::null_mut::<AdditionalData>();
     return true_0;
 }
 unsafe extern "C" fn get_histtype(
@@ -1424,23 +1392,24 @@ unsafe extern "C" fn get_histtype(
     }
     let mut i: HistoryType = HIST_CMD;
     while !history_names[i as usize].is_null() {
-        if strncasecmp(name as *mut ::core::ffi::c_char, history_names[i as usize], len)
-            == 0 as ::core::ffi::c_int
+        if strncasecmp(
+            name as *mut ::core::ffi::c_char,
+            history_names[i as usize],
+            len,
+        ) == 0 as ::core::ffi::c_int
         {
             return i;
         }
         i += 1;
     }
     if !vim_strchr(
-            b":=@>?/\0".as_ptr() as *const ::core::ffi::c_char,
-            *name.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int,
-        )
-        .is_null() && len == 1 as size_t
+        b":=@>?/\0".as_ptr() as *const ::core::ffi::c_char,
+        *name.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
+        && len == 1 as size_t
     {
-        return hist_char2type(
-            *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        );
+        return hist_char2type(*name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int);
     }
     return HIST_INVALID;
 }
@@ -1454,12 +1423,12 @@ pub unsafe extern "C" fn add_to_history(
     mut sep: ::core::ffi::c_int,
 ) {
     let mut hisptr: *mut histentry_T = ::core::ptr::null_mut::<histentry_T>();
-    if hislen == 0 as ::core::ffi::c_int || histype == HIST_INVALID as ::core::ffi::c_int
-    {
+    if hislen == 0 as ::core::ffi::c_int || histype == HIST_INVALID as ::core::ffi::c_int {
         return;
     }
     '_c2rust_label: {
-        if histype != HIST_DEFAULT as ::core::ffi::c_int {} else {
+        if histype != HIST_DEFAULT as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"histype != HIST_DEFAULT\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0".as_ptr()
@@ -1475,26 +1444,22 @@ pub unsafe extern "C" fn add_to_history(
     {
         return;
     }
-    if histype == HIST_SEARCH as ::core::ffi::c_int && in_map as ::core::ffi::c_int != 0
-    {
+    if histype == HIST_SEARCH as ::core::ffi::c_int && in_map as ::core::ffi::c_int != 0 {
         if maptick == last_maptick
-            && hisidx[HIST_SEARCH as ::core::ffi::c_int as usize]
-                >= 0 as ::core::ffi::c_int
+            && hisidx[HIST_SEARCH as ::core::ffi::c_int as usize] >= 0 as ::core::ffi::c_int
         {
             hisptr = (*(&raw mut history as *mut *mut histentry_T)
                 .offset(HIST_SEARCH as ::core::ffi::c_int as isize))
-                .offset(
-                    *(&raw mut hisidx as *mut ::core::ffi::c_int)
-                        .offset(HIST_SEARCH as ::core::ffi::c_int as isize) as isize,
-                );
+            .offset(
+                *(&raw mut hisidx as *mut ::core::ffi::c_int)
+                    .offset(HIST_SEARCH as ::core::ffi::c_int as isize) as isize,
+            );
             hist_free_entry(hisptr);
             hisnum[histype as usize] -= 1;
             hisidx[HIST_SEARCH as ::core::ffi::c_int as usize] -= 1;
-            if hisidx[HIST_SEARCH as ::core::ffi::c_int as usize]
-                < 0 as ::core::ffi::c_int
-            {
-                hisidx[HIST_SEARCH as ::core::ffi::c_int as usize] = hislen
-                    - 1 as ::core::ffi::c_int;
+            if hisidx[HIST_SEARCH as ::core::ffi::c_int as usize] < 0 as ::core::ffi::c_int {
+                hisidx[HIST_SEARCH as ::core::ffi::c_int as usize] =
+                    hislen - 1 as ::core::ffi::c_int;
             }
         }
         last_maptick = -1 as ::core::ffi::c_int;
@@ -1507,28 +1472,24 @@ pub unsafe extern "C" fn add_to_history(
         hisidx[histype as usize] = 0 as ::core::ffi::c_int;
     }
     hisptr = (*(&raw mut history as *mut *mut histentry_T).offset(histype as isize))
-        .offset(
-            *(&raw mut hisidx as *mut ::core::ffi::c_int).offset(histype as isize)
-                as isize,
-        );
+        .offset(*(&raw mut hisidx as *mut ::core::ffi::c_int).offset(histype as isize) as isize);
     hist_free_entry(hisptr);
     (*hisptr).hisstr = xstrnsave(new_entry, new_entrylen.wrapping_add(2 as size_t));
     (*hisptr).timestamp = os_time();
     (*hisptr).additional_data = ::core::ptr::null_mut::<AdditionalData>();
-    *(*hisptr).hisstr.offset(new_entrylen.wrapping_add(1 as size_t) as isize) = sep
-        as ::core::ffi::c_char;
+    *(*hisptr)
+        .hisstr
+        .offset(new_entrylen.wrapping_add(1 as size_t) as isize) = sep as ::core::ffi::c_char;
     (*hisptr).hisstrlen = new_entrylen;
     hisnum[histype as usize] += 1;
     (*hisptr).hisnum = hisnum[histype as usize];
-    if histype == HIST_SEARCH as ::core::ffi::c_int && in_map as ::core::ffi::c_int != 0
-    {
+    if histype == HIST_SEARCH as ::core::ffi::c_int && in_map as ::core::ffi::c_int != 0 {
         last_maptick = maptick;
     }
 }
-unsafe extern "C" fn get_history_idx(
-    mut histype: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if hislen == 0 as ::core::ffi::c_int || histype < 0 as ::core::ffi::c_int
+unsafe extern "C" fn get_history_idx(mut histype: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    if hislen == 0 as ::core::ffi::c_int
+        || histype < 0 as ::core::ffi::c_int
         || histype >= HIST_COUNT as ::core::ffi::c_int
         || hisidx[histype as usize] < 0 as ::core::ffi::c_int
     {
@@ -1541,12 +1502,14 @@ unsafe extern "C" fn calc_hist_idx(
     mut num: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0;
-    if hislen == 0 as ::core::ffi::c_int || histype < 0 as ::core::ffi::c_int
+    if hislen == 0 as ::core::ffi::c_int
+        || histype < 0 as ::core::ffi::c_int
         || histype >= HIST_COUNT as ::core::ffi::c_int
         || {
             i = hisidx[histype as usize];
             i < 0 as ::core::ffi::c_int
-        } || num == 0 as ::core::ffi::c_int
+        }
+        || num == 0 as ::core::ffi::c_int
     {
         return -1 as ::core::ffi::c_int;
     }
@@ -1564,7 +1527,8 @@ unsafe extern "C" fn calc_hist_idx(
             i += hislen;
             wrapped = true_0 != 0;
         }
-        if i >= 0 as ::core::ffi::c_int && (*hist.offset(i as isize)).hisnum == num
+        if i >= 0 as ::core::ffi::c_int
+            && (*hist.offset(i as isize)).hisnum == num
             && !(*hist.offset(i as isize)).hisstr.is_null()
         {
             return i;
@@ -1582,7 +1546,8 @@ unsafe extern "C" fn calc_hist_idx(
 }
 #[no_mangle]
 pub unsafe extern "C" fn clr_history(histype: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if hislen != 0 as ::core::ffi::c_int && histype >= 0 as ::core::ffi::c_int
+    if hislen != 0 as ::core::ffi::c_int
+        && histype >= 0 as ::core::ffi::c_int
         && histype < HIST_COUNT as ::core::ffi::c_int
     {
         let mut hisptr: *mut histentry_T = history[histype as usize] as *mut histentry_T;
@@ -1606,7 +1571,8 @@ unsafe extern "C" fn del_history_entry(
     mut histype: ::core::ffi::c_int,
     mut str: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if hislen == 0 as ::core::ffi::c_int || histype < 0 as ::core::ffi::c_int
+    if hislen == 0 as ::core::ffi::c_int
+        || histype < 0 as ::core::ffi::c_int
         || histype >= HIST_COUNT as ::core::ffi::c_int
         || *str as ::core::ffi::c_int == NUL
         || hisidx[histype as usize] < 0 as ::core::ffi::c_int
@@ -1632,7 +1598,7 @@ unsafe extern "C" fn del_history_entry(
     loop {
         let mut hisptr: *mut histentry_T = (*(&raw mut history as *mut *mut histentry_T)
             .offset(histype as isize))
-            .offset(i as isize);
+        .offset(i as isize);
         if (*hisptr).hisstr.is_null() {
             break;
         }
@@ -1657,7 +1623,10 @@ unsafe extern "C" fn del_history_entry(
             break;
         }
     }
-    if (*history[histype as usize].offset(idx as isize)).hisstr.is_null() {
+    if (*history[histype as usize].offset(idx as isize))
+        .hisstr
+        .is_null()
+    {
         hisidx[histype as usize] = -1 as ::core::ffi::c_int;
     }
     vim_regfree(regmatch.regprog);
@@ -1673,18 +1642,15 @@ unsafe extern "C" fn del_history_idx(
     }
     idx = hisidx[histype as usize];
     hist_free_entry(
-        (*(&raw mut history as *mut *mut histentry_T).offset(histype as isize))
-            .offset(i as isize),
+        (*(&raw mut history as *mut *mut histentry_T).offset(histype as isize)).offset(i as isize),
     );
-    if histype == HIST_SEARCH as ::core::ffi::c_int && maptick == last_maptick
-        && i == idx
-    {
+    if histype == HIST_SEARCH as ::core::ffi::c_int && maptick == last_maptick && i == idx {
         last_maptick = -1 as ::core::ffi::c_int;
     }
     while i != idx {
         let mut j: ::core::ffi::c_int = (i + 1 as ::core::ffi::c_int) % hislen;
-        *history[histype as usize].offset(i as isize) = *history[histype as usize]
-            .offset(j as isize);
+        *history[histype as usize].offset(i as isize) =
+            *history[histype as usize].offset(j as isize);
         i = j;
     }
     clear_hist_entry(
@@ -1708,9 +1674,8 @@ pub unsafe extern "C" fn f_histadd(
     if check_secure() {
         return;
     }
-    let mut str: *const ::core::ffi::c_char = tv_get_string_chk(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut str: *const ::core::ffi::c_char =
+        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut histype: HistoryType = (if !str.is_null() {
         get_histtype(str, strlen(str), false_0 != 0) as ::core::ffi::c_int
     } else {
@@ -1728,7 +1693,13 @@ pub unsafe extern "C" fn f_histadd(
         return;
     }
     init_history();
-    add_to_history(histype as ::core::ffi::c_int, str, strlen(str), false_0 != 0, NUL);
+    add_to_history(
+        histype as ::core::ffi::c_int,
+        str,
+        strlen(str),
+        false_0 != 0,
+        NUL,
+    );
     (*rettv).vval.v_number = true_0 as varnumber_T;
 }
 #[no_mangle]
@@ -1738,25 +1709,20 @@ pub unsafe extern "C" fn f_histdel(
     mut fptr: EvalFuncData,
 ) {
     let mut n: ::core::ffi::c_int = 0;
-    let str: *const ::core::ffi::c_char = tv_get_string_chk(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let str: *const ::core::ffi::c_char =
+        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     if str.is_null() {
         n = 0 as ::core::ffi::c_int;
-    } else if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint
+    } else if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        n = clr_history(
-            get_histtype(str, strlen(str), false_0 != 0) as ::core::ffi::c_int,
-        );
-    } else if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
+        n = clr_history(get_histtype(str, strlen(str), false_0 != 0) as ::core::ffi::c_int);
+    } else if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         n = del_history_idx(
             get_histtype(str, strlen(str), false_0 != 0) as ::core::ffi::c_int,
-            tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize))
-                as ::core::ffi::c_int,
+            tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
         );
     } else {
         let mut buf: [::core::ffi::c_char; 65] = [0; 65];
@@ -1776,16 +1742,14 @@ pub unsafe extern "C" fn f_histget(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let str: *const ::core::ffi::c_char = tv_get_string_chk(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let str: *const ::core::ffi::c_char =
+        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     if str.is_null() {
         (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     } else {
         let mut idx: ::core::ffi::c_int = 0;
         let mut type_0: HistoryType = get_histtype(str, strlen(str), false_0 != 0);
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             idx = get_history_idx(type_0 as ::core::ffi::c_int);
@@ -1797,10 +1761,8 @@ pub unsafe extern "C" fn f_histget(
         }
         idx = calc_hist_idx(type_0 as ::core::ffi::c_int, idx);
         if idx < 0 as ::core::ffi::c_int {
-            (*rettv).vval.v_string = xstrnsave(
-                b"\0".as_ptr() as *const ::core::ffi::c_char,
-                0 as size_t,
-            );
+            (*rettv).vval.v_string =
+                xstrnsave(b"\0".as_ptr() as *const ::core::ffi::c_char, 0 as size_t);
         } else {
             (*rettv).vval.v_string = xstrnsave(
                 (*history[type_0 as usize].offset(idx as isize)).hisstr,
@@ -1816,9 +1778,8 @@ pub unsafe extern "C" fn f_histnr(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let histname: *const ::core::ffi::c_char = tv_get_string_chk(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let histname: *const ::core::ffi::c_char =
+        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut i: HistoryType = (if histname.is_null() {
         HIST_INVALID as ::core::ffi::c_int
     } else {
@@ -1836,16 +1797,12 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
     let mut histype2: ::core::ffi::c_int = HIST_CMD as ::core::ffi::c_int;
     let mut hisidx1: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut hisidx2: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     if hislen == 0 as ::core::ffi::c_int {
         msg(
-            gettext(
-                b"'history' option is zero\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"'history' option is zero\0".as_ptr() as *const ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
         );
         return;
@@ -1860,20 +1817,19 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
             || *end as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                 && *end as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
             || !vim_strchr(
-                    b":=@>/?\0".as_ptr() as *const ::core::ffi::c_char,
-                    *end as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                b":=@>/?\0".as_ptr() as *const ::core::ffi::c_char,
+                *end as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             end = end.offset(1);
         }
-        histype1 = get_histtype(arg, end.offset_from(arg) as size_t, false_0 != 0)
-            as ::core::ffi::c_int;
+        histype1 =
+            get_histtype(arg, end.offset_from(arg) as size_t, false_0 != 0) as ::core::ffi::c_int;
         if histype1 == HIST_INVALID as ::core::ffi::c_int {
             if strncasecmp(
                 arg,
-                b"all\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 end.offset_from(arg) as size_t,
             ) == 0 as ::core::ffi::c_int
             {
@@ -1896,7 +1852,10 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
         || *end as ::core::ffi::c_int != NUL
     {
         if *end as ::core::ffi::c_int != NUL {
-            semsg(gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char), end);
+            semsg(
+                gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
+                end,
+            );
         } else {
             semsg(
                 gettext(&raw const e_val_too_large as *const ::core::ffi::c_char),
@@ -1907,15 +1866,14 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
     }
     while !got_int && histype1 <= histype2 {
         '_c2rust_label: {
-            if !history_names[histype1 as usize].is_null() {} else {
+            if !history_names[histype1 as usize].is_null() {
+            } else {
                 __assert_fail(
-                    b"history_names[histype1] != NULL\0".as_ptr()
+                    b"history_names[histype1] != NULL\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdhist.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     641 as ::core::ffi::c_uint,
-                    b"void ex_history(exarg_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"void ex_history(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -1934,10 +1892,7 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
             j = if -j > hislen {
                 0 as ::core::ffi::c_int
             } else {
-                (*hist
-                    .offset(
-                        ((hislen + j + idx + 1 as ::core::ffi::c_int) % hislen) as isize,
-                    ))
+                (*hist.offset(((hislen + j + idx + 1 as ::core::ffi::c_int) % hislen) as isize))
                     .hisnum
             };
         }
@@ -1945,10 +1900,7 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
             k = if -k > hislen {
                 0 as ::core::ffi::c_int
             } else {
-                (*hist
-                    .offset(
-                        ((hislen + k + idx + 1 as ::core::ffi::c_int) % hislen) as isize,
-                    ))
+                (*hist.offset(((hislen + k + idx + 1 as ::core::ffi::c_int) % hislen) as isize))
                     .hisnum
             };
         }
@@ -1980,15 +1932,13 @@ pub unsafe extern "C" fn ex_history(mut eap: *mut exarg_T) {
                     {
                         trunc_string(
                             (*hist.offset(i as isize)).hisstr,
-                            (&raw mut IObuff as *mut ::core::ffi::c_char)
-                                .offset(len as isize),
+                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
                             Columns - 10 as ::core::ffi::c_int,
                             IOSIZE - len,
                         );
                     } else {
                         xstrlcpy(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char)
-                                .offset(len as isize),
+                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
                             (*hist.offset(i as isize)).hisstr,
                             (IOSIZE - len) as size_t,
                         );
@@ -2027,16 +1977,13 @@ pub unsafe extern "C" fn hist_iter(
     }
     let hstart: *mut histentry_T = (*(&raw mut history as *mut *mut histentry_T)
         .offset(history_type as isize))
-        .offset(0 as ::core::ffi::c_int as isize);
+    .offset(0 as ::core::ffi::c_int as isize);
     let hlast: *mut histentry_T = (*(&raw mut history as *mut *mut histentry_T)
         .offset(history_type as isize))
-        .offset(
-            *(&raw mut hisidx as *mut ::core::ffi::c_int).offset(history_type as isize)
-                as isize,
-        );
+    .offset(*(&raw mut hisidx as *mut ::core::ffi::c_int).offset(history_type as isize) as isize);
     let hend: *const histentry_T = (*(&raw mut history as *mut *mut histentry_T)
         .offset(history_type as isize))
-        .offset((hislen - 1 as ::core::ffi::c_int) as isize);
+    .offset((hislen - 1 as ::core::ffi::c_int) as isize);
     let mut hiter: *mut histentry_T = ::core::ptr::null_mut::<histentry_T>();
     if iter.is_null() {
         let mut hfirst: *mut histentry_T = hlast;
@@ -2071,8 +2018,11 @@ pub unsafe extern "C" fn hist_iter(
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
     hiter = hiter.offset(1);
-    return (if hiter > hend as *mut histentry_T { hstart } else { hiter })
-        as *const ::core::ffi::c_void;
+    return (if hiter > hend as *mut histentry_T {
+        hstart
+    } else {
+        hiter
+    }) as *const ::core::ffi::c_void;
 }
 #[no_mangle]
 pub unsafe extern "C" fn hist_get_array(
@@ -2081,14 +2031,11 @@ pub unsafe extern "C" fn hist_get_array(
     new_hisnum: *mut *mut ::core::ffi::c_int,
 ) -> *mut histentry_T {
     init_history();
-    *new_hisidx = (&raw mut hisidx as *mut ::core::ffi::c_int)
-        .offset(history_type as isize);
-    *new_hisnum = (&raw mut hisnum as *mut ::core::ffi::c_int)
-        .offset(history_type as isize);
+    *new_hisidx = (&raw mut hisidx as *mut ::core::ffi::c_int).offset(history_type as isize);
+    *new_hisnum = (&raw mut hisnum as *mut ::core::ffi::c_int).offset(history_type as isize);
     return history[history_type as usize] as *mut histentry_T;
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -45,10 +45,7 @@ extern "C" {
     static hl_mode_str: [*const ::core::ffi::c_char; 0];
     static mut decor_state: DecorState;
     static mut decor_items: C2Rust_Unnamed_26;
-    fn decor_providers_invoke_conceal_line(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-    ) -> bool;
+    fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int) -> bool;
     fn extmark_set(
         buf: *mut buf_T,
         ns_id: uint32_t,
@@ -83,10 +80,7 @@ extern "C" {
     fn schar_get(buf_out: *mut ::core::ffi::c_char, sc: schar_T) -> size_t;
     fn schar_get_first_codepoint(sc: schar_T) -> ::core::ffi::c_int;
     fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
-    fn hl_add_url(
-        attr: ::core::ffi::c_int,
-        url: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn hl_add_url(attr: ::core::ffi::c_int, url: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn hl_combine_attr(
         char_attr: ::core::ffi::c_int,
         prim_attr: ::core::ffi::c_int,
@@ -133,17 +127,10 @@ extern "C" {
         itr: *mut MarkTreeIter,
         pair: *mut MTPair,
     ) -> bool;
-    fn marktree_get_altpos(
-        b: *mut MarkTree,
-        mark: MTKey,
-        itr: *mut MarkTreeIter,
-    ) -> MTPos;
+    fn marktree_get_altpos(b: *mut MarkTree, mark: MTKey, itr: *mut MarkTreeIter) -> MTPos;
     fn changed_window_setting(wp: *mut win_T);
     fn buf_has_signs(buf: *const buf_T) -> bool;
-    fn describe_sign_text(
-        buf: *mut ::core::ffi::c_char,
-        sign_text: *mut schar_T,
-    ) -> size_t;
+    fn describe_sign_text(buf: *mut ::core::ffi::c_char, sign_text: *mut schar_T) -> size_t;
 }
 pub type ptrdiff_t = isize;
 pub type size_t = usize;
@@ -2063,9 +2050,7 @@ pub const kExtmarkVirtText: C2Rust_Unnamed_29 = 8;
 pub const kExtmarkVirtLines: C2Rust_Unnamed_29 = 16;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const kExtmarkSignHL: C2Rust_Unnamed_29 = 4;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
@@ -2096,10 +2081,7 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_has_uint32_t(
-    mut set: *mut Set_uint32_t,
-    mut key: uint32_t,
-) -> bool {
+unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
     return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 pub const kMTFilterSelect: uint32_t = -1 as ::core::ffi::c_int as uint32_t;
@@ -2118,9 +2100,7 @@ unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> ui
 #[no_mangle]
 pub static mut decor_freelist: uint32_t = UINT32_MAX as uint32_t;
 #[no_mangle]
-pub static mut to_free_virt: *mut DecorVirtText = ::core::ptr::null_mut::<
-    DecorVirtText,
->();
+pub static mut to_free_virt: *mut DecorVirtText = ::core::ptr::null_mut::<DecorVirtText>();
 #[no_mangle]
 pub static mut to_free_sh: uint32_t = UINT32_MAX as uint32_t;
 #[no_mangle]
@@ -2196,24 +2176,21 @@ pub unsafe extern "C" fn decor_redraw(
     if decor.ext {
         let mut vt: *mut DecorVirtText = decor.data.ext.vt;
         while !vt.is_null() {
-            let mut below: bool = (*vt).flags as ::core::ffi::c_int
-                & kVTIsLines as ::core::ffi::c_int != 0
-                && (*vt).flags as ::core::ffi::c_int
-                    & kVTLinesAbove as ::core::ffi::c_int == 0;
-            let mut vt_lnum: linenr_T = row1 as linenr_T + 1 as linenr_T
-                + below as linenr_T;
+            let mut below: bool =
+                (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0
+                    && (*vt).flags as ::core::ffi::c_int & kVTLinesAbove as ::core::ffi::c_int == 0;
+            let mut vt_lnum: linenr_T = row1 as linenr_T + 1 as linenr_T + below as linenr_T;
             redraw_buf_line_later(buf, vt_lnum, true_0 != 0);
             if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0
                 || (*vt).pos as ::core::ffi::c_uint
                     == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut vt_col: colnr_T = if (*vt).flags as ::core::ffi::c_int
-                    & kVTIsLines as ::core::ffi::c_int != 0
-                {
-                    0 as colnr_T
-                } else {
-                    col1 as colnr_T
-                };
+                let mut vt_col: colnr_T =
+                    if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
+                        0 as colnr_T
+                    } else {
+                        col1 as colnr_T
+                    };
                 changed_lines_invalidate_buf(
                     buf,
                     vt_lnum,
@@ -2241,10 +2218,13 @@ pub unsafe extern "C" fn decor_redraw_sh(
     mut row2: ::core::ffi::c_int,
     mut sh: DecorSignHighlight,
 ) {
-    if sh.hl_id != 0 || !sh.url.is_null()
+    if sh.hl_id != 0
+        || !sh.url.is_null()
         || sh.flags as ::core::ffi::c_int
-            & (kSHIsSign as ::core::ffi::c_int | kSHSpellOn as ::core::ffi::c_int
-                | kSHSpellOff as ::core::ffi::c_int | kSHConceal as ::core::ffi::c_int)
+            & (kSHIsSign as ::core::ffi::c_int
+                | kSHSpellOn as ::core::ffi::c_int
+                | kSHSpellOff as ::core::ffi::c_int
+                | kSHConceal as ::core::ffi::c_int)
             != 0
     {
         if row2 >= row1 {
@@ -2289,10 +2269,10 @@ pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t 
             });
             decor_items.items = xrealloc(
                 decor_items.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<DecorSignHighlight>()
-                    .wrapping_mul(decor_items.capacity),
+                ::core::mem::size_of::<DecorSignHighlight>().wrapping_mul(decor_items.capacity),
             ) as *mut DecorSignHighlight;
-        } else {};
+        } else {
+        };
         let c2rust_fresh0 = decor_items.size;
         decor_items.size = decor_items.size.wrapping_add(1);
         *decor_items.items.offset(c2rust_fresh0 as isize) = item;
@@ -2304,9 +2284,8 @@ pub unsafe extern "C" fn decor_put_vt(
     mut vt: DecorVirtText,
     mut next: *mut DecorVirtText,
 ) -> *mut DecorVirtText {
-    let mut decor_alloc: *mut DecorVirtText = xmalloc(
-        ::core::mem::size_of::<DecorVirtText>(),
-    ) as *mut DecorVirtText;
+    let mut decor_alloc: *mut DecorVirtText =
+        xmalloc(::core::mem::size_of::<DecorVirtText>()) as *mut DecorVirtText;
     *decor_alloc = vt;
     (*decor_alloc).next = next;
     return decor_alloc;
@@ -2316,15 +2295,15 @@ pub unsafe extern "C" fn decor_sh_from_inline(
     mut item: DecorHighlightInline,
 ) -> DecorSignHighlight {
     '_c2rust_label: {
-        if item.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int == 0
-        {} else {
+        if item.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int == 0 {
+        } else {
             __assert_fail(
                 b"!(item.flags & kSHIsSign)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 166 as ::core::ffi::c_uint,
-                b"DecorSignHighlight decor_sh_from_inline(DecorHighlightInline)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"DecorSignHighlight decor_sh_from_inline(DecorHighlightInline)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2350,9 +2329,7 @@ pub unsafe extern "C" fn buf_put_decor(
     mut row: ::core::ffi::c_int,
     mut row2: ::core::ffi::c_int,
 ) {
-    if decor.ext as ::core::ffi::c_int != 0
-        && (row as linenr_T) < (*buf).b_ml.ml_line_count
-    {
+    if decor.ext as ::core::ffi::c_int != 0 && (row as linenr_T) < (*buf).b_ml.ml_line_count {
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         row2 = (if ((*buf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
             (*buf).b_ml.ml_line_count - 1 as linenr_T
@@ -2366,15 +2343,17 @@ pub unsafe extern "C" fn buf_put_decor(
         }
     }
 }
-unsafe extern "C" fn may_force_numberwidth_recompute(
-    mut buf: *mut buf_T,
-    mut unplace: bool,
-) {
+unsafe extern "C" fn may_force_numberwidth_recompute(mut buf: *mut buf_T, mut unplace: bool) {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
-            if (*wp).w_buffer == buf && (*wp).w_minscwidth == SCL_NUM
+            if (*wp).w_buffer == buf
+                && (*wp).w_minscwidth == SCL_NUM
                 && ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
                 && (unplace as ::core::ffi::c_int != 0
                     || (*wp).w_nrwidth_width < 2 as ::core::ffi::c_int)
@@ -2414,9 +2393,7 @@ pub unsafe extern "C" fn buf_decor_remove(
     mut free: bool,
 ) {
     decor_redraw(buf, row1, row2, col1, decor);
-    if decor.ext as ::core::ffi::c_int != 0
-        && (row1 as linenr_T) < (*buf).b_ml.ml_line_count
-    {
+    if decor.ext as ::core::ffi::c_int != 0 && (row1 as linenr_T) < (*buf).b_ml.ml_line_count {
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         row2 = (if ((*buf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
             (*buf).b_ml.ml_line_count - 1 as linenr_T
@@ -2443,17 +2420,10 @@ pub unsafe extern "C" fn buf_remove_decor_sh(
     if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
         if (*sh).text[0 as ::core::ffi::c_int as usize] != 0 {
             if buf_meta_total(buf, kMTMetaSignText) != 0 {
-                buf_signcols_count_range(
-                    buf,
-                    row1,
-                    row2,
-                    -1 as ::core::ffi::c_int,
-                    kFalse,
-                );
+                buf_signcols_count_range(buf, row1, row2, -1 as ::core::ffi::c_int, kFalse);
             } else {
                 may_force_numberwidth_recompute(buf, true_0 != 0);
-                (*buf).b_signcols.count[0 as ::core::ffi::c_int as usize] = 0
-                    as ::core::ffi::c_int;
+                (*buf).b_signcols.count[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
                 (*buf).b_signcols.max = 0 as ::core::ffi::c_int;
             }
         }
@@ -2490,10 +2460,7 @@ pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
         decor_free_inner(vt, idx);
     };
 }
-unsafe extern "C" fn decor_free_inner(
-    mut vt: *mut DecorVirtText,
-    mut first_idx: uint32_t,
-) {
+unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx: uint32_t) {
     while !vt.is_null() {
         if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
             clear_virtlines(&raw mut (*vt).data.virt_lines);
@@ -2508,16 +2475,16 @@ unsafe extern "C" fn decor_free_inner(
     while idx != DECOR_ID_INVALID as uint32_t {
         let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
         if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*sh).sign_name
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut (*sh).sign_name as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
         }
         (*sh).flags = 0 as uint16_t;
         if !(*sh).url.is_null() {
-            let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*sh).url
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                &raw mut (*sh).url as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL;
             *ptr__0;
@@ -2540,15 +2507,14 @@ pub unsafe extern "C" fn decor_state_invalidate(mut buf: *mut buf_T) {
 #[no_mangle]
 pub unsafe extern "C" fn decor_check_to_be_deleted() {
     '_c2rust_label: {
-        if !decor_state.running_decor_provider {} else {
+        if !decor_state.running_decor_provider {
+        } else {
             __assert_fail(
-                b"!decor_state.running_decor_provider\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"!decor_state.running_decor_provider\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 330 as ::core::ffi::c_uint,
-                b"void decor_check_to_be_deleted(void)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void decor_check_to_be_deleted(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2607,23 +2573,19 @@ pub unsafe extern "C" fn decor_check_invalid_glyphs() {
     let mut i: size_t = 0 as size_t;
     while i < decor_items.size {
         let mut it: *mut DecorSignHighlight = decor_items.items.offset(i as isize);
-        let mut width: ::core::ffi::c_int = if (*it).flags as ::core::ffi::c_int
-            & kSHIsSign as ::core::ffi::c_int != 0
-        {
-            SIGN_WIDTH as ::core::ffi::c_int
-        } else if (*it).flags as ::core::ffi::c_int & kSHConceal as ::core::ffi::c_int
-            != 0
-        {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        };
+        let mut width: ::core::ffi::c_int =
+            if (*it).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
+                SIGN_WIDTH as ::core::ffi::c_int
+            } else if (*it).flags as ::core::ffi::c_int & kSHConceal as ::core::ffi::c_int != 0 {
+                1 as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            };
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while j < width {
             if schar_high((*it).text[j as usize]) {
-                (*it).text[j as usize] = schar_from_char(
-                    schar_get_first_codepoint((*it).text[j as usize]),
-                );
+                (*it).text[j as usize] =
+                    schar_from_char(schar_get_first_codepoint((*it).text[j as usize]));
             }
             j += 1;
         }
@@ -2636,9 +2598,7 @@ pub unsafe extern "C" fn next_virt_text_chunk(
     mut pos: *mut size_t,
     mut attr: *mut ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut text: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut text: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     while text.is_null() && *pos < vt.size {
         text = (*vt.items.offset(*pos as isize)).text;
         let mut hl_id: ::core::ffi::c_int = (*vt.items.offset(*pos as isize)).hl_id;
@@ -2662,21 +2622,19 @@ pub unsafe extern "C" fn decor_find_virttext(
     mut row: ::core::ffi::c_int,
     mut ns_id: uint64_t,
 ) -> *mut DecorVirtText {
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_19 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_19 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     marktree_itr_get(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         row as int32_t,
@@ -2692,14 +2650,11 @@ pub unsafe extern "C" fn decor_find_virttext(
         if !mt_invalid(mark) {
             decor = mt_decor_virt(mark);
             while !decor.is_null()
-                && (*decor).flags as ::core::ffi::c_int
-                    & kVTIsLines as ::core::ffi::c_int != 0
+                && (*decor).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0
             {
                 decor = (*decor).next;
             }
-            if (ns_id == 0 as uint64_t || ns_id == mark.ns as uint64_t)
-                && !decor.is_null()
-            {
+            if (ns_id == 0 as uint64_t || ns_id == mark.ns as uint64_t) && !decor.is_null() {
                 return decor;
             }
         }
@@ -2719,10 +2674,7 @@ pub unsafe extern "C" fn decor_redraw_reset(
     (*state).win = wp;
     let indices: *mut ::core::ffi::c_int = (*state).ranges_i.items;
     let slots: *mut DecorRangeSlot = (*state).slots.items;
-    let beg_pos: [::core::ffi::c_int; 2] = [
-        0 as ::core::ffi::c_int,
-        (*state).future_begin,
-    ];
+    let beg_pos: [::core::ffi::c_int; 2] = [0 as ::core::ffi::c_int, (*state).future_begin];
     let end_pos: [::core::ffi::c_int; 2] = [
         (*state).current_end,
         (*state).ranges_i.size as ::core::ffi::c_int,
@@ -2731,12 +2683,10 @@ pub unsafe extern "C" fn decor_redraw_reset(
     while pos_i < 2 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = beg_pos[pos_i as usize];
         while i < end_pos[pos_i as usize] {
-            let r: *mut DecorRange = &raw mut (*slots
-                .offset(*indices.offset(i as isize) as isize))
-                .range;
+            let r: *mut DecorRange =
+                &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
             if (*r).owned as ::core::ffi::c_int != 0
-                && (*r).kind as ::core::ffi::c_int
-                    == kDecorKindVirtText as ::core::ffi::c_int
+                && (*r).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int
             {
                 clear_virttext(&raw mut (*(*r).data.vt).data.virt_text);
                 xfree((*r).data.vt as *mut ::core::ffi::c_void);
@@ -2755,15 +2705,11 @@ pub unsafe extern "C" fn decor_redraw_reset(
 }
 #[no_mangle]
 pub unsafe extern "C" fn decor_virt_pos(mut decor: *const DecorRange) -> bool {
-    return (*decor).kind as ::core::ffi::c_int
-        == kDecorKindVirtText as ::core::ffi::c_int
-        || (*decor).kind as ::core::ffi::c_int
-            == kDecorKindUIWatched as ::core::ffi::c_int;
+    return (*decor).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int
+        || (*decor).kind as ::core::ffi::c_int == kDecorKindUIWatched as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn decor_virt_pos_kind(
-    mut decor: *const DecorRange,
-) -> VirtTextPos {
+pub unsafe extern "C" fn decor_virt_pos_kind(mut decor: *const DecorRange) -> VirtTextPos {
     if (*decor).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int {
         return (*(*decor).data.vt).pos;
     }
@@ -2900,15 +2846,7 @@ unsafe extern "C" fn decor_range_add_from_inline(
     if decor.ext {
         let mut vt: *mut DecorVirtText = decor.data.ext.vt;
         while !vt.is_null() {
-            decor_range_add_virt(
-                state,
-                start_row,
-                start_col,
-                end_row,
-                end_col,
-                vt,
-                owned,
-            );
+            decor_range_add_virt(state, start_row, start_col, end_row, end_col, vt, owned);
             vt = (*vt).next;
         }
         let mut idx: uint32_t = decor.data.ext.sh_idx;
@@ -2944,10 +2882,7 @@ unsafe extern "C" fn decor_range_add_from_inline(
         );
     };
 }
-unsafe extern "C" fn decor_range_insert(
-    mut state: *mut DecorState,
-    mut range: *mut DecorRange,
-) {
+unsafe extern "C" fn decor_range_insert(mut state: *mut DecorState, mut range: *mut DecorRange) {
     let c2rust_fresh2 = (*state).new_range_ordering;
     (*state).new_range_ordering = (*state).new_range_ordering + 1;
     (*range).ordering = c2rust_fresh2;
@@ -2967,10 +2902,10 @@ unsafe extern "C" fn decor_range_insert(
             });
             (*state).slots.items = xrealloc(
                 (*state).slots.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<DecorRangeSlot>()
-                    .wrapping_mul((*state).slots.capacity),
+                ::core::mem::size_of::<DecorRangeSlot>().wrapping_mul((*state).slots.capacity),
             ) as *mut DecorRangeSlot;
-        } else {};
+        } else {
+        };
         let c2rust_fresh3 = (*state).slots.size;
         (*state).slots.size = (*state).slots.size.wrapping_add(1);
         (*(*state).slots.items.offset(c2rust_fresh3 as isize)).range = *range;
@@ -2984,9 +2919,8 @@ unsafe extern "C" fn decor_range_insert(
     let mut end: ::core::ffi::c_int = count;
     while begin < end {
         let mid: ::core::ffi::c_int = begin + (end - begin >> 1 as ::core::ffi::c_int);
-        let mr: *mut DecorRange = &raw mut (*slots
-            .offset(*indices.offset(mid as isize) as isize))
-            .range;
+        let mr: *mut DecorRange =
+            &raw mut (*slots.offset(*indices.offset(mid as isize) as isize)).range;
         let mrow: ::core::ffi::c_int = (*mr).start_row;
         let mcol: ::core::ffi::c_int = (*mr).start_col;
         if mrow < row || mrow == row && mcol <= col {
@@ -3006,17 +2940,16 @@ unsafe extern "C" fn decor_range_insert(
         });
         (*state).ranges_i.items = xrealloc(
             (*state).ranges_i.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_int>()
-                .wrapping_mul((*state).ranges_i.capacity),
+            ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul((*state).ranges_i.capacity),
         ) as *mut ::core::ffi::c_int;
-    } else {};
+    } else {
+    };
     (*state).ranges_i.size = (*state).ranges_i.size.wrapping_add(1);
     let item: *mut ::core::ffi::c_int = (*state).ranges_i.items.offset(begin as isize);
     memmove(
         item.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
         item as *const ::core::ffi::c_void,
-        ((count - begin) as size_t)
-            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
+        ((count - begin) as size_t).wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
     );
     *item = index;
 }
@@ -3030,16 +2963,15 @@ pub unsafe extern "C" fn decor_range_add_virt(
     mut vt: *mut DecorVirtText,
     mut owned: bool,
 ) {
-    let mut is_lines: bool = (*vt).flags as ::core::ffi::c_int
-        & kVTIsLines as ::core::ffi::c_int != 0;
+    let mut is_lines: bool =
+        (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0;
     let mut range: DecorRange = DecorRange {
         start_row: start_row,
         start_col: start_col,
         end_row: end_row,
         end_col: end_col,
         ordering: 0,
-        priority_internal: ((*vt).priority as DecorPriorityInternal)
-            << 16 as ::core::ffi::c_int,
+        priority_internal: ((*vt).priority as DecorPriorityInternal) << 16 as ::core::ffi::c_int,
         owned: owned,
         kind: (if is_lines as ::core::ffi::c_int != 0 {
             kDecorKindVirtLines as ::core::ffi::c_int
@@ -3074,8 +3006,7 @@ pub unsafe extern "C" fn decor_range_add_sh(
         end_row: end_row,
         end_col: end_col,
         ordering: 0,
-        priority_internal: (((*sh).priority as DecorPriorityInternal)
-            << 16 as ::core::ffi::c_int)
+        priority_internal: (((*sh).priority as DecorPriorityInternal) << 16 as ::core::ffi::c_int)
             .wrapping_add(subpriority as DecorPriorityInternal),
         owned: owned,
         kind: kDecorKindHighlight as ::core::ffi::c_int as DecorRangeKind,
@@ -3083,10 +3014,13 @@ pub unsafe extern "C" fn decor_range_add_sh(
         attr_id: 0 as ::core::ffi::c_int,
         draw_col: -10 as ::core::ffi::c_int,
     };
-    if (*sh).hl_id != 0 || !(*sh).url.is_null()
+    if (*sh).hl_id != 0
+        || !(*sh).url.is_null()
         || (*sh).flags as ::core::ffi::c_int
-            & (kSHConceal as ::core::ffi::c_int | kSHSpellOn as ::core::ffi::c_int
-                | kSHSpellOff as ::core::ffi::c_int) != 0
+            & (kSHConceal as ::core::ffi::c_int
+                | kSHSpellOn as ::core::ffi::c_int
+                | kSHSpellOff as ::core::ffi::c_int)
+            != 0
     {
         if (*sh).hl_id != 0 {
             range.attr_id = syn_id2attr((*sh).hl_id);
@@ -3098,7 +3032,8 @@ pub unsafe extern "C" fn decor_range_add_sh(
         range.data.ui.ns_id = ns;
         range.data.ui.mark_id = mark_id;
         range.data.ui.pos = (if (*sh).flags as ::core::ffi::c_int
-            & kSHUIWatchedOverlay as ::core::ffi::c_int != 0
+            & kSHUIWatchedOverlay as ::core::ffi::c_int
+            != 0
         {
             kVPosOverlay as ::core::ffi::c_int
         } else {
@@ -3113,17 +3048,15 @@ pub unsafe extern "C" fn decor_init_draw_col(
     mut hidden: bool,
     mut item: *mut DecorRange,
 ) {
-    let mut vt: *mut DecorVirtText = if (*item).kind as ::core::ffi::c_int
-        == kDecorKindVirtText as ::core::ffi::c_int
-    {
-        (*item).data.vt
-    } else {
-        ::core::ptr::null_mut::<DecorVirtText>()
-    };
+    let mut vt: *mut DecorVirtText =
+        if (*item).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int {
+            (*item).data.vt
+        } else {
+            ::core::ptr::null_mut::<DecorVirtText>()
+        };
     let mut pos: VirtTextPos = decor_virt_pos_kind(item);
     if win_col < 0 as ::core::ffi::c_int
-        && pos as ::core::ffi::c_uint
-            != kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
+        && pos as ::core::ffi::c_uint != kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         (*item).draw_col = win_col;
     } else if pos as ::core::ffi::c_uint
@@ -3152,9 +3085,8 @@ pub unsafe extern "C" fn decor_recheck_draw_col(
     let slots: *mut DecorRangeSlot = (*state).slots.items;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < end {
-        let r: *mut DecorRange = &raw mut (*slots
-            .offset(*indices.offset(i as isize) as isize))
-            .range;
+        let r: *mut DecorRange =
+            &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
         if (*r).draw_col == -3 as ::core::ffi::c_int {
             decor_init_draw_col(win_col, hidden, r);
         }
@@ -3175,9 +3107,7 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
     let mut col_last: ::core::ffi::c_int = max_col_last;
     let mut endpos: MTPos = MTPos { row: 0, col: 0 };
     loop {
-        let mut mark: MTKey = marktree_itr_current(
-            &raw mut (*state).itr as *mut MarkTreeIter,
-        );
+        let mut mark: MTKey = marktree_itr_current(&raw mut (*state).itr as *mut MarkTreeIter);
         if mark.pos.row < 0 as int32_t || mark.pos.row > row as int32_t {
             break;
         }
@@ -3190,7 +3120,8 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
             break;
         } else {
             if !(mt_invalid(mark) as ::core::ffi::c_int != 0
-                || mt_end(mark) as ::core::ffi::c_int != 0 || !mt_decor_any(mark)
+                || mt_end(mark) as ::core::ffi::c_int != 0
+                || !mt_decor_any(mark)
                 || !ns_in_win(mark.ns, wp))
             {
                 endpos = marktree_get_altpos(
@@ -3232,8 +3163,7 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
         let mut begin: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut end: ::core::ffi::c_int = cur_end;
         while begin < end {
-            let mut mid: ::core::ffi::c_int = begin
-                + (end - begin >> 1 as ::core::ffi::c_int);
+            let mut mid: ::core::ffi::c_int = begin + (end - begin >> 1 as ::core::ffi::c_int);
             let mut mi: ::core::ffi::c_int = *indices.offset(mid as isize);
             let mut mr: *mut DecorRange = &raw mut (*slots.offset(mi as isize)).range;
             if (*mr).priority_internal < priority
@@ -3256,9 +3186,8 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
         fut_beg += 1;
     }
     if fut_beg < count {
-        let mut r_0: *mut DecorRange = &raw mut (*slots
-            .offset(*indices.offset(fut_beg as isize) as isize))
-            .range;
+        let mut r_0: *mut DecorRange =
+            &raw mut (*slots.offset(*indices.offset(fut_beg as isize) as isize)).range;
         if (*r_0).start_row == row {
             col_last = if col_last < (*r_0).start_col - 1 as ::core::ffi::c_int {
                 col_last
@@ -3280,8 +3209,7 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
         let r_1: *mut DecorRange = &raw mut (*slot).range;
         let mut keep: bool = false;
         if (*r_1).end_row < row || (*r_1).end_row == row && (*r_1).end_col <= col {
-            keep = (*r_1).start_row >= row
-                && decor_virt_pos(r_1) as ::core::ffi::c_int != 0;
+            keep = (*r_1).start_row >= row && decor_virt_pos(r_1) as ::core::ffi::c_int != 0;
         } else {
             keep = true_0 != 0;
             if (*r_1).end_row == row && (*r_1).end_col > col {
@@ -3294,10 +3222,9 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
             if (*r_1).attr_id > 0 as ::core::ffi::c_int {
                 attr = hl_combine_attr(attr, (*r_1).attr_id);
             }
-            if (*r_1).kind as ::core::ffi::c_int
-                == kDecorKindHighlight as ::core::ffi::c_int
-                && (*r_1).data.sh.flags as ::core::ffi::c_int
-                    & kSHConceal as ::core::ffi::c_int != 0
+            if (*r_1).kind as ::core::ffi::c_int == kDecorKindHighlight as ::core::ffi::c_int
+                && (*r_1).data.sh.flags as ::core::ffi::c_int & kSHConceal as ::core::ffi::c_int
+                    != 0
             {
                 conceal = 1 as ::core::ffi::c_int;
                 if (*r_1).start_row == row && (*r_1).start_col == col {
@@ -3312,15 +3239,14 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
                     conceal_attr = (*r_1).attr_id;
                 }
             }
-            if (*r_1).kind as ::core::ffi::c_int
-                == kDecorKindHighlight as ::core::ffi::c_int
-            {
-                if (*r_1).data.sh.flags as ::core::ffi::c_int
-                    & kSHSpellOn as ::core::ffi::c_int != 0
+            if (*r_1).kind as ::core::ffi::c_int == kDecorKindHighlight as ::core::ffi::c_int {
+                if (*r_1).data.sh.flags as ::core::ffi::c_int & kSHSpellOn as ::core::ffi::c_int
+                    != 0
                 {
                     spell = kTrue;
                 } else if (*r_1).data.sh.flags as ::core::ffi::c_int
-                    & kSHSpellOff as ::core::ffi::c_int != 0
+                    & kSHSpellOff as ::core::ffi::c_int
+                    != 0
                 {
                     spell = kFalse;
                 }
@@ -3329,7 +3255,8 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
                 }
             }
         }
-        if (*r_1).start_row == row && (*r_1).start_col <= col
+        if (*r_1).start_row == row
+            && (*r_1).start_col <= col
             && decor_virt_pos(r_1) as ::core::ffi::c_int != 0
             && (*r_1).draw_col == -10 as ::core::ffi::c_int
         {
@@ -3341,9 +3268,7 @@ pub unsafe extern "C" fn decor_redraw_col_impl(
             *indices.offset(c2rust_fresh4 as isize) = index_0;
         } else {
             if (*r_1).owned {
-                if (*r_1).kind as ::core::ffi::c_int
-                    == kDecorKindVirtText as ::core::ffi::c_int
-                {
+                if (*r_1).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int {
                     clear_virttext(&raw mut (*(*r_1).data.vt).data.virt_text);
                     xfree((*r_1).data.vt as *mut ::core::ffi::c_void);
                 } else if (*r_1).kind as ::core::ffi::c_int
@@ -3381,8 +3306,10 @@ pub unsafe extern "C" fn decor_conceal_line(
     mut row: ::core::ffi::c_int,
     mut check_cursor: bool,
 ) -> bool {
-    if row < 0 as ::core::ffi::c_int || (*wp).w_onebuf_opt.wo_cole < 2 as OptInt
-        || !check_cursor && wp == curwin
+    if row < 0 as ::core::ffi::c_int
+        || (*wp).w_onebuf_opt.wo_cole < 2 as OptInt
+        || !check_cursor
+            && wp == curwin
             && row as linenr_T + 1 as linenr_T == (*wp).w_cursor.lnum
             && !conceal_cursor_line(wp)
     {
@@ -3414,10 +3341,7 @@ pub unsafe extern "C" fn decor_conceal_line(
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_19 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_19 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -3475,9 +3399,7 @@ pub unsafe extern "C" fn sign_item_cmp(
 ) -> ::core::ffi::c_int {
     let mut s1: *const SignItem = p1 as *mut SignItem;
     let mut s2: *const SignItem = p2 as *mut SignItem;
-    if (*(*s1).sh).priority as ::core::ffi::c_int
-        != (*(*s2).sh).priority as ::core::ffi::c_int
-    {
+    if (*(*s1).sh).priority as ::core::ffi::c_int != (*(*s2).sh).priority as ::core::ffi::c_int {
         return if ((*(*s1).sh).priority as ::core::ffi::c_int)
             < (*(*s2).sh).priority as ::core::ffi::c_int
         {
@@ -3540,10 +3462,7 @@ pub unsafe extern "C" fn decor_redraw_signs(
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_19 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_19 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -3569,9 +3488,8 @@ pub unsafe extern "C" fn decor_redraw_signs(
             && ns_in_win(pair.start.ns, wp) as ::core::ffi::c_int != 0
         {
             let mut sh: *mut DecorSignHighlight = decor_find_sign(mt_decor(pair.start));
-            num_text
-                += ((*sh).text[0 as ::core::ffi::c_int as usize] != NUL as schar_T)
-                    as ::core::ffi::c_int;
+            num_text += ((*sh).text[0 as ::core::ffi::c_int as usize] != NUL as schar_T)
+                as ::core::ffi::c_int;
             if signs.size == signs.capacity {
                 signs.capacity = (if signs.capacity != 0 {
                     signs.capacity << 1 as ::core::ffi::c_int
@@ -3582,7 +3500,8 @@ pub unsafe extern "C" fn decor_redraw_signs(
                     signs.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<SignItem>().wrapping_mul(signs.capacity),
                 ) as *mut SignItem;
-            } else {};
+            } else {
+            };
             let c2rust_fresh5 = signs.size;
             signs.size = signs.size.wrapping_add(1);
             *signs.items.offset(c2rust_fresh5 as isize) = SignItem {
@@ -3601,14 +3520,14 @@ pub unsafe extern "C" fn decor_redraw_signs(
         if mark.pos.row != row as int32_t {
             break;
         }
-        if !mt_invalid(mark) && !mt_end(mark)
+        if !mt_invalid(mark)
+            && !mt_end(mark)
             && mt_decor_sign(mark) as ::core::ffi::c_int != 0
             && ns_in_win(mark.ns, wp) as ::core::ffi::c_int != 0
         {
             let mut sh_0: *mut DecorSignHighlight = decor_find_sign(mt_decor(mark));
-            num_text
-                += ((*sh_0).text[0 as ::core::ffi::c_int as usize] != NUL as schar_T)
-                    as ::core::ffi::c_int;
+            num_text += ((*sh_0).text[0 as ::core::ffi::c_int as usize] != NUL as schar_T)
+                as ::core::ffi::c_int;
             if signs.size == signs.capacity {
                 signs.capacity = (if signs.capacity != 0 {
                     signs.capacity << 1 as ::core::ffi::c_int
@@ -3619,7 +3538,8 @@ pub unsafe extern "C" fn decor_redraw_signs(
                     signs.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<SignItem>().wrapping_mul(signs.capacity),
                 ) as *mut SignItem;
-            } else {};
+            } else {
+            };
             let c2rust_fresh6 = signs.size;
             signs.size = signs.size.wrapping_add(1);
             *signs.items.offset(c2rust_fresh6 as isize) = SignItem {
@@ -3641,15 +3561,10 @@ pub unsafe extern "C" fn decor_redraw_signs(
         } else {
             (*wp).w_scwidth
         };
-        let mut len: ::core::ffi::c_int = if width < num_text {
-            width
-        } else {
-            num_text
-        };
+        let mut len: ::core::ffi::c_int = if width < num_text { width } else { num_text };
         let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         qsort(
-            signs.items.offset(0 as ::core::ffi::c_int as isize)
-                as *mut ::core::ffi::c_void,
+            signs.items.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
             signs.size,
             ::core::mem::size_of::<SignItem>(),
             Some(
@@ -3663,8 +3578,7 @@ pub unsafe extern "C" fn decor_redraw_signs(
         let mut i: size_t = 0 as size_t;
         while i < signs.size {
             let mut sh_1: *mut DecorSignHighlight = (*signs.items.offset(i as isize)).sh;
-            if !sattrs.is_null() && idx < len
-                && (*sh_1).text[0 as ::core::ffi::c_int as usize] != 0
+            if !sattrs.is_null() && idx < len && (*sh_1).text[0 as ::core::ffi::c_int as usize] != 0
             {
                 memcpy(
                     &raw mut (*sattrs.offset(idx as isize)).text as *mut schar_T
@@ -3695,9 +3609,7 @@ pub unsafe extern "C" fn decor_redraw_signs(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn decor_find_sign(
-    mut decor: DecorInline,
-) -> *mut DecorSignHighlight {
+pub unsafe extern "C" fn decor_find_sign(mut decor: DecorInline) -> *mut DecorSignHighlight {
     if !decor.ext {
         return ::core::ptr::null_mut::<DecorSignHighlight>();
     }
@@ -3706,14 +3618,12 @@ pub unsafe extern "C" fn decor_find_sign(
         if decor_id == DECOR_ID_INVALID as uint32_t {
             return ::core::ptr::null_mut::<DecorSignHighlight>();
         }
-        let mut sh: *mut DecorSignHighlight = decor_items
-            .items
-            .offset(decor_id as isize);
+        let mut sh: *mut DecorSignHighlight = decor_items.items.offset(decor_id as isize);
         if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
             return sh;
         }
         decor_id = (*sh).next;
-    };
+    }
 }
 static mut signtext_filter: [uint32_t; 5] = [0, 0, 0, kMTFilterSelect, 0];
 #[no_mangle]
@@ -3724,9 +3634,7 @@ pub unsafe extern "C" fn buf_signcols_count_range(
     mut add: ::core::ffi::c_int,
     mut clear: TriState,
 ) {
-    if !(*buf).b_signcols.autom || row2 < row1
-        || buf_meta_total(buf, kMTMetaSignText) == 0
-    {
+    if !(*buf).b_signcols.autom || row2 < row1 || buf_meta_total(buf, kMTMetaSignText) == 0 {
         return;
     }
     let mut count: *mut ::core::ffi::c_int = xcalloc(
@@ -3738,17 +3646,17 @@ pub unsafe extern "C" fn buf_signcols_count_range(
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_19 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_19 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
     }; 1];
     let mut pair: MTPair = MTPair {
         start: MTKey {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
+            pos: MTPos {
+                row: 0 as int32_t,
+                col: 0,
+            },
             ns: 0,
             id: 0,
             flags: 0,
@@ -3802,7 +3710,8 @@ pub unsafe extern "C" fn buf_signcols_count_range(
             break;
         }
         if mark.flags as ::core::ffi::c_int & MT_FLAG_DECOR_SIGNTEXT != 0
-            && !mt_invalid(mark) && !mt_end(mark)
+            && !mt_invalid(mark)
+            && !mt_end(mark)
         {
             let mut end: MTPos = marktree_get_altpos(
                 &raw mut (*buf).b_marktree as *mut MarkTree,
@@ -3811,7 +3720,11 @@ pub unsafe extern "C" fn buf_signcols_count_range(
             );
             let mut i_0: ::core::ffi::c_int = mark.pos.row as ::core::ffi::c_int;
             while i_0 as int32_t
-                <= (if (row2 as int32_t) < end.row { row2 as int32_t } else { end.row })
+                <= (if (row2 as int32_t) < end.row {
+                    row2 as int32_t
+                } else {
+                    end.row
+                })
             {
                 *count.offset((i_0 - row1) as isize) += 1;
                 i_0 += 1;
@@ -3827,28 +3740,26 @@ pub unsafe extern "C" fn buf_signcols_count_range(
     }
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_1 < row2 + 1 as ::core::ffi::c_int - row1 {
-        let mut prevwidth: ::core::ffi::c_int = if (SIGN_SHOW_MAX as ::core::ffi::c_int)
-            < *count.offset(i_1 as isize) - add
-        {
-            SIGN_SHOW_MAX as ::core::ffi::c_int
-        } else {
-            *count.offset(i_1 as isize) - add
-        };
+        let mut prevwidth: ::core::ffi::c_int =
+            if (SIGN_SHOW_MAX as ::core::ffi::c_int) < *count.offset(i_1 as isize) - add {
+                SIGN_SHOW_MAX as ::core::ffi::c_int
+            } else {
+                *count.offset(i_1 as isize) - add
+            };
         if clear as ::core::ffi::c_int != kNone as ::core::ffi::c_int
             && prevwidth > 0 as ::core::ffi::c_int
         {
             (*buf).b_signcols.count[(prevwidth - 1 as ::core::ffi::c_int) as usize] -= 1;
             '_c2rust_label: {
-                if (*buf)
-                    .b_signcols
-                    .count[(prevwidth - 1 as ::core::ffi::c_int) as usize]
+                if (*buf).b_signcols.count[(prevwidth - 1 as ::core::ffi::c_int) as usize]
                     >= 0 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"buf->b_signcols.count[prevwidth - 1] >= 0\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1078 as ::core::ffi::c_uint,
                         b"void buf_signcols_count_range(buf_T *, int, int, int, TriState)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -3856,13 +3767,12 @@ pub unsafe extern "C" fn buf_signcols_count_range(
                 }
             };
         }
-        let mut width: ::core::ffi::c_int = if (SIGN_SHOW_MAX as ::core::ffi::c_int)
-            < *count.offset(i_1 as isize)
-        {
-            SIGN_SHOW_MAX as ::core::ffi::c_int
-        } else {
-            *count.offset(i_1 as isize)
-        };
+        let mut width: ::core::ffi::c_int =
+            if (SIGN_SHOW_MAX as ::core::ffi::c_int) < *count.offset(i_1 as isize) {
+                SIGN_SHOW_MAX as ::core::ffi::c_int
+            } else {
+                *count.offset(i_1 as isize)
+            };
         if clear as ::core::ffi::c_int != kTrue as ::core::ffi::c_int
             && width > 0 as ::core::ffi::c_int
         {
@@ -3901,16 +3811,14 @@ pub unsafe extern "C" fn decor_redraw_eol(
     let mut has_virt_pos: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < count {
-        let mut r: *mut DecorRange = &raw mut (*slots
-            .offset(*indices.offset(i as isize) as isize))
-            .range;
+        let mut r: *mut DecorRange =
+            &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
         has_virt_pos = has_virt_pos as ::core::ffi::c_int
-            | ((*r).start_row == (*state).row
-                && decor_virt_pos(r) as ::core::ffi::c_int != 0) as ::core::ffi::c_int
+            | ((*r).start_row == (*state).row && decor_virt_pos(r) as ::core::ffi::c_int != 0)
+                as ::core::ffi::c_int
             != 0;
         if (*r).kind as ::core::ffi::c_int == kDecorKindHighlight as ::core::ffi::c_int
-            && (*r).data.sh.flags as ::core::ffi::c_int & kSHHlEol as ::core::ffi::c_int
-                != 0
+            && (*r).data.sh.flags as ::core::ffi::c_int & kSHHlEol as ::core::ffi::c_int != 0
         {
             *eol_attr = hl_combine_attr(*eol_attr, (*r).attr_id);
         }
@@ -3932,21 +3840,19 @@ pub unsafe extern "C" fn decor_virt_lines(
     if buf_meta_total(buf, kMTMetaLines) == 0 {
         return 0 as ::core::ffi::c_int;
     }
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_19 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_19 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     if !marktree_itr_get_filter(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         if start_row - 1 as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
@@ -3963,14 +3869,15 @@ pub unsafe extern "C" fn decor_virt_lines(
         return 0 as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if start_row >= 0 as ::core::ffi::c_int {} else {
+        if start_row >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"start_row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1138 as ::core::ffi::c_uint,
-                b"int decor_virt_lines(win_T *, int, int, int *, VirtLines *, _Bool)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"int decor_virt_lines(win_T *, int, int, int *, VirtLines *, _Bool)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -3980,29 +3887,30 @@ pub unsafe extern "C" fn decor_virt_lines(
         let mut vt: *mut DecorVirtText = mt_decor_virt(mark);
         if !mt_invalid(mark) && ns_in_win(mark.ns, wp) as ::core::ffi::c_int != 0 {
             while !vt.is_null() {
-                if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int
-                    != 0
-                {
+                if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
                     let mut above: bool = (*vt).flags as ::core::ffi::c_int
-                        & kVTLinesAbove as ::core::ffi::c_int != 0;
-                    let mut mrow: ::core::ffi::c_int = mark.pos.row
-                        as ::core::ffi::c_int;
+                        & kVTLinesAbove as ::core::ffi::c_int
+                        != 0;
+                    let mut mrow: ::core::ffi::c_int = mark.pos.row as ::core::ffi::c_int;
                     let mut draw_row: ::core::ffi::c_int = mrow
                         + (if above as ::core::ffi::c_int != 0 {
                             0 as ::core::ffi::c_int
                         } else {
                             1 as ::core::ffi::c_int
                         });
-                    if draw_row >= start_row && draw_row < end_row
+                    if draw_row >= start_row
+                        && draw_row < end_row
                         && (!apply_folds
                             || !(hasFolding(
                                 wp,
                                 mrow as linenr_T + 1 as linenr_T,
                                 ::core::ptr::null_mut::<linenr_T>(),
                                 ::core::ptr::null_mut::<linenr_T>(),
-                            ) as ::core::ffi::c_int != 0
+                            ) as ::core::ffi::c_int
+                                != 0
                                 || decor_conceal_line(wp, mrow, false_0 != 0)
-                                    as ::core::ffi::c_int != 0))
+                                    as ::core::ffi::c_int
+                                    != 0))
                     {
                         virt_lines += (*vt).data.virt_lines.size as ::core::ffi::c_int;
                         if !lines.is_null() {
@@ -4010,30 +3918,31 @@ pub unsafe extern "C" fn decor_virt_lines(
                                 if (*lines).capacity
                                     < (*lines).size.wrapping_add((*vt).data.virt_lines.size)
                                 {
-                                    (*lines).capacity = (*lines)
-                                        .size
-                                        .wrapping_add((*vt).data.virt_lines.size);
+                                    (*lines).capacity =
+                                        (*lines).size.wrapping_add((*vt).data.virt_lines.size);
                                     (*lines).capacity = (*lines).capacity.wrapping_sub(1);
-                                    (*lines).capacity
-                                        |= (*lines).capacity >> 1 as ::core::ffi::c_int;
-                                    (*lines).capacity
-                                        |= (*lines).capacity >> 2 as ::core::ffi::c_int;
-                                    (*lines).capacity
-                                        |= (*lines).capacity >> 4 as ::core::ffi::c_int;
-                                    (*lines).capacity
-                                        |= (*lines).capacity >> 8 as ::core::ffi::c_int;
-                                    (*lines).capacity
-                                        |= (*lines).capacity >> 16 as ::core::ffi::c_int;
+                                    (*lines).capacity |=
+                                        (*lines).capacity >> 1 as ::core::ffi::c_int;
+                                    (*lines).capacity |=
+                                        (*lines).capacity >> 2 as ::core::ffi::c_int;
+                                    (*lines).capacity |=
+                                        (*lines).capacity >> 4 as ::core::ffi::c_int;
+                                    (*lines).capacity |=
+                                        (*lines).capacity >> 8 as ::core::ffi::c_int;
+                                    (*lines).capacity |=
+                                        (*lines).capacity >> 16 as ::core::ffi::c_int;
                                     (*lines).capacity = (*lines).capacity.wrapping_add(1);
                                     (*lines).capacity = (*lines).capacity;
                                     (*lines).items = xrealloc(
                                         (*lines).items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<virt_line>()
                                             .wrapping_mul((*lines).capacity),
-                                    ) as *mut virt_line;
+                                    )
+                                        as *mut virt_line;
                                 }
                                 '_c2rust_label_0: {
-                                    if !(*lines).items.is_null() {} else {
+                                    if !(*lines).items.is_null() {
+                                    } else {
                                         __assert_fail(
                                             b"(*lines).items\0".as_ptr() as *const ::core::ffi::c_char,
                                             b"/home/overlord/projects/neovim/neovim/src/nvim/decoration.c\0"
@@ -4051,14 +3960,12 @@ pub unsafe extern "C" fn decor_virt_lines(
                                     ::core::mem::size_of::<virt_line>()
                                         .wrapping_mul((*vt).data.virt_lines.size),
                                 );
-                                (*lines).size = (*lines)
-                                    .size
-                                    .wrapping_add((*vt).data.virt_lines.size);
+                                (*lines).size =
+                                    (*lines).size.wrapping_add((*vt).data.virt_lines.size);
                             }
                         }
                         if !num_below.is_null() && !above {
-                            *num_below
-                                += (*vt).data.virt_lines.size as ::core::ffi::c_int;
+                            *num_below += (*vt).data.virt_lines.size as ::core::ffi::c_int;
                         }
                     }
                 }
@@ -4092,8 +3999,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
     if decor.ext {
         let mut vt: *mut DecorVirtText = decor.data.ext.vt;
         while !vt.is_null() {
-            if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0
-            {
+            if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
                 virt_lines = vt;
             } else {
                 virt_text = vt;
@@ -4127,8 +4033,8 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed_14 {
-                    boolean: sh_hl.flags as ::core::ffi::c_int
-                        & kSHHlEol as ::core::ffi::c_int != 0,
+                    boolean: sh_hl.flags as ::core::ffi::c_int & kSHHlEol as ::core::ffi::c_int
+                        != 0,
                 },
             },
         };
@@ -4159,9 +4065,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         let c2rust_fresh11 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh11 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"conceal_lines\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"conceal_lines\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_14 {
@@ -4180,17 +4084,14 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
                 data: C2Rust_Unnamed_14 { boolean: true },
             },
         };
-    } else if sh_hl.flags as ::core::ffi::c_int & kSHSpellOff as ::core::ffi::c_int != 0
-    {
+    } else if sh_hl.flags as ::core::ffi::c_int & kSHSpellOff as ::core::ffi::c_int != 0 {
         let c2rust_fresh13 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh13 as isize) = key_value_pair {
             key: cstr_as_string(b"spell\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed_14 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_14 { boolean: false },
             },
         };
     }
@@ -4228,19 +4129,14 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_14 {
                         string: cstr_as_string(
-                            *(&raw const hl_mode_str
-                                as *const *const ::core::ffi::c_char)
+                            *(&raw const hl_mode_str as *const *const ::core::ffi::c_char)
                                 .offset((*virt_text).hl_mode as isize),
                         ),
                     },
                 },
             };
         }
-        let mut chunks: Array = virt_text_to_array(
-            (*virt_text).data.virt_text,
-            hl_name,
-            arena,
-        );
+        let mut chunks: Array = virt_text_to_array((*virt_text).data.virt_text, hl_name, arena);
         let c2rust_fresh17 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh17 as isize) = key_value_pair {
@@ -4253,14 +4149,13 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         let c2rust_fresh18 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh18 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"virt_text_hide\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"virt_text_hide\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed_14 {
                     boolean: (*virt_text).flags as ::core::ffi::c_int
-                        & kVTHide as ::core::ffi::c_int != 0,
+                        & kVTHide as ::core::ffi::c_int
+                        != 0,
                 },
             },
         };
@@ -4268,13 +4163,14 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh19 as isize) = key_value_pair {
             key: cstr_as_string(
-                b"virt_text_repeat_linebreak\0".as_ptr() as *const ::core::ffi::c_char,
+                b"virt_text_repeat_linebreak\0".as_ptr() as *const ::core::ffi::c_char
             ),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed_14 {
                     boolean: (*virt_text).flags as ::core::ffi::c_int
-                        & kVTRepeatLinebreak as ::core::ffi::c_int != 0,
+                        & kVTRepeatLinebreak as ::core::ffi::c_int
+                        != 0,
                 },
             },
         };
@@ -4284,9 +4180,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
             let c2rust_fresh20 = (*dict).size;
             (*dict).size = (*dict).size.wrapping_add(1);
             *(*dict).items.offset(c2rust_fresh20 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"virt_text_win_col\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"virt_text_win_col\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed_14 {
@@ -4298,15 +4192,12 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         let c2rust_fresh21 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh21 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"virt_text_pos\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"virt_text_pos\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_14 {
                     string: cstr_as_string(
-                        *(&raw const virt_text_pos_str
-                            as *const *const ::core::ffi::c_char)
+                        *(&raw const virt_text_pos_str as *const *const ::core::ffi::c_char)
                             .offset((*virt_text).pos as isize),
                     ),
                 },
@@ -4315,15 +4206,11 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         priority = (*virt_text).priority as int32_t;
     }
     if !virt_lines.is_null() {
-        let mut all_chunks: Array = arena_array(
-            arena,
-            (*virt_lines).data.virt_lines.size,
-        );
+        let mut all_chunks: Array = arena_array(arena, (*virt_lines).data.virt_lines.size);
         let mut virt_lines_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut i: size_t = 0 as size_t;
         while i < (*virt_lines).data.virt_lines.size {
-            virt_lines_flags = (*(*virt_lines).data.virt_lines.items.offset(i as isize))
-                .flags;
+            virt_lines_flags = (*(*virt_lines).data.virt_lines.items.offset(i as isize)).flags;
             let mut chunks_0: Array = virt_text_to_array(
                 (*(*virt_lines).data.virt_lines.items.offset(i as isize)).line,
                 hl_name,
@@ -4339,14 +4226,13 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
                     all_chunks.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<Object>().wrapping_mul(all_chunks.capacity),
                 ) as *mut Object;
-            } else {};
+            } else {
+            };
             let c2rust_fresh22 = all_chunks.size;
             all_chunks.size = all_chunks.size.wrapping_add(1);
             *all_chunks.items.offset(c2rust_fresh22 as isize) = object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_14 {
-                    array: chunks_0,
-                },
+                data: C2Rust_Unnamed_14 { array: chunks_0 },
             };
             i = i.wrapping_add(1);
         }
@@ -4356,31 +4242,26 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
             key: cstr_as_string(b"virt_lines\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_14 {
-                    array: all_chunks,
-                },
+                data: C2Rust_Unnamed_14 { array: all_chunks },
             },
         };
         let c2rust_fresh24 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh24 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"virt_lines_above\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"virt_lines_above\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed_14 {
                     boolean: (*virt_lines).flags as ::core::ffi::c_int
-                        & kVTLinesAbove as ::core::ffi::c_int != 0,
+                        & kVTLinesAbove as ::core::ffi::c_int
+                        != 0,
                 },
             },
         };
         let c2rust_fresh25 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh25 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"virt_lines_leftcol\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"virt_lines_leftcol\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed_14 {
@@ -4391,9 +4272,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         let c2rust_fresh26 = (*dict).size;
         (*dict).size = (*dict).size.wrapping_add(1);
         *(*dict).items.offset(c2rust_fresh26 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"virt_lines_overflow\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"virt_lines_overflow\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_14 {
@@ -4419,9 +4298,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
             let c2rust_fresh27 = (*dict).size;
             (*dict).size = (*dict).size.wrapping_add(1);
             *(*dict).items.offset(c2rust_fresh27 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"sign_text\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"sign_text\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_14 {
@@ -4437,9 +4314,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
             let c2rust_fresh28 = (*dict).size;
             (*dict).size = (*dict).size.wrapping_add(1);
             *(*dict).items.offset(c2rust_fresh28 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"sign_name\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"sign_name\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_14 {
@@ -4509,9 +4384,7 @@ pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
         let mut vt: *mut DecorVirtText = decor.data.ext.vt;
         while !vt.is_null() {
             type_flags = (type_flags as ::core::ffi::c_int
-                | if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int
-                    != 0
-                {
+                | if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
                     kExtmarkVirtLines as ::core::ffi::c_int
                 } else {
                     kExtmarkVirtText as ::core::ffi::c_int
@@ -4522,9 +4395,7 @@ pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
         while idx != DECOR_ID_INVALID as uint32_t {
             let mut sh: *mut DecorSignHighlight = decor_items.items.offset(idx as isize);
             type_flags = (type_flags as ::core::ffi::c_int
-                | if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int
-                    != 0
-                {
+                | if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                     kExtmarkSign as ::core::ffi::c_int
                 } else {
                     kExtmarkHighlight as ::core::ffi::c_int
@@ -4533,34 +4404,30 @@ pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
         }
         return type_flags;
     } else {
-        return (if decor.data.hl.flags as ::core::ffi::c_int
-            & kSHIsSign as ::core::ffi::c_int != 0
+        return (if decor.data.hl.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0
         {
             kExtmarkSign as ::core::ffi::c_int
         } else {
             kExtmarkHighlight as ::core::ffi::c_int
-        }) as uint16_t
+        }) as uint16_t;
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn hl_group_name(
-    mut hl_id: ::core::ffi::c_int,
-    mut hl_name: bool,
-) -> Object {
+pub unsafe extern "C" fn hl_group_name(mut hl_id: ::core::ffi::c_int, mut hl_name: bool) -> Object {
     if hl_name {
         return object {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed_14 {
                 string: cstr_as_string(syn_id2name(hl_id)),
             },
-        }
+        };
     } else {
         return object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed_14 {
                 integer: hl_id as Integer,
             },
-        }
+        };
     };
 }
 #[inline(always)]
@@ -4578,26 +4445,29 @@ unsafe extern "C" fn decor_redraw_col(
     return decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last);
 }
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const MT_FLAG_END: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_EXT | MT_FLAG_DECOR_HL
-    | MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL | MT_FLAG_DECOR_VIRT_LINES
+pub const MT_FLAG_END: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALID: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_EXT
+    | MT_FLAG_DECOR_HL
+    | MT_FLAG_DECOR_SIGNTEXT
+    | MT_FLAG_DECOR_SIGNHL
+    | MT_FLAG_DECOR_VIRT_LINES
     | MT_FLAG_DECOR_VIRT_TEXT_INLINE;
 #[inline]
 unsafe extern "C" fn mt_end(mut key: MTKey) -> bool {
@@ -4613,8 +4483,7 @@ unsafe extern "C" fn mt_decor_any(mut key: MTKey) -> bool {
 }
 #[inline]
 unsafe extern "C" fn mt_decor_sign(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int
-        & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL) != 0;
+    return key.flags as ::core::ffi::c_int & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL) != 0;
 }
 #[inline]
 unsafe extern "C" fn mt_conceal_lines(mut key: MTKey) -> bool {

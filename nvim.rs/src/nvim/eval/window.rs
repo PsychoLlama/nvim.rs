@@ -34,21 +34,13 @@ extern "C" {
     static e_invexpr2: [::core::ffi::c_char; 0];
     static e_auabort: [::core::ffi::c_char; 0];
     static e_invalwindow: [::core::ffi::c_char; 0];
-    fn execute_common(
-        argvars: *mut typval_T,
-        rettv: *mut typval_T,
-        arg_off: ::core::ffi::c_int,
-    );
+    fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_off: ::core::ffi::c_int);
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
     fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
     fn tv_dict_alloc() -> *mut dict_T;
     fn tv_dict_find(
@@ -56,10 +48,7 @@ extern "C" {
         key: *const ::core::ffi::c_char,
         len: ptrdiff_t,
     ) -> *mut dictitem_T;
-    fn tv_dict_get_number(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-    ) -> varnumber_T;
+    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
     fn tv_dict_add_list(
         d: *mut dict_T,
         key: *const ::core::ffi::c_char,
@@ -87,11 +76,7 @@ extern "C" {
         idx: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn text_or_buf_locked() -> bool;
@@ -159,11 +144,7 @@ extern "C" {
     fn win_drag_vsep_line(dragwin: *mut win_T, offset: ::core::ffi::c_int);
     fn win_new_height(wp: *mut win_T, height: ::core::ffi::c_int);
     fn win_new_width(wp: *mut win_T, width: ::core::ffi::c_int);
-    fn win_get_tabwin(
-        id: handle_T,
-        tabnr: *mut ::core::ffi::c_int,
-        winnr: *mut ::core::ffi::c_int,
-    );
+    fn win_get_tabwin(id: handle_T, tabnr: *mut ::core::ffi::c_int, winnr: *mut ::core::ffi::c_int);
 }
 pub type __time_t = ::core::ffi::c_long;
 pub type int16_t = i16;
@@ -1798,9 +1779,7 @@ pub const WSP_TOP: C2Rust_Unnamed_12 = 8;
 pub const WSP_HOR: C2Rust_Unnamed_12 = 4;
 pub const WSP_ROOM: C2Rust_Unnamed_12 = 1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -1813,17 +1792,18 @@ unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
     return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
 }
 static mut e_cannot_resize_window_in_another_tab_page: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 50],
-        [::core::ffi::c_char; 50],
-    >(*b"E1308: Cannot resize a window in another tab page\0")
+    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+        *b"E1308: Cannot resize a window in another tab page\0",
+    )
 };
 #[no_mangle]
-pub unsafe extern "C" fn win_has_winnr(
-    mut wp: *mut win_T,
-    mut tp: *mut tabpage_T,
-) -> bool {
-    return wp == (if tp == curtab { curwin } else { (*tp).tp_curwin })
+pub unsafe extern "C" fn win_has_winnr(mut wp: *mut win_T, mut tp: *mut tabpage_T) -> bool {
+    return wp
+        == (if tp == curtab {
+            curwin
+        } else {
+            (*tp).tp_curwin
+        })
         || !(*wp).w_config.hide && (*wp).w_config.focusable as ::core::ffi::c_int != 0;
 }
 unsafe extern "C" fn win_getid(mut argvars: *mut typval_T) -> ::core::ffi::c_int {
@@ -1832,9 +1812,8 @@ unsafe extern "C" fn win_getid(mut argvars: *mut typval_T) -> ::core::ffi::c_int
     {
         return (*curwin).handle as ::core::ffi::c_int;
     }
-    let mut winnr: ::core::ffi::c_int = tv_get_number(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as ::core::ffi::c_int;
+    let mut winnr: ::core::ffi::c_int =
+        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     if winnr <= 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
@@ -1846,9 +1825,8 @@ unsafe extern "C" fn win_getid(mut argvars: *mut typval_T) -> ::core::ffi::c_int
         tp = curtab;
         wp = firstwin;
     } else {
-        let mut tabnr: ::core::ffi::c_int = tv_get_number(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-        ) as ::core::ffi::c_int;
+        let mut tabnr: ::core::ffi::c_int =
+            tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
         let mut tp2: *mut tabpage_T = first_tabpage as *mut tabpage_T;
         while !tp2.is_null() {
             tabnr -= 1;
@@ -1878,9 +1856,8 @@ unsafe extern "C" fn win_getid(mut argvars: *mut typval_T) -> ::core::ffi::c_int
     return 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T) {
-    let mut id: handle_T = tv_get_number(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as handle_T;
+    let mut id: handle_T =
+        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as handle_T;
     let mut winnr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut tabnr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     win_get_tabwin(id, &raw mut tabnr, &raw mut winnr);
@@ -1899,7 +1876,11 @@ pub unsafe extern "C" fn win_id2wp_tp(
 ) -> *mut win_T {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*wp).handle == id {
                 if !tpp.is_null() {
@@ -1915,9 +1896,8 @@ pub unsafe extern "C" fn win_id2wp_tp(
 }
 unsafe extern "C" fn win_id2win(mut argvars: *mut typval_T) -> ::core::ffi::c_int {
     let mut nr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut id: ::core::ffi::c_int = tv_get_number(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as ::core::ffi::c_int;
+    let mut id: ::core::ffi::c_int =
+        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     let mut wp: *mut win_T = if curtab == curtab {
         firstwin
     } else {
@@ -1938,12 +1918,15 @@ unsafe extern "C" fn win_id2win(mut argvars: *mut typval_T) -> ::core::ffi::c_in
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_findbuf(mut argvars: *mut typval_T, mut list: *mut list_T) {
-    let mut bufnr: ::core::ffi::c_int = tv_get_number(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as ::core::ffi::c_int;
+    let mut bufnr: ::core::ffi::c_int =
+        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*(*wp).w_buffer).handle == bufnr {
                 tv_list_append_number(list, (*wp).handle as varnumber_T);
@@ -1958,10 +1941,8 @@ pub unsafe extern "C" fn find_win_by_nr(
     mut vp: *mut typval_T,
     mut tp: *mut tabpage_T,
 ) -> *mut win_T {
-    let mut nr: ::core::ffi::c_int = tv_get_number_chk(
-        vp,
-        ::core::ptr::null_mut::<bool>(),
-    ) as ::core::ffi::c_int;
+    let mut nr: ::core::ffi::c_int =
+        tv_get_number_chk(vp, ::core::ptr::null_mut::<bool>()) as ::core::ffi::c_int;
     if nr < 0 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<win_T>();
     }
@@ -1971,7 +1952,11 @@ pub unsafe extern "C" fn find_win_by_nr(
     if tp.is_null() {
         tp = curtab;
     }
-    let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+    let mut wp: *mut win_T = if tp == curtab {
+        firstwin
+    } else {
+        (*tp).tp_firstwin
+    };
     while !wp.is_null() {
         if nr >= LOWEST_WIN_ID as ::core::ffi::c_int {
             if (*wp).handle == nr {
@@ -1989,20 +1974,15 @@ pub unsafe extern "C" fn find_win_by_nr(
 }
 #[no_mangle]
 pub unsafe extern "C" fn find_win_by_nr_or_id(mut vp: *mut typval_T) -> *mut win_T {
-    let mut nr: ::core::ffi::c_int = tv_get_number_chk(
-        vp,
-        ::core::ptr::null_mut::<bool>(),
-    ) as ::core::ffi::c_int;
+    let mut nr: ::core::ffi::c_int =
+        tv_get_number_chk(vp, ::core::ptr::null_mut::<bool>()) as ::core::ffi::c_int;
     if nr >= LOWEST_WIN_ID as ::core::ffi::c_int {
         return win_id2wp(tv_get_number(vp) as ::core::ffi::c_int);
     }
     return find_win_by_nr(vp, ::core::ptr::null_mut::<tabpage_T>());
 }
 #[no_mangle]
-pub unsafe extern "C" fn find_tabwin(
-    mut wvp: *mut typval_T,
-    mut tvp: *mut typval_T,
-) -> *mut win_T {
+pub unsafe extern "C" fn find_tabwin(mut wvp: *mut typval_T, mut tvp: *mut typval_T) -> *mut win_T {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     if (*wvp).v_type as ::core::ffi::c_uint
@@ -2026,11 +2006,7 @@ pub unsafe extern "C" fn find_tabwin(
     }
     return wp;
 }
-unsafe extern "C" fn get_framelayout(
-    mut fr: *const frame_T,
-    mut l: *mut list_T,
-    mut outer: bool,
-) {
+unsafe extern "C" fn get_framelayout(mut fr: *const frame_T, mut l: *mut list_T, mut outer: bool) {
     if fr.is_null() {
         return;
     }
@@ -2046,8 +2022,8 @@ unsafe extern "C" fn get_framelayout(
             tv_list_append_string(
                 fr_list,
                 b"leaf\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as usize) as ssize_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
+                    as ssize_t,
             );
             tv_list_append_number(fr_list, (*(*fr).fr_win).handle as varnumber_T);
         }
@@ -2056,20 +2032,19 @@ unsafe extern "C" fn get_framelayout(
             tv_list_append_string(
                 fr_list,
                 b"row\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as usize) as ssize_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
+                    as ssize_t,
             );
         } else {
             tv_list_append_string(
                 fr_list,
                 b"col\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as usize) as ssize_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
+                    as ssize_t,
             );
         }
-        let win_list: *mut list_T = tv_list_alloc(
-            kListLenUnknown as ::core::ffi::c_int as ptrdiff_t,
-        );
+        let win_list: *mut list_T =
+            tv_list_alloc(kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
         tv_list_append_list(fr_list, win_list);
         let mut child: *const frame_T = (*fr).fr_child;
         while !child.is_null() {
@@ -2083,7 +2058,11 @@ unsafe extern "C" fn get_winnr(
     mut argvar: *mut typval_T,
 ) -> ::core::ffi::c_int {
     let mut nr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut twin: *mut win_T = if tp == curtab { curwin } else { (*tp).tp_curwin };
+    let mut twin: *mut win_T = if tp == curtab {
+        curwin
+    } else {
+        (*tp).tp_curwin
+    };
     if (*argvar).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -2094,23 +2073,26 @@ unsafe extern "C" fn get_winnr(
         } else if strcmp(arg, b"$\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int
         {
-            twin = if tp == curtab { lastwin } else { (*tp).tp_lastwin };
+            twin = if tp == curtab {
+                lastwin
+            } else {
+                (*tp).tp_lastwin
+            };
         } else if strcmp(arg, b"#\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int
         {
-            twin = if tp == curtab { prevwin } else { (*tp).tp_prevwin };
+            twin = if tp == curtab {
+                prevwin
+            } else {
+                (*tp).tp_prevwin
+            };
             if twin.is_null() {
                 nr = 0 as ::core::ffi::c_int;
             }
         } else {
-            let mut endp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
-            let mut count: ::core::ffi::c_int = strtol(
-                arg,
-                &raw mut endp,
-                10 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int;
+            let mut endp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut count: ::core::ffi::c_int =
+                strtol(arg, &raw mut endp, 10 as ::core::ffi::c_int) as ::core::ffi::c_int;
             if count <= 0 as ::core::ffi::c_int {
                 count = 1 as ::core::ffi::c_int;
             }
@@ -2131,7 +2113,10 @@ unsafe extern "C" fn get_winnr(
             }
         }
         if invalid_arg {
-            semsg(gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char), arg);
+            semsg(
+                gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char),
+                arg,
+            );
             nr = 0 as ::core::ffi::c_int;
         }
     } else if !win_has_winnr(twin, tp) {
@@ -2141,7 +2126,11 @@ unsafe extern "C" fn get_winnr(
         return 0 as ::core::ffi::c_int;
     }
     nr = 0 as ::core::ffi::c_int;
-    let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+    let mut wp: *mut win_T = if tp == curtab {
+        firstwin
+    } else {
+        (*tp).tp_firstwin
+    };
     while !wp.is_null() {
         nr += win_has_winnr(wp, tp) as ::core::ffi::c_int;
         if wp == twin {
@@ -2261,8 +2250,8 @@ unsafe extern "C" fn get_win_info(
         dict,
         b"loclist\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        (bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-            && !(*wp).w_llist_ref.is_null()) as ::core::ffi::c_int as varnumber_T,
+        (bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_llist_ref.is_null())
+            as ::core::ffi::c_int as varnumber_T,
     );
     tv_dict_add_dict(
         dict,
@@ -2283,10 +2272,12 @@ unsafe extern "C" fn get_tabpage_info(
         ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
         tp_idx as varnumber_T,
     );
-    let l: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
-    let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+    let l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
+    let mut wp: *mut win_T = if tp == curtab {
+        firstwin
+    } else {
+        (*tp).tp_firstwin
+    };
     while !wp.is_null() {
         tv_list_append_number(l, (*wp).handle as varnumber_T);
         wp = (*wp).w_next;
@@ -2314,8 +2305,7 @@ pub unsafe extern "C" fn f_gettabinfo(
     let mut tparg: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     tv_list_alloc_ret(
         rettv,
-        (if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        (if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             1 as ::core::ffi::c_int
@@ -2326,12 +2316,10 @@ pub unsafe extern "C" fn f_gettabinfo(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        tparg = find_tabpage(
-            tv_get_number_chk(
-                argvars.offset(0 as ::core::ffi::c_int as isize),
-                ::core::ptr::null_mut::<bool>(),
-            ) as ::core::ffi::c_int,
-        );
+        tparg = find_tabpage(tv_get_number_chk(
+            argvars.offset(0 as ::core::ffi::c_int as isize),
+            ::core::ptr::null_mut::<bool>(),
+        ) as ::core::ffi::c_int);
         if tparg.is_null() {
             return;
         }
@@ -2362,8 +2350,7 @@ pub unsafe extern "C" fn f_getwininfo(
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         wparg = win_id2wp(
-            tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize))
-                as ::core::ffi::c_int,
+            tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
         );
         if wparg.is_null() {
             return;
@@ -2374,7 +2361,11 @@ pub unsafe extern "C" fn f_getwininfo(
     while !tp.is_null() {
         tabnr += 1;
         let mut winnr: int16_t = 0 as int16_t;
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             winnr = (winnr as ::core::ffi::c_int
                 + win_has_winnr(wp, tp as *mut tabpage_T) as ::core::ffi::c_int)
@@ -2383,9 +2374,7 @@ pub unsafe extern "C" fn f_getwininfo(
                 let d: *mut dict_T = get_win_info(
                     wp,
                     tabnr,
-                    (if win_has_winnr(wp, tp as *mut tabpage_T) as ::core::ffi::c_int
-                        != 0
-                    {
+                    (if win_has_winnr(wp, tp as *mut tabpage_T) as ::core::ffi::c_int != 0 {
                         winnr as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
@@ -2437,16 +2426,13 @@ pub unsafe extern "C" fn f_tabpagenr(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        let arg: *const ::core::ffi::c_char = tv_get_string_chk(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-        );
+        let arg: *const ::core::ffi::c_char =
+            tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
         nr = 0 as ::core::ffi::c_int;
         if !arg.is_null() {
-            if strcmp(arg, b"$\0".as_ptr() as *const ::core::ffi::c_char)
-                == 0 as ::core::ffi::c_int
+            if strcmp(arg, b"$\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
             {
-                nr = tabpage_index(::core::ptr::null_mut::<tabpage_T>())
-                    - 1 as ::core::ffi::c_int;
+                nr = tabpage_index(::core::ptr::null_mut::<tabpage_T>()) - 1 as ::core::ffi::c_int;
             } else if strcmp(arg, b"#\0".as_ptr() as *const ::core::ffi::c_char)
                 == 0 as ::core::ffi::c_int
             {
@@ -2456,7 +2442,10 @@ pub unsafe extern "C" fn f_tabpagenr(
                     0 as ::core::ffi::c_int
                 };
             } else {
-                semsg(gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char), arg);
+                semsg(
+                    gettext(&raw const e_invexpr2 as *const ::core::ffi::c_char),
+                    arg,
+                );
             }
         }
     } else {
@@ -2471,10 +2460,9 @@ pub unsafe extern "C" fn f_tabpagewinnr(
     mut fptr: EvalFuncData,
 ) {
     let mut nr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let tp: *mut tabpage_T = find_tabpage(
-        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize))
-            as ::core::ffi::c_int,
-    );
+    let tp: *mut tabpage_T = find_tabpage(tv_get_number(
+        argvars.offset(0 as ::core::ffi::c_int as isize),
+    ) as ::core::ffi::c_int);
     if tp.is_null() {
         nr = 0 as ::core::ffi::c_int;
     } else {
@@ -2494,9 +2482,9 @@ pub unsafe extern "C" fn win_execute_before(
     (*args).apply_acd = false_0 != 0;
     (*args).save_sfname = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if curwin != wp
-        && (!(*curwin).w_localdir.is_null() || !(*wp).w_localdir.is_null()
-            || curtab != tp
-                && (!(*curtab).tp_localdir.is_null() || !(*tp).tp_localdir.is_null())
+        && (!(*curwin).w_localdir.is_null()
+            || !(*wp).w_localdir.is_null()
+            || curtab != tp && (!(*curtab).tp_localdir.is_null() || !(*tp).tp_localdir.is_null())
             || p_acd != 0)
     {
         (*args).cwd_status = os_dirname(
@@ -2510,8 +2498,10 @@ pub unsafe extern "C" fn win_execute_before(
         }
         do_autochdir();
         let mut autocwd: [::core::ffi::c_char; 4096] = [0; 4096];
-        if os_dirname(&raw mut autocwd as *mut ::core::ffi::c_char, MAXPATHL as size_t)
-            == OK
+        if os_dirname(
+            &raw mut autocwd as *mut ::core::ffi::c_char,
+            MAXPATHL as size_t,
+        ) == OK
         {
             (*args).apply_acd = strcmp(
                 &raw mut (*args).cwd as *mut ::core::ffi::c_char,
@@ -2609,9 +2599,8 @@ pub unsafe extern "C" fn f_win_gotoid(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut id: ::core::ffi::c_int = tv_get_number(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as ::core::ffi::c_int;
+    let mut id: ::core::ffi::c_int =
+        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     if (*curwin).handle == id {
         (*rettv).vval.v_number = 1 as varnumber_T;
         return;
@@ -2621,7 +2610,11 @@ pub unsafe extern "C" fn f_win_gotoid(
     }
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*wp).handle == id {
                 if VIsual_active as ::core::ffi::c_int != 0 && (*wp).w_buffer != curbuf {
@@ -2659,24 +2652,18 @@ pub unsafe extern "C" fn f_win_move_separator(
     mut fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = false_0 as varnumber_T;
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() || (*wp).w_floating as ::core::ffi::c_int != 0 {
         return;
     }
     if !win_valid(wp) {
-        emsg(
-            gettext(
-                &raw const e_cannot_resize_window_in_another_tab_page
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_cannot_resize_window_in_another_tab_page as *const ::core::ffi::c_char,
+        ));
         return;
     }
-    let mut offset: ::core::ffi::c_int = tv_get_number(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-    ) as ::core::ffi::c_int;
+    let mut offset: ::core::ffi::c_int =
+        tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     win_drag_vsep_line(wp, offset);
     (*rettv).vval.v_number = true_0 as varnumber_T;
 }
@@ -2694,16 +2681,12 @@ pub unsafe extern "C" fn f_win_move_statusline(
         return;
     }
     if !win_valid(wp) {
-        emsg(
-            gettext(
-                &raw const e_cannot_resize_window_in_another_tab_page
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_cannot_resize_window_in_another_tab_page as *const ::core::ffi::c_char,
+        ));
         return;
     }
-    offset = tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize))
-        as ::core::ffi::c_int;
+    offset = tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     win_drag_status_line(wp, offset);
     (*rettv).vval.v_number = true_0 as varnumber_T;
 }
@@ -2714,9 +2697,7 @@ pub unsafe extern "C" fn f_win_screenpos(
     mut fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
-    let wp: *const win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let wp: *const win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     tv_list_append_number(
         (*rettv).vval.v_list,
         (if wp.is_null() {
@@ -2740,18 +2721,21 @@ pub unsafe extern "C" fn f_win_splitmove(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
-    let mut targetwin: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
+    let mut targetwin: *mut win_T =
+        find_win_by_nr_or_id(argvars.offset(1 as ::core::ffi::c_int as isize));
     let mut oldwin: *mut win_T = curwin;
     (*rettv).vval.v_number = -1 as varnumber_T;
-    if wp.is_null() || targetwin.is_null() || wp == targetwin || !win_valid(wp)
-        || !win_valid(targetwin) || (*targetwin).w_floating as ::core::ffi::c_int != 0
+    if wp.is_null()
+        || targetwin.is_null()
+        || wp == targetwin
+        || !win_valid(wp)
+        || !win_valid(targetwin)
+        || (*targetwin).w_floating as ::core::ffi::c_int != 0
     {
-        emsg(gettext(&raw const e_invalwindow as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_invalwindow as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2764,10 +2748,10 @@ pub unsafe extern "C" fn f_win_splitmove(
         if tv_check_for_nonnull_dict_arg(argvars, 2 as ::core::ffi::c_int) == FAIL {
             return;
         }
-        d = (*argvars.offset(2 as ::core::ffi::c_int as isize)).vval.v_dict;
-        if tv_dict_get_number(d, b"vertical\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0
-        {
+        d = (*argvars.offset(2 as ::core::ffi::c_int as isize))
+            .vval
+            .v_dict;
+        if tv_dict_get_number(d, b"vertical\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
             flags |= WSP_VERT as ::core::ffi::c_int;
         }
         di = tv_dict_find(
@@ -2776,12 +2760,11 @@ pub unsafe extern "C" fn f_win_splitmove(
             -1 as ptrdiff_t,
         );
         if !di.is_null() {
-            flags
-                |= if tv_get_number(&raw mut (*di).di_tv) != 0 {
-                    WSP_BELOW as ::core::ffi::c_int
-                } else {
-                    WSP_ABOVE as ::core::ffi::c_int
-                };
+            flags |= if tv_get_number(&raw mut (*di).di_tv) != 0 {
+                WSP_BELOW as ::core::ffi::c_int
+            } else {
+                WSP_ABOVE as ::core::ffi::c_int
+            };
         }
         size = tv_dict_get_number(d, b"size\0".as_ptr() as *const ::core::ffi::c_char)
             as ::core::ffi::c_int;
@@ -2820,36 +2803,24 @@ pub unsafe extern "C" fn f_win_gettype(
     {
         wp = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
         if wp.is_null() {
-            (*rettv).vval.v_string = xstrdup(
-                b"unknown\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            (*rettv).vval.v_string = xstrdup(b"unknown\0".as_ptr() as *const ::core::ffi::c_char);
             return;
         }
     }
     if is_aucmd_win(wp) {
-        (*rettv).vval.v_string = xstrdup(
-            b"autocmd\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*rettv).vval.v_string = xstrdup(b"autocmd\0".as_ptr() as *const ::core::ffi::c_char);
     } else if (*wp).w_onebuf_opt.wo_pvw != 0 {
-        (*rettv).vval.v_string = xstrdup(
-            b"preview\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*rettv).vval.v_string = xstrdup(b"preview\0".as_ptr() as *const ::core::ffi::c_char);
     } else if (*wp).w_floating {
-        (*rettv).vval.v_string = xstrdup(
-            b"popup\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*rettv).vval.v_string = xstrdup(b"popup\0".as_ptr() as *const ::core::ffi::c_char);
     } else if wp == cmdwin_win {
-        (*rettv).vval.v_string = xstrdup(
-            b"command\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*rettv).vval.v_string = xstrdup(b"command\0".as_ptr() as *const ::core::ffi::c_char);
     } else if bt_quickfix((*wp).w_buffer) {
-        (*rettv).vval.v_string = xstrdup(
-            if !(*wp).w_llist_ref.is_null() {
-                b"loclist\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"quickfix\0".as_ptr() as *const ::core::ffi::c_char
-            },
-        );
+        (*rettv).vval.v_string = xstrdup(if !(*wp).w_llist_ref.is_null() {
+            b"loclist\0".as_ptr() as *const ::core::ffi::c_char
+        } else {
+            b"quickfix\0".as_ptr() as *const ::core::ffi::c_char
+        });
     }
 }
 #[no_mangle]
@@ -2861,8 +2832,10 @@ pub unsafe extern "C" fn f_getcmdwintype(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*rettv).vval.v_string = xmallocz(1 as size_t) as *mut ::core::ffi::c_char;
-    *(*rettv).vval.v_string.offset(0 as ::core::ffi::c_int as isize) = cmdwin_type
-        as ::core::ffi::c_char;
+    *(*rettv)
+        .vval
+        .v_string
+        .offset(0 as ::core::ffi::c_int as isize) = cmdwin_type as ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_winbufnr(
@@ -2870,9 +2843,7 @@ pub unsafe extern "C" fn f_winbufnr(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
         (*rettv).vval.v_number = -1 as varnumber_T;
     } else {
@@ -2894,9 +2865,7 @@ pub unsafe extern "C" fn f_winheight(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
         (*rettv).vval.v_number = -1 as varnumber_T;
     } else {
@@ -2917,8 +2886,7 @@ pub unsafe extern "C" fn f_winlayout(
         tp = curtab;
     } else {
         tp = find_tabpage(
-            tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize))
-                as ::core::ffi::c_int,
+            tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
         );
         if tp.is_null() {
             return;
@@ -2941,10 +2909,8 @@ pub unsafe extern "C" fn f_winnr(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    (*rettv).vval.v_number = get_winnr(
-        curtab,
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as varnumber_T;
+    (*rettv).vval.v_number =
+        get_winnr(curtab, argvars.offset(0 as ::core::ffi::c_int as isize)) as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_winrestcmd(
@@ -3025,8 +2991,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_cursor.lnum = tv_get_number(&raw mut (*di).di_tv) as linenr_T;
@@ -3034,8 +2999,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"col\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_cursor.col = tv_get_number(&raw mut (*di).di_tv) as colnr_T;
@@ -3043,8 +3007,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"coladd\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_cursor.coladd = tv_get_number(&raw mut (*di).di_tv) as colnr_T;
@@ -3052,8 +3015,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"curswant\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_curswant = tv_get_number(&raw mut (*di).di_tv) as colnr_T;
@@ -3062,8 +3024,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"topline\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         set_topline(curwin, tv_get_number(&raw mut (*di).di_tv) as linenr_T);
@@ -3071,8 +3032,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"topfill\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_topfill = tv_get_number(&raw mut (*di).di_tv) as ::core::ffi::c_int;
@@ -3080,8 +3040,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"leftcol\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_leftcol = tv_get_number(&raw mut (*di).di_tv) as colnr_T;
@@ -3089,8 +3048,7 @@ pub unsafe extern "C" fn f_winrestview(
     di = tv_dict_find(
         dict,
         b"skipcol\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         (*curwin).w_skipcol = tv_get_number(&raw mut (*di).di_tv) as colnr_T;
@@ -3171,9 +3129,7 @@ pub unsafe extern "C" fn f_winwidth(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
         (*rettv).vval.v_number = -1 as varnumber_T;
     } else {
@@ -3226,10 +3182,7 @@ pub unsafe extern "C" fn switch_win_noblock(
     return OK;
 }
 #[no_mangle]
-pub unsafe extern "C" fn restore_win(
-    mut switchwin: *mut switchwin_T,
-    mut no_display: bool,
-) {
+pub unsafe extern "C" fn restore_win(mut switchwin: *mut switchwin_T, mut no_display: bool) {
     restore_win_noblock(switchwin, no_display);
     unblock_autocmds();
 }

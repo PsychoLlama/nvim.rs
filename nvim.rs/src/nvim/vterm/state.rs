@@ -38,10 +38,7 @@ extern "C" {
         c2: ::core::ffi::c_int,
         state: *mut GraphemeState,
     ) -> bool;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn vterm_scroll_rect(
         rect: VTermRect,
         downward: ::core::ffi::c_int,
@@ -86,11 +83,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn vterm_allocator_malloc(vt: *mut VTerm, size: size_t) -> *mut ::core::ffi::c_void;
     fn vterm_allocator_free(vt: *mut VTerm, ptr: *mut ::core::ffi::c_void);
-    fn vterm_push_output_bytes(
-        vt: *mut VTerm,
-        bytes: *const ::core::ffi::c_char,
-        len: size_t,
-    );
+    fn vterm_push_output_bytes(vt: *mut VTerm, bytes: *const ::core::ffi::c_char, len: size_t);
     fn vterm_push_output_sprintf_ctrl(
         vt: *mut VTerm,
         ctrl: uint8_t,
@@ -177,7 +170,8 @@ pub struct ScreenPen {
     #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
     #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -229,7 +223,8 @@ pub struct VTermScreenCellAttrs {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -256,15 +251,10 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
-    pub damage: Option<
-        unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub damage:
+        Option<unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub movecursor: Option<
         unsafe extern "C" fn(
@@ -281,9 +271,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -291,9 +279,8 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub sb_pushline: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -308,9 +295,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -437,10 +422,7 @@ pub struct VTermSelectionCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub query: Option<
-        unsafe extern "C" fn(
-            VTermSelectionMask,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermSelectionMask, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
@@ -508,7 +490,8 @@ pub struct VTermPen {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -521,9 +504,7 @@ pub struct VTermEncodingInstance {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
-    pub init: Option<
-        unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
         unsafe extern "C" fn(
             *mut VTermEncoding,
@@ -560,7 +541,8 @@ pub struct C2Rust_Unnamed_7 {
         ty = "::core::ffi::c_uint",
         bits = "16..=16"
     )]
-    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output: [u8; 3],
+    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -582,9 +564,8 @@ pub struct VTermLineInfo {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub csi: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -611,22 +592,13 @@ pub struct VTermStateFallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 #[derive(Copy, Clone)]
@@ -656,11 +628,7 @@ pub struct VTermStateCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub erase: Option<
         unsafe extern "C" fn(
@@ -669,9 +637,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub initpen: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub initpen: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setpenattr: Option<
         unsafe extern "C" fn(
             VTermAttr,
@@ -686,9 +652,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -697,9 +661,8 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setlineinfo: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -708,9 +671,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -747,11 +708,8 @@ pub struct VTermGlyphInfo {
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-pub type VTermOutputCallback = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    size_t,
-    *mut ::core::ffi::c_void,
-) -> ();
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_9 {
@@ -778,9 +736,8 @@ pub struct VTermParserCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub escape: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -814,22 +771,13 @@ pub struct VTermParserCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub resize: Option<
         unsafe extern "C" fn(
@@ -889,15 +837,10 @@ pub struct C2Rust_Unnamed_14 {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermAllocatorFunctions {
-    pub malloc: Option<
-        unsafe extern "C" fn(
-            size_t,
-            *mut ::core::ffi::c_void,
-        ) -> *mut ::core::ffi::c_void,
-    >,
-    pub free: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub malloc:
+        Option<unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>,
+    pub free:
+        Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>,
 }
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const VTERM_N_PROP_CURSORSHAPES: C2Rust_Unnamed_15 = 4;
@@ -919,9 +862,7 @@ pub const C1_ST: C2Rust_Unnamed_17 = 156;
 pub const C1_CSI: C2Rust_Unnamed_17 = 155;
 pub const C1_DCS: C2Rust_Unnamed_17 = 144;
 pub const C1_SS3: C2Rust_Unnamed_17 = 143;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const BUFIDX_PRIMARY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const BUFIDX_ALTSCREEN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -929,22 +870,20 @@ pub const KEY_ENCODING_DISAMBIGUATE: ::core::ffi::c_int = 0x1 as ::core::ffi::c_
 pub const KEY_ENCODING_REPORT_EVENTS: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const KEY_ENCODING_REPORT_ALTERNATE: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const KEY_ENCODING_REPORT_ALL_KEYS: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const KEY_ENCODING_REPORT_ASSOCIATED: ::core::ffi::c_int = 0x10
-    as ::core::ffi::c_int;
+pub const KEY_ENCODING_REPORT_ASSOCIATED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const MOUSE_WANT_CLICK: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const MOUSE_WANT_DRAG: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOUSE_WANT_MOVE: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const VTERM_VERSION_MAJOR: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const VTERM_VERSION_MINOR: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint = (1 as ::core::ffi::c_uint)
-    << 31 as ::core::ffi::c_int;
-pub const CSI_ARG_MASK: ::core::ffi::c_uint = !((1 as ::core::ffi::c_uint)
-    << 31 as ::core::ffi::c_int);
+pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint =
+    (1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int;
+pub const CSI_ARG_MASK: ::core::ffi::c_uint =
+    !((1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int);
 pub const CSI_ARG_MISSING: ::core::ffi::c_long = 2147483647 as ::core::ffi::c_long;
 #[no_mangle]
-pub static mut vterm_primary_device_attr: [::core::ffi::c_char; 9] = unsafe {
-    ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"61;22;52\0")
-};
+pub static mut vterm_primary_device_attr: [::core::ffi::c_char; 9] =
+    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"61;22;52\0") };
 unsafe extern "C" fn putglyph(
     mut state: *mut VTermState,
     schar: schar_T,
@@ -964,8 +903,12 @@ unsafe extern "C" fn putglyph(
         init
     };
     if !(*state).callbacks.is_null() && (*(*state).callbacks).putglyph.is_some() {
-        if Some((*(*state).callbacks).putglyph.expect("non-null function pointer"))
-            .expect("non-null function pointer")(&raw mut info, pos, (*state).cbdata)
+        if Some(
+            (*(*state).callbacks)
+                .putglyph
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(&raw mut info, pos, (*state).cbdata)
             != 0
         {
             return;
@@ -984,10 +927,12 @@ unsafe extern "C" fn updatecursor(
         (*state).at_phantom = 0 as ::core::ffi::c_int;
     }
     if !(*state).callbacks.is_null() && (*(*state).callbacks).movecursor.is_some() {
-        if Some((*(*state).callbacks).movecursor.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(
+        if Some(
+            (*(*state).callbacks)
+                .movecursor
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(
             (*state).pos,
             *oldpos,
             (*state).mode.cursor_visible() as ::core::ffi::c_int,
@@ -1012,18 +957,21 @@ unsafe extern "C" fn erase(
         }
     }
     if !(*state).callbacks.is_null() && (*(*state).callbacks).erase.is_some() {
-        if Some((*(*state).callbacks).erase.expect("non-null function pointer"))
-            .expect("non-null function pointer")(rect, selective, (*state).cbdata) != 0
+        if Some(
+            (*(*state).callbacks)
+                .erase
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(rect, selective, (*state).cbdata)
+            != 0
         {
             return;
         }
     }
 }
 unsafe extern "C" fn vterm_state_new(mut vt: *mut VTerm) -> *mut VTermState {
-    let mut state: *mut VTermState = vterm_allocator_malloc(
-        vt,
-        ::core::mem::size_of::<VTermState>(),
-    ) as *mut VTermState;
+    let mut state: *mut VTermState =
+        vterm_allocator_malloc(vt, ::core::mem::size_of::<VTermState>()) as *mut VTermState;
     (*state).vt = vt;
     (*state).rows = (*vt).rows;
     (*state).cols = (*vt).cols;
@@ -1041,7 +989,9 @@ unsafe extern "C" fn vterm_state_new(mut vt: *mut VTerm) -> *mut VTermState {
     (*state).combine_pos.row = -1 as ::core::ffi::c_int;
     (*state).tabstops = vterm_allocator_malloc(
         (*state).vt,
-        ((*state).cols as size_t).wrapping_add(7 as size_t).wrapping_div(8 as size_t),
+        ((*state).cols as size_t)
+            .wrapping_add(7 as size_t)
+            .wrapping_div(8 as size_t),
     ) as *mut uint8_t;
     (*state).lineinfos[BUFIDX_PRIMARY as usize] = vterm_allocator_malloc(
         (*state).vt,
@@ -1052,48 +1002,49 @@ unsafe extern "C" fn vterm_state_new(mut vt: *mut VTerm) -> *mut VTermState {
         ((*state).rows as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
     ) as *mut VTermLineInfo;
     (*state).lineinfo = (*state).lineinfos[BUFIDX_PRIMARY as usize];
-    (*state).encoding_utf8.enc = vterm_lookup_encoding(
-        ENC_UTF8,
-        'u' as ::core::ffi::c_char,
-    );
-    if Some((*(*state).encoding_utf8.enc).init.expect("non-null function pointer"))
-        .is_some()
+    (*state).encoding_utf8.enc = vterm_lookup_encoding(ENC_UTF8, 'u' as ::core::ffi::c_char);
+    if Some(
+        (*(*state).encoding_utf8.enc)
+            .init
+            .expect("non-null function pointer"),
+    )
+    .is_some()
     {
-        Some((*(*state).encoding_utf8.enc).init.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(
+        Some(
+            (*(*state).encoding_utf8.enc)
+                .init
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(
             (*state).encoding_utf8.enc,
             &raw mut (*state).encoding_utf8.data as *mut ::core::ffi::c_char
                 as *mut ::core::ffi::c_void,
         );
     }
     let mut i: size_t = 0 as size_t;
-    while i
-        < ::core::mem::size_of::<[VTermKeyEncodingStack; 2]>()
-            .wrapping_div(::core::mem::size_of::<VTermKeyEncodingStack>())
-            .wrapping_div(
-                (::core::mem::size_of::<[VTermKeyEncodingStack; 2]>()
-                    .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingStack>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            )
+    while i < ::core::mem::size_of::<[VTermKeyEncodingStack; 2]>()
+        .wrapping_div(::core::mem::size_of::<VTermKeyEncodingStack>())
+        .wrapping_div(
+            (::core::mem::size_of::<[VTermKeyEncodingStack; 2]>()
+                .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingStack>())
+                == 0) as ::core::ffi::c_int as usize,
+        )
     {
-        let mut stack: *mut VTermKeyEncodingStack = (&raw mut (*state)
-            .key_encoding_stacks as *mut VTermKeyEncodingStack)
+        let mut stack: *mut VTermKeyEncodingStack = (&raw mut (*state).key_encoding_stacks
+            as *mut VTermKeyEncodingStack)
             .offset(i as isize);
         let mut j: size_t = 0 as size_t;
-        while j
-            < ::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
-                .wrapping_div(::core::mem::size_of::<VTermKeyEncodingFlags>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
-                        .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
+        while j < ::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
+            .wrapping_div(::core::mem::size_of::<VTermKeyEncodingFlags>())
+            .wrapping_div(
+                (::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
+                    .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
         {
             memset(
-                (&raw mut (*stack).items as *mut VTermKeyEncodingFlags)
-                    .offset(j as isize) as *mut ::core::ffi::c_void,
+                (&raw mut (*stack).items as *mut VTermKeyEncodingFlags).offset(j as isize)
+                    as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
                 ::core::mem::size_of::<VTermKeyEncodingFlags>(),
             );
@@ -1140,15 +1091,14 @@ unsafe extern "C" fn scroll(
     } else if rightward < -cols {
         rightward = -cols;
     }
-    if rect.start_col == 0 as ::core::ffi::c_int && rect.end_col == (*state).cols
+    if rect.start_col == 0 as ::core::ffi::c_int
+        && rect.end_col == (*state).cols
         && rightward == 0 as ::core::ffi::c_int
     {
-        let mut height: ::core::ffi::c_int = rect.end_row - rect.start_row
-            - abs(downward);
+        let mut height: ::core::ffi::c_int = rect.end_row - rect.start_row - abs(downward);
         if downward > 0 as ::core::ffi::c_int {
             memmove(
-                (*state).lineinfo.offset(rect.start_row as isize)
-                    as *mut ::core::ffi::c_void,
+                (*state).lineinfo.offset(rect.start_row as isize) as *mut ::core::ffi::c_void,
                 (*state)
                     .lineinfo
                     .offset(rect.start_row as isize)
@@ -1175,8 +1125,7 @@ unsafe extern "C" fn scroll(
                     .lineinfo
                     .offset(rect.start_row as isize)
                     .offset(-(downward as isize)) as *mut ::core::ffi::c_void,
-                (*state).lineinfo.offset(rect.start_row as isize)
-                    as *const ::core::ffi::c_void,
+                (*state).lineinfo.offset(rect.start_row as isize) as *const ::core::ffi::c_void,
                 (height as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
             );
             let mut row_0: ::core::ffi::c_int = rect.start_row;
@@ -1196,10 +1145,13 @@ unsafe extern "C" fn scroll(
         }
     }
     if !(*state).callbacks.is_null() && (*(*state).callbacks).scrollrect.is_some() {
-        if Some((*(*state).callbacks).scrollrect.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(rect, downward, rightward, (*state).cbdata) != 0
+        if Some(
+            (*(*state).callbacks)
+                .scrollrect
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(rect, downward, rightward, (*state).cbdata)
+            != 0
         {
             return;
         }
@@ -1243,45 +1195,50 @@ unsafe extern "C" fn linefeed(mut state: *mut VTermState) {
                 (*state).cols
             },
         };
-        scroll(state, rect, 1 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
+        scroll(
+            state,
+            rect,
+            1 as ::core::ffi::c_int,
+            0 as ::core::ffi::c_int,
+        );
     } else if (*state).pos.row < (*state).rows - 1 as ::core::ffi::c_int {
         (*state).pos.row += 1;
     }
 }
-unsafe extern "C" fn set_col_tabstop(
-    mut state: *mut VTermState,
-    mut col: ::core::ffi::c_int,
-) {
-    let mut mask: uint8_t = ((1 as ::core::ffi::c_int)
-        << (col & 7 as ::core::ffi::c_int)) as uint8_t;
-    *(*state).tabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) = (*(*state)
+unsafe extern "C" fn set_col_tabstop(mut state: *mut VTermState, mut col: ::core::ffi::c_int) {
+    let mut mask: uint8_t =
+        ((1 as ::core::ffi::c_int) << (col & 7 as ::core::ffi::c_int)) as uint8_t;
+    *(*state)
         .tabstops
-        .offset((col >> 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-        | mask as ::core::ffi::c_int) as uint8_t;
+        .offset((col >> 3 as ::core::ffi::c_int) as isize) =
+        (*(*state)
+            .tabstops
+            .offset((col >> 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+            | mask as ::core::ffi::c_int) as uint8_t;
 }
-unsafe extern "C" fn clear_col_tabstop(
-    mut state: *mut VTermState,
-    mut col: ::core::ffi::c_int,
-) {
-    let mut mask: uint8_t = ((1 as ::core::ffi::c_int)
-        << (col & 7 as ::core::ffi::c_int)) as uint8_t;
-    *(*state).tabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) = (*(*state)
+unsafe extern "C" fn clear_col_tabstop(mut state: *mut VTermState, mut col: ::core::ffi::c_int) {
+    let mut mask: uint8_t =
+        ((1 as ::core::ffi::c_int) << (col & 7 as ::core::ffi::c_int)) as uint8_t;
+    *(*state)
         .tabstops
-        .offset((col >> 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-        & !(mask as ::core::ffi::c_int)) as uint8_t;
+        .offset((col >> 3 as ::core::ffi::c_int) as isize) =
+        (*(*state)
+            .tabstops
+            .offset((col >> 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+            & !(mask as ::core::ffi::c_int)) as uint8_t;
 }
 unsafe extern "C" fn is_col_tabstop(
     mut state: *mut VTermState,
     mut col: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut mask: uint8_t = ((1 as ::core::ffi::c_int)
-        << (col & 7 as ::core::ffi::c_int)) as uint8_t;
-    return *(*state).tabstops.offset((col >> 3 as ::core::ffi::c_int) as isize)
-        as ::core::ffi::c_int & mask as ::core::ffi::c_int;
+    let mut mask: uint8_t =
+        ((1 as ::core::ffi::c_int) << (col & 7 as ::core::ffi::c_int)) as uint8_t;
+    return *(*state)
+        .tabstops
+        .offset((col >> 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+        & mask as ::core::ffi::c_int;
 }
-unsafe extern "C" fn is_cursor_in_scrollregion(
-    mut state: *const VTermState,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn is_cursor_in_scrollregion(mut state: *const VTermState) -> ::core::ffi::c_int {
     if (*state).pos.row < (*state).scrollregion_top
         || (*state).pos.row
             >= (if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
@@ -1319,8 +1276,9 @@ unsafe extern "C" fn tab(
     while count > 0 as ::core::ffi::c_int {
         if direction > 0 as ::core::ffi::c_int {
             if (*state).pos.col
-                >= (if (*(*state).lineinfo.offset((*state).pos.row as isize))
-                    .doublewidth() as ::core::ffi::c_int != 0
+                >= (if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
+                    as ::core::ffi::c_int
+                    != 0
                 {
                     (*state).cols / 2 as ::core::ffi::c_int
                 } else {
@@ -1368,16 +1326,20 @@ unsafe extern "C" fn set_lineinfo(
     } else if dhl == DHL_BOTTOM {
         info.set_doubleheight(DHL_BOTTOM as ::core::ffi::c_uint as ::core::ffi::c_uint);
     }
-    if !(*state).callbacks.is_null() && (*(*state).callbacks).setlineinfo.is_some()
-        && Some((*(*state).callbacks).setlineinfo.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(
+    if !(*state).callbacks.is_null()
+        && (*(*state).callbacks).setlineinfo.is_some()
+        && Some(
+            (*(*state).callbacks)
+                .setlineinfo
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(
             row,
             &raw mut info,
             (*state).lineinfo.offset(row as isize),
             (*state).cbdata,
-        ) != 0 || force != 0
+        ) != 0
+        || force != 0
     {
         *(*state).lineinfo.offset(row as isize) = info;
     }
@@ -1398,27 +1360,25 @@ unsafe extern "C" fn on_text(
     let mut encoding: *mut VTermEncodingInstance = if (*state).gsingle_set != 0 {
         (&raw mut (*state).encoding as *mut VTermEncodingInstance)
             .offset((*state).gsingle_set as isize)
-    } else if *bytes.offset(eaten as isize) as ::core::ffi::c_int
-        & 0x80 as ::core::ffi::c_int == 0
+    } else if *bytes.offset(eaten as isize) as ::core::ffi::c_int & 0x80 as ::core::ffi::c_int == 0
     {
-        (&raw mut (*state).encoding as *mut VTermEncodingInstance)
-            .offset((*state).gl_set as isize)
+        (&raw mut (*state).encoding as *mut VTermEncodingInstance).offset((*state).gl_set as isize)
     } else if (*(*state).vt).mode.utf8() as ::core::ffi::c_int != 0 {
         &raw mut (*state).encoding_utf8
     } else {
-        (&raw mut (*state).encoding as *mut VTermEncodingInstance)
-            .offset((*state).gr_set as isize)
+        (&raw mut (*state).encoding as *mut VTermEncodingInstance).offset((*state).gr_set as isize)
     };
     if (*encoding).enc == (*state).encoding_utf8.enc {
         encoding = &raw mut (*state).encoding_utf8;
     }
-    Some((*(*encoding).enc).decode.expect("non-null function pointer"))
-        .expect(
-            "non-null function pointer",
-        )(
+    Some(
+        (*(*encoding).enc)
+            .decode
+            .expect("non-null function pointer"),
+    )
+    .expect("non-null function pointer")(
         (*encoding).enc,
-        &raw mut (*encoding).data as *mut ::core::ffi::c_char
-            as *mut ::core::ffi::c_void,
+        &raw mut (*encoding).data as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
         codepoints as *mut uint32_t,
         &raw mut npoints,
         if (*state).gsingle_set != 0 {
@@ -1459,17 +1419,13 @@ unsafe extern "C" fn on_text(
     while i < npoints {
         loop {
             if grapheme_len
-                < ::core::mem::size_of::<[::core::ffi::c_char; 32]>()
-                    .wrapping_sub(4 as usize)
+                < ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(4 as usize)
             {
-                grapheme_len = grapheme_len
-                    .wrapping_add(
-                        utf_char2bytes(
-                            *codepoints.offset(i as isize) as ::core::ffi::c_int,
-                            (&raw mut (*state).grapheme_buf as *mut ::core::ffi::c_char)
-                                .offset(grapheme_len as isize),
-                        ) as size_t,
-                    );
+                grapheme_len = grapheme_len.wrapping_add(utf_char2bytes(
+                    *codepoints.offset(i as isize) as ::core::ffi::c_int,
+                    (&raw mut (*state).grapheme_buf as *mut ::core::ffi::c_char)
+                        .offset(grapheme_len as isize),
+                ) as size_t);
             }
             i += 1;
             if !(i < npoints
@@ -1478,7 +1434,8 @@ unsafe extern "C" fn on_text(
                         as ::core::ffi::c_int,
                     *codepoints.offset(i as isize) as ::core::ffi::c_int,
                     &raw mut grapheme_state,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
             {
                 break;
             }
@@ -1489,8 +1446,9 @@ unsafe extern "C" fn on_text(
         );
         if (*state).at_phantom != 0
             || (*state).pos.col + width
-                > (if (*(*state).lineinfo.offset((*state).pos.row as isize))
-                    .doublewidth() as ::core::ffi::c_int != 0
+                > (if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
+                    as ::core::ffi::c_int
+                    != 0
                 {
                     (*state).cols / 2 as ::core::ffi::c_int
                 } else {
@@ -1508,15 +1466,21 @@ unsafe extern "C" fn on_text(
                 start_row: (*state).pos.row,
                 end_row: (*state).pos.row + 1 as ::core::ffi::c_int,
                 start_col: (*state).pos.col,
-                end_col: if (*(*state).lineinfo.offset((*state).pos.row as isize))
-                    .doublewidth() as ::core::ffi::c_int != 0
+                end_col: if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
+                    as ::core::ffi::c_int
+                    != 0
                 {
                     (*state).cols / 2 as ::core::ffi::c_int
                 } else {
                     (*state).cols
                 },
             };
-            scroll(state, rect, 0 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
+            scroll(
+                state,
+                rect,
+                0 as ::core::ffi::c_int,
+                -1 as ::core::ffi::c_int,
+            );
         }
         let mut sc: schar_T = schar_from_buf(
             &raw mut (*state).grapheme_buf as *mut ::core::ffi::c_char,
@@ -1525,8 +1489,7 @@ unsafe extern "C" fn on_text(
         putglyph(state, sc, width, (*state).pos);
         if i == npoints {
             (*state).grapheme_len = grapheme_len;
-            (*state).grapheme_last = *codepoints
-                .offset((i - 1 as ::core::ffi::c_int) as isize);
+            (*state).grapheme_last = *codepoints.offset((i - 1 as ::core::ffi::c_int) as isize);
             (*state).grapheme_state = grapheme_state;
             (*state).combine_width = width;
             (*state).combine_pos = (*state).pos;
@@ -1536,7 +1499,8 @@ unsafe extern "C" fn on_text(
         }
         if (*state).pos.col + width
             >= (if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
             {
                 (*state).cols / 2 as ::core::ffi::c_int
             } else {
@@ -1562,8 +1526,12 @@ unsafe extern "C" fn on_control(
     match control as ::core::ffi::c_int {
         7 => {
             if !(*state).callbacks.is_null() && (*(*state).callbacks).bell.is_some() {
-                Some((*(*state).callbacks).bell.expect("non-null function pointer"))
-                    .expect("non-null function pointer")((*state).cbdata);
+                Some(
+                    (*(*state).callbacks)
+                        .bell
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")((*state).cbdata);
             }
         }
         8 => {
@@ -1608,22 +1576,25 @@ unsafe extern "C" fn on_control(
                     } else {
                         (*state).rows
                     },
-                    start_col: if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                        != 0
-                    {
+                    start_col: if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
                         (*state).scrollregion_left
                     } else {
                         0 as ::core::ffi::c_int
                     },
-                    end_col: if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                        != 0 && (*state).scrollregion_right > -1 as ::core::ffi::c_int
+                    end_col: if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
+                        && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                     {
                         (*state).scrollregion_right
                     } else {
                         (*state).cols
                     },
                 };
-                scroll(state, rect, -1 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
+                scroll(
+                    state,
+                    rect,
+                    -1 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                );
             } else if (*state).pos.row > 0 as ::core::ffi::c_int {
                 (*state).pos.row -= 1;
             }
@@ -1637,9 +1608,12 @@ unsafe extern "C" fn on_control(
         _ => {
             if !(*state).fallbacks.is_null() && (*(*state).fallbacks).control.is_some() {
                 if Some(
-                        (*(*state).fallbacks).control.expect("non-null function pointer"),
-                    )
-                    .expect("non-null function pointer")(control, (*state).fbdata) != 0
+                    (*(*state).fallbacks)
+                        .control
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(control, (*state).fbdata)
+                    != 0
                 {
                     return 1 as ::core::ffi::c_int;
                 }
@@ -1674,10 +1648,7 @@ unsafe extern "C" fn settermprop_string(
     let mut val: VTermValue = VTermValue { string: frag };
     return vterm_state_set_termprop(state, prop, &raw mut val);
 }
-unsafe extern "C" fn savecursor(
-    mut state: *mut VTermState,
-    mut save: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn savecursor(mut state: *mut VTermState, mut save: ::core::ffi::c_int) {
     if save != 0 {
         (*state).saved.pos = (*state).pos;
         (*state)
@@ -1753,24 +1724,12 @@ unsafe extern "C" fn on_escape(
                 }
                 52 => {
                     if (*state).mode.leftrightmargin() == 0 {
-                        set_lineinfo(
-                            state,
-                            (*state).pos.row,
-                            NO_FORCE,
-                            DWL_ON,
-                            DHL_BOTTOM,
-                        );
+                        set_lineinfo(state, (*state).pos.row, NO_FORCE, DWL_ON, DHL_BOTTOM);
                     }
                 }
                 53 => {
                     if (*state).mode.leftrightmargin() == 0 {
-                        set_lineinfo(
-                            state,
-                            (*state).pos.row,
-                            NO_FORCE,
-                            DWL_OFF,
-                            DHL_OFF,
-                        );
+                        set_lineinfo(state, (*state).pos.row, NO_FORCE, DWL_OFF, DHL_OFF);
                     }
                 }
                 54 => {
@@ -1785,8 +1744,9 @@ unsafe extern "C" fn on_escape(
                     while pos.row < (*state).rows {
                         pos.col = 0 as ::core::ffi::c_int;
                         while pos.col
-                            < (if (*(*state).lineinfo.offset(pos.row as isize))
-                                .doublewidth() as ::core::ffi::c_int != 0
+                            < (if (*(*state).lineinfo.offset(pos.row as isize)).doublewidth()
+                                as ::core::ffi::c_int
+                                != 0
                             {
                                 (*state).cols / 2 as ::core::ffi::c_int
                             } else {
@@ -1807,8 +1767,8 @@ unsafe extern "C" fn on_escape(
             if len != 2 as size_t {
                 return 0 as ::core::ffi::c_int;
             }
-            let mut setnum: ::core::ffi::c_int = *bytes
-                .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            let mut setnum: ::core::ffi::c_int = *bytes.offset(0 as ::core::ffi::c_int as isize)
+                as ::core::ffi::c_int
                 - 0x28 as ::core::ffi::c_int;
             let mut newenc: *mut VTermEncoding = vterm_lookup_encoding(
                 ENC_SINGLE_94,
@@ -1818,14 +1778,12 @@ unsafe extern "C" fn on_escape(
                 (*state).encoding[setnum as usize].enc = newenc;
                 if (*newenc).init.is_some() {
                     Some((*newenc).init.expect("non-null function pointer"))
-                        .expect(
-                            "non-null function pointer",
-                        )(
+                        .expect("non-null function pointer")(
                         newenc,
-                        &raw mut (*(&raw mut (*state).encoding
-                            as *mut VTermEncodingInstance)
+                        &raw mut (*(&raw mut (*state).encoding as *mut VTermEncodingInstance)
                             .offset(setnum as isize))
-                            .data as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+                        .data as *mut ::core::ffi::c_char
+                            as *mut ::core::ffi::c_void,
                     );
                 }
             }
@@ -1841,27 +1799,27 @@ unsafe extern "C" fn on_escape(
         }
         60 => return 1 as ::core::ffi::c_int,
         61 => {
-            (*state).mode.set_keypad(1 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state)
+                .mode
+                .set_keypad(1 as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         62 => {
-            (*state).mode.set_keypad(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state)
+                .mode
+                .set_keypad(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         99 => {
             let mut oldpos: VTermPos = (*state).pos;
             vterm_state_reset(state, 1 as ::core::ffi::c_int);
-            if !(*state).callbacks.is_null()
-                && (*(*state).callbacks).movecursor.is_some()
-            {
+            if !(*state).callbacks.is_null() && (*(*state).callbacks).movecursor.is_some() {
                 Some(
-                        (*(*state).callbacks)
-                            .movecursor
-                            .expect("non-null function pointer"),
-                    )
-                    .expect(
-                        "non-null function pointer",
-                    )(
+                    (*(*state).callbacks)
+                        .movecursor
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(
                     (*state).pos,
                     oldpos,
                     (*state).mode.cursor_visible() as ::core::ffi::c_int,
@@ -1900,10 +1858,14 @@ unsafe extern "C" fn set_mode(
 ) {
     match num {
         4 => {
-            (*state).mode.set_insert(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state)
+                .mode
+                .set_insert(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         20 => {
-            (*state).mode.set_newline(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state)
+                .mode
+                .set_newline(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         _ => return,
     };
@@ -1915,14 +1877,18 @@ unsafe extern "C" fn set_dec_mode(
 ) {
     match num {
         1 => {
-            (*state).mode.set_cursor(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state)
+                .mode
+                .set_cursor(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         5 => {
             settermprop_bool(state, VTERM_PROP_REVERSE, val);
         }
         6 => {
             let mut oldpos: VTermPos = (*state).pos;
-            (*state).mode.set_origin(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state)
+                .mode
+                .set_origin(val as ::core::ffi::c_uint as ::core::ffi::c_uint);
             (*state).pos.row = if (*state).mode.origin() as ::core::ffi::c_int != 0 {
                 (*state).scrollregion_top
             } else {
@@ -2028,10 +1994,7 @@ unsafe extern "C" fn set_dec_mode(
         _ => return,
     };
 }
-unsafe extern "C" fn request_dec_mode(
-    mut state: *mut VTermState,
-    mut num: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn request_dec_mode(mut state: *mut VTermState, mut num: ::core::ffi::c_int) {
     let mut reply: ::core::ffi::c_int = 0;
     match num {
         1 => {
@@ -2059,12 +2022,12 @@ unsafe extern "C" fn request_dec_mode(
             reply = ((*state).mouse_flags == MOUSE_WANT_CLICK) as ::core::ffi::c_int;
         }
         1002 => {
-            reply = ((*state).mouse_flags == MOUSE_WANT_CLICK | MOUSE_WANT_DRAG)
-                as ::core::ffi::c_int;
+            reply =
+                ((*state).mouse_flags == MOUSE_WANT_CLICK | MOUSE_WANT_DRAG) as ::core::ffi::c_int;
         }
         1003 => {
-            reply = ((*state).mouse_flags == MOUSE_WANT_CLICK | MOUSE_WANT_MOVE)
-                as ::core::ffi::c_int;
+            reply =
+                ((*state).mouse_flags == MOUSE_WANT_CLICK | MOUSE_WANT_MOVE) as ::core::ffi::c_int;
         }
         1004 => {
             reply = (*state).mode.report_focus() as ::core::ffi::c_int;
@@ -2112,7 +2075,11 @@ unsafe extern "C" fn request_dec_mode(
         C1_CSI as ::core::ffi::c_int as uint8_t,
         b"?%d;%d$y\0".as_ptr() as *const ::core::ffi::c_char,
         num,
-        if reply != 0 { 1 as ::core::ffi::c_int } else { 2 as ::core::ffi::c_int },
+        if reply != 0 {
+            1 as ::core::ffi::c_int
+        } else {
+            2 as ::core::ffi::c_int
+        },
     );
 }
 unsafe extern "C" fn request_version_string(mut state: *mut VTermState) {
@@ -2126,9 +2093,7 @@ unsafe extern "C" fn request_version_string(mut state: *mut VTermState) {
     );
 }
 unsafe extern "C" fn request_key_encoding_flags(mut state: *mut VTermState) {
-    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen()
-        as ::core::ffi::c_int != 0
-    {
+    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
         BUFIDX_ALTSCREEN
     } else {
         BUFIDX_PRIMARY
@@ -2138,19 +2103,20 @@ unsafe extern "C" fn request_key_encoding_flags(mut state: *mut VTermState) {
         .offset(screen as isize);
     let mut reply: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     '_c2rust_label: {
-        if (*stack).size as ::core::ffi::c_int > 0 as ::core::ffi::c_int {} else {
+        if (*stack).size as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"stack->size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 952 as ::core::ffi::c_uint,
                 b"void request_key_encoding_flags(VTermState *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
             );
         }
     };
-    let mut flags: VTermKeyEncodingFlags = (*stack)
-        .items[((*stack).size as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize];
+    let mut flags: VTermKeyEncodingFlags =
+        (*stack).items[((*stack).size as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize];
     if flags.disambiguate() {
         reply |= KEY_ENCODING_DISAMBIGUATE;
     }
@@ -2216,9 +2182,7 @@ unsafe extern "C" fn set_key_encoding_flags(
     } else if reset_unset {
         flags.set_report_associated((false_0 != 0) as bool);
     }
-    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen()
-        as ::core::ffi::c_int != 0
-    {
+    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
         BUFIDX_ALTSCREEN
     } else {
         BUFIDX_PRIMARY
@@ -2227,28 +2191,26 @@ unsafe extern "C" fn set_key_encoding_flags(
         as *mut VTermKeyEncodingStack)
         .offset(screen as isize);
     '_c2rust_label: {
-        if (*stack).size as ::core::ffi::c_int > 0 as ::core::ffi::c_int {} else {
+        if (*stack).size as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"stack->size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 1018 as ::core::ffi::c_uint,
                 b"void set_key_encoding_flags(VTermState *, int, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
             );
         }
     };
-    (*stack)
-        .items[((*stack).size as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-        as usize] = flags as VTermKeyEncodingFlags;
+    (*stack).items[((*stack).size as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize] =
+        flags as VTermKeyEncodingFlags;
 }
 unsafe extern "C" fn push_key_encoding_flags(
     mut state: *mut VTermState,
     mut arg: ::core::ffi::c_int,
 ) {
-    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen()
-        as ::core::ffi::c_int != 0
-    {
+    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
         BUFIDX_ALTSCREEN
     } else {
         BUFIDX_PRIMARY
@@ -2265,12 +2227,12 @@ unsafe extern "C" fn push_key_encoding_flags(
                         .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>())
                         == 0) as ::core::ffi::c_int as usize,
                 )
-        {} else {
+        {
+        } else {
             __assert_fail(
-                b"stack->size <= ARRAY_SIZE(stack->items)\0".as_ptr()
+                b"stack->size <= ARRAY_SIZE(stack->items)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/state.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
                 1026 as ::core::ffi::c_uint,
                 b"void push_key_encoding_flags(VTermState *, int)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2282,23 +2244,21 @@ unsafe extern "C" fn push_key_encoding_flags(
             .wrapping_div(::core::mem::size_of::<VTermKeyEncodingFlags>())
             .wrapping_div(
                 (::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
-                    .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>())
+                    == 0) as ::core::ffi::c_int as usize,
             )
     {
         let mut i: size_t = 0 as size_t;
-        while i
-            < ::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
-                .wrapping_div(::core::mem::size_of::<VTermKeyEncodingFlags>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
-                        .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-                .wrapping_sub(1 as usize)
+        while i < ::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
+            .wrapping_div(::core::mem::size_of::<VTermKeyEncodingFlags>())
+            .wrapping_div(
+                (::core::mem::size_of::<[VTermKeyEncodingFlags; 16]>()
+                    .wrapping_rem(::core::mem::size_of::<VTermKeyEncodingFlags>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
+            .wrapping_sub(1 as usize)
         {
-            (*stack).items[i as usize] = (*stack)
-                .items[i.wrapping_add(1 as size_t) as usize];
+            (*stack).items[i as usize] = (*stack).items[i.wrapping_add(1 as size_t) as usize];
             i = i.wrapping_add(1);
         }
     } else {
@@ -2310,9 +2270,7 @@ unsafe extern "C" fn pop_key_encoding_flags(
     mut state: *mut VTermState,
     mut arg: ::core::ffi::c_int,
 ) {
-    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen()
-        as ::core::ffi::c_int != 0
-    {
+    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
         BUFIDX_ALTSCREEN
     } else {
         BUFIDX_PRIMARY
@@ -2352,8 +2310,8 @@ unsafe extern "C" fn on_csi(
         }
         match *leader.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
             63 | 62 | 60 | 61 => {
-                leader_byte = *leader.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int;
+                leader_byte =
+                    *leader.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
             }
             _ => return 0 as ::core::ffi::c_int,
         }
@@ -2366,8 +2324,8 @@ unsafe extern "C" fn on_csi(
         }
         match *intermed.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
             32 | 33 | 34 | 36 | 39 => {
-                intermed_byte = *intermed.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int;
+                intermed_byte =
+                    *intermed.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
             }
             _ => return 0 as ::core::ffi::c_int,
         }
@@ -2385,27 +2343,28 @@ unsafe extern "C" fn on_csi(
     };
     let mut selective: ::core::ffi::c_int = 0;
     match intermed_byte << 16 as ::core::ffi::c_int
-        | leader_byte << 8 as ::core::ffi::c_int | command as ::core::ffi::c_int
+        | leader_byte << 8 as ::core::ffi::c_int
+        | command as ::core::ffi::c_int
     {
         64 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if is_cursor_in_scrollregion(state) != 0 {
                 rect.start_row = (*state).pos.row;
                 rect.end_row = (*state).pos.row + 1 as ::core::ffi::c_int;
                 rect.start_col = (*state).pos.col;
                 if (*state).mode.leftrightmargin() != 0 {
-                    rect.end_col = if (*state).mode.leftrightmargin()
-                        as ::core::ffi::c_int != 0
+                    rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
                         && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                     {
                         (*state).scrollregion_right
@@ -2413,10 +2372,9 @@ unsafe extern "C" fn on_csi(
                         (*state).cols
                     };
                 } else {
-                    rect.end_col = if (*(*state)
-                        .lineinfo
-                        .offset((*state).pos.row as isize))
-                        .doublewidth() as ::core::ffi::c_int != 0
+                    rect.end_col = if (*(*state).lineinfo.offset((*state).pos.row as isize))
+                        .doublewidth() as ::core::ffi::c_int
+                        != 0
                     {
                         (*state).cols / 2 as ::core::ffi::c_int
                     } else {
@@ -2428,75 +2386,80 @@ unsafe extern "C" fn on_csi(
         }
         65 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row -= count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         66 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row += count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         67 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col += count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         68 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col -= count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         69 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col = 0 as ::core::ffi::c_int;
             (*state).pos.row += count;
@@ -2504,15 +2467,16 @@ unsafe extern "C" fn on_csi(
         }
         70 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col = 0 as ::core::ffi::c_int;
             (*state).pos.row -= count;
@@ -2525,8 +2489,7 @@ unsafe extern "C" fn on_csi(
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col = val - 1 as ::core::ffi::c_int;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
@@ -2538,43 +2501,42 @@ unsafe extern "C" fn on_csi(
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             col = (if argcount < 2 as ::core::ffi::c_int
                 || (*args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(1 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row = row - 1 as ::core::ffi::c_int;
             (*state).pos.col = col - 1 as ::core::ffi::c_int;
             if (*state).mode.origin() != 0 {
                 (*state).pos.row += (*state).scrollregion_top;
-                (*state).pos.col
-                    += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
-                        (*state).scrollregion_left
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                (*state).pos.col += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
+                    (*state).scrollregion_left
+                } else {
+                    0 as ::core::ffi::c_int
+                };
             }
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         73 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             tab(state, count, 1 as ::core::ffi::c_int);
         }
@@ -2636,15 +2598,15 @@ unsafe extern "C" fn on_csi(
                     erase(state, rect, selective);
                 }
                 3 => {
-                    if !(*state).callbacks.is_null()
-                        && (*(*state).callbacks).sb_clear.is_some()
-                    {
+                    if !(*state).callbacks.is_null() && (*(*state).callbacks).sb_clear.is_some() {
                         if Some(
-                                (*(*state).callbacks)
-                                    .sb_clear
-                                    .expect("non-null function pointer"),
-                            )
-                            .expect("non-null function pointer")((*state).cbdata) != 0
+                            (*(*state).callbacks)
+                                .sb_clear
+                                .expect("non-null function pointer"),
+                        )
+                        .expect("non-null function pointer")(
+                            (*state).cbdata
+                        ) != 0
                         {
                             return 1 as ::core::ffi::c_int;
                         }
@@ -2662,10 +2624,9 @@ unsafe extern "C" fn on_csi(
             {
                 2147483647 | 0 => {
                     rect.start_col = (*state).pos.col;
-                    rect.end_col = if (*(*state)
-                        .lineinfo
-                        .offset((*state).pos.row as isize))
-                        .doublewidth() as ::core::ffi::c_int != 0
+                    rect.end_col = if (*(*state).lineinfo.offset((*state).pos.row as isize))
+                        .doublewidth() as ::core::ffi::c_int
+                        != 0
                     {
                         (*state).cols / 2 as ::core::ffi::c_int
                     } else {
@@ -2678,10 +2639,9 @@ unsafe extern "C" fn on_csi(
                 }
                 2 => {
                     rect.start_col = 0 as ::core::ffi::c_int;
-                    rect.end_col = if (*(*state)
-                        .lineinfo
-                        .offset((*state).pos.row as isize))
-                        .doublewidth() as ::core::ffi::c_int != 0
+                    rect.end_col = if (*(*state).lineinfo.offset((*state).pos.row as isize))
+                        .doublewidth() as ::core::ffi::c_int
+                        != 0
                     {
                         (*state).cols / 2 as ::core::ffi::c_int
                     } else {
@@ -2696,33 +2656,31 @@ unsafe extern "C" fn on_csi(
         }
         76 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if is_cursor_in_scrollregion(state) != 0 {
                 rect.start_row = (*state).pos.row;
-                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int
-                {
+                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
                     (*state).scrollregion_bottom
                 } else {
                     (*state).rows
                 };
-                rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                    != 0
-                {
+                rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
                     (*state).scrollregion_left
                 } else {
                     0 as ::core::ffi::c_int
                 };
-                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                    != 0 && (*state).scrollregion_right > -1 as ::core::ffi::c_int
+                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
+                    && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                 {
                     (*state).scrollregion_right
                 } else {
@@ -2733,33 +2691,31 @@ unsafe extern "C" fn on_csi(
         }
         77 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if is_cursor_in_scrollregion(state) != 0 {
                 rect.start_row = (*state).pos.row;
-                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int
-                {
+                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
                     (*state).scrollregion_bottom
                 } else {
                     (*state).rows
                 };
-                rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                    != 0
-                {
+                rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
                     (*state).scrollregion_left
                 } else {
                     0 as ::core::ffi::c_int
                 };
-                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                    != 0 && (*state).scrollregion_right > -1 as ::core::ffi::c_int
+                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
+                    && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                 {
                     (*state).scrollregion_right
                 } else {
@@ -2770,23 +2726,23 @@ unsafe extern "C" fn on_csi(
         }
         80 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if is_cursor_in_scrollregion(state) != 0 {
                 rect.start_row = (*state).pos.row;
                 rect.end_row = (*state).pos.row + 1 as ::core::ffi::c_int;
                 rect.start_col = (*state).pos.col;
                 if (*state).mode.leftrightmargin() != 0 {
-                    rect.end_col = if (*state).mode.leftrightmargin()
-                        as ::core::ffi::c_int != 0
+                    rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
                         && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                     {
                         (*state).scrollregion_right
@@ -2794,10 +2750,9 @@ unsafe extern "C" fn on_csi(
                         (*state).cols
                     };
                 } else {
-                    rect.end_col = if (*(*state)
-                        .lineinfo
-                        .offset((*state).pos.row as isize))
-                        .doublewidth() as ::core::ffi::c_int != 0
+                    rect.end_col = if (*(*state).lineinfo.offset((*state).pos.row as isize))
+                        .doublewidth() as ::core::ffi::c_int
+                        != 0
                     {
                         (*state).cols / 2 as ::core::ffi::c_int
                     } else {
@@ -2809,15 +2764,16 @@ unsafe extern "C" fn on_csi(
         }
         83 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             rect.start_row = (*state).scrollregion_top;
             rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
@@ -2825,9 +2781,7 @@ unsafe extern "C" fn on_csi(
             } else {
                 (*state).rows
             };
-            rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                != 0
-            {
+            rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
                 (*state).scrollregion_left
             } else {
                 0 as ::core::ffi::c_int
@@ -2843,15 +2797,16 @@ unsafe extern "C" fn on_csi(
         }
         84 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             rect.start_row = (*state).scrollregion_top;
             rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
@@ -2859,9 +2814,7 @@ unsafe extern "C" fn on_csi(
             } else {
                 (*state).rows
             };
-            rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                != 0
-            {
+            rect.start_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
                 (*state).scrollregion_left
             } else {
                 0 as ::core::ffi::c_int
@@ -2877,23 +2830,25 @@ unsafe extern "C" fn on_csi(
         }
         88 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             rect.start_row = (*state).pos.row;
             rect.end_row = (*state).pos.row + 1 as ::core::ffi::c_int;
             rect.start_col = (*state).pos.col;
             rect.end_col = (*state).pos.col + count;
             if rect.end_col
-                > (if (*(*state).lineinfo.offset((*state).pos.row as isize))
-                    .doublewidth() as ::core::ffi::c_int != 0
+                > (if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
+                    as ::core::ffi::c_int
+                    != 0
                 {
                     (*state).cols / 2 as ::core::ffi::c_int
                 } else {
@@ -2901,7 +2856,8 @@ unsafe extern "C" fn on_csi(
                 })
             {
                 rect.end_col = if (*(*state).lineinfo.offset((*state).pos.row as isize))
-                    .doublewidth() as ::core::ffi::c_int != 0
+                    .doublewidth() as ::core::ffi::c_int
+                    != 0
                 {
                     (*state).cols / 2 as ::core::ffi::c_int
                 } else {
@@ -2912,15 +2868,16 @@ unsafe extern "C" fn on_csi(
         }
         90 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             tab(state, count, -1 as ::core::ffi::c_int);
         }
@@ -2931,47 +2888,48 @@ unsafe extern "C" fn on_csi(
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col = col - 1 as ::core::ffi::c_int;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         97 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col += count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         98 => {
-            let row_width: ::core::ffi::c_int = if (*(*state)
-                .lineinfo
-                .offset((*state).pos.row as isize))
-                .doublewidth() as ::core::ffi::c_int != 0
-            {
-                (*state).cols / 2 as ::core::ffi::c_int
-            } else {
-                (*state).cols
-            };
+            let row_width: ::core::ffi::c_int =
+                if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
+                    as ::core::ffi::c_int
+                    != 0
+                {
+                    (*state).cols / 2 as ::core::ffi::c_int
+                } else {
+                    (*state).cols
+                };
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             col = (*state).pos.col + count;
             if col > row_width {
@@ -2999,8 +2957,7 @@ unsafe extern "C" fn on_csi(
             {
                 0 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if val == 0 as ::core::ffi::c_int {
                 vterm_push_output_sprintf_ctrl(
@@ -3028,8 +2985,7 @@ unsafe extern "C" fn on_csi(
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row = row - 1 as ::core::ffi::c_int;
             if (*state).mode.origin() != 0 {
@@ -3039,15 +2995,16 @@ unsafe extern "C" fn on_csi(
         }
         101 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row += count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
@@ -3059,29 +3016,27 @@ unsafe extern "C" fn on_csi(
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             col = (if argcount < 2 as ::core::ffi::c_int
                 || (*args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(1 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row = row - 1 as ::core::ffi::c_int;
             (*state).pos.col = col - 1 as ::core::ffi::c_int;
             if (*state).mode.origin() != 0 {
                 (*state).pos.row += (*state).scrollregion_top;
-                (*state).pos.col
-                    += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
-                        (*state).scrollregion_left
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                (*state).pos.col += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
+                    (*state).scrollregion_left
+                } else {
+                    0 as ::core::ffi::c_int
+                };
             }
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
@@ -3092,8 +3047,7 @@ unsafe extern "C" fn on_csi(
             {
                 0 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             match val {
                 0 => {
@@ -3118,7 +3072,8 @@ unsafe extern "C" fn on_csi(
                 set_mode(
                     state,
                     (*args.offset(0 as ::core::ffi::c_int as isize)
-                        & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_int,
+                        & CSI_ARG_MASK as ::core::ffi::c_long)
+                        as ::core::ffi::c_int,
                     1 as ::core::ffi::c_int,
                 );
             }
@@ -3127,7 +3082,8 @@ unsafe extern "C" fn on_csi(
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < argcount {
                 if !((*args.offset(i as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
-                    as ::core::ffi::c_ulong == CSI_ARG_MISSING as ::core::ffi::c_ulong)
+                    as ::core::ffi::c_ulong
+                    == CSI_ARG_MISSING as ::core::ffi::c_ulong)
                 {
                     set_dec_mode(
                         state,
@@ -3141,30 +3097,32 @@ unsafe extern "C" fn on_csi(
         }
         106 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.col -= count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
         }
         107 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             (*state).pos.row -= count;
             (*state).at_phantom = 0 as ::core::ffi::c_int;
@@ -3177,7 +3135,8 @@ unsafe extern "C" fn on_csi(
                 set_mode(
                     state,
                     (*args.offset(0 as ::core::ffi::c_int as isize)
-                        & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_int,
+                        & CSI_ARG_MASK as ::core::ffi::c_long)
+                        as ::core::ffi::c_int,
                     0 as ::core::ffi::c_int,
                 );
             }
@@ -3186,12 +3145,13 @@ unsafe extern "C" fn on_csi(
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_0 < argcount {
                 if !((*args.offset(i_0 as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
-                    as ::core::ffi::c_ulong == CSI_ARG_MISSING as ::core::ffi::c_ulong)
+                    as ::core::ffi::c_ulong
+                    == CSI_ARG_MISSING as ::core::ffi::c_ulong)
                 {
                     set_dec_mode(
                         state,
-                        (*args.offset(i_0 as isize)
-                            & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_int,
+                        (*args.offset(i_0 as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
+                            as ::core::ffi::c_int,
                         0 as ::core::ffi::c_int,
                     );
                 }
@@ -3243,12 +3203,9 @@ unsafe extern "C" fn on_csi(
             {
                 0 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
-            let mut qmark: *mut ::core::ffi::c_char = (if leader_byte
-                == '?' as ::core::ffi::c_int
-            {
+            let mut qmark: *mut ::core::ffi::c_char = (if leader_byte == '?' as ::core::ffi::c_int {
                 b"?\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
@@ -3274,14 +3231,12 @@ unsafe extern "C" fn on_csi(
                     );
                 }
                 996 => {
-                    if !(*state).callbacks.is_null()
-                        && (*(*state).callbacks).theme.is_some()
-                    {
+                    if !(*state).callbacks.is_null() && (*(*state).callbacks).theme.is_some() {
                         if (*(*state).callbacks)
                             .theme
-                            .expect(
-                                "non-null function pointer",
-                            )(&raw mut dark, (*state).cbdata) != 0
+                            .expect("non-null function pointer")(
+                            &raw mut dark, (*state).cbdata
+                        ) != 0
                         {
                             vterm_push_output_sprintf_ctrl(
                                 (*state).vt,
@@ -3319,16 +3274,11 @@ unsafe extern "C" fn on_csi(
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             match val {
                 0 | 1 => {
-                    settermprop_bool(
-                        state,
-                        VTERM_PROP_CURSORBLINK,
-                        1 as ::core::ffi::c_int,
-                    );
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 1 as ::core::ffi::c_int);
                     settermprop_int(
                         state,
                         VTERM_PROP_CURSORSHAPE,
@@ -3336,11 +3286,7 @@ unsafe extern "C" fn on_csi(
                     );
                 }
                 2 => {
-                    settermprop_bool(
-                        state,
-                        VTERM_PROP_CURSORBLINK,
-                        0 as ::core::ffi::c_int,
-                    );
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 0 as ::core::ffi::c_int);
                     settermprop_int(
                         state,
                         VTERM_PROP_CURSORSHAPE,
@@ -3348,11 +3294,7 @@ unsafe extern "C" fn on_csi(
                     );
                 }
                 3 => {
-                    settermprop_bool(
-                        state,
-                        VTERM_PROP_CURSORBLINK,
-                        1 as ::core::ffi::c_int,
-                    );
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 1 as ::core::ffi::c_int);
                     settermprop_int(
                         state,
                         VTERM_PROP_CURSORSHAPE,
@@ -3360,11 +3302,7 @@ unsafe extern "C" fn on_csi(
                     );
                 }
                 4 => {
-                    settermprop_bool(
-                        state,
-                        VTERM_PROP_CURSORBLINK,
-                        0 as ::core::ffi::c_int,
-                    );
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 0 as ::core::ffi::c_int);
                     settermprop_int(
                         state,
                         VTERM_PROP_CURSORSHAPE,
@@ -3372,11 +3310,7 @@ unsafe extern "C" fn on_csi(
                     );
                 }
                 5 => {
-                    settermprop_bool(
-                        state,
-                        VTERM_PROP_CURSORBLINK,
-                        1 as ::core::ffi::c_int,
-                    );
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 1 as ::core::ffi::c_int);
                     settermprop_int(
                         state,
                         VTERM_PROP_CURSORSHAPE,
@@ -3384,11 +3318,7 @@ unsafe extern "C" fn on_csi(
                     );
                 }
                 6 => {
-                    settermprop_bool(
-                        state,
-                        VTERM_PROP_CURSORBLINK,
-                        0 as ::core::ffi::c_int,
-                    );
+                    settermprop_bool(state, VTERM_PROP_CURSORBLINK, 0 as ::core::ffi::c_int);
                     settermprop_int(
                         state,
                         VTERM_PROP_CURSORSHAPE,
@@ -3405,45 +3335,38 @@ unsafe extern "C" fn on_csi(
             {
                 0 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             match val {
                 0 | 2 => {
-                    (*state)
-                        .set_protected_cell(
-                            0 as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                        );
+                    (*state).set_protected_cell(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
                 }
                 1 => {
-                    (*state)
-                        .set_protected_cell(
-                            1 as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                        );
+                    (*state).set_protected_cell(1 as ::core::ffi::c_uint as ::core::ffi::c_uint);
                 }
                 _ => {}
             }
         }
         114 => {
-            (*state).scrollregion_top = ((if (*args
-                .offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+            (*state).scrollregion_top = ((if (*args.offset(0 as ::core::ffi::c_int as isize)
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
-            }) - 1 as ::core::ffi::c_long) as ::core::ffi::c_int;
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
+            }) - 1 as ::core::ffi::c_long)
+                as ::core::ffi::c_int;
             (*state).scrollregion_bottom = (if argcount < 2 as ::core::ffi::c_int
                 || (*args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 -1 as ::core::ffi::c_long
             } else {
-                *args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(1 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if (*state).scrollregion_top < 0 as ::core::ffi::c_int {
                 (*state).scrollregion_top = 0 as ::core::ffi::c_int;
@@ -3474,34 +3397,33 @@ unsafe extern "C" fn on_csi(
             (*state).pos.col = 0 as ::core::ffi::c_int;
             if (*state).mode.origin() != 0 {
                 (*state).pos.row += (*state).scrollregion_top;
-                (*state).pos.col
-                    += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
-                        (*state).scrollregion_left
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                (*state).pos.col += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
+                    (*state).scrollregion_left
+                } else {
+                    0 as ::core::ffi::c_int
+                };
             }
         }
         115 => {
-            (*state).scrollregion_left = ((if (*args
-                .offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+            (*state).scrollregion_left = ((if (*args.offset(0 as ::core::ffi::c_int as isize)
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
-            }) - 1 as ::core::ffi::c_long) as ::core::ffi::c_int;
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
+            }) - 1 as ::core::ffi::c_long)
+                as ::core::ffi::c_int;
             (*state).scrollregion_right = (if argcount < 2 as ::core::ffi::c_int
                 || (*args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 -1 as ::core::ffi::c_long
             } else {
-                *args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(1 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if (*state).scrollregion_left < 0 as ::core::ffi::c_int {
                 (*state).scrollregion_left = 0 as ::core::ffi::c_int;
@@ -3529,12 +3451,11 @@ unsafe extern "C" fn on_csi(
             (*state).pos.col = 0 as ::core::ffi::c_int;
             if (*state).mode.origin() != 0 {
                 (*state).pos.row += (*state).scrollregion_top;
-                (*state).pos.col
-                    += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
-                        (*state).scrollregion_left
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                (*state).pos.col += if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
+                    (*state).scrollregion_left
+                } else {
+                    0 as ::core::ffi::c_int
+                };
             }
         }
         16245 => {
@@ -3544,7 +3465,8 @@ unsafe extern "C" fn on_csi(
             push_key_encoding_flags(
                 state,
                 (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 {
                     0 as ::core::ffi::c_long
@@ -3558,7 +3480,8 @@ unsafe extern "C" fn on_csi(
             pop_key_encoding_flags(
                 state,
                 (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 {
                     1 as ::core::ffi::c_long
@@ -3571,18 +3494,19 @@ unsafe extern "C" fn on_csi(
         15733 => {
             val = (if argcount < 2 as ::core::ffi::c_int
                 || (*args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(1 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(1 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             set_key_encoding_flags(
                 state,
                 (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 {
                     0 as ::core::ffi::c_long
@@ -3595,27 +3519,27 @@ unsafe extern "C" fn on_csi(
         }
         2556029 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if is_cursor_in_scrollregion(state) != 0 {
                 rect.start_row = (*state).scrollregion_top;
-                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int
-                {
+                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
                     (*state).scrollregion_bottom
                 } else {
                     (*state).rows
                 };
                 rect.start_col = (*state).pos.col;
-                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                    != 0 && (*state).scrollregion_right > -1 as ::core::ffi::c_int
+                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
+                    && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                 {
                     (*state).scrollregion_right
                 } else {
@@ -3626,27 +3550,27 @@ unsafe extern "C" fn on_csi(
         }
         2556030 => {
             count = (if (*args.offset(0 as ::core::ffi::c_int as isize)
-                & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                & CSI_ARG_MASK as ::core::ffi::c_long)
+                as ::core::ffi::c_ulong
                 == CSI_ARG_MISSING as ::core::ffi::c_ulong
                 || *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long == 0 as ::core::ffi::c_long
+                    & CSI_ARG_MASK as ::core::ffi::c_long
+                    == 0 as ::core::ffi::c_long
             {
                 1 as ::core::ffi::c_long
             } else {
-                *args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long
+                *args.offset(0 as ::core::ffi::c_int as isize) & CSI_ARG_MASK as ::core::ffi::c_long
             }) as ::core::ffi::c_int;
             if is_cursor_in_scrollregion(state) != 0 {
                 rect.start_row = (*state).scrollregion_top;
-                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int
-                {
+                rect.end_row = if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
                     (*state).scrollregion_bottom
                 } else {
                     (*state).rows
                 };
                 rect.start_col = (*state).pos.col;
-                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                    != 0 && (*state).scrollregion_right > -1 as ::core::ffi::c_int
+                rect.end_col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
+                    && (*state).scrollregion_right > -1 as ::core::ffi::c_int
                 {
                     (*state).scrollregion_right
                 } else {
@@ -3657,10 +3581,19 @@ unsafe extern "C" fn on_csi(
         }
         _ => {
             if !(*state).fallbacks.is_null() && (*(*state).fallbacks).csi.is_some() {
-                if Some((*(*state).fallbacks).csi.expect("non-null function pointer"))
-                    .expect(
-                        "non-null function pointer",
-                    )(leader, args, argcount, intermed, command, (*state).fbdata) != 0
+                if Some(
+                    (*(*state).fallbacks)
+                        .csi
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(
+                    leader,
+                    args,
+                    argcount,
+                    intermed,
+                    command,
+                    (*state).fbdata,
+                ) != 0
                 {
                     return 1 as ::core::ffi::c_int;
                 }
@@ -3679,9 +3612,7 @@ unsafe extern "C" fn on_csi(
                 (*state).rows
             }) - 1 as ::core::ffi::c_int
         {
-            (*state).pos.row = (if (*state).scrollregion_bottom
-                > -1 as ::core::ffi::c_int
-            {
+            (*state).pos.row = (if (*state).scrollregion_bottom > -1 as ::core::ffi::c_int {
                 (*state).scrollregion_bottom
             } else {
                 (*state).rows
@@ -3694,9 +3625,7 @@ unsafe extern "C" fn on_csi(
                 0 as ::core::ffi::c_int
             })
         {
-            (*state).pos.col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                != 0
-            {
+            (*state).pos.col = if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0 {
                 (*state).scrollregion_left
             } else {
                 0 as ::core::ffi::c_int
@@ -3711,8 +3640,8 @@ unsafe extern "C" fn on_csi(
                 (*state).cols
             }) - 1 as ::core::ffi::c_int
         {
-            (*state).pos.col = (if (*state).mode.leftrightmargin() as ::core::ffi::c_int
-                != 0 && (*state).scrollregion_right > -1 as ::core::ffi::c_int
+            (*state).pos.col = (if (*state).mode.leftrightmargin() as ::core::ffi::c_int != 0
+                && (*state).scrollregion_right > -1 as ::core::ffi::c_int
             {
                 (*state).scrollregion_right
             } else {
@@ -3731,7 +3660,8 @@ unsafe extern "C" fn on_csi(
         }
         if (*state).pos.col
             > (if (*(*state).lineinfo.offset((*state).pos.row as isize)).doublewidth()
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
             {
                 (*state).cols / 2 as ::core::ffi::c_int
             } else {
@@ -3739,7 +3669,8 @@ unsafe extern "C" fn on_csi(
             }) - 1 as ::core::ffi::c_int
         {
             (*state).pos.col = (if (*(*state).lineinfo.offset((*state).pos.row as isize))
-                .doublewidth() as ::core::ffi::c_int != 0
+                .doublewidth() as ::core::ffi::c_int
+                != 0
             {
                 (*state).cols / 2 as ::core::ffi::c_int
             } else {
@@ -3754,71 +3685,70 @@ unsafe extern "C" fn unbase64one(mut c: ::core::ffi::c_char) -> uint8_t {
     if c as ::core::ffi::c_int >= 'A' as ::core::ffi::c_int
         && c as ::core::ffi::c_int <= 'Z' as ::core::ffi::c_int
     {
-        return (c as uint8_t as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            as uint8_t
+        return (c as uint8_t as ::core::ffi::c_int - 'A' as ::core::ffi::c_int) as uint8_t;
     } else if c as ::core::ffi::c_int >= 'a' as ::core::ffi::c_int
         && c as ::core::ffi::c_int <= 'z' as ::core::ffi::c_int
     {
         return (c as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int
-            + 26 as ::core::ffi::c_int) as uint8_t
+            + 26 as ::core::ffi::c_int) as uint8_t;
     } else if c as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
         && c as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
     {
         return (c as uint8_t as ::core::ffi::c_int - '0' as ::core::ffi::c_int
-            + 52 as ::core::ffi::c_int) as uint8_t
+            + 52 as ::core::ffi::c_int) as uint8_t;
     } else if c as ::core::ffi::c_int == '+' as ::core::ffi::c_int {
-        return 62 as uint8_t
+        return 62 as uint8_t;
     } else if c as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
-        return 63 as uint8_t
+        return 63 as uint8_t;
     }
     return 0xff as uint8_t;
 }
-unsafe extern "C" fn osc_selection(
-    mut state: *mut VTermState,
-    mut frag: VTermStringFragment,
-) {
+unsafe extern "C" fn osc_selection(mut state: *mut VTermState, mut frag: VTermStringFragment) {
     if frag.initial() {
         (*state).tmp.selection.mask = 0 as uint16_t;
-        (*state).tmp.selection.set_state(SELECTION_INITIAL as C2Rust_Unnamed_4);
+        (*state)
+            .tmp
+            .selection
+            .set_state(SELECTION_INITIAL as C2Rust_Unnamed_4);
     }
-    while (*state).tmp.selection.state() as u64 == 0
-        && frag.len() as ::core::ffi::c_int != 0
-    {
+    while (*state).tmp.selection.state() as u64 == 0 && frag.len() as ::core::ffi::c_int != 0 {
         match *frag.str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
             99 => {
-                (*state).tmp.selection.mask = ((*state).tmp.selection.mask
-                    as ::core::ffi::c_int
-                    | VTERM_SELECTION_CLIPBOARD as ::core::ffi::c_int) as uint16_t;
+                (*state).tmp.selection.mask = ((*state).tmp.selection.mask as ::core::ffi::c_int
+                    | VTERM_SELECTION_CLIPBOARD as ::core::ffi::c_int)
+                    as uint16_t;
             }
             112 => {
-                (*state).tmp.selection.mask = ((*state).tmp.selection.mask
-                    as ::core::ffi::c_int
-                    | VTERM_SELECTION_PRIMARY as ::core::ffi::c_int) as uint16_t;
+                (*state).tmp.selection.mask = ((*state).tmp.selection.mask as ::core::ffi::c_int
+                    | VTERM_SELECTION_PRIMARY as ::core::ffi::c_int)
+                    as uint16_t;
             }
             113 => {
-                (*state).tmp.selection.mask = ((*state).tmp.selection.mask
-                    as ::core::ffi::c_int
-                    | VTERM_SELECTION_SECONDARY as ::core::ffi::c_int) as uint16_t;
+                (*state).tmp.selection.mask = ((*state).tmp.selection.mask as ::core::ffi::c_int
+                    | VTERM_SELECTION_SECONDARY as ::core::ffi::c_int)
+                    as uint16_t;
             }
             115 => {
-                (*state).tmp.selection.mask = ((*state).tmp.selection.mask
-                    as ::core::ffi::c_int | VTERM_SELECTION_SELECT as ::core::ffi::c_int)
+                (*state).tmp.selection.mask = ((*state).tmp.selection.mask as ::core::ffi::c_int
+                    | VTERM_SELECTION_SELECT as ::core::ffi::c_int)
                     as uint16_t;
             }
             48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 => {
-                (*state).tmp.selection.mask = ((*state).tmp.selection.mask
-                    as ::core::ffi::c_int
+                (*state).tmp.selection.mask = ((*state).tmp.selection.mask as ::core::ffi::c_int
                     | (VTERM_SELECTION_CUT0 as ::core::ffi::c_int)
-                        << *frag.str.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
+                        << *frag.str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            - '0' as ::core::ffi::c_int)
                     as uint16_t;
             }
             59 => {
-                (*state).tmp.selection.set_state(SELECTION_SELECTED as C2Rust_Unnamed_4);
+                (*state)
+                    .tmp
+                    .selection
+                    .set_state(SELECTION_SELECTED as C2Rust_Unnamed_4);
                 if (*state).tmp.selection.mask == 0 {
-                    (*state).tmp.selection.mask = (VTERM_SELECTION_SELECT
-                        as ::core::ffi::c_int
-                        | VTERM_SELECTION_CUT0 as ::core::ffi::c_int) as uint16_t;
+                    (*state).tmp.selection.mask = (VTERM_SELECTION_SELECT as ::core::ffi::c_int
+                        | VTERM_SELECTION_CUT0 as ::core::ffi::c_int)
+                        as uint16_t;
                 }
             }
             _ => {}
@@ -3830,10 +3760,12 @@ unsafe extern "C" fn osc_selection(
         if frag.final_0() as ::core::ffi::c_int != 0
             && (*(*state).selection.callbacks).set.is_some()
         {
-            Some((*(*state).selection.callbacks).set.expect("non-null function pointer"))
-                .expect(
-                    "non-null function pointer",
-                )(
+            Some(
+                (*(*state).selection.callbacks)
+                    .set
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")(
                 (*state).tmp.selection.mask as VTermSelectionMask,
                 {
                     let mut init = VTermStringFragment {
@@ -3860,24 +3792,27 @@ unsafe extern "C" fn osc_selection(
         if *frag.str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '?' as ::core::ffi::c_int
         {
-            (*state).tmp.selection.set_state(SELECTION_QUERY as C2Rust_Unnamed_4);
+            (*state)
+                .tmp
+                .selection
+                .set_state(SELECTION_QUERY as C2Rust_Unnamed_4);
         } else {
-            (*state).tmp.selection.set_state(SELECTION_SET_INITIAL as C2Rust_Unnamed_4);
+            (*state)
+                .tmp
+                .selection
+                .set_state(SELECTION_SET_INITIAL as C2Rust_Unnamed_4);
             (*state).tmp.selection.recvpartial = 0 as uint32_t;
         }
     }
-    if (*state).tmp.selection.state() as ::core::ffi::c_int
-        == SELECTION_QUERY as ::core::ffi::c_int
+    if (*state).tmp.selection.state() as ::core::ffi::c_int == SELECTION_QUERY as ::core::ffi::c_int
     {
         if (*(*state).selection.callbacks).query.is_some() {
             Some(
-                    (*(*state).selection.callbacks)
-                        .query
-                        .expect("non-null function pointer"),
-                )
-                .expect(
-                    "non-null function pointer",
-                )(
+                (*(*state).selection.callbacks)
+                    .query
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")(
                 (*state).tmp.selection.mask as VTermSelectionMask,
                 (*state).selection.user,
             );
@@ -3907,34 +3842,30 @@ unsafe extern "C" fn osc_selection(
                 == '=' as ::core::ffi::c_int
             {
                 if n == 2 as ::core::ffi::c_int {
-                    *buffer.offset(0 as ::core::ffi::c_int as isize) = (x
-                        >> 4 as ::core::ffi::c_int & 0xff as uint32_t)
-                        as ::core::ffi::c_char;
+                    *buffer.offset(0 as ::core::ffi::c_int as isize) =
+                        (x >> 4 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
                     buffer = buffer.offset(1 as ::core::ffi::c_int as isize);
                     bufcur = bufcur.wrapping_add(1 as size_t);
                 }
                 if n == 3 as ::core::ffi::c_int {
-                    *buffer.offset(0 as ::core::ffi::c_int as isize) = (x
-                        >> 10 as ::core::ffi::c_int & 0xff as uint32_t)
-                        as ::core::ffi::c_char;
-                    *buffer.offset(1 as ::core::ffi::c_int as isize) = (x
-                        >> 2 as ::core::ffi::c_int & 0xff as uint32_t)
-                        as ::core::ffi::c_char;
+                    *buffer.offset(0 as ::core::ffi::c_int as isize) =
+                        (x >> 10 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
+                    *buffer.offset(1 as ::core::ffi::c_int as isize) =
+                        (x >> 2 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
                     buffer = buffer.offset(2 as ::core::ffi::c_int as isize);
                     bufcur = bufcur.wrapping_add(2 as size_t);
                 }
                 while frag.len() as ::core::ffi::c_int != 0
-                    && *frag.str.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '=' as ::core::ffi::c_int
+                    && *frag.str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '=' as ::core::ffi::c_int
                 {
                     frag.str = frag.str.offset(1);
                     frag.set_len(frag.len() - 1 as size_t);
                 }
                 n = 0 as ::core::ffi::c_int;
             } else {
-                let mut b: uint8_t = unbase64one(
-                    *frag.str.offset(0 as ::core::ffi::c_int as isize),
-                );
+                let mut b: uint8_t =
+                    unbase64one(*frag.str.offset(0 as ::core::ffi::c_int as isize));
                 if b as ::core::ffi::c_int == 0xff as ::core::ffi::c_int {
                     (*state)
                         .tmp
@@ -3942,13 +3873,11 @@ unsafe extern "C" fn osc_selection(
                         .set_state(SELECTION_INVALID as C2Rust_Unnamed_4);
                     if (*(*state).selection.callbacks).set.is_some() {
                         Some(
-                                (*(*state).selection.callbacks)
-                                    .set
-                                    .expect("non-null function pointer"),
-                            )
-                            .expect(
-                                "non-null function pointer",
-                            )(
+                            (*(*state).selection.callbacks)
+                                .set
+                                .expect("non-null function pointer"),
+                        )
+                        .expect("non-null function pointer")(
                             (*state).tmp.selection.mask as VTermSelectionMask,
                             {
                                 let mut init = VTermStringFragment {
@@ -3971,15 +3900,15 @@ unsafe extern "C" fn osc_selection(
                     frag.str = frag.str.offset(1);
                     frag.set_len(frag.len() - 1 as size_t);
                     if n == 4 as ::core::ffi::c_int {
-                        *buffer.offset(0 as ::core::ffi::c_int as isize) = (x
-                            >> 16 as ::core::ffi::c_int & 0xff as uint32_t)
-                            as ::core::ffi::c_char;
-                        *buffer.offset(1 as ::core::ffi::c_int as isize) = (x
-                            >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-                            as ::core::ffi::c_char;
-                        *buffer.offset(2 as ::core::ffi::c_int as isize) = (x
-                            >> 0 as ::core::ffi::c_int & 0xff as uint32_t)
-                            as ::core::ffi::c_char;
+                        *buffer.offset(0 as ::core::ffi::c_int as isize) =
+                            (x >> 16 as ::core::ffi::c_int & 0xff as uint32_t)
+                                as ::core::ffi::c_char;
+                        *buffer.offset(1 as ::core::ffi::c_int as isize) =
+                            (x >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
+                                as ::core::ffi::c_char;
+                        *buffer.offset(2 as ::core::ffi::c_int as isize) =
+                            (x >> 0 as ::core::ffi::c_int & 0xff as uint32_t)
+                                as ::core::ffi::c_char;
                         buffer = buffer.offset(3 as ::core::ffi::c_int as isize);
                         bufcur = bufcur.wrapping_add(3 as size_t);
                         x = 0 as uint32_t;
@@ -3987,18 +3916,14 @@ unsafe extern "C" fn osc_selection(
                     }
                 }
             }
-            if frag.len() == 0
-                || (*state).selection.buflen.wrapping_sub(bufcur) < 3 as size_t
-            {
+            if frag.len() == 0 || (*state).selection.buflen.wrapping_sub(bufcur) < 3 as size_t {
                 if bufcur != 0 {
                     Some(
-                            (*(*state).selection.callbacks)
-                                .set
-                                .expect("non-null function pointer"),
-                        )
-                        .expect(
-                            "non-null function pointer",
-                        )(
+                        (*(*state).selection.callbacks)
+                            .set
+                            .expect("non-null function pointer"),
+                    )
+                    .expect("non-null function pointer")(
                         (*state).tmp.selection.mask as VTermSelectionMask,
                         {
                             let mut init = VTermStringFragment {
@@ -4018,15 +3943,17 @@ unsafe extern "C" fn osc_selection(
                         },
                         (*state).selection.user,
                     );
-                    (*state).tmp.selection.set_state(SELECTION_SET as C2Rust_Unnamed_4);
+                    (*state)
+                        .tmp
+                        .selection
+                        .set_state(SELECTION_SET as C2Rust_Unnamed_4);
                 }
                 buffer = (*state).selection.buffer;
                 bufcur = 0 as size_t;
             }
         }
         if n != 0 {
-            (*state).tmp.selection.recvpartial = (n << 24 as ::core::ffi::c_int)
-                as uint32_t | x;
+            (*state).tmp.selection.recvpartial = (n << 24 as ::core::ffi::c_int) as uint32_t | x;
         }
     }
 }
@@ -4055,8 +3982,13 @@ unsafe extern "C" fn on_osc(
         _ => {}
     }
     if !(*state).fallbacks.is_null() && (*(*state).fallbacks).osc.is_some() {
-        if Some((*(*state).fallbacks).osc.expect("non-null function pointer"))
-            .expect("non-null function pointer")(command, frag, (*state).fbdata) != 0
+        if Some(
+            (*(*state).fallbacks)
+                .osc
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(command, frag, (*state).fbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -4068,16 +4000,16 @@ unsafe extern "C" fn request_status_string(
     mut frag: VTermStringFragment,
 ) {
     let mut vt: *mut VTerm = (*state).vt;
-    let mut tmp: *mut ::core::ffi::c_char = &raw mut (*state).tmp.decrqss
-        as *mut ::core::ffi::c_char;
+    let mut tmp: *mut ::core::ffi::c_char =
+        &raw mut (*state).tmp.decrqss as *mut ::core::ffi::c_char;
     if frag.initial() {
         *tmp.offset(3 as ::core::ffi::c_int as isize) = 0 as ::core::ffi::c_char;
-        *tmp.offset(2 as ::core::ffi::c_int as isize) = *tmp
-            .offset(3 as ::core::ffi::c_int as isize);
-        *tmp.offset(1 as ::core::ffi::c_int as isize) = *tmp
-            .offset(2 as ::core::ffi::c_int as isize);
-        *tmp.offset(0 as ::core::ffi::c_int as isize) = *tmp
-            .offset(1 as ::core::ffi::c_int as isize);
+        *tmp.offset(2 as ::core::ffi::c_int as isize) =
+            *tmp.offset(3 as ::core::ffi::c_int as isize);
+        *tmp.offset(1 as ::core::ffi::c_int as isize) =
+            *tmp.offset(2 as ::core::ffi::c_int as isize);
+        *tmp.offset(0 as ::core::ffi::c_int as isize) =
+            *tmp.offset(1 as ::core::ffi::c_int as isize);
     }
     let mut i: size_t = 0 as size_t;
     while i < ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
@@ -4085,19 +4017,17 @@ unsafe extern "C" fn request_status_string(
     {
         i = i.wrapping_add(1);
     }
-    while i < ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-        && {
-            let c2rust_fresh0 = frag.len();
-            frag.set_len(frag.len().wrapping_sub(1));
-            c2rust_fresh0 != 0
-        }
-    {
+    while i < ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) && {
+        let c2rust_fresh0 = frag.len();
+        frag.set_len(frag.len().wrapping_sub(1));
+        c2rust_fresh0 != 0
+    } {
         let c2rust_fresh1 = frag.str;
         frag.str = frag.str.offset(1);
         let c2rust_fresh2 = i;
         i = i.wrapping_add(1);
-        *tmp.offset(c2rust_fresh2 as isize) = *c2rust_fresh1
-            .offset(0 as ::core::ffi::c_int as isize);
+        *tmp.offset(c2rust_fresh2 as isize) =
+            *c2rust_fresh1.offset(0 as ::core::ffi::c_int as isize);
     }
     *tmp.offset(i as isize) = 0 as ::core::ffi::c_char;
     if !frag.final_0() {
@@ -4119,57 +4049,46 @@ unsafe extern "C" fn request_status_string(
                     as ::core::ffi::c_int,
             );
             let mut cur: size_t = 0 as size_t;
-            cur = cur
-                .wrapping_add(
-                    snprintf(
-                        (*vt).tmpbuffer.offset(cur as isize),
-                        (*vt).tmpbuffer_len.wrapping_sub(cur),
-                        if (*vt).mode.ctrl8bit() as ::core::ffi::c_int != 0 {
-                            b"\x901$r\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            b"\x1BP1$r\0".as_ptr() as *const ::core::ffi::c_char
-                        },
-                    ) as size_t,
-                );
+            cur = cur.wrapping_add(snprintf(
+                (*vt).tmpbuffer.offset(cur as isize),
+                (*vt).tmpbuffer_len.wrapping_sub(cur),
+                if (*vt).mode.ctrl8bit() as ::core::ffi::c_int != 0 {
+                    b"\x901$r\0".as_ptr() as *const ::core::ffi::c_char
+                } else {
+                    b"\x1BP1$r\0".as_ptr() as *const ::core::ffi::c_char
+                },
+            ) as size_t);
             if cur >= (*vt).tmpbuffer_len {
                 return;
             }
             let mut argi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while argi < argc {
-                cur = cur
-                    .wrapping_add(
-                        snprintf(
-                            (*vt).tmpbuffer.offset(cur as isize),
-                            (*vt).tmpbuffer_len.wrapping_sub(cur),
-                            if argi == argc - 1 as ::core::ffi::c_int {
-                                b"%ld\0".as_ptr() as *const ::core::ffi::c_char
-                            } else if args[argi as usize]
-                                & CSI_ARG_FLAG_MORE as ::core::ffi::c_long != 0
-                            {
-                                b"%ld:\0".as_ptr() as *const ::core::ffi::c_char
-                            } else {
-                                b"%ld;\0".as_ptr() as *const ::core::ffi::c_char
-                            },
-                            args[argi as usize] & CSI_ARG_MASK as ::core::ffi::c_long,
-                        ) as size_t,
-                    );
+                cur = cur.wrapping_add(snprintf(
+                    (*vt).tmpbuffer.offset(cur as isize),
+                    (*vt).tmpbuffer_len.wrapping_sub(cur),
+                    if argi == argc - 1 as ::core::ffi::c_int {
+                        b"%ld\0".as_ptr() as *const ::core::ffi::c_char
+                    } else if args[argi as usize] & CSI_ARG_FLAG_MORE as ::core::ffi::c_long != 0 {
+                        b"%ld:\0".as_ptr() as *const ::core::ffi::c_char
+                    } else {
+                        b"%ld;\0".as_ptr() as *const ::core::ffi::c_char
+                    },
+                    args[argi as usize] & CSI_ARG_MASK as ::core::ffi::c_long,
+                ) as size_t);
                 if cur >= (*vt).tmpbuffer_len {
                     return;
                 }
                 argi += 1;
             }
-            cur = cur
-                .wrapping_add(
-                    snprintf(
-                        (*vt).tmpbuffer.offset(cur as isize),
-                        (*vt).tmpbuffer_len.wrapping_sub(cur),
-                        if (*vt).mode.ctrl8bit() as ::core::ffi::c_int != 0 {
-                            b"m\x9C\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            b"m\x1B\\\0".as_ptr() as *const ::core::ffi::c_char
-                        },
-                    ) as size_t,
-                );
+            cur = cur.wrapping_add(snprintf(
+                (*vt).tmpbuffer.offset(cur as isize),
+                (*vt).tmpbuffer_len.wrapping_sub(cur),
+                if (*vt).mode.ctrl8bit() as ::core::ffi::c_int != 0 {
+                    b"m\x9C\0".as_ptr() as *const ::core::ffi::c_char
+                } else {
+                    b"m\x1B\\\0".as_ptr() as *const ::core::ffi::c_char
+                },
+            ) as size_t);
             if cur >= (*vt).tmpbuffer_len {
                 return;
             }
@@ -4269,16 +4188,22 @@ unsafe extern "C" fn on_dcs(
 ) -> ::core::ffi::c_int {
     let mut state: *mut VTermState = user as *mut VTermState;
     if commandlen == 2 as size_t
-        && strncmp(command, b"$q\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            command,
+            b"$q\0".as_ptr() as *const ::core::ffi::c_char,
+            2 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         request_status_string(state, frag);
         return 1 as ::core::ffi::c_int;
     } else if !(*state).fallbacks.is_null() && (*(*state).fallbacks).dcs.is_some() {
-        if Some((*(*state).fallbacks).dcs.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(command, commandlen, frag, (*state).fbdata) != 0
+        if Some(
+            (*(*state).fallbacks)
+                .dcs
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(command, commandlen, frag, (*state).fbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -4291,8 +4216,13 @@ unsafe extern "C" fn on_apc(
 ) -> ::core::ffi::c_int {
     let mut state: *mut VTermState = user as *mut VTermState;
     if !(*state).fallbacks.is_null() && (*(*state).fallbacks).apc.is_some() {
-        if Some((*(*state).fallbacks).apc.expect("non-null function pointer"))
-            .expect("non-null function pointer")(frag, (*state).fbdata) != 0
+        if Some(
+            (*(*state).fallbacks)
+                .apc
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(frag, (*state).fbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -4306,7 +4236,8 @@ unsafe extern "C" fn on_pm(
     let mut state: *mut VTermState = user as *mut VTermState;
     if !(*state).fallbacks.is_null() && (*(*state).fallbacks).pm.is_some() {
         if Some((*(*state).fallbacks).pm.expect("non-null function pointer"))
-            .expect("non-null function pointer")(frag, (*state).fbdata) != 0
+            .expect("non-null function pointer")(frag, (*state).fbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -4319,8 +4250,13 @@ unsafe extern "C" fn on_sos(
 ) -> ::core::ffi::c_int {
     let mut state: *mut VTermState = user as *mut VTermState;
     if !(*state).fallbacks.is_null() && (*(*state).fallbacks).sos.is_some() {
-        if Some((*(*state).fallbacks).sos.expect("non-null function pointer"))
-            .expect("non-null function pointer")(frag, (*state).fbdata) != 0
+        if Some(
+            (*(*state).fallbacks)
+                .sos
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(frag, (*state).fbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -4337,37 +4273,47 @@ unsafe extern "C" fn on_resize(
     if cols != (*state).cols {
         let mut newtabstops: *mut uint8_t = vterm_allocator_malloc(
             (*state).vt,
-            (cols as size_t).wrapping_add(7 as size_t).wrapping_div(8 as size_t),
+            (cols as size_t)
+                .wrapping_add(7 as size_t)
+                .wrapping_div(8 as size_t),
         ) as *mut uint8_t;
         let mut col: ::core::ffi::c_int = 0;
         col = 0 as ::core::ffi::c_int;
         while col < (*state).cols && col < cols {
-            let mut mask: uint8_t = ((1 as ::core::ffi::c_int)
-                << (col & 7 as ::core::ffi::c_int)) as uint8_t;
-            if *(*state).tabstops.offset((col >> 3 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int & mask as ::core::ffi::c_int != 0
+            let mut mask: uint8_t =
+                ((1 as ::core::ffi::c_int) << (col & 7 as ::core::ffi::c_int)) as uint8_t;
+            if *(*state)
+                .tabstops
+                .offset((col >> 3 as ::core::ffi::c_int) as isize)
+                as ::core::ffi::c_int
+                & mask as ::core::ffi::c_int
+                != 0
             {
-                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) = (*newtabstops
-                    .offset((col >> 3 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int | mask as ::core::ffi::c_int) as uint8_t;
+                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) =
+                    (*newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        | mask as ::core::ffi::c_int) as uint8_t;
             } else {
-                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) = (*newtabstops
-                    .offset((col >> 3 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int & !(mask as ::core::ffi::c_int)) as uint8_t;
+                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) =
+                    (*newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        & !(mask as ::core::ffi::c_int)) as uint8_t;
             }
             col += 1;
         }
         while col < cols {
-            let mut mask_0: uint8_t = ((1 as ::core::ffi::c_int)
-                << (col & 7 as ::core::ffi::c_int)) as uint8_t;
+            let mut mask_0: uint8_t =
+                ((1 as ::core::ffi::c_int) << (col & 7 as ::core::ffi::c_int)) as uint8_t;
             if col % 8 as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) = (*newtabstops
-                    .offset((col >> 3 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int | mask_0 as ::core::ffi::c_int) as uint8_t;
+                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) =
+                    (*newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        | mask_0 as ::core::ffi::c_int) as uint8_t;
             } else {
-                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) = (*newtabstops
-                    .offset((col >> 3 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int & !(mask_0 as ::core::ffi::c_int)) as uint8_t;
+                *newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize) =
+                    (*newtabstops.offset((col >> 3 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        & !(mask_0 as ::core::ffi::c_int)) as uint8_t;
             }
             col += 1;
         }
@@ -4394,31 +4340,30 @@ unsafe extern "C" fn on_resize(
         ],
     };
     if !(*state).callbacks.is_null() && (*(*state).callbacks).resize.is_some() {
-        Some((*(*state).callbacks).resize.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(rows, cols, &raw mut fields, (*state).cbdata);
+        Some(
+            (*(*state).callbacks)
+                .resize
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(rows, cols, &raw mut fields, (*state).cbdata);
         (*state).pos = fields.pos;
-        (*state).lineinfos[0 as ::core::ffi::c_int as usize] = fields
-            .lineinfos[0 as ::core::ffi::c_int as usize];
-        (*state).lineinfos[1 as ::core::ffi::c_int as usize] = fields
-            .lineinfos[1 as ::core::ffi::c_int as usize];
+        (*state).lineinfos[0 as ::core::ffi::c_int as usize] =
+            fields.lineinfos[0 as ::core::ffi::c_int as usize];
+        (*state).lineinfos[1 as ::core::ffi::c_int as usize] =
+            fields.lineinfos[1 as ::core::ffi::c_int as usize];
     } else if rows != (*state).rows {
         let mut bufidx: ::core::ffi::c_int = BUFIDX_PRIMARY;
         while bufidx <= BUFIDX_ALTSCREEN {
-            let mut oldlineinfo: *mut VTermLineInfo = (*state)
-                .lineinfos[bufidx as usize];
+            let mut oldlineinfo: *mut VTermLineInfo = (*state).lineinfos[bufidx as usize];
             if !oldlineinfo.is_null() {
                 let mut newlineinfo: *mut VTermLineInfo = vterm_allocator_malloc(
                     (*state).vt,
-                    (rows as size_t)
-                        .wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
+                    (rows as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
                 ) as *mut VTermLineInfo;
                 let mut row: ::core::ffi::c_int = 0;
                 row = 0 as ::core::ffi::c_int;
                 while row < (*state).rows && row < rows {
-                    *newlineinfo.offset(row as isize) = *oldlineinfo
-                        .offset(row as isize);
+                    *newlineinfo.offset(row as isize) = *oldlineinfo.offset(row as isize);
                     row += 1;
                 }
                 while row < rows {
@@ -4443,8 +4388,8 @@ unsafe extern "C" fn on_resize(
             bufidx += 1;
         }
     }
-    (*state).lineinfo = (*state)
-        .lineinfos[(if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
+    (*state).lineinfo = (*state).lineinfos[(if (*state).mode.alt_screen() as ::core::ffi::c_int != 0
+    {
         BUFIDX_ALTSCREEN
     } else {
         BUFIDX_PRIMARY
@@ -4478,11 +4423,7 @@ static mut parser_callbacks: VTermParserCallbacks = VTermParserCallbacks {
             ) -> ::core::ffi::c_int,
     ),
     control: Some(
-        on_control
-            as unsafe extern "C" fn(
-                uint8_t,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
+        on_control as unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
     escape: Some(
         on_escape
@@ -4573,18 +4514,40 @@ pub unsafe extern "C" fn vterm_state_reset(
     (*state).scrollregion_bottom = -1 as ::core::ffi::c_int;
     (*state).scrollregion_left = 0 as ::core::ffi::c_int;
     (*state).scrollregion_right = -1 as ::core::ffi::c_int;
-    (*state).mode.set_keypad(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_cursor(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_autowrap(1 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_insert(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_newline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_alt_screen(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_origin(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_leftrightmargin(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_bracketpaste(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*state).mode.set_report_focus(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_keypad(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_cursor(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_autowrap(1 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_insert(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_newline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_alt_screen(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_origin(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_leftrightmargin(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_bracketpaste(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .mode
+        .set_report_focus(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     (*state).mouse_flags = 0 as ::core::ffi::c_int;
-    (*(*state).vt).mode.set_ctrl8bit(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*(*state).vt)
+        .mode
+        .set_ctrl8bit(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while col < (*state).cols {
         if col % 8 as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
@@ -4600,29 +4563,30 @@ pub unsafe extern "C" fn vterm_state_reset(
         row += 1;
     }
     if !(*state).callbacks.is_null() && (*(*state).callbacks).initpen.is_some() {
-        Some((*(*state).callbacks).initpen.expect("non-null function pointer"))
-            .expect("non-null function pointer")((*state).cbdata);
+        Some(
+            (*(*state).callbacks)
+                .initpen
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")((*state).cbdata);
     }
     vterm_state_resetpen(state);
-    let mut default_enc: *mut VTermEncoding = if (*(*state).vt).mode.utf8()
-        as ::core::ffi::c_int != 0
-    {
-        vterm_lookup_encoding(ENC_UTF8, 'u' as ::core::ffi::c_char)
-    } else {
-        vterm_lookup_encoding(ENC_SINGLE_94, 'B' as ::core::ffi::c_char)
-    };
+    let mut default_enc: *mut VTermEncoding =
+        if (*(*state).vt).mode.utf8() as ::core::ffi::c_int != 0 {
+            vterm_lookup_encoding(ENC_UTF8, 'u' as ::core::ffi::c_char)
+        } else {
+            vterm_lookup_encoding(ENC_SINGLE_94, 'B' as ::core::ffi::c_char)
+        };
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 4 as ::core::ffi::c_int {
         (*state).encoding[i as usize].enc = default_enc;
         if (*default_enc).init.is_some() {
             Some((*default_enc).init.expect("non-null function pointer"))
-                .expect(
-                    "non-null function pointer",
-                )(
+                .expect("non-null function pointer")(
                 default_enc,
                 &raw mut (*(&raw mut (*state).encoding as *mut VTermEncodingInstance)
                     .offset(i as isize))
-                    .data as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
+                .data as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             );
         }
         i += 1;
@@ -4661,8 +4625,12 @@ pub unsafe extern "C" fn vterm_state_set_callbacks(
         (*state).callbacks = callbacks;
         (*state).cbdata = user;
         if !(*state).callbacks.is_null() && (*(*state).callbacks).initpen.is_some() {
-            Some((*(*state).callbacks).initpen.expect("non-null function pointer"))
-                .expect("non-null function pointer")((*state).cbdata);
+            Some(
+                (*(*state).callbacks)
+                    .initpen
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")((*state).cbdata);
         }
     } else {
         (*state).callbacks = ::core::ptr::null::<VTermStateCallbacks>();
@@ -4690,8 +4658,13 @@ pub unsafe extern "C" fn vterm_state_set_termprop(
     mut val: *mut VTermValue,
 ) -> ::core::ffi::c_int {
     if !(*state).callbacks.is_null() && (*(*state).callbacks).settermprop.is_some() {
-        if Some((*(*state).callbacks).settermprop.expect("non-null function pointer"))
-            .expect("non-null function pointer")(prop, val, (*state).cbdata) == 0
+        if Some(
+            (*(*state).callbacks)
+                .settermprop
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(prop, val, (*state).cbdata)
+            == 0
         {
             return 0 as ::core::ffi::c_int;
         }
@@ -4701,47 +4674,37 @@ pub unsafe extern "C" fn vterm_state_set_termprop(
         1 => {
             (*state)
                 .mode
-                .set_cursor_visible(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_cursor_visible((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         2 => {
             (*state)
                 .mode
-                .set_cursor_blink(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_cursor_blink((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         7 => {
             (*state)
                 .mode
-                .set_cursor_shape(
-                    (*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_cursor_shape((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         6 => {
             (*state)
                 .mode
-                .set_screen(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_screen((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         3 => {
             (*state)
                 .mode
-                .set_alt_screen(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
-            (*state).lineinfo = (*state)
-                .lineinfos[(if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
-                BUFIDX_ALTSCREEN
-            } else {
-                BUFIDX_PRIMARY
-            }) as usize];
+                .set_alt_screen((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
+            (*state).lineinfo =
+                (*state).lineinfos[(if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
+                    BUFIDX_ALTSCREEN
+                } else {
+                    BUFIDX_PRIMARY
+                }) as usize];
             if (*state).mode.alt_screen() != 0 {
                 let mut rect: VTermRect = VTermRect {
                     start_row: 0 as ::core::ffi::c_int,
@@ -4769,25 +4732,19 @@ pub unsafe extern "C" fn vterm_state_set_termprop(
         9 => {
             (*state)
                 .mode
-                .set_report_focus(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_report_focus((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         10 => {
             (*state)
                 .mode
-                .set_theme_updates(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_theme_updates((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         11 => {
-            (*state)
-                .mode
-                .set_synchronized_output(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+            (*state).mode.set_synchronized_output(
+                (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
+            );
             return 1 as ::core::ffi::c_int;
         }
         12 => return 0 as ::core::ffi::c_int,

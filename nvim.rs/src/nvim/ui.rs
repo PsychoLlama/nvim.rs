@@ -67,12 +67,7 @@ extern "C" {
     static mut ui_ext_names: [*const ::core::ffi::c_char; 0];
     fn remote_ui_stop(ui: *mut RemoteUI);
     fn remote_ui_grid_clear(ui: *mut RemoteUI, grid: Integer);
-    fn remote_ui_grid_resize(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        width: Integer,
-        height: Integer,
-    );
+    fn remote_ui_grid_resize(ui: *mut RemoteUI, grid: Integer, width: Integer, height: Integer);
     fn remote_ui_grid_scroll(
         ui: *mut RemoteUI,
         grid: Integer,
@@ -98,12 +93,7 @@ extern "C" {
         cterm_attrs: HlAttrs,
         info: Array,
     );
-    fn remote_ui_grid_cursor_goto(
-        ui: *mut RemoteUI,
-        grid: Integer,
-        row: Integer,
-        col: Integer,
-    );
+    fn remote_ui_grid_cursor_goto(ui: *mut RemoteUI, grid: Integer, row: Integer, col: Integer);
     fn remote_ui_raw_line(
         ui: *mut RemoteUI,
         grid: Integer,
@@ -119,11 +109,7 @@ extern "C" {
     fn remote_ui_flush(ui: *mut RemoteUI);
     fn remote_ui_ui_send(ui: *mut RemoteUI, content: String_0);
     fn remote_ui_event(ui: *mut RemoteUI, name: *mut ::core::ffi::c_char, args: Array);
-    fn remote_ui_mode_info_set(
-        ui: *mut RemoteUI,
-        enabled: Boolean,
-        cursor_styles: Array,
-    );
+    fn remote_ui_mode_info_set(ui: *mut RemoteUI, enabled: Boolean, cursor_styles: Array);
     fn remote_ui_update_menu(ui: *mut RemoteUI);
     fn remote_ui_busy_start(ui: *mut RemoteUI);
     fn remote_ui_busy_stop(ui: *mut RemoteUI);
@@ -182,10 +168,7 @@ extern "C" {
     static mut updating_screen: bool;
     fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
     fn cmdline_ui_flush();
-    fn describe_ns(
-        ns_id: NS,
-        unknown: *const ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
+    fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
     static mut default_grid: ScreenGrid;
     fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T;
     static mut called_vim_beep: bool;
@@ -2520,9 +2503,7 @@ pub struct RemoteUI {
     pub client_col: Integer,
     pub wildmenu_active: bool,
 }
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -2632,12 +2613,8 @@ pub struct UIEventCallback {
     pub ext_widgets: [bool; 5],
 }
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     pos: 0 as size_t,
@@ -2690,9 +2667,8 @@ pub const MOUSE_INSERT: ::core::ffi::c_int = 'i' as ::core::ffi::c_int;
 pub const MOUSE_COMMAND: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
 pub const MOUSE_HELP: ::core::ffi::c_int = 104;
 pub const MOUSE_RETURN: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
-pub const MOUSE_A: [::core::ffi::c_char; 6] = unsafe {
-    ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"nvich\0")
-};
+pub const MOUSE_A: [::core::ffi::c_char; 6] =
+    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"nvich\0") };
 pub const MAX_UI_COUNT: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 static mut uis: [*mut RemoteUI; 16] = [::core::ptr::null_mut::<RemoteUI>(); 16];
 static mut ui_ext: [bool; 10] = [
@@ -2714,9 +2690,8 @@ static mut has_mouse: bool = false_0 != 0;
 static mut pending_has_mouse: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 static mut pending_default_colors: bool = false_0 != 0;
 static mut uilog_seen: size_t = 0 as size_t;
-static mut uilog_last_event: *const ::core::ffi::c_char = ::core::ptr::null::<
-    ::core::ffi::c_char,
->();
+static mut uilog_last_event: *const ::core::ffi::c_char =
+    ::core::ptr::null::<::core::ffi::c_char>();
 unsafe extern "C" fn ui_log(mut funname: *const ::core::ffi::c_char) {
     if uilog_last_event == funname {
         uilog_seen = uilog_seen.wrapping_add(1);
@@ -2811,21 +2786,30 @@ pub unsafe extern "C" fn ui_refresh() {
         ::core::mem::size_of::<[bool; 10]>()
             .wrapping_div(::core::mem::size_of::<bool>())
             .wrapping_div(
-                (::core::mem::size_of::<[bool; 10]>()
-                    .wrapping_rem(::core::mem::size_of::<bool>()) == 0)
-                    as ::core::ffi::c_int as size_t,
+                (::core::mem::size_of::<[bool; 10]>().wrapping_rem(::core::mem::size_of::<bool>())
+                    == 0) as ::core::ffi::c_int as size_t,
             ),
     );
     let mut i: size_t = 0 as size_t;
     while i < ui_count {
         let mut ui: *mut RemoteUI = uis[i as usize];
-        width = if (*ui).width < width { (*ui).width } else { width };
-        height = if (*ui).height < height { (*ui).height } else { height };
+        width = if (*ui).width < width {
+            (*ui).width
+        } else {
+            width
+        };
+        height = if (*ui).height < height {
+            (*ui).height
+        } else {
+            height
+        };
         let mut j: UIExtension = kUICmdline;
         while (j as ::core::ffi::c_int) < kUIExtCount as ::core::ffi::c_int {
             ext_widgets[j as usize] = ext_widgets[j as usize] as ::core::ffi::c_int
                 & ((*ui).ui_ext[j as usize] as ::core::ffi::c_int != 0
-                    || inclusive as ::core::ffi::c_int != 0) as ::core::ffi::c_int != 0;
+                    || inclusive as ::core::ffi::c_int != 0)
+                    as ::core::ffi::c_int
+                != 0;
             j += 1;
         }
         i = i.wrapping_add(1);
@@ -2837,10 +2821,9 @@ pub unsafe extern "C" fn ui_refresh() {
     let mut i_0: UIExtension = kUICmdline;
     while (i_0 as ::core::ffi::c_int) < kUIExtCount as ::core::ffi::c_int {
         ui_ext[i_0 as usize] = ext_widgets[i_0 as usize] as ::core::ffi::c_int
-            | ui_cb_ext[i_0 as usize] as ::core::ffi::c_int != 0;
-        if (i_0 as ::core::ffi::c_uint)
-            < kUILinegrid as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+            | ui_cb_ext[i_0 as usize] as ::core::ffi::c_int
+            != 0;
+        if (i_0 as ::core::ffi::c_uint) < kUILinegrid as ::core::ffi::c_int as ::core::ffi::c_uint {
             ui_call_option_set(
                 cstr_as_string(
                     *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
@@ -2904,7 +2887,11 @@ pub unsafe extern "C" fn ui_pum_get_height() -> ::core::ffi::c_int {
         let mut ui_pum_height: ::core::ffi::c_int = (*uis[i as usize]).pum_nlines;
         if ui_pum_height != 0 {
             pum_height = if pum_height != 0 as ::core::ffi::c_int {
-                if pum_height < ui_pum_height { pum_height } else { ui_pum_height }
+                if pum_height < ui_pum_height {
+                    pum_height
+                } else {
+                    ui_pum_height
+                }
             } else {
                 ui_pum_height
             };
@@ -2943,8 +2930,7 @@ pub unsafe extern "C" fn ui_schedule_refresh() {
         resize_events,
         Event {
             handler: Some(
-                ui_refresh_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                ui_refresh_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2998,9 +2984,7 @@ pub unsafe extern "C" fn ui_busy_stop() {
 #[no_mangle]
 pub unsafe extern "C" fn vim_beep(mut val: ::core::ffi::c_uint) {
     called_vim_beep = true_0 != 0;
-    if emsg_silent != 0 as ::core::ffi::c_int
-        || in_assert_fails as ::core::ffi::c_int != 0
-    {
+    if emsg_silent != 0 as ::core::ffi::c_int || in_assert_fails as ::core::ffi::c_int != 0 {
         return;
     }
     if !(bo_flags & val != 0
@@ -3062,8 +3046,7 @@ pub unsafe extern "C" fn ui_attach_impl(mut ui: *mut RemoteUI, mut chanid: uint6
     resettitle();
     let mut cwd: [::core::ffi::c_char; 4096] = [0; 4096];
     let mut cwdlen: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 4096]>();
-    if uv_cwd(&raw mut cwd as *mut ::core::ffi::c_char, &raw mut cwdlen)
-        == 0 as ::core::ffi::c_int
+    if uv_cwd(&raw mut cwd as *mut ::core::ffi::c_char, &raw mut cwdlen) == 0 as ::core::ffi::c_int
     {
         ui_call_chdir(String_0 {
             data: &raw mut cwd as *mut ::core::ffi::c_char,
@@ -3124,34 +3107,27 @@ pub unsafe extern "C" fn ui_set_ext_option(
     mut ext: UIExtension,
     mut active: bool,
 ) {
-    if (ext as ::core::ffi::c_uint)
-        < kUILinegrid as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if (ext as ::core::ffi::c_uint) < kUILinegrid as ::core::ffi::c_int as ::core::ffi::c_uint {
         ui_refresh();
         return;
     }
-    if *(*(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
-        .offset(ext as isize))
+    if *(*(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(ext as isize))
         .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        != '_' as ::core::ffi::c_int || active as ::core::ffi::c_int != 0
+        != '_' as ::core::ffi::c_int
+        || active as ::core::ffi::c_int != 0
     {
         remote_ui_option_set(
             ui,
             cstr_as_string(
-                *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
-                    .offset(ext as isize),
+                *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(ext as isize),
             ),
             object {
                 type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed_12 {
-                    boolean: active,
-                },
+                data: C2Rust_Unnamed_12 { boolean: active },
             },
         );
     }
-    if ext as ::core::ffi::c_uint
-        == kUITermColors as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if ext as ::core::ffi::c_uint == kUITermColors as ::core::ffi::c_int as ::core::ffi::c_uint {
         ui_default_colors_set();
     }
 }
@@ -3167,14 +3143,15 @@ pub unsafe extern "C" fn ui_line(
     mut wrap: bool,
 ) {
     '_c2rust_label: {
-        if 0 as ::core::ffi::c_int <= row && row < (*grid).rows {} else {
+        if 0 as ::core::ffi::c_int <= row && row < (*grid).rows {
+        } else {
             __assert_fail(
                 b"0 <= row && row < grid->rows\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ui.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 471 as ::core::ffi::c_uint,
-                b"void ui_line(ScreenGrid *, int, _Bool, int, int, int, int, _Bool)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"void ui_line(ScreenGrid *, int, _Bool, int, int, int, int, _Bool)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -3187,8 +3164,8 @@ pub unsafe extern "C" fn ui_line(
         flags |= kLineFlagInvalid as ::core::ffi::c_int;
     }
     ui_may_set_default_colors();
-    let mut off: size_t = (*(*grid).line_offset.offset(row as isize))
-        .wrapping_add(startcol as size_t);
+    let mut off: size_t =
+        (*(*grid).line_offset.offset(row as isize)).wrapping_add(startcol as size_t);
     ui_call_raw_line(
         (*grid).handle as Integer,
         row as Integer,
@@ -3200,9 +3177,7 @@ pub unsafe extern "C" fn ui_line(
         ((*grid).chars as *const schar_T).offset(off as isize),
         ((*grid).attrs as *const sattr_T).offset(off as isize),
     );
-    if p_wd != 0
-        && rdb_flags & kOptRdbFlagLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-    {
+    if p_wd != 0 && rdb_flags & kOptRdbFlagLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         ui_call_grid_cursor_goto(
             (*grid).handle as Integer,
             row as Integer,
@@ -3231,9 +3206,7 @@ pub unsafe extern "C" fn ui_grid_cursor_goto(
     mut new_row: ::core::ffi::c_int,
     mut new_col: ::core::ffi::c_int,
 ) {
-    if new_row == cursor_row && new_col == cursor_col
-        && grid_handle == cursor_grid_handle
-    {
+    if new_row == cursor_row && new_col == cursor_col && grid_handle == cursor_grid_handle {
         return;
     }
     cursor_row = new_row;
@@ -3262,7 +3235,8 @@ pub unsafe extern "C" fn ui_current_col() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn ui_flush() {
     '_c2rust_label: {
-        if ui_client_channel_id == 0 {} else {
+        if ui_client_channel_id == 0 {
+        } else {
             __assert_fail(
                 b"!ui_client_channel_id\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ui.c\0".as_ptr()
@@ -3313,17 +3287,16 @@ pub unsafe extern "C" fn ui_flush() {
     }
     static mut cursor_was_obscured: bool = false_0 != 0;
     let mut cursor_obscured: bool = ui_cursor_is_behind_floatwin();
-    if (cursor_obscured as ::core::ffi::c_int
-        != cursor_was_obscured as ::core::ffi::c_int
-        || pending_mode_update as ::core::ffi::c_int != 0) && starting == 0
+    if (cursor_obscured as ::core::ffi::c_int != cursor_was_obscured as ::core::ffi::c_int
+        || pending_mode_update as ::core::ffi::c_int != 0)
+        && starting == 0
     {
         let mut idx: ::core::ffi::c_int = if cursor_obscured as ::core::ffi::c_int != 0 {
             SHAPE_IDX_R as ::core::ffi::c_int
         } else {
             ui_mode_idx
         };
-        let mut full_name: *mut ::core::ffi::c_char = shape_table[idx as usize]
-            .full_name;
+        let mut full_name: *mut ::core::ffi::c_char = shape_table[idx as usize].full_name;
         ui_call_mode_change(cstr_as_string(full_name), idx as Integer);
         pending_mode_update = false_0 != 0;
         cursor_was_obscured = cursor_obscured;
@@ -3334,13 +3307,11 @@ pub unsafe extern "C" fn ui_flush() {
         } else {
             Some(ui_call_mouse_off as unsafe extern "C" fn() -> ())
         }
-            .expect("non-null function pointer")();
+        .expect("non-null function pointer")();
         pending_has_mouse = has_mouse as ::core::ffi::c_int;
     }
     ui_call_flush();
-    if p_wd != 0
-        && rdb_flags & kOptRdbFlagFlush as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-    {
+    if p_wd != 0 && rdb_flags & kOptRdbFlagFlush as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
         os_sleep(llabs(p_wd as ::core::ffi::c_longlong) as uint64_t);
     }
 }
@@ -3414,17 +3385,17 @@ unsafe extern "C" fn ui_cursor_is_behind_floatwin() -> bool {
     if State & MODE_CMDLINE as ::core::ffi::c_int != 0 || !ui_comp_should_draw() {
         return false_0 != 0;
     }
-    let mut crow: ::core::ffi::c_int = (*curwin).w_winrow + (*curwin).w_winrow_off
-        + (*curwin).w_wrow;
-    let mut ccol: ::core::ffi::c_int = (*curwin).w_wincol + (*curwin).w_wincol_off
+    let mut crow: ::core::ffi::c_int =
+        (*curwin).w_winrow + (*curwin).w_winrow_off + (*curwin).w_wrow;
+    let mut ccol: ::core::ffi::c_int = (*curwin).w_wincol
+        + (*curwin).w_wincol_off
         + (if (*curwin).w_onebuf_opt.wo_rl != 0 {
             (*curwin).w_view_width - (*curwin).w_wcol - 1 as ::core::ffi::c_int
         } else {
             (*curwin).w_wcol
         });
     let mut top_grid: *mut ScreenGrid = ui_comp_get_grid_at_coord(crow, ccol);
-    return top_grid != &raw mut (*curwin).w_grid_alloc
-        && top_grid != &raw mut default_grid;
+    return top_grid != &raw mut (*curwin).w_grid_alloc && top_grid != &raw mut default_grid;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_has(mut ext: UIExtension) -> bool {
@@ -3468,9 +3439,7 @@ pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
             key: cstr_as_string(b"rgb\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed_12 {
-                    boolean: (*ui).rgb,
-                },
+                data: C2Rust_Unnamed_12 { boolean: (*ui).rgb },
             },
         };
         let c2rust_fresh5 = info.size;
@@ -3498,9 +3467,7 @@ pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
         let c2rust_fresh7 = info.size;
         info.size = info.size.wrapping_add(1);
         *info.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"term_background\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"term_background\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_12 {
@@ -3547,11 +3514,9 @@ pub unsafe extern "C" fn ui_array(mut arena: *mut Arena) -> Array {
             },
         };
         let mut j: UIExtension = kUICmdline;
-        while (j as ::core::ffi::c_uint)
-            < kUIExtCount as ::core::ffi::c_int as ::core::ffi::c_uint
+        while (j as ::core::ffi::c_uint) < kUIExtCount as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            if *(*(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
-                .offset(j as isize))
+            if *(*(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(j as isize))
                 .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != '_' as ::core::ffi::c_int
                 || (*ui).ui_ext[j as usize] as ::core::ffi::c_int != 0
@@ -3659,29 +3624,22 @@ unsafe extern "C" fn ui_attach_error(
         b"ui_attach_error\0".as_ptr() as *const ::core::ffi::c_char,
         783 as ::core::ffi::c_int,
         true_0 != 0,
-        b"Error in \"%s\" UI event handler (ns=%s):\n%s\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Error in \"%s\" UI event handler (ns=%s):\n%s\0".as_ptr() as *const ::core::ffi::c_char,
         name,
         ns,
         msg_0,
     );
     msg_schedule_semsg_multiline(
-        b"Error in \"%s\" UI event handler (ns=%s):\n%s\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Error in \"%s\" UI event handler (ns=%s):\n%s\0".as_ptr() as *const ::core::ffi::c_char,
         name,
         ns,
         msg_0,
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_call_event(
-    mut name: *mut ::core::ffi::c_char,
-    mut args: Array,
-) {
-    let mut fast: bool = strcmp(
-        name,
-        b"msg_show\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int;
+pub unsafe extern "C" fn ui_call_event(mut name: *mut ::core::ffi::c_char, mut args: Array) {
+    let mut fast: bool = strcmp(name, b"msg_show\0".as_ptr() as *const ::core::ffi::c_char)
+        == 0 as ::core::ffi::c_int;
     let mut not_fast: [*const ::core::ffi::c_char; 13] = [
         b"empty\0".as_ptr() as *const ::core::ffi::c_char,
         b"echo\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3701,7 +3659,10 @@ pub unsafe extern "C" fn ui_call_event(
     while fast as ::core::ffi::c_int != 0 && !not_fast[i as usize].is_null() {
         fast = !strequal(
             not_fast[i as usize],
-            (*args.items.offset(0 as ::core::ffi::c_int as isize)).data.string.data,
+            (*args.items.offset(0 as ::core::ffi::c_int as isize))
+                .data
+                .string
+                .data,
         );
         i += 1;
     }
@@ -3768,16 +3729,13 @@ unsafe extern "C" fn ui_cb_update_ext() {
         ::core::mem::size_of::<[bool; 10]>()
             .wrapping_div(::core::mem::size_of::<bool>())
             .wrapping_div(
-                (::core::mem::size_of::<[bool; 10]>()
-                    .wrapping_rem(::core::mem::size_of::<bool>()) == 0)
-                    as ::core::ffi::c_int as size_t,
+                (::core::mem::size_of::<[bool; 10]>().wrapping_rem(::core::mem::size_of::<bool>())
+                    == 0) as ::core::ffi::c_int as size_t,
             ),
     );
     let mut i: size_t = 0 as size_t;
     while i < kUILinegrid as ::core::ffi::c_int as size_t {
-        let mut event_cb: *mut UIEventCallback = ::core::ptr::null_mut::<
-            UIEventCallback,
-        >();
+        let mut event_cb: *mut UIEventCallback = ::core::ptr::null_mut::<UIEventCallback>();
         let mut __i: uint32_t = 0;
         __i = 0 as uint32_t;
         while __i < ui_event_cbs.set.h.n_keys {
@@ -3802,10 +3760,8 @@ pub unsafe extern "C" fn ui_add_cb(
     mut cb: LuaRef,
     mut ext_widgets: *mut bool,
 ) {
-    let mut event_cb: *mut UIEventCallback = xcalloc(
-        1 as size_t,
-        ::core::mem::size_of::<UIEventCallback>(),
-    ) as *mut UIEventCallback;
+    let mut event_cb: *mut UIEventCallback =
+        xcalloc(1 as size_t, ::core::mem::size_of::<UIEventCallback>()) as *mut UIEventCallback;
     (*event_cb).cb = cb;
     memcpy(
         &raw mut (*event_cb).ext_widgets as *mut bool as *mut ::core::ffi::c_void,
@@ -3813,9 +3769,8 @@ pub unsafe extern "C" fn ui_add_cb(
         ::core::mem::size_of::<[bool; 5]>()
             .wrapping_div(::core::mem::size_of::<bool>())
             .wrapping_div(
-                (::core::mem::size_of::<[bool; 5]>()
-                    .wrapping_rem(::core::mem::size_of::<bool>()) == 0)
-                    as ::core::ffi::c_int as size_t,
+                (::core::mem::size_of::<[bool; 5]>().wrapping_rem(::core::mem::size_of::<bool>())
+                    == 0) as ::core::ffi::c_int as size_t,
             ),
     );
     if (*event_cb).ext_widgets[kUIMessages as ::core::ffi::c_int as usize] {
@@ -3836,16 +3791,13 @@ pub unsafe extern "C" fn ui_add_cb(
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_remove_cb(mut ns_id: uint32_t, mut checkerr: bool) {
-    let mut item: *mut UIEventCallback = map_get_uint32_t_ptr_t(
-        &raw mut ui_event_cbs,
-        ns_id,
-    ) as *mut UIEventCallback;
+    let mut item: *mut UIEventCallback =
+        map_get_uint32_t_ptr_t(&raw mut ui_event_cbs, ns_id) as *mut UIEventCallback;
     if !item.is_null()
-        && (!checkerr
-            || {
-                (*item).errors = (*item).errors.wrapping_add(1);
-                (*item).errors as ::core::ffi::c_int > CB_MAX_ERROR as ::core::ffi::c_int
-            })
+        && (!checkerr || {
+            (*item).errors = (*item).errors.wrapping_add(1);
+            (*item).errors as ::core::ffi::c_int > CB_MAX_ERROR as ::core::ffi::c_int
+        })
     {
         map_del_uint32_t_ptr_t(
             &raw mut ui_event_cbs,
@@ -3869,10 +3821,7 @@ pub unsafe extern "C" fn ui_remove_cb(mut ns_id: uint32_t, mut checkerr: bool) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_call_mode_info_set(
-    mut enabled: Boolean,
-    mut cursor_styles: Array,
-) {
+pub unsafe extern "C" fn ui_call_mode_info_set(mut enabled: Boolean, mut cursor_styles: Array) {
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
     while i < ui_count {
@@ -4021,9 +3970,7 @@ pub unsafe extern "C" fn ui_call_restart(mut listen_addr: String_0) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4163,9 +4110,7 @@ pub unsafe extern "C" fn ui_call_update_fg(mut fg: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4176,8 +4121,7 @@ pub unsafe extern "C" fn ui_call_update_fg(mut fg: Integer) {
         data: C2Rust_Unnamed_12 { integer: fg },
     };
     ui_call_event(
-        b"update_fg\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"update_fg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4192,9 +4136,7 @@ pub unsafe extern "C" fn ui_call_update_bg(mut bg: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4205,8 +4147,7 @@ pub unsafe extern "C" fn ui_call_update_bg(mut bg: Integer) {
         data: C2Rust_Unnamed_12 { integer: bg },
     };
     ui_call_event(
-        b"update_bg\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"update_bg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4221,9 +4162,7 @@ pub unsafe extern "C" fn ui_call_update_sp(mut sp: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4234,8 +4173,7 @@ pub unsafe extern "C" fn ui_call_update_sp(mut sp: Integer) {
         data: C2Rust_Unnamed_12 { integer: sp },
     };
     ui_call_event(
-        b"update_sp\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"update_sp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4250,9 +4188,7 @@ pub unsafe extern "C" fn ui_call_resize(mut width: Integer, mut height: Integer)
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4260,17 +4196,13 @@ pub unsafe extern "C" fn ui_call_resize(mut width: Integer, mut height: Integer)
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh18 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: width,
-        },
+        data: C2Rust_Unnamed_12 { integer: width },
     };
     let c2rust_fresh19 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh19 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: height,
-        },
+        data: C2Rust_Unnamed_12 { integer: height },
     };
     ui_call_event(
         b"resize\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4299,8 +4231,7 @@ pub unsafe extern "C" fn ui_call_eol_clear() {
     }
     entered = true_0 != 0;
     ui_call_event(
-        b"eol_clear\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"eol_clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         noargs,
     );
     entered = false_0 != 0;
@@ -4315,9 +4246,7 @@ pub unsafe extern "C" fn ui_call_cursor_goto(mut row: Integer, mut col: Integer)
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4334,8 +4263,7 @@ pub unsafe extern "C" fn ui_call_cursor_goto(mut row: Integer, mut col: Integer)
         data: C2Rust_Unnamed_12 { integer: col },
     };
     ui_call_event(
-        b"cursor_goto\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"cursor_goto\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4350,9 +4278,7 @@ pub unsafe extern "C" fn ui_call_put(mut str: String_0) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4383,9 +4309,7 @@ pub unsafe extern "C" fn ui_call_set_scroll_region(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 4] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 4];
     args.capacity = 4 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4411,13 +4335,10 @@ pub unsafe extern "C" fn ui_call_set_scroll_region(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh26 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: right,
-        },
+        data: C2Rust_Unnamed_12 { integer: right },
     };
     ui_call_event(
-        b"set_scroll_region\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"set_scroll_region\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4432,9 +4353,7 @@ pub unsafe extern "C" fn ui_call_scroll(mut count: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4442,9 +4361,7 @@ pub unsafe extern "C" fn ui_call_scroll(mut count: Integer) {
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh27 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: count,
-        },
+        data: C2Rust_Unnamed_12 { integer: count },
     };
     ui_call_event(
         b"scroll\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4617,9 +4534,7 @@ pub unsafe extern "C" fn ui_call_grid_line(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 5] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 5];
     args.capacity = 5 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4639,9 +4554,7 @@ pub unsafe extern "C" fn ui_call_grid_line(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh30 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: col_start,
-        },
+        data: C2Rust_Unnamed_12 { integer: col_start },
     };
     let c2rust_fresh31 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -4656,8 +4569,7 @@ pub unsafe extern "C" fn ui_call_grid_line(
         data: C2Rust_Unnamed_12 { boolean: wrap },
     };
     ui_call_event(
-        b"grid_line\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"grid_line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4721,9 +4633,7 @@ pub unsafe extern "C" fn ui_call_grid_destroy(mut grid: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4734,8 +4644,7 @@ pub unsafe extern "C" fn ui_call_grid_destroy(mut grid: Integer) {
         data: C2Rust_Unnamed_12 { integer: grid },
     };
     ui_call_event(
-        b"grid_destroy\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"grid_destroy\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -4753,15 +4662,7 @@ pub unsafe extern "C" fn ui_call_raw_line(
     mut attrs: *const sattr_T,
 ) {
     ui_comp_raw_line(
-        grid,
-        row,
-        startcol,
-        endcol,
-        clearcol,
-        clearattr,
-        flags,
-        chunk,
-        attrs,
+        grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
     );
     let mut any_call: bool = false_0 != 0;
     let mut i: size_t = 0 as size_t;
@@ -4769,16 +4670,7 @@ pub unsafe extern "C" fn ui_call_raw_line(
         let mut ui: *mut RemoteUI = uis[i as usize];
         if !(*ui).composed {
             remote_ui_raw_line(
-                ui,
-                grid,
-                row,
-                startcol,
-                endcol,
-                clearcol,
-                clearattr,
-                flags,
-                chunk,
-                attrs,
+                ui, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
             );
             any_call = true_0 != 0;
         }
@@ -4806,16 +4698,7 @@ pub unsafe extern "C" fn ui_composed_call_raw_line(
         let mut ui: *mut RemoteUI = uis[i as usize];
         if (*ui).composed {
             remote_ui_raw_line(
-                ui,
-                grid,
-                row,
-                startcol,
-                endcol,
-                clearcol,
-                clearattr,
-                flags,
-                chunk,
-                attrs,
+                ui, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
             );
             any_call = true_0 != 0;
         }
@@ -4842,9 +4725,7 @@ pub unsafe extern "C" fn ui_call_win_pos(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 6] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 6];
     args.capacity = 6 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4866,33 +4747,25 @@ pub unsafe extern "C" fn ui_call_win_pos(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh36 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: startrow,
-        },
+        data: C2Rust_Unnamed_12 { integer: startrow },
     };
     let c2rust_fresh37 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh37 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: startcol,
-        },
+        data: C2Rust_Unnamed_12 { integer: startcol },
     };
     let c2rust_fresh38 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh38 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: width,
-        },
+        data: C2Rust_Unnamed_12 { integer: width },
     };
     let c2rust_fresh39 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh39 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: height,
-        },
+        data: C2Rust_Unnamed_12 { integer: height },
     };
     ui_call_event(
         b"win_pos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -4922,9 +4795,7 @@ pub unsafe extern "C" fn ui_call_win_float_pos(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 11] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 11];
     args.capacity = 11 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -4946,9 +4817,7 @@ pub unsafe extern "C" fn ui_call_win_float_pos(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh42 as isize) = object {
         type_0: kObjectTypeString,
-        data: C2Rust_Unnamed_12 {
-            string: anchor,
-        },
+        data: C2Rust_Unnamed_12 { string: anchor },
     };
     let c2rust_fresh43 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -4986,17 +4855,13 @@ pub unsafe extern "C" fn ui_call_win_float_pos(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh47 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: zindex,
-        },
+        data: C2Rust_Unnamed_12 { integer: zindex },
     };
     let c2rust_fresh48 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh48 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: compindex,
-        },
+        data: C2Rust_Unnamed_12 { integer: compindex },
     };
     let c2rust_fresh49 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -5015,8 +4880,7 @@ pub unsafe extern "C" fn ui_call_win_float_pos(
         },
     };
     ui_call_event(
-        b"win_float_pos\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"win_float_pos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5031,9 +4895,7 @@ pub unsafe extern "C" fn ui_call_win_external_pos(mut grid: Integer, mut win: Wi
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5052,8 +4914,7 @@ pub unsafe extern "C" fn ui_call_win_external_pos(mut grid: Integer, mut win: Wi
         },
     };
     ui_call_event(
-        b"win_external_pos\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"win_external_pos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5068,9 +4929,7 @@ pub unsafe extern "C" fn ui_call_win_hide(mut grid: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5096,9 +4955,7 @@ pub unsafe extern "C" fn ui_call_win_close(mut grid: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5109,8 +4966,7 @@ pub unsafe extern "C" fn ui_call_win_close(mut grid: Integer) {
         data: C2Rust_Unnamed_12 { integer: grid },
     };
     ui_call_event(
-        b"win_close\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"win_close\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5233,9 +5089,7 @@ pub unsafe extern "C" fn ui_call_win_extmark(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 6] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 6];
     args.capacity = 6 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5257,17 +5111,13 @@ pub unsafe extern "C" fn ui_call_win_extmark(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh57 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: ns_id,
-        },
+        data: C2Rust_Unnamed_12 { integer: ns_id },
     };
     let c2rust_fresh58 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh58 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: mark_id,
-        },
+        data: C2Rust_Unnamed_12 { integer: mark_id },
     };
     let c2rust_fresh59 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -5282,8 +5132,7 @@ pub unsafe extern "C" fn ui_call_win_extmark(
         data: C2Rust_Unnamed_12 { integer: col },
     };
     ui_call_event(
-        b"win_extmark\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"win_extmark\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5304,9 +5153,7 @@ pub unsafe extern "C" fn ui_call_popupmenu_show(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 5] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 5];
     args.capacity = 5 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5320,9 +5167,7 @@ pub unsafe extern "C" fn ui_call_popupmenu_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh62 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: selected,
-        },
+        data: C2Rust_Unnamed_12 { integer: selected },
     };
     let c2rust_fresh63 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -5343,8 +5188,7 @@ pub unsafe extern "C" fn ui_call_popupmenu_show(
         data: C2Rust_Unnamed_12 { integer: grid },
     };
     ui_call_event(
-        b"popupmenu_show\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"popupmenu_show\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5357,8 +5201,7 @@ pub unsafe extern "C" fn ui_call_popupmenu_hide() {
     }
     entered = true_0 != 0;
     ui_call_event(
-        b"popupmenu_hide\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"popupmenu_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         noargs,
     );
     entered = false_0 != 0;
@@ -5373,9 +5216,7 @@ pub unsafe extern "C" fn ui_call_popupmenu_select(mut selected: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5383,13 +5224,10 @@ pub unsafe extern "C" fn ui_call_popupmenu_select(mut selected: Integer) {
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh66 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: selected,
-        },
+        data: C2Rust_Unnamed_12 { integer: selected },
     };
     ui_call_event(
-        b"popupmenu_select\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"popupmenu_select\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5409,9 +5247,7 @@ pub unsafe extern "C" fn ui_call_tabline_update(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 4] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 4];
     args.capacity = 4 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5441,13 +5277,10 @@ pub unsafe extern "C" fn ui_call_tabline_update(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh70 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: buffers,
-        },
+        data: C2Rust_Unnamed_12 { array: buffers },
     };
     ui_call_event(
-        b"tabline_update\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"tabline_update\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5470,9 +5303,7 @@ pub unsafe extern "C" fn ui_call_cmdline_show(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 7] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 7];
     args.capacity = 7 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5480,9 +5311,7 @@ pub unsafe extern "C" fn ui_call_cmdline_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh71 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: content,
-        },
+        data: C2Rust_Unnamed_12 { array: content },
     };
     let c2rust_fresh72 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -5494,45 +5323,34 @@ pub unsafe extern "C" fn ui_call_cmdline_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh73 as isize) = object {
         type_0: kObjectTypeString,
-        data: C2Rust_Unnamed_12 {
-            string: firstc,
-        },
+        data: C2Rust_Unnamed_12 { string: firstc },
     };
     let c2rust_fresh74 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh74 as isize) = object {
         type_0: kObjectTypeString,
-        data: C2Rust_Unnamed_12 {
-            string: prompt,
-        },
+        data: C2Rust_Unnamed_12 { string: prompt },
     };
     let c2rust_fresh75 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh75 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: indent,
-        },
+        data: C2Rust_Unnamed_12 { integer: indent },
     };
     let c2rust_fresh76 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh76 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: level,
-        },
+        data: C2Rust_Unnamed_12 { integer: level },
     };
     let c2rust_fresh77 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh77 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: hl_id,
-        },
+        data: C2Rust_Unnamed_12 { integer: hl_id },
     };
     ui_call_event(
-        b"cmdline_show\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"cmdline_show\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5547,9 +5365,7 @@ pub unsafe extern "C" fn ui_call_cmdline_pos(mut pos: Integer, mut level: Intege
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5563,13 +5379,10 @@ pub unsafe extern "C" fn ui_call_cmdline_pos(mut pos: Integer, mut level: Intege
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh79 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: level,
-        },
+        data: C2Rust_Unnamed_12 { integer: level },
     };
     ui_call_event(
-        b"cmdline_pos\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"cmdline_pos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5588,9 +5401,7 @@ pub unsafe extern "C" fn ui_call_cmdline_special_char(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 3] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 3];
     args.capacity = 3 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5604,17 +5415,13 @@ pub unsafe extern "C" fn ui_call_cmdline_special_char(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh81 as isize) = object {
         type_0: kObjectTypeBoolean,
-        data: C2Rust_Unnamed_12 {
-            boolean: shift,
-        },
+        data: C2Rust_Unnamed_12 { boolean: shift },
     };
     let c2rust_fresh82 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh82 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: level,
-        },
+        data: C2Rust_Unnamed_12 { integer: level },
     };
     ui_call_event(
         b"cmdline_special_char\0".as_ptr() as *const ::core::ffi::c_char
@@ -5633,9 +5440,7 @@ pub unsafe extern "C" fn ui_call_cmdline_hide(mut level: Integer, mut abort_0: B
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5643,21 +5448,16 @@ pub unsafe extern "C" fn ui_call_cmdline_hide(mut level: Integer, mut abort_0: B
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh83 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: level,
-        },
+        data: C2Rust_Unnamed_12 { integer: level },
     };
     let c2rust_fresh84 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh84 as isize) = object {
         type_0: kObjectTypeBoolean,
-        data: C2Rust_Unnamed_12 {
-            boolean: abort_0,
-        },
+        data: C2Rust_Unnamed_12 { boolean: abort_0 },
     };
     ui_call_event(
-        b"cmdline_hide\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"cmdline_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5672,9 +5472,7 @@ pub unsafe extern "C" fn ui_call_cmdline_block_show(mut lines: Array) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5685,8 +5483,7 @@ pub unsafe extern "C" fn ui_call_cmdline_block_show(mut lines: Array) {
         data: C2Rust_Unnamed_12 { array: lines },
     };
     ui_call_event(
-        b"cmdline_block_show\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"cmdline_block_show\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5701,9 +5498,7 @@ pub unsafe extern "C" fn ui_call_cmdline_block_append(mut lines: Array) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5728,8 +5523,7 @@ pub unsafe extern "C" fn ui_call_cmdline_block_hide() {
     }
     entered = true_0 != 0;
     ui_call_event(
-        b"cmdline_block_hide\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"cmdline_block_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         noargs,
     );
     entered = false_0 != 0;
@@ -5744,9 +5538,7 @@ pub unsafe extern "C" fn ui_call_wildmenu_show(mut items: Array) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5757,8 +5549,7 @@ pub unsafe extern "C" fn ui_call_wildmenu_show(mut items: Array) {
         data: C2Rust_Unnamed_12 { array: items },
     };
     ui_call_event(
-        b"wildmenu_show\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"wildmenu_show\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5773,9 +5564,7 @@ pub unsafe extern "C" fn ui_call_wildmenu_select(mut selected: Integer) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5783,13 +5572,10 @@ pub unsafe extern "C" fn ui_call_wildmenu_select(mut selected: Integer) {
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh88 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_12 {
-            integer: selected,
-        },
+        data: C2Rust_Unnamed_12 { integer: selected },
     };
     ui_call_event(
-        b"wildmenu_select\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"wildmenu_select\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5802,8 +5588,7 @@ pub unsafe extern "C" fn ui_call_wildmenu_hide() {
     }
     entered = true_0 != 0;
     ui_call_event(
-        b"wildmenu_hide\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"wildmenu_hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         noargs,
     );
     entered = false_0 != 0;
@@ -5826,9 +5611,7 @@ pub unsafe extern "C" fn ui_call_msg_show(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 7] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 7];
     args.capacity = 7 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5842,9 +5625,7 @@ pub unsafe extern "C" fn ui_call_msg_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh90 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: content,
-        },
+        data: C2Rust_Unnamed_12 { array: content },
     };
     let c2rust_fresh91 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -5858,17 +5639,13 @@ pub unsafe extern "C" fn ui_call_msg_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh92 as isize) = object {
         type_0: kObjectTypeBoolean,
-        data: C2Rust_Unnamed_12 {
-            boolean: history,
-        },
+        data: C2Rust_Unnamed_12 { boolean: history },
     };
     let c2rust_fresh93 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh93 as isize) = object {
         type_0: kObjectTypeBoolean,
-        data: C2Rust_Unnamed_12 {
-            boolean: append,
-        },
+        data: C2Rust_Unnamed_12 { boolean: append },
     };
     let c2rust_fresh94 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -5877,9 +5654,7 @@ pub unsafe extern "C" fn ui_call_msg_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh95 as isize) = object {
         type_0: kObjectTypeString,
-        data: C2Rust_Unnamed_12 {
-            string: trigger,
-        },
+        data: C2Rust_Unnamed_12 { string: trigger },
     };
     ui_call_event(
         b"msg_show\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -5895,8 +5670,7 @@ pub unsafe extern "C" fn ui_call_msg_clear() {
     }
     entered = true_0 != 0;
     ui_call_event(
-        b"msg_clear\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"msg_clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         noargs,
     );
     entered = false_0 != 0;
@@ -5911,9 +5685,7 @@ pub unsafe extern "C" fn ui_call_msg_showcmd(mut content: Array) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5921,13 +5693,10 @@ pub unsafe extern "C" fn ui_call_msg_showcmd(mut content: Array) {
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh96 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: content,
-        },
+        data: C2Rust_Unnamed_12 { array: content },
     };
     ui_call_event(
-        b"msg_showcmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"msg_showcmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5942,9 +5711,7 @@ pub unsafe extern "C" fn ui_call_msg_showmode(mut content: Array) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5952,13 +5719,10 @@ pub unsafe extern "C" fn ui_call_msg_showmode(mut content: Array) {
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh97 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: content,
-        },
+        data: C2Rust_Unnamed_12 { array: content },
     };
     ui_call_event(
-        b"msg_showmode\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"msg_showmode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
@@ -5973,9 +5737,7 @@ pub unsafe extern "C" fn ui_call_msg_ruler(mut content: Array) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -5983,22 +5745,16 @@ pub unsafe extern "C" fn ui_call_msg_ruler(mut content: Array) {
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh98 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: content,
-        },
+        data: C2Rust_Unnamed_12 { array: content },
     };
     ui_call_event(
-        b"msg_ruler\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"msg_ruler\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_call_msg_history_show(
-    mut entries: Array,
-    mut prev_cmd: Boolean,
-) {
+pub unsafe extern "C" fn ui_call_msg_history_show(mut entries: Array, mut prev_cmd: Boolean) {
     static mut entered: bool = false_0 != 0;
     if entered {
         return;
@@ -6007,9 +5763,7 @@ pub unsafe extern "C" fn ui_call_msg_history_show(
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_12 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_12 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -6017,21 +5771,16 @@ pub unsafe extern "C" fn ui_call_msg_history_show(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh99 as isize) = object {
         type_0: kObjectTypeArray,
-        data: C2Rust_Unnamed_12 {
-            array: entries,
-        },
+        data: C2Rust_Unnamed_12 { array: entries },
     };
     let c2rust_fresh100 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh100 as isize) = object {
         type_0: kObjectTypeBoolean,
-        data: C2Rust_Unnamed_12 {
-            boolean: prev_cmd,
-        },
+        data: C2Rust_Unnamed_12 { boolean: prev_cmd },
     };
     ui_call_event(
-        b"msg_history_show\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"msg_history_show\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         args,
     );
     entered = false_0 != 0;

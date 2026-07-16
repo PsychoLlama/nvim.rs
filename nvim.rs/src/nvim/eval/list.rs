@@ -28,10 +28,7 @@ extern "C" {
         __needle: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn eval_expr_typval(
         expr: *const typval_T,
         want_func: bool,
@@ -72,11 +69,7 @@ extern "C" {
         key_len: size_t,
         tv: *mut typval_T,
     ) -> ::core::ffi::c_int;
-    fn tv_dict_extend(
-        d1: *mut dict_T,
-        d2: *mut dict_T,
-        action: *const ::core::ffi::c_char,
-    );
+    fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char);
     fn tv_dict_copy(
         conv: *const vimconv_T,
         orig: *mut dict_T,
@@ -116,11 +109,7 @@ extern "C" {
     fn get_vim_var_tv(idx: VimVarIndex) -> *mut typval_T;
     fn set_vim_var_type(idx: VimVarIndex, type_0: VarType);
     fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn var_check_ro(
         flags: ::core::ffi::c_int,
         name: *const ::core::ffi::c_char,
@@ -131,11 +120,7 @@ extern "C" {
         name: *const ::core::ffi::c_char,
         name_len: size_t,
     ) -> bool;
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
@@ -207,9 +192,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -617,20 +601,16 @@ pub const FILTERMAP_MAPNEW: filtermap_T = 2;
 pub const FILTERMAP_MAP: filtermap_T = 1;
 pub const FILTERMAP_FILTER: filtermap_T = 0;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static mut e_argument_of_str_must_be_list_string_or_dictionary: [::core::ffi::c_char; 58] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 58],
-        [::core::ffi::c_char; 58],
-    >(*b"E706: Argument of %s must be a List, String or Dictionary\0")
+    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
+        *b"E706: Argument of %s must be a List, String or Dictionary\0",
+    )
 };
 static mut e_argument_of_str_must_be_list_string_dictionary_or_blob: [::core::ffi::c_char; 65] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 65],
-        [::core::ffi::c_char; 65],
-    >(*b"E1250: Argument of %s must be a List, String, Dictionary or Blob\0")
+    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
+        *b"E1250: Argument of %s must be a List, String, Dictionary or Blob\0",
+    )
 };
 unsafe extern "C" fn filter_map_one(
     mut tv: *mut typval_T,
@@ -707,7 +687,8 @@ unsafe extern "C" fn filter_map_dict(
         || filtermap as ::core::ffi::c_uint
             == FILTERMAP_FILTER as ::core::ffi::c_int as ::core::ffi::c_uint
             && value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t)
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
     {
         return;
     }
@@ -733,19 +714,22 @@ unsafe extern "C" fn filter_map_dict(
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key
-                .offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
+                .offset(-(17 as ::core::ffi::c_ulong as isize))
+                as *mut dictitem_T;
             if filtermap as ::core::ffi::c_uint
                 == FILTERMAP_MAP as ::core::ffi::c_int as ::core::ffi::c_uint
                 && (value_check_lock(
                     (*di).di_tv.v_lock,
                     arg_errmsg,
                     18446744073709551615 as size_t,
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
                     || var_check_ro(
                         (*di).di_flags as ::core::ffi::c_int,
                         arg_errmsg,
                         18446744073709551615 as size_t,
-                    ) as ::core::ffi::c_int != 0)
+                    ) as ::core::ffi::c_int
+                        != 0)
             {
                 break;
             }
@@ -798,12 +782,14 @@ unsafe extern "C" fn filter_map_dict(
                     (*di).di_flags as ::core::ffi::c_int,
                     arg_errmsg,
                     18446744073709551615 as size_t,
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
                     || var_check_ro(
                         (*di).di_flags as ::core::ffi::c_int,
                         arg_errmsg,
                         18446744073709551615 as size_t,
-                    ) as ::core::ffi::c_int != 0
+                    ) as ::core::ffi::c_int
+                        != 0
                 {
                     break;
                 }
@@ -833,7 +819,8 @@ unsafe extern "C" fn filter_map_blob(
         || filtermap as ::core::ffi::c_uint
             == FILTERMAP_FILTER as ::core::ffi::c_int as ::core::ffi::c_uint
             && value_check_lock((*b).bv_lock, arg_errmsg, TV_TRANSLATE as size_t)
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
     {
         return;
     }
@@ -865,8 +852,8 @@ unsafe extern "C" fn filter_map_blob(
             vval: typval_vval_union { v_number: 0 },
         };
         let mut rem: bool = false;
-        if filter_map_one(&raw mut tv, expr, filtermap, &raw mut newtv, &raw mut rem)
-            == FAIL || did_emsg != 0
+        if filter_map_one(&raw mut tv, expr, filtermap, &raw mut newtv, &raw mut rem) == FAIL
+            || did_emsg != 0
         {
             break;
         }
@@ -891,11 +878,12 @@ unsafe extern "C" fn filter_map_blob(
                     tv_blob_set(b_ret, i, newtv.vval.v_number as uint8_t);
                 }
             } else if rem {
-                let p: *mut ::core::ffi::c_char = (*blob_arg).bv_ga.ga_data
-                    as *mut ::core::ffi::c_char;
+                let p: *mut ::core::ffi::c_char =
+                    (*blob_arg).bv_ga.ga_data as *mut ::core::ffi::c_char;
                 memmove(
                     p.offset(i as isize) as *mut ::core::ffi::c_void,
-                    p.offset(i as isize).offset(1 as ::core::ffi::c_int as isize)
+                    p.offset(i as isize)
+                        .offset(1 as ::core::ffi::c_int as isize)
                         as *const ::core::ffi::c_void,
                     ((*b).bv_ga.ga_len - i - 1 as ::core::ffi::c_int) as size_t,
                 );
@@ -949,8 +937,8 @@ unsafe extern "C" fn filter_map_string(
             vval: typval_vval_union { v_number: 0 },
         };
         let mut rem: bool = false;
-        if filter_map_one(&raw mut tv, expr, filtermap, &raw mut newtv, &raw mut rem)
-            == FAIL || did_emsg != 0
+        if filter_map_one(&raw mut tv, expr, filtermap, &raw mut newtv, &raw mut rem) == FAIL
+            || did_emsg != 0
         {
             tv_clear(&raw mut newtv);
             tv_clear(&raw mut tv);
@@ -975,7 +963,8 @@ unsafe extern "C" fn filter_map_string(
                     ga_concat(&raw mut ga, newtv.vval.v_string);
                 }
             } else if filtermap as ::core::ffi::c_uint
-                == FILTERMAP_FOREACH as ::core::ffi::c_int as ::core::ffi::c_uint || !rem
+                == FILTERMAP_FOREACH as ::core::ffi::c_int as ::core::ffi::c_uint
+                || !rem
             {
                 ga_concat(&raw mut ga, tv.vval.v_string);
             }
@@ -1006,7 +995,8 @@ unsafe extern "C" fn filter_map_list(
         || filtermap as ::core::ffi::c_uint
             == FILTERMAP_FILTER as ::core::ffi::c_int as ::core::ffi::c_uint
             && value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t)
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
     {
         return;
     }
@@ -1030,7 +1020,8 @@ unsafe extern "C" fn filter_map_list(
         if filtermap as ::core::ffi::c_uint
             == FILTERMAP_MAP as ::core::ffi::c_int as ::core::ffi::c_uint
             && value_check_lock((*li).li_tv.v_lock, arg_errmsg, TV_TRANSLATE as size_t)
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
         {
             break;
         }
@@ -1116,22 +1107,18 @@ unsafe extern "C" fn filter_map(
     };
     if filtermap as ::core::ffi::c_uint
         != FILTERMAP_MAPNEW as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         tv_copy(argvars.offset(0 as ::core::ffi::c_int as isize), rettv);
     }
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
@@ -1165,25 +1152,29 @@ unsafe extern "C" fn filter_map(
         == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         filter_map_dict(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_dict,
+            (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                .vval
+                .v_dict,
             filtermap,
             func_name,
             arg_errmsg,
             expr,
             rettv,
         );
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         filter_map_blob(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_blob,
+            (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                .vval
+                .v_blob,
             filtermap,
             expr,
             arg_errmsg,
             rettv,
         );
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         filter_map_string(
             tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
@@ -1193,15 +1184,14 @@ unsafe extern "C" fn filter_map(
         );
     } else {
         '_c2rust_label: {
-            if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-                as ::core::ffi::c_uint
+            if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            {} else {
+            {
+            } else {
                 __assert_fail(
-                    b"argvars[0].v_type == VAR_LIST\0".as_ptr()
+                    b"argvars[0].v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/list.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/list.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     393 as ::core::ffi::c_uint,
                     b"void filter_map(typval_T *, typval_T *, filtermap_T)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1209,7 +1199,9 @@ unsafe extern "C" fn filter_map(
             }
         };
         filter_map_list(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_list,
+            (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                .vval
+                .v_list,
             filtermap,
             func_name,
             arg_errmsg,
@@ -1274,8 +1266,8 @@ pub unsafe extern "C" fn f_add(
             tv_list_append_tv(l, argvars.offset(1 as ::core::ffi::c_int as isize));
             tv_copy(argvars.offset(0 as ::core::ffi::c_int as isize), rettv);
         }
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let b: *mut blob_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
             .vval
@@ -1298,10 +1290,7 @@ pub unsafe extern "C" fn f_add(
             }
         }
     } else {
-        emsg(
-            &raw const e_listblobreq as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-        );
+        emsg(&raw const e_listblobreq as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
     };
 }
 unsafe extern "C" fn count_string(
@@ -1325,9 +1314,7 @@ unsafe extern "C" fn count_string(
             }
         }
     } else {
-        let mut next: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut next: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         loop {
             next = strstr(p, needle);
             if next.is_null() {
@@ -1383,7 +1370,8 @@ unsafe extern "C" fn count_dict(
             dihi_todo_ = dihi_todo_.wrapping_sub(1);
             let di: *mut dictitem_T = (*dihi_)
                 .hi_key
-                .offset(-(17 as ::core::ffi::c_ulong as isize)) as *mut dictitem_T;
+                .offset(-(17 as ::core::ffi::c_ulong as isize))
+                as *mut dictitem_T;
             if tv_equal(&raw mut (*di).di_tv, needle, ic) {
                 n += 1;
             }
@@ -1410,26 +1398,24 @@ pub unsafe extern "C" fn f_count(
         ) as ::core::ffi::c_int;
     }
     if !error
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         n = count_string(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_string,
+            (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                .vval
+                .v_string,
             tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize)),
             ic != 0,
         );
     } else if !error
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut idx: int64_t = 0 as int64_t;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type
-                as ::core::ffi::c_uint
+            && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             idx = tv_get_number_chk(
@@ -1439,35 +1425,33 @@ pub unsafe extern "C" fn f_count(
         }
         if !error {
             n = count_list(
-                (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_list,
+                (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                    .vval
+                    .v_list,
                 argvars.offset(1 as ::core::ffi::c_int as isize),
                 idx,
                 ic != 0,
             );
         }
     } else if !error
-        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut d: *mut dict_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
             .vval
             .v_dict;
         if !d.is_null() {
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-                as ::core::ffi::c_uint
+            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type
-                    as ::core::ffi::c_uint
+                && (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                     != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                emsg(
-                    &raw const e_invarg as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                );
+                emsg(&raw const e_invarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char);
             } else {
                 n = count_dict(
-                    (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_dict,
+                    (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                        .vval
+                        .v_dict,
                     argvars.offset(1 as ::core::ffi::c_int as isize),
                     ic != 0,
                 );
@@ -1492,20 +1476,17 @@ unsafe extern "C" fn extend_dict(
         .vval
         .v_dict;
     if d1.is_null() {
-        let locked: bool = value_check_lock(
-            VAR_FIXED,
-            arg_errmsg,
-            TV_TRANSLATE as size_t,
-        );
+        let locked: bool = value_check_lock(VAR_FIXED, arg_errmsg, TV_TRANSLATE as size_t);
         '_c2rust_label: {
-            if locked as ::core::ffi::c_int == 1 as ::core::ffi::c_int {} else {
+            if locked as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"locked == true\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/list.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/list.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     584 as ::core::ffi::c_uint,
-                    b"void extend_dict(typval_T *, const char *, _Bool, typval_T *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void extend_dict(typval_T *, const char *, _Bool, typval_T *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -1519,8 +1500,8 @@ unsafe extern "C" fn extend_dict(
         return;
     }
     if !is_new
-        && value_check_lock((*d1).dv_lock, arg_errmsg, TV_TRANSLATE as size_t)
-            as ::core::ffi::c_int != 0
+        && value_check_lock((*d1).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) as ::core::ffi::c_int
+            != 0
     {
         return;
     }
@@ -1535,8 +1516,7 @@ unsafe extern "C" fn extend_dict(
             return;
         }
     }
-    let mut action: *const ::core::ffi::c_char = b"force\0".as_ptr()
-        as *const ::core::ffi::c_char;
+    let mut action: *const ::core::ffi::c_char = b"force\0".as_ptr() as *const ::core::ffi::c_char;
     if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -1554,15 +1534,13 @@ unsafe extern "C" fn extend_dict(
         }
         let mut i: size_t = 0;
         i = 0 as size_t;
-        while i
-            < ::core::mem::size_of::<[*const ::core::ffi::c_char; 3]>()
-                .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*const ::core::ffi::c_char; 3]>()
-                        .wrapping_rem(
-                            ::core::mem::size_of::<*const ::core::ffi::c_char>(),
-                        ) == 0) as ::core::ffi::c_int as usize,
-                )
+        while i < ::core::mem::size_of::<[*const ::core::ffi::c_char; 3]>()
+            .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
+            .wrapping_div(
+                (::core::mem::size_of::<[*const ::core::ffi::c_char; 3]>()
+                    .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
         {
             if strcmp(action, av[i as usize]) == 0 as ::core::ffi::c_int {
                 break;
@@ -1574,8 +1552,7 @@ unsafe extern "C" fn extend_dict(
                 tv_dict_unref(d1);
             }
             semsg(
-                &raw const e_invarg2 as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                &raw const e_invarg2 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 action,
             );
             return;
@@ -1607,7 +1584,8 @@ unsafe extern "C" fn extend_list(
         .v_list;
     if !is_new
         && value_check_lock(tv_list_locked(l1), arg_errmsg, TV_TRANSLATE as size_t)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         return;
     }
@@ -1624,8 +1602,7 @@ unsafe extern "C" fn extend_list(
     }
     let mut item: *mut listitem_T = ::core::ptr::null_mut::<listitem_T>();
     's_92: {
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             let mut before: ::core::ffi::c_int = tv_get_number_chk(
@@ -1640,8 +1617,8 @@ unsafe extern "C" fn extend_list(
                     item = tv_list_find(l1, before);
                     if item.is_null() {
                         semsg(
-                            &raw const e_list_index_out_of_range_nr
-                                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                            &raw const e_list_index_out_of_range_nr as *const ::core::ffi::c_char
+                                as *mut ::core::ffi::c_char,
                             before as int64_t,
                         );
                     } else {
@@ -1676,22 +1653,19 @@ unsafe extern "C" fn extend(
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         extend_list(argvars, arg_errmsg, is_new, rettv);
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
+        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         extend_dict(argvars, arg_errmsg, is_new, rettv);
     } else {
         semsg(
-            &raw const e_listdictarg as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            &raw const e_listdictarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             if is_new as ::core::ffi::c_int != 0 {
                 b"extendnew()\0".as_ptr() as *const ::core::ffi::c_char
             } else {
@@ -1706,8 +1680,8 @@ pub unsafe extern "C" fn f_extend(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut errmsg: *mut ::core::ffi::c_char = b"extend() argument\0".as_ptr()
-        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    let mut errmsg: *mut ::core::ffi::c_char =
+        b"extend() argument\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     extend(argvars, rettv, errmsg, false_0 != 0);
 }
 #[no_mangle]
@@ -1717,7 +1691,8 @@ pub unsafe extern "C" fn f_extendnew(
     mut fptr: EvalFuncData,
 ) {
     let mut errmsg: *mut ::core::ffi::c_char = b"extendnew() argument\0".as_ptr()
-        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        as *const ::core::ffi::c_char
+        as *mut ::core::ffi::c_char;
     extend(argvars, rettv, errmsg, true_0 != 0);
 }
 #[no_mangle]
@@ -1738,14 +1713,14 @@ pub unsafe extern "C" fn f_insert(
                 (*b).bv_lock,
                 b"insert() argument\0".as_ptr() as *const ::core::ffi::c_char,
                 TV_TRANSLATE as size_t,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
         {
             return;
         }
         let mut before: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let len: ::core::ffi::c_int = tv_blob_len(b);
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             before = tv_get_number_chk(
@@ -1757,8 +1732,7 @@ pub unsafe extern "C" fn f_insert(
             }
             if before < 0 as ::core::ffi::c_int || before > len {
                 semsg(
-                    &raw const e_invarg2 as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    &raw const e_invarg2 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     tv_get_string(argvars.offset(2 as ::core::ffi::c_int as isize)),
                 );
                 return;
@@ -1773,8 +1747,7 @@ pub unsafe extern "C" fn f_insert(
         }
         if val < 0 as ::core::ffi::c_int || val > 255 as ::core::ffi::c_int {
             semsg(
-                &raw const e_invarg2 as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                &raw const e_invarg2 as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)),
             );
             return;
@@ -1782,20 +1755,19 @@ pub unsafe extern "C" fn f_insert(
         ga_grow(&raw mut (*b).bv_ga, 1 as ::core::ffi::c_int);
         let p: *mut uint8_t = (*b).bv_ga.ga_data as *mut uint8_t;
         memmove(
-            p.offset(before as isize).offset(1 as ::core::ffi::c_int as isize)
-                as *mut ::core::ffi::c_void,
+            p.offset(before as isize)
+                .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
             p.offset(before as isize) as *const ::core::ffi::c_void,
             (len - before) as size_t,
         );
         *p.offset(before as isize) = val as uint8_t;
         (*b).bv_ga.ga_len += 1;
         tv_copy(argvars.offset(0 as ::core::ffi::c_int as isize), rettv);
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         semsg(
-            &raw const e_listblobarg as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            &raw const e_listblobarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"insert()\0".as_ptr() as *const ::core::ffi::c_char,
         );
     } else {
@@ -1810,8 +1782,7 @@ pub unsafe extern "C" fn f_insert(
             return;
         }
         let mut before_0: int64_t = 0 as int64_t;
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             before_0 = tv_get_number_chk(
@@ -1846,24 +1817,23 @@ pub unsafe extern "C" fn f_remove(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let arg_errmsg: *const ::core::ffi::c_char = b"remove() argument\0".as_ptr()
-        as *const ::core::ffi::c_char;
+    let arg_errmsg: *const ::core::ffi::c_char =
+        b"remove() argument\0".as_ptr() as *const ::core::ffi::c_char;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         tv_dict_remove(argvars, rettv, arg_errmsg);
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         tv_blob_remove(argvars, rettv, arg_errmsg);
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         tv_list_remove(argvars, rettv, arg_errmsg);
     } else {
         semsg(
-            &raw const e_listdictblobarg as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            &raw const e_listdictblobarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"remove()\0".as_ptr() as *const ::core::ffi::c_char,
         );
     };
@@ -1874,8 +1844,7 @@ pub unsafe extern "C" fn f_reverse(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    if tv_check_for_string_or_list_or_blob_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-    {
+    if tv_check_for_string_or_list_or_blob_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
     }
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -1893,19 +1862,25 @@ pub unsafe extern "C" fn f_reverse(
             i += 1;
         }
         tv_blob_set_ret(rettv, b);
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         (*rettv).v_type = VAR_STRING;
-        if !(*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_string.is_null() {
+        if !(*argvars.offset(0 as ::core::ffi::c_int as isize))
+            .vval
+            .v_string
+            .is_null()
+        {
             (*rettv).vval.v_string = reverse_text(
-                (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_string,
+                (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                    .vval
+                    .v_string,
             );
         } else {
             (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
+        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let l: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
             .vval
@@ -1944,16 +1919,16 @@ unsafe extern "C" fn tv_list_locked(l: *const list_T) -> VarLockStatus {
 unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     if l.is_null() {
         '_c2rust_label: {
-            if lock as ::core::ffi::c_uint
-                == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {} else {
+            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+            } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -1991,18 +1966,11 @@ unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
     return (*b).bv_ga.ga_len;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_blob_get(
-    b: *const blob_T,
-    mut idx: ::core::ffi::c_int,
-) -> uint8_t {
+unsafe extern "C" fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
     return *((*b).bv_ga.ga_data as *mut uint8_t).offset(idx as isize);
 }
 #[inline(always)]
-unsafe extern "C" fn tv_blob_set(
-    blob: *mut blob_T,
-    mut idx: ::core::ffi::c_int,
-    mut c: uint8_t,
-) {
+unsafe extern "C" fn tv_blob_set(blob: *mut blob_T, mut idx: ::core::ffi::c_int, mut c: uint8_t) {
     *((*blob).bv_ga.ga_data as *mut uint8_t).offset(idx as isize) = c;
 }
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;

@@ -166,11 +166,7 @@ extern "C" {
     static e_write: [::core::ffi::c_char; 0];
     static e_bufloaded: [::core::ffi::c_char; 0];
     static e_notset: [::core::ffi::c_char; 0];
-    fn vim_fgets(
-        buf: *mut ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-        fp: *mut FILE,
-    ) -> bool;
+    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn get2c(fd: *mut FILE) -> ::core::ffi::c_int;
     fn get3c(fd: *mut FILE) -> ::core::ffi::c_int;
     fn get4c(fd: *mut FILE) -> ::core::ffi::c_int;
@@ -181,18 +177,11 @@ extern "C" {
     fn buf_reload(buf: *mut buf_T, orig_mode: ::core::ffi::c_int, reload_options: bool);
     fn vim_tempname() -> *mut ::core::ffi::c_char;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
-    fn ga_append_via_ptr(
-        gap: *mut garray_T,
-        item_size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     static mut msg_col: ::core::ffi::c_int;
     static mut msg_didout: bool;
     static mut curwin: *mut win_T;
@@ -204,10 +193,7 @@ extern "C" {
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
-    fn hash_find(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-    ) -> *mut hashitem_T;
+    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
     fn hash_lookup(
         ht: *const hashtab_T,
         key: *const ::core::ffi::c_char,
@@ -228,19 +214,13 @@ extern "C" {
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_toupper(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn utf_head_off(
         base_in: *const ::core::ffi::c_char,
         p_in: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn utf_valid_string(
-        s: *const ::core::ffi::c_char,
-        end: *const ::core::ffi::c_char,
-    ) -> bool;
+    fn utf_valid_string(s: *const ::core::ffi::c_char, end: *const ::core::ffi::c_char) -> bool;
     fn mb_charlen(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn enc_canonize(enc: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn convert_setup(
@@ -263,11 +243,7 @@ extern "C" {
         newfile: bool,
     ) -> ::core::ffi::c_int;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn msg_start();
@@ -277,11 +253,7 @@ extern "C" {
     fn verbose_enter();
     fn verbose_leave();
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
-    fn set_option_value_give_err(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    );
+    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
     fn copy_option_part(
         option: *mut *mut ::core::ffi::c_char,
         buf: *mut ::core::ffi::c_char,
@@ -289,10 +261,7 @@ extern "C" {
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
     fn os_mkdir(path: *const ::core::ffi::c_char, mode: int32_t) -> ::core::ffi::c_int;
     fn os_mkdir_recurse(
@@ -379,11 +348,7 @@ extern "C" {
         buf: *mut ::core::ffi::c_char,
         buflen: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn onecap_copy(
-        word: *const ::core::ffi::c_char,
-        wcopy: *mut ::core::ffi::c_char,
-        upper: bool,
-    );
+    fn onecap_copy(word: *const ::core::ffi::c_char, wcopy: *mut ::core::ffi::c_char, upper: bool);
     fn spell_soundfold(
         slang: *mut slang_T,
         inword: *mut ::core::ffi::c_char,
@@ -3686,9 +3651,7 @@ pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
@@ -3701,53 +3664,45 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
-pub const SPL_FNAME_TMPL: [::core::ffi::c_char; 10] = unsafe {
-    ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"%s.%s.spl\0")
-};
-pub const SPL_FNAME_ADD: [::core::ffi::c_char; 6] = unsafe {
-    ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b".add.\0")
-};
-pub const SPL_FNAME_ASCII: [::core::ffi::c_char; 8] = unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".ascii.\0")
-};
-pub const VIMSUGMAGIC: [::core::ffi::c_char; 7] = unsafe {
-    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"VIMsug\0")
-};
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const SPL_FNAME_TMPL: [::core::ffi::c_char; 10] =
+    unsafe { ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"%s.%s.spl\0") };
+pub const SPL_FNAME_ADD: [::core::ffi::c_char; 6] =
+    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b".add.\0") };
+pub const SPL_FNAME_ASCII: [::core::ffi::c_char; 8] =
+    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".ascii.\0") };
+pub const VIMSUGMAGIC: [::core::ffi::c_char; 7] =
+    unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"VIMsug\0") };
 pub const VIMSUGMAGICL: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const VIMSUGVERSION: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ZERO_FLAG: ::core::ffi::c_int = 65009 as ::core::ffi::c_int;
-pub const VIMSPELLMAGIC: [::core::ffi::c_char; 9] = unsafe {
-    ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"VIMspell\0")
-};
-pub const VIMSPELLMAGICL: usize = ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-    .wrapping_sub(1 as usize);
+pub const VIMSPELLMAGIC: [::core::ffi::c_char; 9] =
+    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"VIMspell\0") };
+pub const VIMSPELLMAGICL: usize =
+    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize);
 pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
-static mut e_spell_trunc: *const ::core::ffi::c_char = b"E758: Truncated spell file\0"
-    .as_ptr() as *const ::core::ffi::c_char;
+static mut e_spell_trunc: *const ::core::ffi::c_char =
+    b"E758: Truncated spell file\0".as_ptr() as *const ::core::ffi::c_char;
 static mut e_error_while_reading_sug_file_str: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 40],
-        [::core::ffi::c_char; 40],
-    >(*b"E782: Error while reading .sug file: %s\0")
+    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+        *b"E782: Error while reading .sug file: %s\0",
+    )
 };
 static mut e_duplicate_char_in_map_entry: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E783: Duplicate char in MAP entry\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E783: Duplicate char in MAP entry\0",
+    )
 };
-static mut e_illegal_character_in_word: *const ::core::ffi::c_char = b"E1280: Illegal character in word\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut e_afftrailing: *const ::core::ffi::c_char = b"Trailing text in %s line %d: %s\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut e_affname: *const ::core::ffi::c_char = b"Affix name too long in %s line %d: %s\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut msg_compressing: *const ::core::ffi::c_char = b"Compressing word tree...\0"
-    .as_ptr() as *const ::core::ffi::c_char;
+static mut e_illegal_character_in_word: *const ::core::ffi::c_char =
+    b"E1280: Illegal character in word\0".as_ptr() as *const ::core::ffi::c_char;
+static mut e_afftrailing: *const ::core::ffi::c_char =
+    b"Trailing text in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char;
+static mut e_affname: *const ::core::ffi::c_char =
+    b"Affix name too long in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char;
+static mut msg_compressing: *const ::core::ffi::c_char =
+    b"Compressing word tree...\0".as_ptr() as *const ::core::ffi::c_char;
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -3759,8 +3714,8 @@ pub const WN_MASK: ::core::ffi::c_int = 0xffff as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn spell_check_magic_string(fd: *mut FILE) -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 8] = [0; 8];
-    let n__SPRB: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-        .wrapping_sub(1 as size_t);
+    let n__SPRB: size_t =
+        ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t);
     let fd__SPRB: *mut FILE = fd;
     let buf__SPRB: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
     let read_bytes__SPRB: size_t = fread(
@@ -3801,10 +3756,7 @@ pub unsafe extern "C" fn spell_load_file(
     let mut lp: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
     let mut res: ::core::ffi::c_int = 0;
     let mut did_estack_push: bool = false_0 != 0;
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(fname, b"r\0".as_ptr() as *const ::core::ffi::c_char);
     '_endOK: {
         '_endFAIL: {
             if fd.is_null() {
@@ -3828,8 +3780,7 @@ pub unsafe extern "C" fn spell_load_file(
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
-                            b"Reading spell file \"%s\"\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                            b"Reading spell file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
                         ),
                         fname,
                     );
@@ -3838,8 +3789,7 @@ pub unsafe extern "C" fn spell_load_file(
                 if old_lp.is_null() {
                     lp = slang_alloc(lang);
                     (*lp).sl_fname = xstrdup(fname);
-                    (*lp).sl_add = !strstr(path_tail(fname), SPL_FNAME_ADD.as_ptr())
-                        .is_null();
+                    (*lp).sl_add = !strstr(path_tail(fname), SPL_FNAME_ADD.as_ptr()).is_null();
                 } else {
                     lp = old_lp;
                 }
@@ -3850,18 +3800,14 @@ pub unsafe extern "C" fn spell_load_file(
                     -2 | -1 => {
                         semsg(
                             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            gettext(
-                                b"E757: This does not look like a spell file\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E757: This does not look like a spell file\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                         );
                     }
                     -3 => {
                         semsg(
-                            gettext(
-                                b"E5042: Failed to read spell file %s: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E5042: Failed to read spell file %s: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             strerror(ferror(fd)),
                         );
@@ -3869,19 +3815,15 @@ pub unsafe extern "C" fn spell_load_file(
                     0 | _ => {
                         c = getc(fd);
                         if c < VIMSPELLVERSION {
-                            emsg(
-                                gettext(
-                                    b"E771: Old spell file, needs to be updated\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
-                            );
+                            emsg(gettext(
+                                b"E771: Old spell file, needs to be updated\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
+                            ));
                         } else if c > VIMSPELLVERSION {
-                            emsg(
-                                gettext(
-                                    b"E772: Spell file is for newer version of Vim\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
-                            );
+                            emsg(gettext(
+                                b"E772: Spell file is for newer version of Vim\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
+                            ));
                         } else {
                             '_truncerr: loop {
                                 n = getc(fd);
@@ -3931,8 +3873,9 @@ pub unsafe extern "C" fn spell_load_file(
                                         res = 0 as ::core::ffi::c_int;
                                         match n {
                                             15 => {
-                                                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*lp)
-                                                    .sl_info as *mut *mut ::core::ffi::c_void;
+                                                let mut ptr_: *mut *mut ::core::ffi::c_void =
+                                                    &raw mut (*lp).sl_info
+                                                        as *mut *mut ::core::ffi::c_void;
                                                 xfree(*ptr_);
                                                 *ptr_ = NULL;
                                                 *ptr_;
@@ -4013,12 +3956,11 @@ pub unsafe extern "C" fn spell_load_file(
                                             }
                                             _ => {
                                                 if c & SNF_REQUIRED != 0 {
-                                                    emsg(
-                                                        gettext(
-                                                            b"E770: Unsupported section in spell file\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ),
-                                                    );
+                                                    emsg(gettext(
+                                                        b"E770: Unsupported section in spell file\0"
+                                                            .as_ptr()
+                                                            as *const ::core::ffi::c_char,
+                                                    ));
                                                     break '_endFAIL;
                                                 } else {
                                                     loop {
@@ -4085,26 +4027,22 @@ unsafe extern "C" fn tree_count_words(
         if curi[depth as usize]
             > *byts.offset(arridx[depth as usize] as isize) as ::core::ffi::c_int
         {
-            *idxs.offset(arridx[depth as usize] as isize) = wordcount[depth as usize]
-                as idx_T;
+            *idxs.offset(arridx[depth as usize] as isize) = wordcount[depth as usize] as idx_T;
             if depth > 0 as ::core::ffi::c_int {
-                wordcount[(depth - 1 as ::core::ffi::c_int) as usize]
-                    += wordcount[depth as usize];
+                wordcount[(depth - 1 as ::core::ffi::c_int) as usize] += wordcount[depth as usize];
             }
             depth -= 1;
             fast_breakcheck();
         } else {
             let mut n: idx_T = arridx[depth as usize] + curi[depth as usize] as idx_T;
             curi[depth as usize] += 1;
-            let mut c: ::core::ffi::c_int = *byts.offset(n as isize)
-                as ::core::ffi::c_int;
+            let mut c: ::core::ffi::c_int = *byts.offset(n as isize) as ::core::ffi::c_int;
             if c == 0 as ::core::ffi::c_int {
                 wordcount[depth as usize] += 1;
                 while (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) < byts_len
-                    && *byts
-                        .offset(
-                            (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize,
-                        ) as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                    && *byts.offset((n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        == 0 as ::core::ffi::c_int
                 {
                     n += 1;
                     curi[depth as usize] += 1;
@@ -4133,23 +4071,20 @@ pub unsafe extern "C" fn suggest_load_files() {
     };
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
         if (*slang).sl_sugtime != 0 as time_t && !(*slang).sl_sugloaded {
             (*slang).sl_sugloaded = true_0 != 0;
-            let mut dotp: *mut ::core::ffi::c_char = strrchr(
-                (*slang).sl_fname,
-                '.' as ::core::ffi::c_int,
-            );
+            let mut dotp: *mut ::core::ffi::c_char =
+                strrchr((*slang).sl_fname, '.' as ::core::ffi::c_int);
             if !(dotp.is_null()
                 || path_fnamecmp(dotp, b".spl\0".as_ptr() as *const ::core::ffi::c_char)
                     != 0 as ::core::ffi::c_int)
             {
                 strcpy(
                     dotp,
-                    b".sug\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b".sug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 let mut fd: *mut FILE = os_fopen(
                     (*slang).sl_fname,
@@ -4189,7 +4124,8 @@ pub unsafe extern "C" fn suggest_load_files() {
                                 semsg(
                                     gettext(
                                         b"E780: .sug file is for newer version of Vim: %s\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
+                                            .as_ptr()
+                                            as *const ::core::ffi::c_char,
                                     ),
                                     (*slang).sl_fname,
                                 );
@@ -4198,7 +4134,8 @@ pub unsafe extern "C" fn suggest_load_files() {
                                 if timestamp != (*slang).sl_sugtime {
                                     semsg(
                                         gettext(
-                                            b"E781: .sug file doesn't match .spl file: %s\0".as_ptr()
+                                            b"E781: .sug file doesn't match .spl file: %s\0"
+                                                .as_ptr()
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         (*slang).sl_fname,
@@ -4222,8 +4159,8 @@ pub unsafe extern "C" fn suggest_load_files() {
                                                     1 as ::core::ffi::c_int,
                                                     100 as ::core::ffi::c_int,
                                                 );
-                                                let mut wordnr: ::core::ffi::c_int = 0
-                                                    as ::core::ffi::c_int;
+                                                let mut wordnr: ::core::ffi::c_int =
+                                                    0 as ::core::ffi::c_int;
                                                 while wordnr < wcount {
                                                     ga.ga_len = 0 as ::core::ffi::c_int;
                                                     loop {
@@ -4231,9 +4168,13 @@ pub unsafe extern "C" fn suggest_load_files() {
                                                         if c < 0 as ::core::ffi::c_int {
                                                             break '_someerror;
                                                         }
-                                                        ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                                                        *(ga.ga_data as *mut uint8_t).offset(ga.ga_len as isize) = c
-                                                            as uint8_t;
+                                                        ga_grow(
+                                                            &raw mut ga,
+                                                            1 as ::core::ffi::c_int,
+                                                        );
+                                                        *(ga.ga_data as *mut uint8_t)
+                                                            .offset(ga.ga_len as isize) =
+                                                            c as uint8_t;
                                                         ga.ga_len += 1;
                                                         if c == NUL {
                                                             break;
@@ -4284,8 +4225,7 @@ pub unsafe extern "C" fn suggest_load_files() {
                 }
                 strcpy(
                     dotp,
-                    b".spl\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b".spl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
             }
         }
@@ -4329,8 +4269,8 @@ unsafe extern "C" fn read_region_section(
     }
     let n__SPRNB: size_t = len as size_t;
     let fd__SPRNB: *mut FILE = fd;
-    let buf__SPRNB: *mut ::core::ffi::c_char = &raw mut (*lp).sl_regions
-        as *mut ::core::ffi::c_char;
+    let buf__SPRNB: *mut ::core::ffi::c_char =
+        &raw mut (*lp).sl_regions as *mut ::core::ffi::c_char;
     let n__SPRB: size_t = n__SPRNB;
     let fd__SPRB: *mut FILE = fd__SPRNB;
     let buf__SPRB: *mut ::core::ffi::c_char = buf__SPRNB;
@@ -4356,19 +4296,13 @@ unsafe extern "C" fn read_region_section(
 unsafe extern "C" fn read_charflags_section(mut fd: *mut FILE) -> ::core::ffi::c_int {
     let mut flagslen: ::core::ffi::c_int = 0;
     let mut follen: ::core::ffi::c_int = 0;
-    let mut flags: *mut ::core::ffi::c_char = read_cnt_string(
-        fd,
-        1 as ::core::ffi::c_int,
-        &raw mut flagslen,
-    );
+    let mut flags: *mut ::core::ffi::c_char =
+        read_cnt_string(fd, 1 as ::core::ffi::c_int, &raw mut flagslen);
     if flagslen < 0 as ::core::ffi::c_int {
         return flagslen;
     }
-    let mut fol: *mut ::core::ffi::c_char = read_cnt_string(
-        fd,
-        2 as ::core::ffi::c_int,
-        &raw mut follen,
-    );
+    let mut fol: *mut ::core::ffi::c_char =
+        read_cnt_string(fd, 2 as ::core::ffi::c_int, &raw mut follen);
     if follen < 0 as ::core::ffi::c_int {
         xfree(flags as *mut ::core::ffi::c_void);
         return follen;
@@ -4391,8 +4325,8 @@ unsafe extern "C" fn read_prefcond_section(
     if cnt <= 0 as ::core::ffi::c_int {
         return SP_FORMERROR as ::core::ffi::c_int;
     }
-    (*lp).sl_prefprog = xcalloc(cnt as size_t, ::core::mem::size_of::<*mut regprog_T>())
-        as *mut *mut regprog_T;
+    (*lp).sl_prefprog =
+        xcalloc(cnt as size_t, ::core::mem::size_of::<*mut regprog_T>()) as *mut *mut regprog_T;
     (*lp).sl_prefixcnt = cnt;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < cnt {
@@ -4405,9 +4339,8 @@ unsafe extern "C" fn read_prefcond_section(
             buf[0 as ::core::ffi::c_int as usize] = '^' as ::core::ffi::c_char;
             let n__SPRNB: size_t = n as size_t;
             let fd__SPRNB: *mut FILE = fd;
-            let buf__SPRNB: *mut ::core::ffi::c_char = (&raw mut buf
-                as *mut ::core::ffi::c_char)
-                .offset(1 as ::core::ffi::c_int as isize);
+            let buf__SPRNB: *mut ::core::ffi::c_char =
+                (&raw mut buf as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize);
             let n__SPRB: size_t = n__SPRNB;
             let fd__SPRB: *mut FILE = fd__SPRNB;
             let buf__SPRB: *mut ::core::ffi::c_char = buf__SPRNB;
@@ -4424,8 +4357,7 @@ unsafe extern "C" fn read_prefcond_section(
                     SP_OTHERERROR as ::core::ffi::c_int
                 };
             }
-            if !memchr(buf__SPRNB as *const ::core::ffi::c_void, NUL, n__SPRNB).is_null()
-            {
+            if !memchr(buf__SPRNB as *const ::core::ffi::c_void, NUL, n__SPRNB).is_null() {
                 return SP_FORMERROR as ::core::ffi::c_int;
             }
             buf[(n + 1 as ::core::ffi::c_int) as usize] = NUL as ::core::ffi::c_char;
@@ -4514,24 +4446,23 @@ unsafe extern "C" fn read_sal_section(
     ga_grow(gap, cnt + 1 as ::core::ffi::c_int);
     while (*gap).ga_len < cnt {
         let mut c: ::core::ffi::c_int = NUL;
-        let mut smp: *mut salitem_T = ((*gap).ga_data as *mut salitem_T)
-            .offset((*gap).ga_len as isize);
+        let mut smp: *mut salitem_T =
+            ((*gap).ga_data as *mut salitem_T).offset((*gap).ga_len as isize);
         let mut ccnt: ::core::ffi::c_int = getc(fd);
         if ccnt < 0 as ::core::ffi::c_int {
             return SP_TRUNCERROR as ::core::ffi::c_int;
         }
-        let mut p: *mut ::core::ffi::c_char = xmalloc(
-            (ccnt as size_t).wrapping_add(2 as size_t),
-        ) as *mut ::core::ffi::c_char;
+        let mut p: *mut ::core::ffi::c_char =
+            xmalloc((ccnt as size_t).wrapping_add(2 as size_t)) as *mut ::core::ffi::c_char;
         (*smp).sm_lead = p;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < ccnt {
             c = getc(fd);
             if !vim_strchr(
-                    b"0123456789(-<^$\0".as_ptr() as *const ::core::ffi::c_char,
-                    c,
-                )
-                .is_null()
+                b"0123456789(-<^$\0".as_ptr() as *const ::core::ffi::c_char,
+                c,
+            )
+            .is_null()
             {
                 break;
             }
@@ -4595,8 +4526,7 @@ unsafe extern "C" fn read_sal_section(
                     SP_OTHERERROR as ::core::ffi::c_int
                 };
             }
-            if !memchr(buf__SPRNB as *const ::core::ffi::c_void, NUL, n__SPRNB).is_null()
-            {
+            if !memchr(buf__SPRNB as *const ::core::ffi::c_void, NUL, n__SPRNB).is_null() {
                 xfree((*smp).sm_lead as *mut ::core::ffi::c_void);
                 return SP_FORMERROR as ::core::ffi::c_int;
             }
@@ -4625,10 +4555,9 @@ unsafe extern "C" fn read_sal_section(
         (*gap).ga_len += 1;
     }
     if !((*gap).ga_len <= 0 as ::core::ffi::c_int) {
-        let mut smp_0: *mut salitem_T = ((*gap).ga_data as *mut salitem_T)
-            .offset((*gap).ga_len as isize);
-        let mut p_0: *mut ::core::ffi::c_char = xmalloc(1 as size_t)
-            as *mut ::core::ffi::c_char;
+        let mut smp_0: *mut salitem_T =
+            ((*gap).ga_data as *mut salitem_T).offset((*gap).ga_len as isize);
+        let mut p_0: *mut ::core::ffi::c_char = xmalloc(1 as size_t) as *mut ::core::ffi::c_char;
         *p_0.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
         (*smp_0).sm_lead = p_0;
         (*smp_0).sm_lead_w = mb_str2wide((*smp_0).sm_lead);
@@ -4684,19 +4613,13 @@ unsafe extern "C" fn read_sofo_section(
     let mut cnt: ::core::ffi::c_int = 0;
     let mut res: ::core::ffi::c_int = 0;
     (*slang).sl_sofo = true_0 != 0;
-    let mut from: *mut ::core::ffi::c_char = read_cnt_string(
-        fd,
-        2 as ::core::ffi::c_int,
-        &raw mut cnt,
-    );
+    let mut from: *mut ::core::ffi::c_char =
+        read_cnt_string(fd, 2 as ::core::ffi::c_int, &raw mut cnt);
     if cnt < 0 as ::core::ffi::c_int {
         return cnt;
     }
-    let mut to: *mut ::core::ffi::c_char = read_cnt_string(
-        fd,
-        2 as ::core::ffi::c_int,
-        &raw mut cnt,
-    );
+    let mut to: *mut ::core::ffi::c_char =
+        read_cnt_string(fd, 2 as ::core::ffi::c_int, &raw mut cnt);
     if cnt < 0 as ::core::ffi::c_int {
         xfree(from as *mut ::core::ffi::c_void);
         return cnt;
@@ -4767,14 +4690,9 @@ unsafe extern "C" fn read_compound(
             }
             let c2rust_fresh2 = (*gap).ga_len;
             (*gap).ga_len = (*gap).ga_len + 1;
-            let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data
-                as *mut *mut ::core::ffi::c_char)
+            let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data as *mut *mut ::core::ffi::c_char)
                 .offset(c2rust_fresh2 as isize);
-            *c2rust_lvalue_ptr = read_cnt_string(
-                fd,
-                1 as ::core::ffi::c_int,
-                &raw mut cnt,
-            );
+            *c2rust_lvalue_ptr = read_cnt_string(fd, 1 as ::core::ffi::c_int, &raw mut cnt);
             if cnt < 0 as ::core::ffi::c_int {
                 return cnt;
             }
@@ -4849,11 +4767,12 @@ unsafe extern "C" fn read_compound(
             }
         }
         if !crp.is_null() {
-            if c == '?' as ::core::ffi::c_int || c == '+' as ::core::ffi::c_int
+            if c == '?' as ::core::ffi::c_int
+                || c == '+' as ::core::ffi::c_int
                 || c == '*' as ::core::ffi::c_int
             {
-                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*slang)
-                    .sl_comprules as *mut *mut ::core::ffi::c_void;
+                let mut ptr_: *mut *mut ::core::ffi::c_void =
+                    &raw mut (*slang).sl_comprules as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
                 *ptr_;
@@ -4873,7 +4792,8 @@ unsafe extern "C" fn read_compound(
             *c2rust_fresh11 = '|' as ::core::ffi::c_char;
             atstart = 1 as ::core::ffi::c_int;
         } else {
-            if c == '?' as ::core::ffi::c_int || c == '+' as ::core::ffi::c_int
+            if c == '?' as ::core::ffi::c_int
+                || c == '+' as ::core::ffi::c_int
                 || c == '~' as ::core::ffi::c_int
             {
                 let c2rust_fresh12 = pp;
@@ -4938,16 +4858,12 @@ unsafe extern "C" fn set_sofo(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 256 as ::core::ffi::c_int {
         if (*lp).sl_sal_first[i as usize] > 0 as ::core::ffi::c_int {
-            p = xmalloc(
-                ::core::mem::size_of::<::core::ffi::c_int>()
-                    .wrapping_mul(
-                        ((*lp).sl_sal_first[i as usize] as ::core::ffi::c_int
-                            * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                            as size_t,
-                    ),
-            ) as *const ::core::ffi::c_char;
-            *((*gap).ga_data as *mut *mut ::core::ffi::c_int).offset(i as isize) = p
-                as *mut ::core::ffi::c_int;
+            p = xmalloc(::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(
+                ((*lp).sl_sal_first[i as usize] as ::core::ffi::c_int * 2 as ::core::ffi::c_int
+                    + 1 as ::core::ffi::c_int) as size_t,
+            )) as *const ::core::ffi::c_char;
+            *((*gap).ga_data as *mut *mut ::core::ffi::c_int).offset(i as isize) =
+                p as *mut ::core::ffi::c_int;
             *(p as *mut ::core::ffi::c_int) = 0 as ::core::ffi::c_int;
         }
         i += 1;
@@ -4995,21 +4911,20 @@ unsafe extern "C" fn set_sal_first(mut lp: *mut slang_T) {
     let mut smp: *mut salitem_T = (*gap).ga_data as *mut salitem_T;
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_0 < (*gap).ga_len {
-        let mut c: ::core::ffi::c_int = *(*smp.offset(i_0 as isize)).sm_lead_w
-            & 0xff as ::core::ffi::c_int;
+        let mut c: ::core::ffi::c_int =
+            *(*smp.offset(i_0 as isize)).sm_lead_w & 0xff as ::core::ffi::c_int;
         if *sfirst.offset(c as isize) == -1 as ::core::ffi::c_int {
             *sfirst.offset(c as isize) = i_0 as salfirst_T;
             while (i_0 + 1 as ::core::ffi::c_int) < (*gap).ga_len
                 && *(*smp.offset((i_0 + 1 as ::core::ffi::c_int) as isize)).sm_lead_w
-                    & 0xff as ::core::ffi::c_int == c
+                    & 0xff as ::core::ffi::c_int
+                    == c
             {
                 i_0 += 1;
             }
             let mut n: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             while i_0 + n < (*gap).ga_len {
-                if *(*smp.offset((i_0 + n) as isize)).sm_lead_w
-                    & 0xff as ::core::ffi::c_int == c
-                {
+                if *(*smp.offset((i_0 + n) as isize)).sm_lead_w & 0xff as ::core::ffi::c_int == c {
                     let mut tsal: salitem_T = salitem_T {
                         sm_lead: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         sm_leadlen: 0,
@@ -5024,7 +4939,8 @@ unsafe extern "C" fn set_sal_first(mut lp: *mut slang_T) {
                     n -= 1;
                     tsal = *smp.offset((i_0 + n) as isize);
                     memmove(
-                        smp.offset(i_0 as isize).offset(1 as ::core::ffi::c_int as isize)
+                        smp.offset(i_0 as isize)
+                            .offset(1 as ::core::ffi::c_int as isize)
                             as *mut ::core::ffi::c_void,
                         smp.offset(i_0 as isize) as *const ::core::ffi::c_void,
                         ::core::mem::size_of::<salitem_T>().wrapping_mul(n as size_t),
@@ -5037,9 +4953,7 @@ unsafe extern "C" fn set_sal_first(mut lp: *mut slang_T) {
         i_0 += 1;
     }
 }
-unsafe extern "C" fn mb_str2wide(
-    mut s: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_int {
+unsafe extern "C" fn mb_str2wide(mut s: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut res: *mut ::core::ffi::c_int = xmalloc(
         (mb_charlen(s) as size_t)
@@ -5080,8 +4994,7 @@ unsafe extern "C" fn spell_read_tree(
     if !bytsp_len.is_null() {
         *bytsp_len = len;
     }
-    let mut ip: *mut idx_T = xcalloc(len as size_t, ::core::mem::size_of::<idx_T>())
-        as *mut idx_T;
+    let mut ip: *mut idx_T = xcalloc(len as size_t, ::core::mem::size_of::<idx_T>()) as *mut idx_T;
     *idxsp = ip;
     let mut idx: ::core::ffi::c_int = read_tree_node(
         fd,
@@ -5178,14 +5091,14 @@ unsafe extern "C" fn read_tree_node(
     }
     let mut i_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while i_0 <= len {
-        if *byts.offset((startidx as ::core::ffi::c_int + i_0) as isize)
-            as ::core::ffi::c_int != 0 as ::core::ffi::c_int
+        if *byts.offset((startidx as ::core::ffi::c_int + i_0) as isize) as ::core::ffi::c_int
+            != 0 as ::core::ffi::c_int
         {
-            if *idxs.offset((startidx as ::core::ffi::c_int + i_0) as isize)
-                as ::core::ffi::c_int & SHARED_MASK != 0
+            if *idxs.offset((startidx as ::core::ffi::c_int + i_0) as isize) as ::core::ffi::c_int
+                & SHARED_MASK
+                != 0
             {
-                *idxs.offset((startidx as ::core::ffi::c_int + i_0) as isize)
-                    &= !SHARED_MASK;
+                *idxs.offset((startidx as ::core::ffi::c_int + i_0) as isize) &= !SHARED_MASK;
             } else {
                 *idxs.offset((startidx as ::core::ffi::c_int + i_0) as isize) = idx;
                 idx = read_tree_node(
@@ -5208,10 +5121,7 @@ unsafe extern "C" fn read_tree_node(
     return idx;
 }
 pub const SHARED_MASK: ::core::ffi::c_int = 0x8000000 as ::core::ffi::c_int;
-unsafe extern "C" fn spell_reload_one(
-    mut fname: *mut ::core::ffi::c_char,
-    mut added_word: bool,
-) {
+unsafe extern "C" fn spell_reload_one(mut fname: *mut ::core::ffi::c_char, mut added_word: bool) {
     let mut didit: bool = false_0 != 0;
     let mut slang: *mut slang_T = first_lang;
     while !slang.is_null() {
@@ -5221,12 +5131,12 @@ unsafe extern "C" fn spell_reload_one(
         {
             slang_clear(slang);
             if spell_load_file(
-                    fname,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    slang,
-                    false_0 != 0,
-                )
-                .is_null()
+                fname,
+                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                slang,
+                false_0 != 0,
+            )
+            .is_null()
             {
                 slang_clear(slang);
             }
@@ -5253,11 +5163,9 @@ pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
     }
-    let mut start: ::core::ffi::c_int = getdigits_int(
-        &raw mut p,
-        true_0 != 0,
-        0 as ::core::ffi::c_int,
-    ) * 10 as ::core::ffi::c_int / (SBLOCKSIZE / 102 as ::core::ffi::c_int);
+    let mut start: ::core::ffi::c_int =
+        getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) * 10 as ::core::ffi::c_int
+            / (SBLOCKSIZE / 102 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         return FAIL;
     }
@@ -5265,11 +5173,9 @@ pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
     }
-    let mut incr: ::core::ffi::c_int = getdigits_int(
-        &raw mut p,
-        true_0 != 0,
-        0 as ::core::ffi::c_int,
-    ) * 102 as ::core::ffi::c_int / (SBLOCKSIZE / 10 as ::core::ffi::c_int);
+    let mut incr: ::core::ffi::c_int =
+        getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) * 102 as ::core::ffi::c_int
+            / (SBLOCKSIZE / 10 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         return FAIL;
     }
@@ -5277,16 +5183,16 @@ pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
     }
-    let mut added: ::core::ffi::c_int = getdigits_int(
-        &raw mut p,
-        true_0 != 0,
-        0 as ::core::ffi::c_int,
-    ) * 1024 as ::core::ffi::c_int;
+    let mut added: ::core::ffi::c_int =
+        getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int)
+            * 1024 as ::core::ffi::c_int;
     if *p as ::core::ffi::c_int != NUL {
         return FAIL;
     }
-    if start == 0 as ::core::ffi::c_int || incr == 0 as ::core::ffi::c_int
-        || added == 0 as ::core::ffi::c_int || incr > start
+    if start == 0 as ::core::ffi::c_int
+        || incr == 0 as ::core::ffi::c_int
+        || added == 0 as ::core::ffi::c_int
+        || incr > start
     {
         return FAIL;
     }
@@ -5300,57 +5206,36 @@ unsafe extern "C" fn spell_read_aff(
     mut fname: *mut ::core::ffi::c_char,
 ) -> *mut afffile_T {
     let mut rline: [::core::ffi::c_char; 500] = [0; 500];
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut pc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut items: [*mut ::core::ffi::c_char; 30] = [::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >(); 30];
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut pc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut items: [*mut ::core::ffi::c_char; 30] =
+        [::core::ptr::null_mut::<::core::ffi::c_char>(); 30];
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut lnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut cur_aff: *mut affheader_T = ::core::ptr::null_mut::<affheader_T>();
     let mut did_postpone_prefix: bool = false_0 != 0;
     let mut aff_todo: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tp: *mut hashtab_T = ::core::ptr::null_mut::<hashtab_T>();
-    let mut low: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut fol: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut upp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut low: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut fol: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut upp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut found_map: bool = false_0 != 0;
     let mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
     let mut compminlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut compsylmax: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut compoptions: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut compmax: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut compflags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut midword: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut syllable: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut sofofrom: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut sofoto: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut compflags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut midword: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut syllable: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut sofofrom: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut sofoto: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut fd: *mut FILE = os_fopen(fname, b"r\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
-        semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+            fname,
+        );
         return ::core::ptr::null_mut::<afffile_T>();
     }
     vim_snprintf(
@@ -5364,17 +5249,12 @@ unsafe extern "C" fn spell_read_aff(
     let mut do_repsal: bool = (*spin).si_repsal.ga_len <= 0 as ::core::ffi::c_int;
     let mut do_sal: bool = (*spin).si_sal.ga_len <= 0 as ::core::ffi::c_int;
     let mut do_mapline: bool = (*spin).si_map.ga_len <= 0 as ::core::ffi::c_int;
-    let mut aff: *mut afffile_T = getroom(
-        spin,
-        ::core::mem::size_of::<afffile_T>(),
-        true_0 != 0,
-    ) as *mut afffile_T;
+    let mut aff: *mut afffile_T =
+        getroom(spin, ::core::mem::size_of::<afffile_T>(), true_0 != 0) as *mut afffile_T;
     hash_init(&raw mut (*aff).af_pref);
     hash_init(&raw mut (*aff).af_suff);
     hash_init(&raw mut (*aff).af_comp);
-    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd)
-        && !got_int
-    {
+    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int {
         line_breakcheck();
         lnum += 1;
         if *(&raw mut rline as *mut ::core::ffi::c_char) as ::core::ffi::c_int
@@ -5392,10 +5272,8 @@ unsafe extern "C" fn spell_read_aff(
             if pc.is_null() {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Conversion failure for word in %s line %d: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Conversion failure for word in %s line %d: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     lnum,
                     &raw mut rline as *mut ::core::ffi::c_char,
@@ -5429,7 +5307,8 @@ unsafe extern "C" fn spell_read_aff(
             if itemcnt == 2 as ::core::ffi::c_int
                 && spell_info_item(
                     items[0 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
             {
                 while *p as uint8_t as ::core::ffi::c_int >= ' ' as ::core::ffi::c_int
                     || *p as ::core::ffi::c_int == TAB
@@ -5456,20 +5335,19 @@ unsafe extern "C" fn spell_read_aff(
             itemcnt,
             b"SET\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             2 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0 && (*aff).af_enc.is_null()
+        ) as ::core::ffi::c_int
+            != 0
+            && (*aff).af_enc.is_null()
         {
-            (*aff).af_enc = enc_canonize(
-                items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
-            );
+            (*aff).af_enc =
+                enc_canonize(items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char);
             if (*spin).si_ascii == 0
                 && convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc) == FAIL
             {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Conversion in %s not supported: from %s to %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Conversion in %s not supported: from %s to %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     (*aff).af_enc,
                     p_enc,
@@ -5481,7 +5359,9 @@ unsafe extern "C" fn spell_read_aff(
             itemcnt,
             b"FLAG\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             2 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0 && (*aff).af_flagtype == AFT_CHAR
+        ) as ::core::ffi::c_int
+            != 0
+            && (*aff).af_flagtype == AFT_CHAR
         {
             if strcmp(
                 items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
@@ -5504,10 +5384,8 @@ unsafe extern "C" fn spell_read_aff(
             } else {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Invalid value for FLAG in %s line %d: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Invalid value for FLAG in %s line %d: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     lnum,
                     items[1 as ::core::ffi::c_int as usize],
@@ -5521,15 +5399,14 @@ unsafe extern "C" fn spell_read_aff(
                 || (*aff).af_needcomp != 0 as ::core::ffi::c_uint
                 || (*aff).af_comproot != 0 as ::core::ffi::c_uint
                 || (*aff).af_nosuggest != 0 as ::core::ffi::c_uint
-                || !compflags.is_null() || (*aff).af_suff.ht_used > 0 as size_t
+                || !compflags.is_null()
+                || (*aff).af_suff.ht_used > 0 as size_t
                 || (*aff).af_pref.ht_used > 0 as size_t
             {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"FLAG after using flags in %s line %d: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"FLAG after using flags in %s line %d: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     lnum,
                     items[1 as ::core::ffi::c_int as usize],
@@ -5537,7 +5414,9 @@ unsafe extern "C" fn spell_read_aff(
             }
         } else if spell_info_item(
             items[0 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
-        ) as ::core::ffi::c_int != 0 && itemcnt > 1 as ::core::ffi::c_int
+        ) as ::core::ffi::c_int
+            != 0
+            && itemcnt > 1 as ::core::ffi::c_int
         {
             p = getroom(
                 spin,
@@ -5546,19 +5425,13 @@ unsafe extern "C" fn spell_read_aff(
                 } else {
                     strlen((*spin).si_info)
                 })
-                    .wrapping_add(
-                        strlen(
-                            items[0 as ::core::ffi::c_int as usize]
-                                as *const ::core::ffi::c_char,
-                        ),
-                    )
-                    .wrapping_add(
-                        strlen(
-                            items[1 as ::core::ffi::c_int as usize]
-                                as *const ::core::ffi::c_char,
-                        ),
-                    )
-                    .wrapping_add(3 as size_t),
+                .wrapping_add(strlen(
+                    items[0 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
+                ))
+                .wrapping_add(strlen(
+                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
+                ))
+                .wrapping_add(3 as size_t),
                 false_0 != 0,
             ) as *mut ::core::ffi::c_char;
             if !(*spin).si_info.is_null() {
@@ -5578,10 +5451,11 @@ unsafe extern "C" fn spell_read_aff(
         } else if is_aff_rule(
             &raw mut items as *mut *mut ::core::ffi::c_char,
             itemcnt,
-            b"MIDWORD\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"MIDWORD\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             2 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0 && midword.is_null()
+        ) as ::core::ffi::c_int
+            != 0
+            && midword.is_null()
         {
             midword = getroom_save(
                 spin,
@@ -5591,8 +5465,7 @@ unsafe extern "C" fn spell_read_aff(
             if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"TRY\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"TRY\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
             ) {
                 continue;
@@ -5600,17 +5473,17 @@ unsafe extern "C" fn spell_read_aff(
             if (is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"RAR\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"RAR\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 || is_aff_rule(
                     &raw mut items as *mut *mut ::core::ffi::c_char,
                     itemcnt,
-                    b"RARE\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"RARE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     2 as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
                 && (*aff).af_rare == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_rare = affitem2flag(
@@ -5622,17 +5495,18 @@ unsafe extern "C" fn spell_read_aff(
             } else if (is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"KEP\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"KEP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 || is_aff_rule(
                     &raw mut items as *mut *mut ::core::ffi::c_char,
                     itemcnt,
                     b"KEEPCASE\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char,
                     2 as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
                 && (*aff).af_keepcase == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_keepcase = affitem2flag(
@@ -5644,17 +5518,18 @@ unsafe extern "C" fn spell_read_aff(
             } else if (is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"BAD\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"BAD\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 || is_aff_rule(
                     &raw mut items as *mut *mut ::core::ffi::c_char,
                     itemcnt,
                     b"FORBIDDENWORD\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char,
                     2 as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
                 && (*aff).af_bad == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_bad = affitem2flag(
@@ -5666,10 +5541,10 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"NEEDAFFIX\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"NEEDAFFIX\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 && (*aff).af_needaffix == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_needaffix = affitem2flag(
@@ -5681,10 +5556,10 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"CIRCUMFIX\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"CIRCUMFIX\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 && (*aff).af_circumfix == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_circumfix = affitem2flag(
@@ -5696,10 +5571,10 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"NOSUGGEST\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"NOSUGGEST\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 && (*aff).af_nosuggest == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_nosuggest = affitem2flag(
@@ -5714,14 +5589,16 @@ unsafe extern "C" fn spell_read_aff(
                 b"NEEDCOMPOUND\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 || is_aff_rule(
                     &raw mut items as *mut *mut ::core::ffi::c_char,
                     itemcnt,
                     b"ONLYINCOMPOUND\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char,
                     2 as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
                 && (*aff).af_needcomp == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_needcomp = affitem2flag(
@@ -5736,7 +5613,8 @@ unsafe extern "C" fn spell_read_aff(
                 b"COMPOUNDROOT\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 && (*aff).af_comproot == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_comproot = affitem2flag(
@@ -5751,7 +5629,8 @@ unsafe extern "C" fn spell_read_aff(
                 b"COMPOUNDFORBIDFLAG\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 && (*aff).af_compforbid == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_compforbid = affitem2flag(
@@ -5777,7 +5656,8 @@ unsafe extern "C" fn spell_read_aff(
                 b"COMPOUNDPERMITFLAG\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 && (*aff).af_comppermit == 0 as ::core::ffi::c_uint
             {
                 (*aff).af_comppermit = affitem2flag(
@@ -5803,14 +5683,13 @@ unsafe extern "C" fn spell_read_aff(
                 b"COMPOUNDFLAG\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && compflags.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && compflags.is_null()
             {
                 p = getroom(
                     spin,
-                    strlen(
-                            items[1 as ::core::ffi::c_int as usize]
-                                as *const ::core::ffi::c_char,
-                        )
+                    strlen(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char)
                         .wrapping_add(2 as size_t),
                     false_0 != 0,
                 ) as *mut ::core::ffi::c_char;
@@ -5824,16 +5703,13 @@ unsafe extern "C" fn spell_read_aff(
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
             ) {
-                if atoi(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int
+                if atoi(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char)
+                    == 0 as ::core::ffi::c_int
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Wrong COMPOUNDRULES value in %s line %d: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Wrong COMPOUNDRULES value in %s line %d: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         fname,
                         lnum,
                         items[1 as ::core::ffi::c_int as usize],
@@ -5848,29 +5724,25 @@ unsafe extern "C" fn spell_read_aff(
             ) {
                 if !compflags.is_null()
                     || *skipdigits(
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
-                    ) as ::core::ffi::c_int != NUL
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
+                    ) as ::core::ffi::c_int
+                        != NUL
                 {
                     let mut l: ::core::ffi::c_int = strlen(
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
-                    ) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
+                    ) as ::core::ffi::c_int
+                        + 1 as ::core::ffi::c_int;
                     if !compflags.is_null() {
-                        l
-                            += strlen(compflags) as ::core::ffi::c_int
-                                + 1 as ::core::ffi::c_int;
+                        l += strlen(compflags) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
                     }
-                    p = getroom(spin, l as size_t, false_0 != 0)
-                        as *mut ::core::ffi::c_char;
+                    p = getroom(spin, l as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
                     if !compflags.is_null() {
                         strcpy(p, compflags);
                         strcat(p, b"/\0".as_ptr() as *const ::core::ffi::c_char);
                     }
                     strcat(
                         p,
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     );
                     compflags = p;
                 }
@@ -5880,18 +5752,17 @@ unsafe extern "C" fn spell_read_aff(
                 b"COMPOUNDWORDMAX\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && compmax == 0 as ::core::ffi::c_int
+            ) as ::core::ffi::c_int
+                != 0
+                && compmax == 0 as ::core::ffi::c_int
             {
-                compmax = atoi(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                compmax =
+                    atoi(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
                 if compmax == 0 as ::core::ffi::c_int {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Wrong COMPOUNDWORDMAX value in %s line %d: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Wrong COMPOUNDWORDMAX value in %s line %d: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         fname,
                         lnum,
                         items[1 as ::core::ffi::c_int as usize],
@@ -5900,21 +5771,19 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"COMPOUNDMIN\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"COMPOUNDMIN\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && compminlen == 0 as ::core::ffi::c_int
+            ) as ::core::ffi::c_int
+                != 0
+                && compminlen == 0 as ::core::ffi::c_int
             {
-                compminlen = atoi(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                compminlen =
+                    atoi(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
                 if compminlen == 0 as ::core::ffi::c_int {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Wrong COMPOUNDMIN value in %s line %d: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Wrong COMPOUNDMIN value in %s line %d: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         fname,
                         lnum,
                         items[1 as ::core::ffi::c_int as usize],
@@ -5926,18 +5795,17 @@ unsafe extern "C" fn spell_read_aff(
                 b"COMPOUNDSYLMAX\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && compsylmax == 0 as ::core::ffi::c_int
+            ) as ::core::ffi::c_int
+                != 0
+                && compsylmax == 0 as ::core::ffi::c_int
             {
-                compsylmax = atoi(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                compsylmax =
+                    atoi(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
                 if compsylmax == 0 as ::core::ffi::c_int {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Wrong COMPOUNDSYLMAX value in %s line %d: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Wrong COMPOUNDSYLMAX value in %s line %d: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         fname,
                         lnum,
                         items[1 as ::core::ffi::c_int as usize],
@@ -5982,15 +5850,14 @@ unsafe extern "C" fn spell_read_aff(
                     as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
             ) {
-                if atoi(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int
+                if atoi(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char)
+                    == 0 as ::core::ffi::c_int
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
-                            b"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         fname,
                         lnum,
@@ -6009,16 +5876,13 @@ unsafe extern "C" fn spell_read_aff(
                 i = 0 as ::core::ffi::c_int;
                 while i < (*gap).ga_len - 1 as ::core::ffi::c_int {
                     if strcmp(
-                        *((*gap).ga_data as *mut *mut ::core::ffi::c_char)
-                            .offset(i as isize),
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        *((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     ) == 0 as ::core::ffi::c_int
                         && strcmp(
                             *((*gap).ga_data as *mut *mut ::core::ffi::c_char)
                                 .offset((i + 1 as ::core::ffi::c_int) as isize),
-                            items[2 as ::core::ffi::c_int as usize]
-                                as *const ::core::ffi::c_char,
+                            items[2 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         ) == 0 as ::core::ffi::c_int
                     {
                         break;
@@ -6034,8 +5898,7 @@ unsafe extern "C" fn spell_read_aff(
                         .offset(c2rust_fresh35 as isize);
                     *c2rust_lvalue_ptr_0 = getroom_save(
                         spin,
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                     );
                     let c2rust_fresh36 = (*gap).ga_len;
                     (*gap).ga_len = (*gap).ga_len + 1;
@@ -6044,17 +5907,17 @@ unsafe extern "C" fn spell_read_aff(
                         .offset(c2rust_fresh36 as isize);
                     *c2rust_lvalue_ptr_1 = getroom_save(
                         spin,
-                        items[2 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
+                        items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                     );
                 }
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"SYLLABLE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SYLLABLE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && syllable.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && syllable.is_null()
             {
                 syllable = getroom_save(
                     spin,
@@ -6063,16 +5926,14 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"NOBREAK\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"NOBREAK\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 1 as ::core::ffi::c_int,
             ) {
                 (*spin).si_nobreak = true_0 as ::core::ffi::c_char;
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"NOSPLITSUGS\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"NOSPLITSUGS\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 1 as ::core::ffi::c_int,
             ) {
                 (*spin).si_nosplitsugs = true_0;
@@ -6087,24 +5948,21 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"NOSUGFILE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"NOSUGFILE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 1 as ::core::ffi::c_int,
             ) {
                 (*spin).si_nosugfile = true_0;
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"PFXPOSTPONE\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"PFXPOSTPONE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 1 as ::core::ffi::c_int,
             ) {
                 (*aff).af_pfxpostpone = true_0;
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"IGNOREEXTRA\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"IGNOREEXTRA\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 1 as ::core::ffi::c_int,
             ) {
                 (*aff).af_ignoreextra = true_0 != 0;
@@ -6113,10 +5971,10 @@ unsafe extern "C" fn spell_read_aff(
                 b"PFX\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
                 || strcmp(
-                    items[0 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[0 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     b"SFX\0".as_ptr() as *const ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int) && aff_todo == 0 as ::core::ffi::c_int
+                ) == 0 as ::core::ffi::c_int)
+                && aff_todo == 0 as ::core::ffi::c_int
                 && itemcnt >= 4 as ::core::ffi::c_int
             {
                 let mut lasti: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
@@ -6130,16 +5988,15 @@ unsafe extern "C" fn spell_read_aff(
                 }
                 xstrlcpy(
                     &raw mut key as *mut ::core::ffi::c_char,
-                    items[1 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     AH_KEY_LEN as size_t,
                 );
                 hi = hash_find(tp, &raw mut key as *mut ::core::ffi::c_char);
                 if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
                     cur_aff = (*hi).hi_key as *mut affheader_T;
                     if (*cur_aff).ah_combine
-                        != (*items[2 as ::core::ffi::c_int as usize]
-                            as ::core::ffi::c_int == 'Y' as ::core::ffi::c_int)
+                        != (*items[2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                            == 'Y' as ::core::ffi::c_int)
                             as ::core::ffi::c_int
                     {
                         smsg(
@@ -6156,32 +6013,25 @@ unsafe extern "C" fn spell_read_aff(
                     if (*cur_aff).ah_follows == 0 {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Duplicate affix in %s line %d: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Duplicate affix in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             lnum,
                             items[1 as ::core::ffi::c_int as usize],
                         );
                     }
                 } else {
-                    cur_aff = getroom(
-                        spin,
-                        ::core::mem::size_of::<affheader_T>(),
-                        true_0 != 0,
-                    ) as *mut affheader_T;
+                    cur_aff = getroom(spin, ::core::mem::size_of::<affheader_T>(), true_0 != 0)
+                        as *mut affheader_T;
                     (*cur_aff).ah_flag = affitem2flag(
                         (*aff).af_flagtype,
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                         fname,
                         lnum,
                     );
                     if (*cur_aff).ah_flag == 0 as ::core::ffi::c_uint
                         || strlen(
-                            items[1 as ::core::ffi::c_int as usize]
-                                as *const ::core::ffi::c_char,
+                            items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         ) >= AH_KEY_LEN as size_t
                     {
                         break;
@@ -6212,7 +6062,8 @@ unsafe extern "C" fn spell_read_aff(
                     );
                     hash_add(tp, &raw mut (*cur_aff).ah_key as *mut ::core::ffi::c_char);
                     (*cur_aff).ah_combine = (*items[2 as ::core::ffi::c_int as usize]
-                        as ::core::ffi::c_int == 'Y' as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        == 'Y' as ::core::ffi::c_int)
                         as ::core::ffi::c_int;
                 }
                 if itemcnt > lasti
@@ -6226,9 +6077,9 @@ unsafe extern "C" fn spell_read_aff(
                 } else {
                     (*cur_aff).ah_follows = false_0;
                 }
-                if itemcnt > lasti && !(*aff).af_ignoreextra
-                    && *items[lasti as usize] as ::core::ffi::c_int
-                        != '#' as ::core::ffi::c_int
+                if itemcnt > lasti
+                    && !(*aff).af_ignoreextra
+                    && *items[lasti as usize] as ::core::ffi::c_int != '#' as ::core::ffi::c_int
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
@@ -6239,29 +6090,26 @@ unsafe extern "C" fn spell_read_aff(
                     );
                 }
                 if strcmp(
-                    items[2 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[2 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     b"Y\0".as_ptr() as *const ::core::ffi::c_char,
                 ) != 0 as ::core::ffi::c_int
                     && strcmp(
-                        items[2 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[2 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         b"N\0".as_ptr() as *const ::core::ffi::c_char,
                     ) != 0 as ::core::ffi::c_int
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Expected Y or N in %s line %d: %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Expected Y or N in %s line %d: %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         fname,
                         lnum,
                         items[2 as ::core::ffi::c_int as usize],
                     );
                 }
                 if *items[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                    == 'P' as ::core::ffi::c_int && (*aff).af_pfxpostpone != 0
+                    == 'P' as ::core::ffi::c_int
+                    && (*aff).af_pfxpostpone != 0
                 {
                     if (*cur_aff).ah_newID == 0 as ::core::ffi::c_int {
                         check_renumber(spin);
@@ -6272,30 +6120,27 @@ unsafe extern "C" fn spell_read_aff(
                         did_postpone_prefix = true_0 != 0;
                     }
                 }
-                aff_todo = atoi(
-                    items[3 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                aff_todo =
+                    atoi(items[3 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
             } else if (strcmp(
                 items[0 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                 b"PFX\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
                 || strcmp(
-                    items[0 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[0 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     b"SFX\0".as_ptr() as *const ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int) && aff_todo > 0 as ::core::ffi::c_int
+                ) == 0 as ::core::ffi::c_int)
+                && aff_todo > 0 as ::core::ffi::c_int
                 && strcmp(
                     &raw mut (*cur_aff).ah_key as *mut ::core::ffi::c_char,
                     items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int && itemcnt >= 5 as ::core::ffi::c_int
+                ) == 0 as ::core::ffi::c_int
+                && itemcnt >= 5 as ::core::ffi::c_int
             {
-                let mut aff_entry: *mut affentry_T = ::core::ptr::null_mut::<
-                    affentry_T,
-                >();
+                let mut aff_entry: *mut affentry_T = ::core::ptr::null_mut::<affentry_T>();
                 let mut lasti_0: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
                 if itemcnt > lasti_0
-                    && *items[lasti_0 as usize] as ::core::ffi::c_int
-                        != '#' as ::core::ffi::c_int
+                    && *items[lasti_0 as usize] as ::core::ffi::c_int != '#' as ::core::ffi::c_int
                     && (strcmp(
                         items[lasti_0 as usize] as *const ::core::ffi::c_char,
                         b"-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6311,38 +6156,29 @@ unsafe extern "C" fn spell_read_aff(
                     );
                 }
                 aff_todo -= 1;
-                aff_entry = getroom(
-                    spin,
-                    ::core::mem::size_of::<affentry_T>(),
-                    true_0 != 0,
-                ) as *mut affentry_T;
+                aff_entry = getroom(spin, ::core::mem::size_of::<affentry_T>(), true_0 != 0)
+                    as *mut affentry_T;
                 if strcmp(
-                    items[2 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[2 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     b"0\0".as_ptr() as *const ::core::ffi::c_char,
                 ) != 0 as ::core::ffi::c_int
                 {
                     (*aff_entry).ae_chop = getroom_save(
                         spin,
-                        items[2 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
+                        items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                     );
                 }
                 if strcmp(
-                    items[3 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[3 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     b"0\0".as_ptr() as *const ::core::ffi::c_char,
                 ) != 0 as ::core::ffi::c_int
                 {
                     (*aff_entry).ae_add = getroom_save(
                         spin,
-                        items[3 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
+                        items[3 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                     );
-                    (*aff_entry).ae_flags = vim_strchr(
-                        (*aff_entry).ae_add,
-                        '/' as ::core::ffi::c_int,
-                    );
+                    (*aff_entry).ae_flags =
+                        vim_strchr((*aff_entry).ae_add, '/' as ::core::ffi::c_int);
                     if !(*aff_entry).ae_flags.is_null() {
                         let c2rust_fresh37 = (*aff_entry).ae_flags;
                         (*aff_entry).ae_flags = (*aff_entry).ae_flags.offset(1);
@@ -6357,22 +6193,20 @@ unsafe extern "C" fn spell_read_aff(
                     (*aff_entry).ae_next = (*cur_aff).ah_first;
                     (*cur_aff).ah_first = aff_entry;
                     if strcmp(
-                        items[4 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[4 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         b".\0".as_ptr() as *const ::core::ffi::c_char,
                     ) != 0 as ::core::ffi::c_int
                     {
                         let mut buf: [::core::ffi::c_char; 500] = [0; 500];
                         (*aff_entry).ae_cond = getroom_save(
                             spin,
-                            items[4 as ::core::ffi::c_int as usize]
-                                as *mut ::core::ffi::c_char,
+                            items[4 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                         );
                         snprintf(
                             &raw mut buf as *mut ::core::ffi::c_char,
                             ::core::mem::size_of::<[::core::ffi::c_char; 500]>(),
-                            if *items[0 as ::core::ffi::c_int as usize]
-                                as ::core::ffi::c_int == 'P' as ::core::ffi::c_int
+                            if *items[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                                == 'P' as ::core::ffi::c_int
                             {
                                 b"^%s\0".as_ptr() as *const ::core::ffi::c_char
                             } else {
@@ -6387,10 +6221,8 @@ unsafe extern "C" fn spell_read_aff(
                         if (*aff_entry).ae_prog.is_null() {
                             smsg(
                                 0 as ::core::ffi::c_int,
-                                gettext(
-                                    b"Broken condition in %s line %d: %s\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"Broken condition in %s line %d: %s\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                                 fname,
                                 lnum,
                                 items[4 as ::core::ffi::c_int as usize],
@@ -6398,7 +6230,8 @@ unsafe extern "C" fn spell_read_aff(
                         }
                     }
                     if *items[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                        == 'P' as ::core::ffi::c_int && (*aff).af_pfxpostpone != 0
+                        == 'P' as ::core::ffi::c_int
+                        && (*aff).af_pfxpostpone != 0
                         && (*aff_entry).ae_flags.is_null()
                     {
                         let mut upper: bool = false_0 != 0;
@@ -6407,14 +6240,11 @@ unsafe extern "C" fn spell_read_aff(
                             && *(*aff_entry)
                                 .ae_chop
                                 .offset(utfc_ptr2len((*aff_entry).ae_chop) as isize)
-                                as ::core::ffi::c_int == NUL
+                                as ::core::ffi::c_int
+                                == NUL
                         {
-                            let mut c: ::core::ffi::c_int = utf_ptr2char(
-                                (*aff_entry).ae_chop,
-                            );
-                            let mut c_up: ::core::ffi::c_int = if c
-                                >= 128 as ::core::ffi::c_int
-                            {
+                            let mut c: ::core::ffi::c_int = utf_ptr2char((*aff_entry).ae_chop);
+                            let mut c_up: ::core::ffi::c_int = if c >= 128 as ::core::ffi::c_int {
                                 mb_toupper(c)
                             } else {
                                 spelltab.st_upper[c as usize] as ::core::ffi::c_int
@@ -6426,18 +6256,17 @@ unsafe extern "C" fn spell_read_aff(
                                 p = (*aff_entry)
                                     .ae_add
                                     .offset(strlen((*aff_entry).ae_add) as isize);
-                                p = p
-                                    .offset(
-                                        -((utf_head_off(
-                                            (*aff_entry).ae_add,
-                                            p.offset(-(1 as ::core::ffi::c_int as isize)),
-                                        ) + 1 as ::core::ffi::c_int) as isize),
-                                    );
+                                p = p.offset(
+                                    -((utf_head_off(
+                                        (*aff_entry).ae_add,
+                                        p.offset(-(1 as ::core::ffi::c_int as isize)),
+                                    ) + 1 as ::core::ffi::c_int)
+                                        as isize),
+                                );
                                 if utf_ptr2char(p) == c_up {
                                     upper = true_0 != 0;
-                                    (*aff_entry).ae_chop = ::core::ptr::null_mut::<
-                                        ::core::ffi::c_char,
-                                    >();
+                                    (*aff_entry).ae_chop =
+                                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                                     *p = NUL as ::core::ffi::c_char;
                                     if !(*aff_entry).ae_cond.is_null() {
                                         let mut buf_0: [::core::ffi::c_char; 500] = [0; 500];
@@ -6472,8 +6301,7 @@ unsafe extern "C" fn spell_read_aff(
                             let mut idx: ::core::ffi::c_int = 0;
                             idx = (*spin).si_prefcond.ga_len - 1 as ::core::ffi::c_int;
                             while idx >= 0 as ::core::ffi::c_int {
-                                p = *((*spin).si_prefcond.ga_data
-                                    as *mut *mut ::core::ffi::c_char)
+                                p = *((*spin).si_prefcond.ga_data as *mut *mut ::core::ffi::c_char)
                                     .offset(idx as isize);
                                 if str_equal(p, (*aff_entry).ae_cond) {
                                     break;
@@ -6485,7 +6313,8 @@ unsafe extern "C" fn spell_read_aff(
                                 let mut pp: *mut *mut ::core::ffi::c_char = ga_append_via_ptr(
                                     &raw mut (*spin).si_prefcond,
                                     ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
-                                ) as *mut *mut ::core::ffi::c_char;
+                                )
+                                    as *mut *mut ::core::ffi::c_char;
                                 *pp = if (*aff_entry).ae_cond.is_null() {
                                     ::core::ptr::null_mut::<::core::ffi::c_char>()
                                 } else {
@@ -6530,65 +6359,62 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"FOL\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"FOL\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && fol.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && fol.is_null()
             {
-                fol = xstrdup(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                fol =
+                    xstrdup(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"LOW\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"LOW\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && low.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && low.is_null()
             {
-                low = xstrdup(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                low =
+                    xstrdup(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"UPP\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"UPP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && upp.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && upp.is_null()
             {
-                upp = xstrdup(
-                    items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
-                );
+                upp =
+                    xstrdup(items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char);
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"REP\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"REP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 || is_aff_rule(
                     &raw mut items as *mut *mut ::core::ffi::c_char,
                     itemcnt,
-                    b"REPSAL\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"REPSAL\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     2 as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
             {
-                if *(*__ctype_b_loc())
-                    .offset(
-                        *items[1 as ::core::ffi::c_int as usize] as uint8_t
-                            as ::core::ffi::c_int as isize,
-                    ) as ::core::ffi::c_int
-                    & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                        as ::core::ffi::c_int == 0
+                if *(*__ctype_b_loc()).offset(
+                    *items[1 as ::core::ffi::c_int as usize] as uint8_t as ::core::ffi::c_int
+                        as isize,
+                ) as ::core::ffi::c_int
+                    & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                    == 0
                 {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Expected REP(SAL) count in %s line %d\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Expected REP(SAL) count in %s line %d\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         fname,
                         lnum,
                     );
@@ -6598,14 +6424,15 @@ unsafe extern "C" fn spell_read_aff(
                 b"REP\0".as_ptr() as *const ::core::ffi::c_char,
             ) == 0 as ::core::ffi::c_int
                 || strcmp(
-                    items[0 as ::core::ffi::c_int as usize]
-                        as *const ::core::ffi::c_char,
+                    items[0 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     b"REPSAL\0".as_ptr() as *const ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int) && itemcnt >= 3 as ::core::ffi::c_int
+                ) == 0 as ::core::ffi::c_int)
+                && itemcnt >= 3 as ::core::ffi::c_int
             {
                 if itemcnt > 3 as ::core::ffi::c_int
                     && *items[3 as ::core::ffi::c_int as usize]
-                        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        .offset(0 as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         != '#' as ::core::ffi::c_int
                 {
                     smsg(
@@ -6617,7 +6444,8 @@ unsafe extern "C" fn spell_read_aff(
                     );
                 }
                 if if *items[0 as ::core::ffi::c_int as usize]
-                    .offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    .offset(3 as ::core::ffi::c_int as isize)
+                    as ::core::ffi::c_int
                     == 'S' as ::core::ffi::c_int
                 {
                     do_repsal as ::core::ffi::c_int
@@ -6625,16 +6453,14 @@ unsafe extern "C" fn spell_read_aff(
                     do_rep as ::core::ffi::c_int
                 } != 0
                 {
-                    p = items[1 as ::core::ffi::c_int as usize]
-                        as *mut ::core::ffi::c_char;
+                    p = items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char;
                     while *p as ::core::ffi::c_int != NUL {
                         if *p as ::core::ffi::c_int == '_' as ::core::ffi::c_int {
                             *p = ' ' as ::core::ffi::c_char;
                         }
                         p = p.offset(utfc_ptr2len(p) as isize);
                     }
-                    p = items[2 as ::core::ffi::c_int as usize]
-                        as *mut ::core::ffi::c_char;
+                    p = items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char;
                     while *p as ::core::ffi::c_int != NUL {
                         if *p as ::core::ffi::c_int == '_' as ::core::ffi::c_int {
                             *p = ' ' as ::core::ffi::c_char;
@@ -6645,65 +6471,58 @@ unsafe extern "C" fn spell_read_aff(
                         spin,
                         if *items[0 as ::core::ffi::c_int as usize]
                             .offset(3 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 'S' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            == 'S' as ::core::ffi::c_int
                         {
                             &raw mut (*spin).si_repsal
                         } else {
                             &raw mut (*spin).si_rep
                         },
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
-                        items[2 as ::core::ffi::c_int as usize]
-                            as *mut ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
+                        items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                     );
                 }
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"MAP\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"MAP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
             ) {
                 if !found_map {
                     found_map = true_0 != 0;
-                    if *(*__ctype_b_loc())
-                        .offset(
-                            *items[1 as ::core::ffi::c_int as usize] as uint8_t
-                                as ::core::ffi::c_int as isize,
-                        ) as ::core::ffi::c_int
+                    if *(*__ctype_b_loc()).offset(
+                        *items[1 as ::core::ffi::c_int as usize] as uint8_t as ::core::ffi::c_int
+                            as isize,
+                    ) as ::core::ffi::c_int
                         & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int == 0
+                            as ::core::ffi::c_int
+                        == 0
                     {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Expected MAP count in %s line %d\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Expected MAP count in %s line %d\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             lnum,
                         );
                     }
                 } else if do_mapline {
-                    p = items[1 as ::core::ffi::c_int as usize]
-                        as *mut ::core::ffi::c_char;
+                    p = items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char;
                     while *p as ::core::ffi::c_int != NUL {
-                        let mut c_0: ::core::ffi::c_int = mb_ptr2char_adv(
-                            &raw mut p as *mut *const ::core::ffi::c_char,
-                        );
+                        let mut c_0: ::core::ffi::c_int =
+                            mb_ptr2char_adv(&raw mut p as *mut *const ::core::ffi::c_char);
                         if !((*spin).si_map.ga_len <= 0 as ::core::ffi::c_int)
                             && !vim_strchr(
-                                    (*spin).si_map.ga_data as *const ::core::ffi::c_char,
-                                    c_0,
-                                )
-                                .is_null() || !vim_strchr(p, c_0).is_null()
+                                (*spin).si_map.ga_data as *const ::core::ffi::c_char,
+                                c_0,
+                            )
+                            .is_null()
+                            || !vim_strchr(p, c_0).is_null()
                         {
                             smsg(
                                 0 as ::core::ffi::c_int,
-                                gettext(
-                                    b"Duplicate character in MAP in %s line %d\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"Duplicate character in MAP in %s line %d\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                                 fname,
                                 lnum,
                             );
@@ -6711,55 +6530,46 @@ unsafe extern "C" fn spell_read_aff(
                     }
                     ga_concat(
                         &raw mut (*spin).si_map,
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                     );
                     ga_append(&raw mut (*spin).si_map, '/' as uint8_t);
                 }
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"SAL\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SAL\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 3 as ::core::ffi::c_int,
             ) {
                 if do_sal {
                     if strcmp(
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         b"followup\0".as_ptr() as *const ::core::ffi::c_char,
                     ) == 0 as ::core::ffi::c_int
                     {
                         (*spin).si_followup = sal_to_bool(
-                            items[2 as ::core::ffi::c_int as usize]
-                                as *mut ::core::ffi::c_char,
+                            items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                         ) as ::core::ffi::c_int;
                     } else if strcmp(
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         b"collapse_result\0".as_ptr() as *const ::core::ffi::c_char,
                     ) == 0 as ::core::ffi::c_int
                     {
                         (*spin).si_collapse = sal_to_bool(
-                            items[2 as ::core::ffi::c_int as usize]
-                                as *mut ::core::ffi::c_char,
+                            items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                         ) as ::core::ffi::c_int;
                     } else if strcmp(
-                        items[1 as ::core::ffi::c_int as usize]
-                            as *const ::core::ffi::c_char,
+                        items[1 as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
                         b"remove_accents\0".as_ptr() as *const ::core::ffi::c_char,
                     ) == 0 as ::core::ffi::c_int
                     {
                         (*spin).si_rem_accents = sal_to_bool(
-                            items[2 as ::core::ffi::c_int as usize]
-                                as *mut ::core::ffi::c_char,
+                            items[2 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                         ) as ::core::ffi::c_int;
                     } else {
                         add_fromto(
                             spin,
                             &raw mut (*spin).si_sal,
-                            items[1 as ::core::ffi::c_int as usize]
-                                as *mut ::core::ffi::c_char,
+                            items[1 as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char,
                             (if strcmp(
                                 items[2 as ::core::ffi::c_int as usize]
                                     as *const ::core::ffi::c_char,
@@ -6777,10 +6587,11 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"SOFOFROM\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SOFOFROM\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && sofofrom.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && sofofrom.is_null()
             {
                 sofofrom = getroom_save(
                     spin,
@@ -6789,10 +6600,11 @@ unsafe extern "C" fn spell_read_aff(
             } else if is_aff_rule(
                 &raw mut items as *mut *mut ::core::ffi::c_char,
                 itemcnt,
-                b"SOFOTO\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SOFOTO\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 2 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 && sofoto.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && sofoto.is_null()
             {
                 sofoto = getroom_save(
                     spin,
@@ -6809,13 +6621,14 @@ unsafe extern "C" fn spell_read_aff(
                         &raw mut (*spin).si_commonwords,
                         items[i_0 as usize] as *const ::core::ffi::c_char,
                     ))
-                        .hi_key
-                        .is_null()
+                    .hi_key
+                    .is_null()
                         || (*hash_find(
                             &raw mut (*spin).si_commonwords,
                             items[i_0 as usize] as *const ::core::ffi::c_char,
                         ))
-                            .hi_key == &raw mut hash_removed
+                        .hi_key
+                            == &raw mut hash_removed
                     {
                         p = xstrdup(items[i_0 as usize] as *const ::core::ffi::c_char);
                         hash_add(&raw mut (*spin).si_commonwords, p);
@@ -6849,8 +6662,7 @@ unsafe extern "C" fn spell_read_aff(
         aff_check_number(
             (*spin).si_compmax,
             compmax,
-            b"COMPOUNDWORDMAX\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"COMPOUNDWORDMAX\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         (*spin).si_compmax = compmax;
     }
@@ -6858,8 +6670,7 @@ unsafe extern "C" fn spell_read_aff(
         aff_check_number(
             (*spin).si_compminlen,
             compminlen,
-            b"COMPOUNDMIN\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"COMPOUNDMIN\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         (*spin).si_compminlen = compminlen;
     }
@@ -6868,17 +6679,14 @@ unsafe extern "C" fn spell_read_aff(
             smsg(
                 0 as ::core::ffi::c_int,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                gettext(
-                    b"COMPOUNDSYLMAX used without SYLLABLE\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"COMPOUNDSYLMAX used without SYLLABLE\0".as_ptr()
+                    as *const ::core::ffi::c_char),
             );
         }
         aff_check_number(
             (*spin).si_compsylmax,
             compsylmax,
-            b"COMPOUNDSYLMAX\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"COMPOUNDSYLMAX\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         (*spin).si_compsylmax = compsylmax;
     }
@@ -6899,19 +6707,14 @@ unsafe extern "C" fn spell_read_aff(
             || (*spin).si_newcompID == 255 as ::core::ffi::c_int
         {
             msg(
-                gettext(
-                    b"Too many postponed prefixes\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Too many postponed prefixes\0".as_ptr() as *const ::core::ffi::c_char),
                 0 as ::core::ffi::c_int,
             );
         } else if (*spin).si_newprefID == 0 as ::core::ffi::c_int
             || (*spin).si_newprefID == 127 as ::core::ffi::c_int
         {
             msg(
-                gettext(
-                    b"Too many compound flags\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Too many compound flags\0".as_ptr() as *const ::core::ffi::c_char),
                 0 as ::core::ffi::c_int,
             );
         } else {
@@ -6928,8 +6731,7 @@ unsafe extern "C" fn spell_read_aff(
         aff_check_string(
             (*spin).si_syllable,
             syllable,
-            b"SYLLABLE\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"SYLLABLE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         (*spin).si_syllable = syllable;
     }
@@ -6937,9 +6739,7 @@ unsafe extern "C" fn spell_read_aff(
         if sofofrom.is_null() || sofoto.is_null() {
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Missing SOFO%s line in %s\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Missing SOFO%s line in %s\0".as_ptr() as *const ::core::ffi::c_char),
                 if sofofrom.is_null() {
                     b"FROM\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
@@ -6950,24 +6750,19 @@ unsafe extern "C" fn spell_read_aff(
         } else if !((*spin).si_sal.ga_len <= 0 as ::core::ffi::c_int) {
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Both SAL and SOFO lines in %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Both SAL and SOFO lines in %s\0".as_ptr() as *const ::core::ffi::c_char),
                 fname,
             );
         } else {
             aff_check_string(
                 (*spin).si_sofofr,
                 sofofrom,
-                b"SOFOFROM\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SOFOFROM\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             aff_check_string(
                 (*spin).si_sofoto,
                 sofoto,
-                b"SOFOTO\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SOFOTO\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             (*spin).si_sofofr = sofofrom;
             (*spin).si_sofoto = sofoto;
@@ -6977,8 +6772,7 @@ unsafe extern "C" fn spell_read_aff(
         aff_check_string(
             (*spin).si_midword,
             midword,
-            b"MIDWORD\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"MIDWORD\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         (*spin).si_midword = midword;
     }
@@ -6997,14 +6791,11 @@ unsafe extern "C" fn is_aff_rule(
         == 0 as ::core::ffi::c_int
         && (itemcnt == mincount
             || itemcnt > mincount
-                && *(*items.offset(mincount as isize))
-                    .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                && *(*items.offset(mincount as isize)).offset(0 as ::core::ffi::c_int as isize)
+                    as ::core::ffi::c_int
                     == '#' as ::core::ffi::c_int);
 }
-unsafe extern "C" fn aff_process_flags(
-    mut affile: *mut afffile_T,
-    mut entry: *mut affentry_T,
-) {
+unsafe extern "C" fn aff_process_flags(mut affile: *mut afffile_T, mut entry: *mut affentry_T) {
     if !(*entry).ae_flags.is_null()
         && ((*affile).af_compforbid != 0 as ::core::ffi::c_uint
             || (*affile).af_comppermit != 0 as ::core::ffi::c_uint)
@@ -7012,10 +6803,7 @@ unsafe extern "C" fn aff_process_flags(
         let mut p: *mut ::core::ffi::c_char = (*entry).ae_flags;
         while *p as ::core::ffi::c_int != NUL {
             let mut prevp: *mut ::core::ffi::c_char = p;
-            let mut flag: ::core::ffi::c_uint = get_affitem(
-                (*affile).af_flagtype,
-                &raw mut p,
-            );
+            let mut flag: ::core::ffi::c_uint = get_affitem((*affile).af_flagtype, &raw mut p);
             if flag == (*affile).af_comppermit || flag == (*affile).af_compforbid {
                 memmove(
                     prevp as *mut ::core::ffi::c_void,
@@ -7041,16 +6829,13 @@ unsafe extern "C" fn aff_process_flags(
     }
 }
 unsafe extern "C" fn spell_info_item(mut s: *mut ::core::ffi::c_char) -> bool {
-    return strcmp(s, b"NAME\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-        || strcmp(s, b"HOME\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
+    return strcmp(s, b"NAME\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
+        || strcmp(s, b"HOME\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
         || strcmp(s, b"VERSION\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int
         || strcmp(s, b"AUTHOR\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int
-        || strcmp(s, b"EMAIL\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
+        || strcmp(s, b"EMAIL\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
         || strcmp(s, b"COPYRIGHT\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int;
 }
@@ -7066,10 +6851,8 @@ unsafe extern "C" fn affitem2flag(
         if flagtype == AFT_NUM {
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Flag is not a number in %s line %d: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Flag is not a number in %s line %d: %s\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 fname,
                 lnum,
                 item,
@@ -7077,10 +6860,7 @@ unsafe extern "C" fn affitem2flag(
         } else {
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Illegal flag in %s line %d: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Illegal flag in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 fname,
                 lnum,
                 item,
@@ -7088,7 +6868,13 @@ unsafe extern "C" fn affitem2flag(
         }
     }
     if *p as ::core::ffi::c_int != NUL {
-        smsg(0 as ::core::ffi::c_int, gettext(e_affname), fname, lnum, item);
+        smsg(
+            0 as ::core::ffi::c_int,
+            gettext(e_affname),
+            fname,
+            lnum,
+            item,
+        );
         return 0 as ::core::ffi::c_uint;
     }
     return res;
@@ -7110,7 +6896,8 @@ unsafe extern "C" fn get_affitem(
     } else {
         res = mb_ptr2char_adv(pp as *mut *const ::core::ffi::c_char);
         if flagtype == AFT_LONG
-            || flagtype == AFT_CAPLONG && res >= 'A' as ::core::ffi::c_int
+            || flagtype == AFT_CAPLONG
+                && res >= 'A' as ::core::ffi::c_int
                 && res <= 'Z' as ::core::ffi::c_int
         {
             if **pp as ::core::ffi::c_int == NUL {
@@ -7130,15 +6917,13 @@ unsafe extern "C" fn process_compflags(
     let mut ci: *mut compitem_T = ::core::ptr::null_mut::<compitem_T>();
     let mut id: ::core::ffi::c_int = 0;
     let mut key: [::core::ffi::c_char; 17] = [0; 17];
-    let mut len: ::core::ffi::c_int = strlen(compflags) as ::core::ffi::c_int
-        + 1 as ::core::ffi::c_int;
+    let mut len: ::core::ffi::c_int =
+        strlen(compflags) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
     if !(*spin).si_compflags.is_null() {
-        len
-            += strlen((*spin).si_compflags) as ::core::ffi::c_int
-                + 1 as ::core::ffi::c_int;
+        len += strlen((*spin).si_compflags) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
     }
-    let mut p: *mut ::core::ffi::c_char = getroom(spin, len as size_t, false_0 != 0)
-        as *mut ::core::ffi::c_char;
+    let mut p: *mut ::core::ffi::c_char =
+        getroom(spin, len as size_t, false_0 != 0) as *mut ::core::ffi::c_char;
     if !(*spin).si_compflags.is_null() {
         strcpy(p, (*spin).si_compflags);
         strcat(p, b"/\0".as_ptr() as *const ::core::ffi::c_char);
@@ -7148,10 +6933,10 @@ unsafe extern "C" fn process_compflags(
     p = compflags;
     while *p as ::core::ffi::c_int != NUL {
         if !vim_strchr(
-                b"/?*+[]\0".as_ptr() as *const ::core::ffi::c_char,
-                *p as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"/?*+[]\0".as_ptr() as *const ::core::ffi::c_char,
+            *p as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
         {
             let c2rust_fresh38 = p;
             p = p.offset(1);
@@ -7160,10 +6945,7 @@ unsafe extern "C" fn process_compflags(
             *c2rust_fresh39 = *c2rust_fresh38 as uint8_t;
         } else {
             let mut prevp: *mut ::core::ffi::c_char = p;
-            let mut flag: ::core::ffi::c_uint = get_affitem(
-                (*aff).af_flagtype,
-                &raw mut p,
-            );
+            let mut flag: ::core::ffi::c_uint = get_affitem((*aff).af_flagtype, &raw mut p);
             if flag != 0 as ::core::ffi::c_uint {
                 xmemcpyz(
                     &raw mut key as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
@@ -7189,10 +6971,7 @@ unsafe extern "C" fn process_compflags(
                         let c2rust_fresh40 = (*spin).si_newcompID;
                         (*spin).si_newcompID = (*spin).si_newcompID - 1;
                         id = c2rust_fresh40;
-                        if vim_strchr(
-                                b"/?*+[]\\-^\0".as_ptr() as *const ::core::ffi::c_char,
-                                id,
-                            )
+                        if vim_strchr(b"/?*+[]\\-^\0".as_ptr() as *const ::core::ffi::c_char, id)
                             .is_null()
                         {
                             break;
@@ -7235,12 +7014,11 @@ unsafe extern "C" fn flag_in_afflist(
         AFT_CAPLONG | AFT_LONG => {
             let mut p: *mut ::core::ffi::c_char = afflist;
             while *p as ::core::ffi::c_int != NUL {
-                let mut n: ::core::ffi::c_uint = mb_ptr2char_adv(
-                    &raw mut p as *mut *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_uint;
+                let mut n: ::core::ffi::c_uint =
+                    mb_ptr2char_adv(&raw mut p as *mut *const ::core::ffi::c_char)
+                        as ::core::ffi::c_uint;
                 if (flagtype == AFT_LONG
-                    || n >= 'A' as ::core::ffi::c_uint
-                        && n <= 'Z' as ::core::ffi::c_uint)
+                    || n >= 'A' as ::core::ffi::c_uint && n <= 'Z' as ::core::ffi::c_uint)
                     && *p as ::core::ffi::c_int != NUL
                 {
                     n = (mb_ptr2char_adv(&raw mut p as *mut *const ::core::ffi::c_char)
@@ -7255,20 +7033,18 @@ unsafe extern "C" fn flag_in_afflist(
         AFT_NUM => {
             let mut p_0: *mut ::core::ffi::c_char = afflist;
             while *p_0 as ::core::ffi::c_int != NUL {
-                let mut digits: ::core::ffi::c_int = getdigits_int(
-                    &raw mut p_0,
-                    true_0 != 0,
-                    0 as ::core::ffi::c_int,
-                );
+                let mut digits: ::core::ffi::c_int =
+                    getdigits_int(&raw mut p_0, true_0 != 0, 0 as ::core::ffi::c_int);
                 '_c2rust_label: {
-                    if digits >= 0 as ::core::ffi::c_int {} else {
+                    if digits >= 0 as ::core::ffi::c_int {
+                    } else {
                         __assert_fail(
                             b"digits >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             2954 as ::core::ffi::c_uint,
-                            b"_Bool flag_in_afflist(int, char *, unsigned int)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"_Bool flag_in_afflist(int, char *, unsigned int)\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         );
                     }
                 };
@@ -7336,10 +7112,8 @@ unsafe extern "C" fn add_fromto(
     mut to: *mut ::core::ffi::c_char,
 ) {
     let mut word: [::core::ffi::c_char; 254] = [0; 254];
-    let mut ftp: *mut fromto_T = ga_append_via_ptr(
-        gap,
-        ::core::mem::size_of::<fromto_T>(),
-    ) as *mut fromto_T;
+    let mut ftp: *mut fromto_T =
+        ga_append_via_ptr(gap, ::core::mem::size_of::<fromto_T>()) as *mut fromto_T;
     spell_casefold(
         curwin,
         from,
@@ -7358,10 +7132,8 @@ unsafe extern "C" fn add_fromto(
     (*ftp).ft_to = getroom_save(spin, &raw mut word as *mut ::core::ffi::c_char);
 }
 unsafe extern "C" fn sal_to_bool(mut s: *mut ::core::ffi::c_char) -> bool {
-    return strcmp(s, b"1\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-        || strcmp(s, b"true\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int;
+    return strcmp(s, b"1\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
+        || strcmp(s, b"true\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn spell_free_aff(mut aff: *mut afffile_T) {
     xfree((*aff).af_enc as *mut ::core::ffi::c_void);
@@ -7409,9 +7181,7 @@ unsafe extern "C" fn spell_read_dic(
     };
     let mut line: [::core::ffi::c_char; 500] = [0; 500];
     let mut store_afflist: [::core::ffi::c_char; 254] = [0; 254];
-    let mut pc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut w: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut lnum: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut non_ascii: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -7419,55 +7189,48 @@ unsafe extern "C" fn spell_read_dic(
     let mut message: [::core::ffi::c_char; 754] = [0; 754];
     let mut duplicate: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut last_msg_time: Timestamp = 0 as Timestamp;
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(fname, b"r\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
-        semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+            fname,
+        );
         return FAIL;
     }
     hash_init(&raw mut ht);
     vim_snprintf(
         &raw mut IObuff as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
-        gettext(
-            b"Reading dictionary file %s...\0".as_ptr() as *const ::core::ffi::c_char,
-        ),
+        gettext(b"Reading dictionary file %s...\0".as_ptr() as *const ::core::ffi::c_char),
         fname,
     );
     spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
     (*spin).si_msg_count = 999999 as ::core::ffi::c_int;
-    if vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd)
-        as ::core::ffi::c_int != 0
+    if vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd) as ::core::ffi::c_int
+        != 0
         || !ascii_isdigit(
-            *skipwhite(&raw mut line as *mut ::core::ffi::c_char) as ::core::ffi::c_int,
+            *skipwhite(&raw mut line as *mut ::core::ffi::c_char) as ::core::ffi::c_int
         )
     {
         semsg(
-            gettext(
-                b"E760: No word count in %s\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"E760: No word count in %s\0".as_ptr() as *const ::core::ffi::c_char),
             fname,
         );
     }
-    while !vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd)
-        && !got_int
-    {
+    while !vim_fgets(&raw mut line as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int {
         line_breakcheck();
         lnum += 1;
-        if line[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            == '#' as ::core::ffi::c_int
+        if line[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == '#' as ::core::ffi::c_int
             || line[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
                 == '/' as ::core::ffi::c_int
         {
             continue;
         }
-        let mut l: ::core::ffi::c_int = strlen(&raw mut line as *mut ::core::ffi::c_char)
-            as ::core::ffi::c_int;
+        let mut l: ::core::ffi::c_int =
+            strlen(&raw mut line as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
         while l > 0 as ::core::ffi::c_int
-            && line[(l - 1 as ::core::ffi::c_int) as usize] as uint8_t
-                as ::core::ffi::c_int <= ' ' as ::core::ffi::c_int
+            && line[(l - 1 as ::core::ffi::c_int) as usize] as uint8_t as ::core::ffi::c_int
+                <= ' ' as ::core::ffi::c_int
         {
             l -= 1;
         }
@@ -7484,10 +7247,8 @@ unsafe extern "C" fn spell_read_dic(
             if pc.is_null() {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Conversion failure for word in %s line %d: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Conversion failure for word in %s line %d: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     lnum,
                     &raw mut line as *mut ::core::ffi::c_char,
@@ -7500,9 +7261,7 @@ unsafe extern "C" fn spell_read_dic(
             pc = ::core::ptr::null_mut::<::core::ffi::c_char>();
             w = &raw mut line as *mut ::core::ffi::c_char;
         }
-        let mut afflist: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut afflist: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut p: *mut ::core::ffi::c_char = w;
         while *p as ::core::ffi::c_int != NUL {
             if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
@@ -7513,10 +7272,8 @@ unsafe extern "C" fn spell_read_dic(
             {
                 memmove(
                     p as *mut ::core::ffi::c_void,
-                    p.offset(1 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
-                    strlen(p.offset(1 as ::core::ffi::c_int as isize))
-                        .wrapping_add(1 as size_t),
+                    p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                    strlen(p.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
                 );
             } else if *p as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
                 *p = NUL as ::core::ffi::c_char;
@@ -7529,19 +7286,14 @@ unsafe extern "C" fn spell_read_dic(
             non_ascii += 1;
             xfree(pc as *mut ::core::ffi::c_void);
         } else {
-            if (*spin).si_verbose != 0
-                && (*spin).si_msg_count > 10000 as ::core::ffi::c_int
-            {
+            if (*spin).si_verbose != 0 && (*spin).si_msg_count > 10000 as ::core::ffi::c_int {
                 (*spin).si_msg_count = 0 as ::core::ffi::c_int;
                 if os_time() > last_msg_time {
                     last_msg_time = os_time();
                     vim_snprintf(
                         &raw mut message as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 754]>(),
-                        gettext(
-                            b"line %6d, word %6d - %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"line %6d, word %6d - %s\0".as_ptr() as *const ::core::ffi::c_char),
                         lnum,
                         (*spin).si_foldwcount + (*spin).si_keepwcount,
                         w,
@@ -7564,20 +7316,13 @@ unsafe extern "C" fn spell_read_dic(
                 break;
             } else {
                 let mut hash: hash_T = hash_hash(dw);
-                let mut hi: *mut hashitem_T = hash_lookup(
-                    &raw mut ht,
-                    dw,
-                    strlen(dw),
-                    hash,
-                );
+                let mut hi: *mut hashitem_T = hash_lookup(&raw mut ht, dw, strlen(dw), hash);
                 if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
                     if p_verbose > 0 as OptInt {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Duplicate word in %s line %d: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Duplicate word in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             lnum,
                             dw,
@@ -7585,10 +7330,8 @@ unsafe extern "C" fn spell_read_dic(
                     } else if duplicate == 0 as ::core::ffi::c_int {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"First duplicate word in %s line %d: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"First duplicate word in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             lnum,
                             dw,
@@ -7599,18 +7342,15 @@ unsafe extern "C" fn spell_read_dic(
                     hash_add_item(&raw mut ht, hi, dw, hash);
                 }
                 let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                store_afflist[0 as ::core::ffi::c_int as usize] = NUL
-                    as ::core::ffi::c_char;
+                store_afflist[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
                 let mut pfxlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 let mut need_affix: bool = false_0 != 0;
                 if !afflist.is_null() {
                     flags |= get_affix_flags(affile, afflist);
                     if (*affile).af_needaffix != 0 as ::core::ffi::c_uint
-                        && flag_in_afflist(
-                            (*affile).af_flagtype,
-                            afflist,
-                            (*affile).af_needaffix,
-                        ) as ::core::ffi::c_int != 0
+                        && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_needaffix)
+                            as ::core::ffi::c_int
+                            != 0
                     {
                         need_affix = true_0 != 0;
                     }
@@ -7680,9 +7420,7 @@ unsafe extern "C" fn spell_read_dic(
     if duplicate > 0 as ::core::ffi::c_int {
         smsg(
             0 as ::core::ffi::c_int,
-            gettext(
-                b"%d duplicate word(s) in %s\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"%d duplicate word(s) in %s\0".as_ptr() as *const ::core::ffi::c_char),
             duplicate,
             fname,
         );
@@ -7709,37 +7447,41 @@ unsafe extern "C" fn get_affix_flags(
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if (*affile).af_keepcase != 0 as ::core::ffi::c_uint
         && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_keepcase)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         flags |= WF_KEEPCAP as ::core::ffi::c_int | WF_FIXCAP as ::core::ffi::c_int;
     }
     if (*affile).af_rare != 0 as ::core::ffi::c_uint
-        && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_rare)
-            as ::core::ffi::c_int != 0
+        && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_rare) as ::core::ffi::c_int
+            != 0
     {
         flags |= WF_RARE as ::core::ffi::c_int;
     }
     if (*affile).af_bad != 0 as ::core::ffi::c_uint
-        && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_bad)
-            as ::core::ffi::c_int != 0
+        && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_bad) as ::core::ffi::c_int
+            != 0
     {
         flags |= WF_BANNED as ::core::ffi::c_int;
     }
     if (*affile).af_needcomp != 0 as ::core::ffi::c_uint
         && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_needcomp)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         flags |= WF_NEEDCOMP as ::core::ffi::c_int;
     }
     if (*affile).af_comproot != 0 as ::core::ffi::c_uint
         && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_comproot)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         flags |= WF_COMPROOT as ::core::ffi::c_int;
     }
     if (*affile).af_nosuggest != 0 as ::core::ffi::c_uint
         && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_nosuggest)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         flags |= WF_NOSUGGEST as ::core::ffi::c_int;
     }
@@ -7766,18 +7508,16 @@ unsafe extern "C" fn get_pfxlist(
                 &raw mut key as *mut ::core::ffi::c_char,
             );
             if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
-                let mut id: ::core::ffi::c_int = (*((*hi).hi_key as *mut affheader_T))
-                    .ah_newID;
+                let mut id: ::core::ffi::c_int = (*((*hi).hi_key as *mut affheader_T)).ah_newID;
                 if id != 0 as ::core::ffi::c_int {
                     let c2rust_fresh32 = cnt;
                     cnt = cnt + 1;
-                    *store_afflist.offset(c2rust_fresh32 as isize) = id as uint8_t
-                        as ::core::ffi::c_char;
+                    *store_afflist.offset(c2rust_fresh32 as isize) =
+                        id as uint8_t as ::core::ffi::c_char;
                 }
             }
         }
-        if (*affile).af_flagtype == AFT_NUM
-            && *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
+        if (*affile).af_flagtype == AFT_NUM && *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
         {
             p = p.offset(1);
         }
@@ -7808,13 +7548,11 @@ unsafe extern "C" fn get_compflags(
             if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
                 let c2rust_fresh31 = cnt;
                 cnt = cnt + 1;
-                *store_afflist.offset(c2rust_fresh31 as isize) = (*((*hi).hi_key
-                    as *mut compitem_T))
-                    .ci_newID as uint8_t as ::core::ffi::c_char;
+                *store_afflist.offset(c2rust_fresh31 as isize) =
+                    (*((*hi).hi_key as *mut compitem_T)).ci_newID as uint8_t as ::core::ffi::c_char;
             }
         }
-        if (*affile).af_flagtype == AFT_NUM
-            && *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
+        if (*affile).af_flagtype == AFT_NUM && *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
         {
             p = p.offset(1);
         }
@@ -7848,12 +7586,15 @@ unsafe extern "C" fn store_aff_word(
             let mut ah: *mut affheader_T = (*hi).hi_key as *mut affheader_T;
             if (condit & CONDIT_COMB == 0 as ::core::ffi::c_int || (*ah).ah_combine != 0)
                 && flag_in_afflist((*affile).af_flagtype, afflist, (*ah).ah_flag)
-                    as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
             {
                 ae = (*ah).ah_first;
                 while !ae.is_null() {
-                    if (!xht.is_null() || (*affile).af_pfxpostpone == 0
-                        || !(*ae).ae_chop.is_null() || !(*ae).ae_flags.is_null())
+                    if (!xht.is_null()
+                        || (*affile).af_pfxpostpone == 0
+                        || !(*ae).ae_chop.is_null()
+                        || !(*ae).ae_flags.is_null())
                         && ((*ae).ae_chop.is_null() || strlen((*ae).ae_chop) < wordlen)
                         && ((*ae).ae_prog.is_null()
                             || vim_regexec_prog(
@@ -7861,9 +7602,9 @@ unsafe extern "C" fn store_aff_word(
                                 false_0 != 0,
                                 word,
                                 0 as colnr_T,
-                            ) as ::core::ffi::c_int != 0)
-                        && (condit & CONDIT_CFIX == 0 as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
+                            ) as ::core::ffi::c_int
+                                != 0)
+                        && (condit & CONDIT_CFIX == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                             == (condit & CONDIT_AFF == 0 as ::core::ffi::c_int
                                 || (*ae).ae_flags.is_null()
                                 || !flag_in_afflist(
@@ -7874,8 +7615,8 @@ unsafe extern "C" fn store_aff_word(
                     {
                         if xht.is_null() {
                             if (*ae).ae_add.is_null() {
-                                *(&raw mut newword as *mut ::core::ffi::c_char) = NUL
-                                    as ::core::ffi::c_char;
+                                *(&raw mut newword as *mut ::core::ffi::c_char) =
+                                    NUL as ::core::ffi::c_char;
                             } else {
                                 xstrlcpy(
                                     &raw mut newword as *mut ::core::ffi::c_char,
@@ -7905,19 +7646,17 @@ unsafe extern "C" fn store_aff_word(
                             if !(*ae).ae_chop.is_null() {
                                 let mut p_0: *mut ::core::ffi::c_char = (&raw mut newword
                                     as *mut ::core::ffi::c_char)
-                                    .offset(
-                                        strlen(&raw mut newword as *mut ::core::ffi::c_char)
-                                            as isize,
-                                    );
+                                    .offset(strlen(&raw mut newword as *mut ::core::ffi::c_char)
+                                        as isize);
                                 let mut i_0: ::core::ffi::c_int = mb_charlen((*ae).ae_chop);
                                 while i_0 > 0 as ::core::ffi::c_int {
-                                    p_0 = p_0
-                                        .offset(
-                                            -((utf_head_off(
-                                                &raw mut newword as *mut ::core::ffi::c_char,
-                                                p_0.offset(-(1 as ::core::ffi::c_int as isize)),
-                                            ) + 1 as ::core::ffi::c_int) as isize),
-                                        );
+                                    p_0 = p_0.offset(
+                                        -((utf_head_off(
+                                            &raw mut newword as *mut ::core::ffi::c_char,
+                                            p_0.offset(-(1 as ::core::ffi::c_int as isize)),
+                                        ) + 1 as ::core::ffi::c_int)
+                                            as isize),
+                                    );
                                     i_0 -= 1;
                                 }
                                 *p_0 = NUL as ::core::ffi::c_char;
@@ -7934,8 +7673,7 @@ unsafe extern "C" fn store_aff_word(
                         let mut use_pfxlist: *mut ::core::ffi::c_char = pfxlist;
                         let mut use_pfxlen: ::core::ffi::c_int = pfxlen;
                         let mut need_affix: bool = false_0 != 0;
-                        let mut use_condit: ::core::ffi::c_int = condit | CONDIT_COMB
-                            | CONDIT_AFF;
+                        let mut use_condit: ::core::ffi::c_int = condit | CONDIT_COMB | CONDIT_AFF;
                         if !(*ae).ae_flags.is_null() {
                             use_flags |= get_affix_flags(affile, (*ae).ae_flags);
                             if (*affile).af_needaffix != 0 as ::core::ffi::c_uint
@@ -7943,7 +7681,8 @@ unsafe extern "C" fn store_aff_word(
                                     (*affile).af_flagtype,
                                     (*ae).ae_flags,
                                     (*affile).af_needaffix,
-                                ) as ::core::ffi::c_int != 0
+                                ) as ::core::ffi::c_int
+                                    != 0
                             {
                                 need_affix = true_0 != 0;
                             }
@@ -7952,16 +7691,15 @@ unsafe extern "C" fn store_aff_word(
                                     (*affile).af_flagtype,
                                     (*ae).ae_flags,
                                     (*affile).af_circumfix,
-                                ) as ::core::ffi::c_int != 0
+                                ) as ::core::ffi::c_int
+                                    != 0
                             {
                                 use_condit |= CONDIT_CFIX;
                                 if condit & CONDIT_CFIX == 0 as ::core::ffi::c_int {
                                     need_affix = true_0 != 0;
                                 }
                             }
-                            if (*affile).af_pfxpostpone != 0
-                                || !(*spin).si_compflags.is_null()
-                            {
+                            if (*affile).af_pfxpostpone != 0 || !(*spin).si_compflags.is_null() {
                                 if (*affile).af_pfxpostpone != 0 {
                                     use_pfxlen = get_pfxlist(
                                         affile,
@@ -7971,8 +7709,7 @@ unsafe extern "C" fn store_aff_word(
                                 } else {
                                     use_pfxlen = 0 as ::core::ffi::c_int;
                                 }
-                                use_pfxlist = &raw mut store_afflist
-                                    as *mut ::core::ffi::c_char;
+                                use_pfxlist = &raw mut store_afflist as *mut ::core::ffi::c_char;
                                 let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                                 while i_1 < pfxlen {
                                     j = 0 as ::core::ffi::c_int;
@@ -7987,8 +7724,8 @@ unsafe extern "C" fn store_aff_word(
                                     if j == use_pfxlen {
                                         let c2rust_fresh29 = use_pfxlen;
                                         use_pfxlen = use_pfxlen + 1;
-                                        *use_pfxlist.offset(c2rust_fresh29 as isize) = *pfxlist
-                                            .offset(i_1 as isize);
+                                        *use_pfxlist.offset(c2rust_fresh29 as isize) =
+                                            *pfxlist.offset(i_1 as isize);
                                     }
                                     i_1 += 1;
                                 }
@@ -7999,13 +7736,11 @@ unsafe extern "C" fn store_aff_word(
                                         use_pfxlist.offset(use_pfxlen as isize),
                                     );
                                 } else {
-                                    *use_pfxlist.offset(use_pfxlen as isize) = NUL
-                                        as ::core::ffi::c_char;
+                                    *use_pfxlist.offset(use_pfxlen as isize) =
+                                        NUL as ::core::ffi::c_char;
                                 }
                                 let mut i_2: ::core::ffi::c_int = pfxlen;
-                                while *pfxlist.offset(i_2 as isize) as ::core::ffi::c_int
-                                    != NUL
-                                {
+                                while *pfxlist.offset(i_2 as isize) as ::core::ffi::c_int != NUL {
                                     j = use_pfxlen;
                                     while *use_pfxlist.offset(j as isize) as ::core::ffi::c_int
                                         != NUL
@@ -8017,22 +7752,20 @@ unsafe extern "C" fn store_aff_word(
                                         }
                                         j += 1;
                                     }
-                                    if *use_pfxlist.offset(j as isize) as ::core::ffi::c_int
-                                        == NUL
+                                    if *use_pfxlist.offset(j as isize) as ::core::ffi::c_int == NUL
                                     {
                                         let c2rust_fresh30 = j;
                                         j = j + 1;
-                                        *use_pfxlist.offset(c2rust_fresh30 as isize) = *pfxlist
-                                            .offset(i_2 as isize);
-                                        *use_pfxlist.offset(j as isize) = NUL
-                                            as ::core::ffi::c_char;
+                                        *use_pfxlist.offset(c2rust_fresh30 as isize) =
+                                            *pfxlist.offset(i_2 as isize);
+                                        *use_pfxlist.offset(j as isize) =
+                                            NUL as ::core::ffi::c_char;
                                     }
                                     i_2 += 1;
                                 }
                             }
                         }
-                        if !use_pfxlist.is_null()
-                            && (*ae).ae_compforbid as ::core::ffi::c_int != 0
+                        if !use_pfxlist.is_null() && (*ae).ae_compforbid as ::core::ffi::c_int != 0
                         {
                             xmemcpyz(
                                 &raw mut pfx_pfxlist as *mut ::core::ffi::c_char
@@ -8040,8 +7773,7 @@ unsafe extern "C" fn store_aff_word(
                                 use_pfxlist as *const ::core::ffi::c_void,
                                 use_pfxlen as size_t,
                             );
-                            use_pfxlist = &raw mut pfx_pfxlist
-                                as *mut ::core::ffi::c_char;
+                            use_pfxlist = &raw mut pfx_pfxlist as *mut ::core::ffi::c_char;
                         }
                         if !(*spin).si_prefroot.is_null()
                             && !(*(*spin).si_prefroot).wn_sibling.is_null()
@@ -8136,21 +7868,17 @@ unsafe extern "C" fn spell_read_wordfile(
 ) -> ::core::ffi::c_int {
     let mut lnum: linenr_T = 0 as linenr_T;
     let mut rline: [::core::ffi::c_char; 500] = [0; 500];
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut pc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut pc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: ::core::ffi::c_int = OK;
     let mut did_word: bool = false_0 != 0;
     let mut non_ascii: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(fname, b"r\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
-        semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+            fname,
+        );
         return FAIL;
     }
     vim_snprintf(
@@ -8160,9 +7888,7 @@ unsafe extern "C" fn spell_read_wordfile(
         fname,
     );
     spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
-    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd)
-        && !got_int
-    {
+    while !vim_fgets(&raw mut rline as *mut ::core::ffi::c_char, MAXLINELEN, fd) && !got_int {
         line_breakcheck();
         lnum += 1;
         if *(&raw mut rline as *mut ::core::ffi::c_char) as ::core::ffi::c_int
@@ -8170,12 +7896,11 @@ unsafe extern "C" fn spell_read_wordfile(
         {
             continue;
         }
-        let mut l: ::core::ffi::c_int = strlen(
-            &raw mut rline as *mut ::core::ffi::c_char,
-        ) as ::core::ffi::c_int;
+        let mut l: ::core::ffi::c_int =
+            strlen(&raw mut rline as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
         while l > 0 as ::core::ffi::c_int
-            && rline[(l - 1 as ::core::ffi::c_int) as usize] as uint8_t
-                as ::core::ffi::c_int <= ' ' as ::core::ffi::c_int
+            && rline[(l - 1 as ::core::ffi::c_int) as usize] as uint8_t as ::core::ffi::c_int
+                <= ' ' as ::core::ffi::c_int
         {
             l -= 1;
         }
@@ -8193,10 +7918,8 @@ unsafe extern "C" fn spell_read_wordfile(
             if pc.is_null() {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Conversion failure for word in %s line %d: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Conversion failure for word in %s line %d: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     lnum,
                     &raw mut rline as *mut ::core::ffi::c_char,
@@ -8221,8 +7944,8 @@ unsafe extern "C" fn spell_read_wordfile(
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
-                            b"Duplicate /encoding= line ignored in %s line %d: %s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"Duplicate /encoding= line ignored in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         fname,
                         lnum,
@@ -8232,8 +7955,8 @@ unsafe extern "C" fn spell_read_wordfile(
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
-                            b"/encoding= line after word ignored in %s line %d: %s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/encoding= line after word ignored in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         fname,
                         lnum,
@@ -8247,10 +7970,8 @@ unsafe extern "C" fn spell_read_wordfile(
                     {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Conversion in %s not supported: from %s to %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Conversion in %s not supported: from %s to %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             line,
                             p_enc,
@@ -8269,8 +7990,8 @@ unsafe extern "C" fn spell_read_wordfile(
                     smsg(
                         0 as ::core::ffi::c_int,
                         gettext(
-                            b"Duplicate /regions= line ignored in %s line %d: %s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"Duplicate /regions= line ignored in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         fname,
                         lnum,
@@ -8279,37 +8000,32 @@ unsafe extern "C" fn spell_read_wordfile(
                 } else {
                     line = line.offset(8 as ::core::ffi::c_int as isize);
                     if strlen(line)
-                        > (MAXREGIONS as ::core::ffi::c_int * 2 as ::core::ffi::c_int)
-                            as size_t
+                        > (MAXREGIONS as ::core::ffi::c_int * 2 as ::core::ffi::c_int) as size_t
                     {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Too many regions in %s line %d: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Too many regions in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             lnum,
                             line,
                         );
                     } else {
-                        (*spin).si_region_count = strlen(line) as ::core::ffi::c_int
-                            / 2 as ::core::ffi::c_int;
+                        (*spin).si_region_count =
+                            strlen(line) as ::core::ffi::c_int / 2 as ::core::ffi::c_int;
                         strcpy(
                             &raw mut (*spin).si_region_name as *mut ::core::ffi::c_char,
                             line,
                         );
-                        (*spin).si_region = ((1 as ::core::ffi::c_int)
-                            << (*spin).si_region_count) - 1 as ::core::ffi::c_int;
+                        (*spin).si_region = ((1 as ::core::ffi::c_int) << (*spin).si_region_count)
+                            - 1 as ::core::ffi::c_int;
                     }
                 }
             } else {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"/ line ignored in %s line %d: %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"/ line ignored in %s line %d: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     fname,
                     lnum,
                     line.offset(-(1 as ::core::ffi::c_int as isize)),
@@ -8318,55 +8034,42 @@ unsafe extern "C" fn spell_read_wordfile(
         } else {
             let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             let mut regionmask: ::core::ffi::c_int = (*spin).si_region;
-            let mut p: *mut ::core::ffi::c_char = vim_strchr(
-                line,
-                '/' as ::core::ffi::c_int,
-            );
+            let mut p: *mut ::core::ffi::c_char = vim_strchr(line, '/' as ::core::ffi::c_int);
             if !p.is_null() {
                 let c2rust_fresh28 = p;
                 p = p.offset(1);
                 *c2rust_fresh28 = NUL as ::core::ffi::c_char;
                 while *p as ::core::ffi::c_int != NUL {
                     if *p as ::core::ffi::c_int == '=' as ::core::ffi::c_int {
-                        flags
-                            |= WF_KEEPCAP as ::core::ffi::c_int
-                                | WF_FIXCAP as ::core::ffi::c_int;
+                        flags |= WF_KEEPCAP as ::core::ffi::c_int | WF_FIXCAP as ::core::ffi::c_int;
                     } else if *p as ::core::ffi::c_int == '!' as ::core::ffi::c_int {
                         flags |= WF_BANNED as ::core::ffi::c_int;
                     } else if *p as ::core::ffi::c_int == '?' as ::core::ffi::c_int {
                         flags |= WF_RARE as ::core::ffi::c_int;
                     } else if ascii_isdigit(*p as uint8_t as ::core::ffi::c_int) {
-                        if flags & WF_REGION as ::core::ffi::c_int
-                            == 0 as ::core::ffi::c_int
-                        {
+                        if flags & WF_REGION as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                             regionmask = 0 as ::core::ffi::c_int;
                         }
                         flags |= WF_REGION as ::core::ffi::c_int;
-                        l = *p as uint8_t as ::core::ffi::c_int
-                            - '0' as ::core::ffi::c_int;
+                        l = *p as uint8_t as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
                         if l == 0 as ::core::ffi::c_int || l > (*spin).si_region_count {
                             smsg(
                                 0 as ::core::ffi::c_int,
-                                gettext(
-                                    b"Invalid region nr in %s line %d: %s\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"Invalid region nr in %s line %d: %s\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                                 fname,
                                 lnum,
                                 p,
                             );
                             break;
                         } else {
-                            regionmask
-                                |= (1 as ::core::ffi::c_int) << l - 1 as ::core::ffi::c_int;
+                            regionmask |= (1 as ::core::ffi::c_int) << l - 1 as ::core::ffi::c_int;
                         }
                     } else {
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Unrecognized flags in %s line %d: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Unrecognized flags in %s line %d: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                             lnum,
                             p,
@@ -8400,10 +8103,8 @@ unsafe extern "C" fn spell_read_wordfile(
         vim_snprintf(
             &raw mut IObuff as *mut ::core::ffi::c_char,
             IOSIZE as size_t,
-            gettext(
-                b"Ignored %d words with non-ASCII characters\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"Ignored %d words with non-ASCII characters\0".as_ptr()
+                as *const ::core::ffi::c_char),
             non_ascii,
         );
         spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
@@ -8417,7 +8118,8 @@ unsafe extern "C" fn getroom(
 ) -> *mut ::core::ffi::c_void {
     let mut bl: *mut sblock_T = (*spin).si_blocks;
     '_c2rust_label: {
-        if len <= 16000 as size_t {} else {
+        if len <= 16000 as size_t {
+        } else {
             __assert_fail(
                 b"len <= SBLOCKSIZE\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
@@ -8432,23 +8134,23 @@ unsafe extern "C" fn getroom(
         (*bl).sb_used = (((*bl).sb_used as size_t)
             .wrapping_add(::core::mem::size_of::<*mut ::core::ffi::c_char>())
             .wrapping_sub(1 as size_t)
-            & !::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_sub(1 as size_t)) as ::core::ffi::c_int;
+            & !::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_sub(1 as size_t))
+            as ::core::ffi::c_int;
     }
-    if bl.is_null() || ((*bl).sb_used as size_t).wrapping_add(len) > SBLOCKSIZE as size_t
-    {
+    if bl.is_null() || ((*bl).sb_used as size_t).wrapping_add(len) > SBLOCKSIZE as size_t {
         bl = xcalloc(
             1 as size_t,
-            (16 as size_t).wrapping_add(SBLOCKSIZE as size_t).wrapping_add(1 as size_t),
+            (16 as size_t)
+                .wrapping_add(SBLOCKSIZE as size_t)
+                .wrapping_add(1 as size_t),
         ) as *mut sblock_T;
         (*bl).sb_next = (*spin).si_blocks;
         (*spin).si_blocks = bl;
         (*bl).sb_used = 0 as ::core::ffi::c_int;
         (*spin).si_blocks_cnt += 1;
     }
-    let mut p: *mut ::core::ffi::c_char = (&raw mut (*bl).sb_data
-        as *mut ::core::ffi::c_char)
-        .offset((*bl).sb_used as isize);
+    let mut p: *mut ::core::ffi::c_char =
+        (&raw mut (*bl).sb_data as *mut ::core::ffi::c_char).offset((*bl).sb_used as isize);
     (*bl).sb_used += len as ::core::ffi::c_int;
     return p as *mut ::core::ffi::c_void;
 }
@@ -8471,8 +8173,7 @@ unsafe extern "C" fn free_blocks(mut bl: *mut sblock_T) {
     }
 }
 unsafe extern "C" fn wordtree_alloc(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
-    return getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0)
-        as *mut wordnode_T;
+    return getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0) as *mut wordnode_T;
 }
 unsafe extern "C" fn valid_spell_word(
     mut word: *const ::core::ffi::c_char,
@@ -8486,8 +8187,7 @@ unsafe extern "C" fn valid_spell_word(
         if (*p as uint8_t as ::core::ffi::c_int) < ' ' as ::core::ffi::c_int
             || *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '/' as ::core::ffi::c_int
-                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == NUL
+                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
             return false_0 != 0;
         }
@@ -8540,8 +8240,7 @@ unsafe extern "C" fn store_word(
     }
     (*spin).si_foldwcount += 1;
     if res == OK
-        && (ct == WF_KEEPCAP as ::core::ffi::c_int
-            || flags & WF_KEEPCAP as ::core::ffi::c_int != 0)
+        && (ct == WF_KEEPCAP as ::core::ffi::c_int || flags & WF_KEEPCAP as ::core::ffi::c_int != 0)
     {
         let mut p_0: *const ::core::ffi::c_char = pfxlist;
         while res == OK {
@@ -8616,18 +8315,21 @@ unsafe extern "C" fn tree_add_word(
                 || (*node).wn_byte as ::core::ffi::c_int == NUL
                     && (if flags < 0 as ::core::ffi::c_int {
                         (((*node).wn_affixID as ::core::ffi::c_uint)
-                            < affixID as ::core::ffi::c_uint) as ::core::ffi::c_int
+                            < affixID as ::core::ffi::c_uint)
+                            as ::core::ffi::c_int
                     } else {
                         (((*node).wn_flags as ::core::ffi::c_uint)
                             < (flags & WN_MASK) as ::core::ffi::c_uint
                             || (*node).wn_flags as ::core::ffi::c_int == flags & WN_MASK
                                 && (if (*spin).si_sugtree != 0 {
                                     (((*node).wn_region as ::core::ffi::c_int
-                                        & 0xffff as ::core::ffi::c_int) < region)
+                                        & 0xffff as ::core::ffi::c_int)
+                                        < region)
                                         as ::core::ffi::c_int
                                 } else {
                                     (((*node).wn_affixID as ::core::ffi::c_uint)
-                                        < affixID as ::core::ffi::c_uint) as ::core::ffi::c_int
+                                        < affixID as ::core::ffi::c_uint)
+                                        as ::core::ffi::c_int
                                 }) != 0) as ::core::ffi::c_int
                     }) != 0)
         {
@@ -8638,7 +8340,8 @@ unsafe extern "C" fn tree_add_word(
             || (*node).wn_byte as ::core::ffi::c_int
                 != *word.offset(i as isize) as uint8_t as ::core::ffi::c_int
             || *word.offset(i as isize) as ::core::ffi::c_int == NUL
-                && (flags < 0 as ::core::ffi::c_int || (*spin).si_sugtree != 0
+                && (flags < 0 as ::core::ffi::c_int
+                    || (*spin).si_sugtree != 0
                     || (*node).wn_flags as ::core::ffi::c_int != flags & WN_MASK
                     || (*node).wn_affixID as ::core::ffi::c_int != affixID)
         {
@@ -8662,7 +8365,8 @@ unsafe extern "C" fn tree_add_word(
         if *word.offset(i as isize) as ::core::ffi::c_int == NUL {
             (*node).wn_flags = flags as uint16_t;
             (*node).wn_region = ((*node).wn_region as ::core::ffi::c_int
-                | region as int16_t as ::core::ffi::c_int) as int16_t;
+                | region as int16_t as ::core::ffi::c_int)
+                as int16_t;
             (*node).wn_affixID = affixID as uint8_t;
             break;
         } else {
@@ -8712,8 +8416,7 @@ unsafe extern "C" fn tree_add_word(
 unsafe extern "C" fn get_wordnode(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
     let mut n: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     if (*spin).si_first_free.is_null() {
-        n = getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0)
-            as *mut wordnode_T;
+        n = getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0) as *mut wordnode_T;
     } else {
         n = (*spin).si_first_free;
         (*spin).si_first_free = (*n).wn_child;
@@ -8774,16 +8477,10 @@ unsafe extern "C" fn wordtree_compress(
         return;
     }
     hash_init(&raw mut ht);
-    let n: ::core::ffi::c_int = node_compress(
-        spin,
-        (*root).wn_sibling,
-        &raw mut ht,
-        &raw mut tot,
-    );
+    let n: ::core::ffi::c_int = node_compress(spin, (*root).wn_sibling, &raw mut ht, &raw mut tot);
     if (*spin).si_verbose != 0 || p_verbose > 2 as OptInt {
         if tot > 1000000 as ::core::ffi::c_int {
-            perc = ((tot - n) / (tot / 100 as ::core::ffi::c_int))
-                as ::core::ffi::c_long;
+            perc = ((tot - n) / (tot / 100 as ::core::ffi::c_int)) as ::core::ffi::c_long;
         } else if tot == 0 as ::core::ffi::c_int {
             perc = 0 as ::core::ffi::c_long;
         } else {
@@ -8824,17 +8521,12 @@ unsafe extern "C" fn node_compress(
         if !child.is_null() {
             compressed += node_compress(spin, child, ht, tot);
             let mut hash: hash_T = hash_hash(
-                &raw mut (*child).wn_u1.hashkey as *mut uint8_t
-                    as *mut ::core::ffi::c_char,
+                &raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char,
             );
             let mut hi: *mut hashitem_T = hash_lookup(
                 ht,
-                &raw mut (*child).wn_u1.hashkey as *mut uint8_t
-                    as *const ::core::ffi::c_char,
-                strlen(
-                    &raw mut (*child).wn_u1.hashkey as *mut uint8_t
-                        as *mut ::core::ffi::c_char,
-                ),
+                &raw mut (*child).wn_u1.hashkey as *mut uint8_t as *const ::core::ffi::c_char,
+                strlen(&raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char),
                 hash,
             );
             if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
@@ -8858,8 +8550,7 @@ unsafe extern "C" fn node_compress(
                 hash_add_item(
                     ht,
                     hi,
-                    &raw mut (*child).wn_u1.hashkey as *mut uint8_t
-                        as *mut ::core::ffi::c_char,
+                    &raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char,
                     hash,
                 );
             }
@@ -8874,46 +8565,36 @@ unsafe extern "C" fn node_compress(
         if (*np_0).wn_byte as ::core::ffi::c_int == NUL {
             n = ((*np_0).wn_flags as ::core::ffi::c_int
                 + (((*np_0).wn_region as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)
-                + (((*np_0).wn_affixID as ::core::ffi::c_int)
-                    << 16 as ::core::ffi::c_int)) as ::core::ffi::c_uint;
+                + (((*np_0).wn_affixID as ::core::ffi::c_int) << 16 as ::core::ffi::c_int))
+                as ::core::ffi::c_uint;
         } else {
-            n = ((*np_0).wn_byte as uintptr_t)
-                .wrapping_add(
-                    ((*np_0).wn_child.expose_addr() as uintptr_t)
-                        << 8 as ::core::ffi::c_int,
-                ) as ::core::ffi::c_uint;
+            n = ((*np_0).wn_byte as uintptr_t).wrapping_add(
+                ((*np_0).wn_child.expose_addr() as uintptr_t) << 8 as ::core::ffi::c_int,
+            ) as ::core::ffi::c_uint;
         }
         nr = nr.wrapping_mul(101 as ::core::ffi::c_uint).wrapping_add(n);
         np_0 = (*np_0).wn_sibling;
     }
     n = nr & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[1 as ::core::ffi::c_int as usize] = (if n
-        == 0 as ::core::ffi::c_uint
-    {
+    (*node).wn_u1.hashkey[1 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
         1 as ::core::ffi::c_int
     } else {
         n as uint8_t as ::core::ffi::c_int
     }) as uint8_t;
     n = nr >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[2 as ::core::ffi::c_int as usize] = (if n
-        == 0 as ::core::ffi::c_uint
-    {
+    (*node).wn_u1.hashkey[2 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
         1 as ::core::ffi::c_int
     } else {
         n as uint8_t as ::core::ffi::c_int
     }) as uint8_t;
     n = nr >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[3 as ::core::ffi::c_int as usize] = (if n
-        == 0 as ::core::ffi::c_uint
-    {
+    (*node).wn_u1.hashkey[3 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
         1 as ::core::ffi::c_int
     } else {
         n as uint8_t as ::core::ffi::c_int
     }) as uint8_t;
     n = nr >> 24 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[4 as ::core::ffi::c_int as usize] = (if n
-        == 0 as ::core::ffi::c_uint
-    {
+    (*node).wn_u1.hashkey[4 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
         1 as ::core::ffi::c_int
     } else {
         n as uint8_t as ::core::ffi::c_int
@@ -8922,10 +8603,7 @@ unsafe extern "C" fn node_compress(
     veryfast_breakcheck();
     return compressed;
 }
-unsafe extern "C" fn node_equal(
-    mut n1: *mut wordnode_T,
-    mut n2: *mut wordnode_T,
-) -> bool {
+unsafe extern "C" fn node_equal(mut n1: *mut wordnode_T, mut n2: *mut wordnode_T) -> bool {
     let mut p1: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     let mut p2: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     p1 = n1;
@@ -8933,12 +8611,12 @@ unsafe extern "C" fn node_equal(
     while !p1.is_null() && !p2.is_null() {
         if (*p1).wn_byte as ::core::ffi::c_int != (*p2).wn_byte as ::core::ffi::c_int
             || (if (*p1).wn_byte as ::core::ffi::c_int == NUL {
-                ((*p1).wn_flags as ::core::ffi::c_int
-                    != (*p2).wn_flags as ::core::ffi::c_int
+                ((*p1).wn_flags as ::core::ffi::c_int != (*p2).wn_flags as ::core::ffi::c_int
                     || (*p1).wn_region as ::core::ffi::c_int
                         != (*p2).wn_region as ::core::ffi::c_int
                     || (*p1).wn_affixID as ::core::ffi::c_int
-                        != (*p2).wn_affixID as ::core::ffi::c_int) as ::core::ffi::c_int
+                        != (*p2).wn_affixID as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
             } else {
                 ((*p1).wn_child != (*p2).wn_child) as ::core::ffi::c_int
             }) != 0
@@ -8964,12 +8642,12 @@ unsafe extern "C" fn write_vim_spell(
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = OK;
     let mut regionmask: ::core::ffi::c_int = 0;
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"w\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(fname, b"w\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
-        semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+            fname,
+        );
         return FAIL;
     }
     let mut fwv: size_t = fwrite(
@@ -8996,8 +8674,7 @@ unsafe extern "C" fn write_vim_spell(
         if (*spin).si_region_count > 1 as ::core::ffi::c_int {
             putc(SN_REGION as ::core::ffi::c_int, fd);
             putc(SNF_REQUIRED, fd);
-            let mut l: size_t = ((*spin).si_region_count as size_t)
-                .wrapping_mul(2 as size_t);
+            let mut l: size_t = ((*spin).si_region_count as size_t).wrapping_mul(2 as size_t);
             put_bytes(fd, l as uintmax_t, 4 as size_t);
             fwv = (fwv as ::core::ffi::c_ulong
                 & fwrite(
@@ -9007,8 +8684,8 @@ unsafe extern "C" fn write_vim_spell(
                     1 as size_t,
                     fd,
                 )) as size_t;
-            regionmask = ((1 as ::core::ffi::c_int) << (*spin).si_region_count)
-                - 1 as ::core::ffi::c_int;
+            regionmask =
+                ((1 as ::core::ffi::c_int) << (*spin).si_region_count) - 1 as ::core::ffi::c_int;
         } else {
             regionmask = 0 as ::core::ffi::c_int;
         }
@@ -9019,20 +8696,16 @@ unsafe extern "C" fn write_vim_spell(
             let mut l_0: size_t = 0 as size_t;
             let mut i_0: size_t = 128 as size_t;
             while i_0 < 256 as size_t {
-                l_0 = l_0
-                    .wrapping_add(
-                        utf_char2bytes(
-                            spelltab.st_fold[i_0 as usize] as ::core::ffi::c_int,
-                            (&raw mut folchars as *mut ::core::ffi::c_char)
-                                .offset(l_0 as isize),
-                        ) as size_t,
-                    );
+                l_0 = l_0.wrapping_add(utf_char2bytes(
+                    spelltab.st_fold[i_0 as usize] as ::core::ffi::c_int,
+                    (&raw mut folchars as *mut ::core::ffi::c_char).offset(l_0 as isize),
+                ) as size_t);
                 i_0 = i_0.wrapping_add(1);
             }
             put_bytes(
                 fd,
-                ((1 as ::core::ffi::c_int + 128 as ::core::ffi::c_int
-                    + 2 as ::core::ffi::c_int) as uintmax_t)
+                ((1 as ::core::ffi::c_int + 128 as ::core::ffi::c_int + 2 as ::core::ffi::c_int)
+                    as uintmax_t)
                     .wrapping_add(l_0 as uintmax_t),
                 4 as size_t,
             );
@@ -9052,8 +8725,7 @@ unsafe extern "C" fn write_vim_spell(
             put_bytes(fd, l_0 as uintmax_t, 2 as size_t);
             fwv = (fwv as ::core::ffi::c_ulong
                 & fwrite(
-                    &raw mut folchars as *mut ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
+                    &raw mut folchars as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
                     l_0,
                     1 as size_t,
                     fd,
@@ -9109,13 +8781,12 @@ unsafe extern "C" fn write_vim_spell(
                                     as unsafe extern "C" fn(
                                         *const ::core::ffi::c_void,
                                         *const ::core::ffi::c_void,
-                                    ) -> ::core::ffi::c_int,
+                                    )
+                                        -> ::core::ffi::c_int,
                             ),
                         );
                     }
-                    let mut sect_id: ::core::ffi::c_int = if round
-                        == 1 as ::core::ffi::c_uint
-                    {
+                    let mut sect_id: ::core::ffi::c_int = if round == 1 as ::core::ffi::c_uint {
                         SN_REP as ::core::ffi::c_int
                     } else if round == 2 as ::core::ffi::c_uint {
                         SN_SAL as ::core::ffi::c_int
@@ -9126,12 +8797,13 @@ unsafe extern "C" fn write_vim_spell(
                     putc(0 as ::core::ffi::c_int, fd);
                     let mut l_2: size_t = 2 as size_t;
                     '_c2rust_label: {
-                        if (*gap).ga_len >= 0 as ::core::ffi::c_int {} else {
+                        if (*gap).ga_len >= 0 as ::core::ffi::c_int {
+                        } else {
                             __assert_fail(
-                                b"gap->ga_len >= 0\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"gap->ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 4420 as ::core::ffi::c_uint,
                                 b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -9140,16 +8812,10 @@ unsafe extern "C" fn write_vim_spell(
                     };
                     let mut i_3: size_t = 0 as size_t;
                     while i_3 < (*gap).ga_len as size_t {
-                        let mut ftp: *mut fromto_T = ((*gap).ga_data as *mut fromto_T)
-                            .offset(i_3 as isize);
-                        l_2 = l_2
-                            .wrapping_add(
-                                (1 as size_t).wrapping_add(strlen((*ftp).ft_from)),
-                            );
-                        l_2 = l_2
-                            .wrapping_add(
-                                (1 as size_t).wrapping_add(strlen((*ftp).ft_to)),
-                            );
+                        let mut ftp: *mut fromto_T =
+                            ((*gap).ga_data as *mut fromto_T).offset(i_3 as isize);
+                        l_2 = l_2.wrapping_add((1 as size_t).wrapping_add(strlen((*ftp).ft_from)));
+                        l_2 = l_2.wrapping_add((1 as size_t).wrapping_add(strlen((*ftp).ft_to)));
                         i_3 = i_3.wrapping_add(1);
                     }
                     if round == 2 as ::core::ffi::c_uint {
@@ -9172,12 +8838,11 @@ unsafe extern "C" fn write_vim_spell(
                     put_bytes(fd, (*gap).ga_len as uintmax_t, 2 as size_t);
                     let mut i_5: size_t = 0 as size_t;
                     while i_5 < (*gap).ga_len as size_t {
-                        let mut ftp_0: *mut fromto_T = ((*gap).ga_data as *mut fromto_T)
-                            .offset(i_5 as isize);
+                        let mut ftp_0: *mut fromto_T =
+                            ((*gap).ga_data as *mut fromto_T).offset(i_5 as isize);
                         let mut rr: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
                         while rr <= 2 as ::core::ffi::c_uint {
-                            let mut p: *mut ::core::ffi::c_char = if rr
-                                == 1 as ::core::ffi::c_uint
+                            let mut p: *mut ::core::ffi::c_char = if rr == 1 as ::core::ffi::c_uint
                             {
                                 (*ftp_0).ft_from
                             } else {
@@ -9185,8 +8850,8 @@ unsafe extern "C" fn write_vim_spell(
                             };
                             l_2 = strlen(p);
                             '_c2rust_label_0: {
-                                if l_2 < 2147483647 as ::core::ffi::c_int as size_t
-                                {} else {
+                                if l_2 < 2147483647 as ::core::ffi::c_int as size_t {
+                                } else {
                                     __assert_fail(
                                         b"l < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                                         b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
@@ -9200,12 +8865,8 @@ unsafe extern "C" fn write_vim_spell(
                             putc(l_2 as ::core::ffi::c_int, fd);
                             if l_2 > 0 as size_t {
                                 fwv = (fwv as ::core::ffi::c_ulong
-                                    & fwrite(
-                                        p as *const ::core::ffi::c_void,
-                                        l_2,
-                                        1 as size_t,
-                                        fd,
-                                    )) as size_t;
+                                    & fwrite(p as *const ::core::ffi::c_void, l_2, 1 as size_t, fd))
+                                    as size_t;
                             }
                             rr = rr.wrapping_add(1);
                         }
@@ -9255,10 +8916,8 @@ unsafe extern "C" fn write_vim_spell(
                 todo = (*spin).si_commonwords.ht_used;
                 hi = (*spin).si_commonwords.ht_array;
                 while todo > 0 as size_t {
-                    if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed)
-                    {
-                        let mut l_4: size_t = strlen((*hi).hi_key)
-                            .wrapping_add(1 as size_t);
+                    if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
+                        let mut l_4: size_t = strlen((*hi).hi_key).wrapping_add(1 as size_t);
                         len = len.wrapping_add(l_4);
                         if round_0 == 2 as ::core::ffi::c_uint {
                             fwv = (fwv as ::core::ffi::c_ulong
@@ -9312,12 +8971,12 @@ unsafe extern "C" fn write_vim_spell(
             putc(0 as ::core::ffi::c_int, fd);
             let mut l_6: size_t = strlen((*spin).si_compflags);
             '_c2rust_label_1: {
-                if (*spin).si_comppat.ga_len >= 0 as ::core::ffi::c_int {} else {
+                if (*spin).si_comppat.ga_len >= 0 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
-                        b"spin->si_comppat.ga_len >= 0\0".as_ptr()
+                        b"spin->si_comppat.ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         4562 as ::core::ffi::c_uint,
                         b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9326,18 +8985,20 @@ unsafe extern "C" fn write_vim_spell(
             };
             let mut i_6: size_t = 0 as size_t;
             while i_6 < (*spin).si_comppat.ga_len as size_t {
-                l_6 = l_6
-                    .wrapping_add(
-                        strlen(
-                                *((*spin).si_comppat.ga_data
-                                    as *mut *mut ::core::ffi::c_char)
-                                    .offset(i_6 as isize),
-                            )
-                            .wrapping_add(1 as size_t),
-                    );
+                l_6 = l_6.wrapping_add(
+                    strlen(
+                        *((*spin).si_comppat.ga_data as *mut *mut ::core::ffi::c_char)
+                            .offset(i_6 as isize),
+                    )
+                    .wrapping_add(1 as size_t),
+                );
                 i_6 = i_6.wrapping_add(1);
             }
-            put_bytes(fd, (l_6 as uintmax_t).wrapping_add(7 as uintmax_t), 4 as size_t);
+            put_bytes(
+                fd,
+                (l_6 as uintmax_t).wrapping_add(7 as uintmax_t),
+                4 as size_t,
+            );
             putc((*spin).si_compmax, fd);
             putc((*spin).si_compminlen, fd);
             putc((*spin).si_compsylmax, fd);
@@ -9350,12 +9011,12 @@ unsafe extern "C" fn write_vim_spell(
                     as *mut *mut ::core::ffi::c_char)
                     .offset(i_7 as isize);
                 '_c2rust_label_2: {
-                    if strlen(p_0) < 2147483647 as ::core::ffi::c_int as size_t {} else {
+                    if strlen(p_0) < 2147483647 as ::core::ffi::c_int as size_t {
+                    } else {
                         __assert_fail(
-                            b"strlen(p) < INT_MAX\0".as_ptr()
+                            b"strlen(p) < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
                             4576 as ::core::ffi::c_uint,
                             b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -9420,29 +9081,25 @@ unsafe extern "C" fn write_vim_spell(
             ) as size_t;
             put_bytes(fd, nodecount as uintmax_t, 4 as size_t);
             '_c2rust_label_3: {
-                if nodecount
-                    .wrapping_add(
-                        nodecount
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-                    ) < 2147483647 as ::core::ffi::c_int as size_t
-                {} else {
+                if nodecount.wrapping_add(
+                    nodecount.wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
+                ) < 2147483647 as ::core::ffi::c_int as size_t
+                {
+                } else {
                     __assert_fail(
                         b"nodecount + nodecount * sizeof(int) < INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         4630 as ::core::ffi::c_uint,
                         b"int write_vim_spell(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
             };
-            (*spin).si_memtot
-                += nodecount
-                    .wrapping_add(
-                        nodecount
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-                    ) as ::core::ffi::c_int;
+            (*spin).si_memtot += nodecount
+                .wrapping_add(nodecount.wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()))
+                as ::core::ffi::c_int;
             put_node(
                 fd,
                 tree,
@@ -9516,24 +9173,19 @@ unsafe extern "C" fn put_node(
                     putc((*np_0).wn_affixID as ::core::ffi::c_int, fd);
                     put_bytes(fd, (*np_0).wn_region as uintmax_t, 2 as size_t);
                 } else {
-                    let mut flags: ::core::ffi::c_int = (*np_0).wn_flags
-                        as ::core::ffi::c_int;
+                    let mut flags: ::core::ffi::c_int = (*np_0).wn_flags as ::core::ffi::c_int;
                     if regionmask != 0 as ::core::ffi::c_int
                         && (*np_0).wn_region as ::core::ffi::c_int != regionmask
                     {
                         flags |= WF_REGION as ::core::ffi::c_int;
                     }
-                    if (*np_0).wn_affixID as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_int
-                    {
+                    if (*np_0).wn_affixID as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
                         flags |= WF_AFX as ::core::ffi::c_int;
                     }
                     if flags == 0 as ::core::ffi::c_int {
                         putc(BY_NOFLAGS as ::core::ffi::c_int, fd);
                     } else {
-                        if (*np_0).wn_flags as ::core::ffi::c_int
-                            >= 0x100 as ::core::ffi::c_int
-                        {
+                        if (*np_0).wn_flags as ::core::ffi::c_int >= 0x100 as ::core::ffi::c_int {
                             putc(BY_FLAGS2 as ::core::ffi::c_int, fd);
                             putc(flags, fd);
                             putc(
@@ -9593,13 +9245,15 @@ unsafe extern "C" fn put_node(
 #[no_mangle]
 pub unsafe extern "C" fn ex_mkspell(mut eap: *mut exarg_T) {
     let mut fcount: ::core::ffi::c_int = 0;
-    let mut fnames: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut fnames: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut ascii: bool = false_0 != 0;
-    if strncmp(arg, b"-ascii\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        arg,
+        b"-ascii\0".as_ptr() as *const ::core::ffi::c_char,
+        6 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         ascii = true_0 != 0;
         arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
@@ -9615,9 +9269,7 @@ unsafe extern "C" fn spell_make_sugfile(
     mut wfname: *mut ::core::ffi::c_char,
 ) {
     let mut len: ::core::ffi::c_int = 0;
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut slang: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
     let mut free_slang: bool = false_0 != 0;
     slang = first_lang;
@@ -9633,9 +9285,7 @@ unsafe extern "C" fn spell_make_sugfile(
     if slang.is_null() {
         spell_message(
             spin,
-            gettext(
-                b"Reading back spell file...\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"Reading back spell file...\0".as_ptr() as *const ::core::ffi::c_char),
         );
         slang = spell_load_file(
             wfname,
@@ -9662,10 +9312,8 @@ unsafe extern "C" fn spell_make_sugfile(
         if sug_maketable(spin) != FAIL {
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Number of words after soundfolding: %ld\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Number of words after soundfolding: %ld\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 (*(*spin).si_spellbuf).b_ml.ml_line_count as int64_t,
             );
             spell_message(spin, gettext(msg_compressing));
@@ -9677,10 +9325,8 @@ unsafe extern "C" fn spell_make_sugfile(
             fname = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
             xstrlcpy(fname, wfname, MAXPATHL as size_t);
             len = strlen(fname) as ::core::ffi::c_int;
-            *fname.offset((len - 2 as ::core::ffi::c_int) as isize) = 'u'
-                as ::core::ffi::c_char;
-            *fname.offset((len - 1 as ::core::ffi::c_int) as isize) = 'g'
-                as ::core::ffi::c_char;
+            *fname.offset((len - 2 as ::core::ffi::c_int) as isize) = 'u' as ::core::ffi::c_char;
+            *fname.offset((len - 1 as ::core::ffi::c_int) as isize) = 'g' as ::core::ffi::c_char;
             sug_write(spin, fname);
         }
     }
@@ -9716,19 +9362,16 @@ unsafe extern "C" fn sug_filltree(
         if curi[depth as usize]
             > *byts.offset(arridx[depth as usize] as isize) as ::core::ffi::c_int
         {
-            *idxs.offset(arridx[depth as usize] as isize) = wordcount[depth as usize]
-                as idx_T;
+            *idxs.offset(arridx[depth as usize] as isize) = wordcount[depth as usize] as idx_T;
             if depth > 0 as ::core::ffi::c_int {
-                wordcount[(depth - 1 as ::core::ffi::c_int) as usize]
-                    += wordcount[depth as usize];
+                wordcount[(depth - 1 as ::core::ffi::c_int) as usize] += wordcount[depth as usize];
             }
             depth -= 1;
             line_breakcheck();
         } else {
             let mut n: idx_T = arridx[depth as usize] + curi[depth as usize] as idx_T;
             curi[depth as usize] += 1;
-            let mut c: ::core::ffi::c_int = *byts.offset(n as isize)
-                as ::core::ffi::c_int;
+            let mut c: ::core::ffi::c_int = *byts.offset(n as isize) as ::core::ffi::c_int;
             if c == 0 as ::core::ffi::c_int {
                 tword[depth as usize] = NUL as ::core::ffi::c_char;
                 spell_soundfold(
@@ -9751,12 +9394,10 @@ unsafe extern "C" fn sug_filltree(
                 words_done = words_done.wrapping_add(1);
                 wordcount[depth as usize] += 1;
                 (*spin).si_blocks_cnt = 0 as ::core::ffi::c_int;
-                while (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                    < (*slang).sl_fbyts_len
-                    && *byts
-                        .offset(
-                            (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize,
-                        ) as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                while (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) < (*slang).sl_fbyts_len
+                    && *byts.offset((n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        == 0 as ::core::ffi::c_int
                 {
                     n += 1;
                     curi[depth as usize] += 1;
@@ -9788,7 +9429,11 @@ unsafe extern "C" fn sug_maketable(mut spin: *mut spellinfo_T) -> ::core::ffi::c
     };
     let mut res: ::core::ffi::c_int = OK;
     (*spin).si_spellbuf = open_spellbuf();
-    ga_init(&raw mut ga, 1 as ::core::ffi::c_int, 100 as ::core::ffi::c_int);
+    ga_init(
+        &raw mut ga,
+        1 as ::core::ffi::c_int,
+        100 as ::core::ffi::c_int,
+    );
     if sug_filltable(
         spin,
         (*(*spin).si_foldroot).wn_sibling,
@@ -9818,22 +9463,19 @@ unsafe extern "C" fn sug_filltable(
                 ga_grow(gap, 10 as ::core::ffi::c_int);
                 let mut nr: ::core::ffi::c_int = (((*np).wn_flags as ::core::ffi::c_int)
                     << 16 as ::core::ffi::c_int)
-                    + ((*np).wn_region as ::core::ffi::c_int
-                        & 0xffff as ::core::ffi::c_int);
+                    + ((*np).wn_region as ::core::ffi::c_int & 0xffff as ::core::ffi::c_int);
                 nr -= prev_nr;
                 prev_nr += nr;
-                (*gap).ga_len
-                    += offset2bytes(
-                        nr,
-                        ((*gap).ga_data as *mut ::core::ffi::c_char)
-                            .offset((*gap).ga_len as isize),
-                    );
+                (*gap).ga_len += offset2bytes(
+                    nr,
+                    ((*gap).ga_data as *mut ::core::ffi::c_char).offset((*gap).ga_len as isize),
+                );
                 np = (*np).wn_sibling;
             }
             let c2rust_fresh26 = (*gap).ga_len;
             (*gap).ga_len = (*gap).ga_len + 1;
-            *((*gap).ga_data as *mut ::core::ffi::c_char)
-                .offset(c2rust_fresh26 as isize) = NUL as ::core::ffi::c_char;
+            *((*gap).ga_data as *mut ::core::ffi::c_char).offset(c2rust_fresh26 as isize) =
+                NUL as ::core::ffi::c_char;
             if ml_append_buf(
                 (*spin).si_spellbuf,
                 wordnr as linenr_T,
@@ -9867,61 +9509,52 @@ unsafe extern "C" fn offset2bytes(
     mut buf_in: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut buf: *mut uint8_t = buf_in as *mut uint8_t;
-    let mut b1: ::core::ffi::c_int = nr % 255 as ::core::ffi::c_int
-        + 1 as ::core::ffi::c_int;
+    let mut b1: ::core::ffi::c_int = nr % 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
     let mut rem: ::core::ffi::c_int = nr / 255 as ::core::ffi::c_int;
-    let mut b2: ::core::ffi::c_int = rem % 255 as ::core::ffi::c_int
-        + 1 as ::core::ffi::c_int;
+    let mut b2: ::core::ffi::c_int = rem % 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
     rem = rem / 255 as ::core::ffi::c_int;
-    let mut b3: ::core::ffi::c_int = rem % 255 as ::core::ffi::c_int
-        + 1 as ::core::ffi::c_int;
-    let mut b4: ::core::ffi::c_int = rem / 255 as ::core::ffi::c_int
-        + 1 as ::core::ffi::c_int;
+    let mut b3: ::core::ffi::c_int = rem % 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+    let mut b4: ::core::ffi::c_int = rem / 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
     if b4 > 1 as ::core::ffi::c_int || b3 > 0x1f as ::core::ffi::c_int {
-        *buf.offset(0 as ::core::ffi::c_int as isize) = (0xe0 as ::core::ffi::c_int + b4)
-            as uint8_t;
+        *buf.offset(0 as ::core::ffi::c_int as isize) =
+            (0xe0 as ::core::ffi::c_int + b4) as uint8_t;
         *buf.offset(1 as ::core::ffi::c_int as isize) = b3 as uint8_t;
         *buf.offset(2 as ::core::ffi::c_int as isize) = b2 as uint8_t;
         *buf.offset(3 as ::core::ffi::c_int as isize) = b1 as uint8_t;
         return 4 as ::core::ffi::c_int;
     }
     if b3 > 1 as ::core::ffi::c_int || b2 > 0x3f as ::core::ffi::c_int {
-        *buf.offset(0 as ::core::ffi::c_int as isize) = (0xc0 as ::core::ffi::c_int + b3)
-            as uint8_t;
+        *buf.offset(0 as ::core::ffi::c_int as isize) =
+            (0xc0 as ::core::ffi::c_int + b3) as uint8_t;
         *buf.offset(1 as ::core::ffi::c_int as isize) = b2 as uint8_t;
         *buf.offset(2 as ::core::ffi::c_int as isize) = b1 as uint8_t;
         return 3 as ::core::ffi::c_int;
     }
     if b2 > 1 as ::core::ffi::c_int || b1 > 0x7f as ::core::ffi::c_int {
-        *buf.offset(0 as ::core::ffi::c_int as isize) = (0x80 as ::core::ffi::c_int + b2)
-            as uint8_t;
+        *buf.offset(0 as ::core::ffi::c_int as isize) =
+            (0x80 as ::core::ffi::c_int + b2) as uint8_t;
         *buf.offset(1 as ::core::ffi::c_int as isize) = b1 as uint8_t;
         return 2 as ::core::ffi::c_int;
     }
     *buf.offset(0 as ::core::ffi::c_int as isize) = b1 as uint8_t;
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn sug_write(
-    mut spin: *mut spellinfo_T,
-    mut fname: *mut ::core::ffi::c_char,
-) {
+unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::core::ffi::c_char) {
     let mut tree: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     let mut nodecount: size_t = 0;
     let mut wcount: linenr_T = 0;
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"w\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(fname, b"w\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
-        semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+            fname,
+        );
         return;
     }
     vim_snprintf(
         &raw mut IObuff as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
-        gettext(
-            b"Writing suggestion file %s...\0".as_ptr() as *const ::core::ffi::c_char,
-        ),
+        gettext(b"Writing suggestion file %s...\0".as_ptr() as *const ::core::ffi::c_char),
         fname,
     );
     spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
@@ -9949,29 +9582,25 @@ unsafe extern "C" fn sug_write(
             ) as size_t;
             put_bytes(fd, nodecount as uintmax_t, 4 as size_t);
             '_c2rust_label: {
-                if nodecount
-                    .wrapping_add(
-                        nodecount
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-                    ) < 2147483647 as ::core::ffi::c_int as size_t
-                {} else {
+                if nodecount.wrapping_add(
+                    nodecount.wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
+                ) < 2147483647 as ::core::ffi::c_int as size_t
+                {
+                } else {
                     __assert_fail(
                         b"nodecount + nodecount * sizeof(int) < INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         5135 as ::core::ffi::c_uint,
                         b"void sug_write(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
             };
-            (*spin).si_memtot
-                += nodecount
-                    .wrapping_add(
-                        nodecount
-                            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-                    ) as ::core::ffi::c_int;
+            (*spin).si_memtot += nodecount
+                .wrapping_add(nodecount.wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()))
+                as ::core::ffi::c_int;
             put_node(
                 fd,
                 tree,
@@ -9981,11 +9610,12 @@ unsafe extern "C" fn sug_write(
             );
             wcount = (*(*spin).si_spellbuf).b_ml.ml_line_count;
             '_c2rust_label_0: {
-                if wcount >= 0 as linenr_T {} else {
+                if wcount >= 0 as linenr_T {
+                } else {
                     __assert_fail(
                         b"wcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         5143 as ::core::ffi::c_uint,
                         b"void sug_write(spellinfo_T *, char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9995,14 +9625,9 @@ unsafe extern "C" fn sug_write(
             put_bytes(fd, wcount as uintmax_t, 4 as size_t);
             let mut lnum: linenr_T = 1 as linenr_T;
             while lnum <= wcount {
-                let mut line: *mut ::core::ffi::c_char = ml_get_buf(
-                    (*spin).si_spellbuf,
-                    lnum,
-                );
-                let mut len: ::core::ffi::c_int = ml_get_buf_len(
-                    (*spin).si_spellbuf,
-                    lnum,
-                ) + 1 as ::core::ffi::c_int;
+                let mut line: *mut ::core::ffi::c_char = ml_get_buf((*spin).si_spellbuf, lnum);
+                let mut len: ::core::ffi::c_int =
+                    ml_get_buf_len((*spin).si_spellbuf, lnum) + 1 as ::core::ffi::c_int;
                 if fwrite(
                     line as *const ::core::ffi::c_void,
                     len as size_t,
@@ -10023,10 +9648,8 @@ unsafe extern "C" fn sug_write(
             vim_snprintf(
                 &raw mut IObuff as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
-                gettext(
-                    b"Estimated runtime memory use: %d bytes\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Estimated runtime memory use: %d bytes\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 (*spin).si_memtot,
             );
             spell_message(spin, &raw mut IObuff as *mut ::core::ffi::c_char);
@@ -10041,9 +9664,7 @@ unsafe extern "C" fn mkspell(
     mut over_write: bool,
     mut added_word: bool,
 ) {
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut afile: [*mut afffile_T; 8] = [::core::ptr::null_mut::<afffile_T>(); 8];
     let mut error: bool = false_0 != 0;
     let mut spin: spellinfo_T = spellinfo_T {
@@ -10191,22 +9812,21 @@ unsafe extern "C" fn mkspell(
     );
     hash_init(&raw mut spin.si_commonwords);
     spin.si_newcompID = 127 as ::core::ffi::c_int;
-    let mut innames: *mut *mut ::core::ffi::c_char = fnames
-        .offset(
-            (if fcount == 1 as ::core::ffi::c_int {
-                0 as ::core::ffi::c_int
-            } else {
-                1 as ::core::ffi::c_int
-            }) as isize,
-        );
+    let mut innames: *mut *mut ::core::ffi::c_char = fnames.offset(
+        (if fcount == 1 as ::core::ffi::c_int {
+            0 as ::core::ffi::c_int
+        } else {
+            1 as ::core::ffi::c_int
+        }) as isize,
+    );
     let mut incount: ::core::ffi::c_int = fcount - 1 as ::core::ffi::c_int;
-    let mut wfname: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut wfname: *mut ::core::ffi::c_char =
+        xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     if fcount >= 1 as ::core::ffi::c_int {
-        let mut len: ::core::ffi::c_int = strlen(
-            *fnames.offset(0 as ::core::ffi::c_int as isize),
-        ) as ::core::ffi::c_int;
-        if fcount == 1 as ::core::ffi::c_int && len > 4 as ::core::ffi::c_int
+        let mut len: ::core::ffi::c_int =
+            strlen(*fnames.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
+        if fcount == 1 as ::core::ffi::c_int
+            && len > 4 as ::core::ffi::c_int
             && strcmp(
                 (*fnames.offset(0 as ::core::ffi::c_int as isize))
                     .offset(len as isize)
@@ -10271,83 +9891,83 @@ unsafe extern "C" fn mkspell(
         if incount <= 0 as ::core::ffi::c_int {
             emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         } else if !vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int).is_null() {
-            emsg(
-                gettext(
-                    b"E751: Output file name must not have region name\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E751: Output file name must not have region name\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            ));
         } else if incount > MAXREGIONS as ::core::ffi::c_int {
             semsg(
-                gettext(
-                    b"E754: Only up to %d regions supported\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E754: Only up to %d regions supported\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 MAXREGIONS as ::core::ffi::c_int,
             );
         } else if !over_write && os_path_exists(wfname) as ::core::ffi::c_int != 0 {
             emsg(gettext(&raw const e_exists as *const ::core::ffi::c_char));
         } else if os_isdir(wfname) {
-            semsg(gettext(&raw const e_isadir2 as *const ::core::ffi::c_char), wfname);
+            semsg(
+                gettext(&raw const e_isadir2 as *const ::core::ffi::c_char),
+                wfname,
+            );
         } else {
             fname = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < incount {
                 afile[i as usize] = ::core::ptr::null_mut::<afffile_T>();
                 if incount > 1 as ::core::ffi::c_int {
-                    let mut len_0: ::core::ffi::c_int = strlen(
-                        *innames.offset(i as isize),
-                    ) as ::core::ffi::c_int;
+                    let mut len_0: ::core::ffi::c_int =
+                        strlen(*innames.offset(i as isize)) as ::core::ffi::c_int;
                     if strlen(path_tail(*innames.offset(i as isize))) < 5 as size_t
                         || *(*innames.offset(i as isize))
                             .offset((len_0 - 3 as ::core::ffi::c_int) as isize)
-                            as ::core::ffi::c_int != '_' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            != '_' as ::core::ffi::c_int
                     {
                         semsg(
-                            gettext(
-                                b"E755: Invalid region in %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E755: Invalid region in %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             *innames.offset(i as isize),
                         );
                         break '_theend;
                     } else {
-                        spin.si_region_name[(i * 2 as ::core::ffi::c_int) as usize] = (if (*(*innames
-                            .offset(i as isize))
-                            .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                            as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
-                            || *(*innames.offset(i as isize))
+                        spin.si_region_name[(i * 2 as ::core::ffi::c_int) as usize] =
+                            (if (*(*innames.offset(i as isize))
                                 .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int > 'Z' as ::core::ffi::c_int
-                        {
-                            *(*innames.offset(i as isize))
-                                .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int
-                        } else {
-                            *(*innames.offset(i as isize))
-                                .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int
-                                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                        }) as uint8_t as ::core::ffi::c_char;
-                        spin
-                            .si_region_name[(i * 2 as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int) as usize] = (if (*(*innames
-                            .offset(i as isize))
-                            .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                            as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
-                            || *(*innames.offset(i as isize))
+                                as ::core::ffi::c_int)
+                                < 'A' as ::core::ffi::c_int
+                                || *(*innames.offset(i as isize))
+                                    .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
+                                    as ::core::ffi::c_int
+                                    > 'Z' as ::core::ffi::c_int
+                            {
+                                *(*innames.offset(i as isize))
+                                    .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
+                                    as ::core::ffi::c_int
+                            } else {
+                                *(*innames.offset(i as isize))
+                                    .offset((len_0 - 2 as ::core::ffi::c_int) as isize)
+                                    as ::core::ffi::c_int
+                                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
+                            }) as uint8_t as ::core::ffi::c_char;
+                        spin.si_region_name
+                            [(i * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as usize] =
+                            (if (*(*innames.offset(i as isize))
                                 .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int > 'Z' as ::core::ffi::c_int
-                        {
-                            *(*innames.offset(i as isize))
-                                .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int
-                        } else {
-                            *(*innames.offset(i as isize))
-                                .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int
-                                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                        }) as uint8_t as ::core::ffi::c_char;
+                                as ::core::ffi::c_int)
+                                < 'A' as ::core::ffi::c_int
+                                || *(*innames.offset(i as isize))
+                                    .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
+                                    as ::core::ffi::c_int
+                                    > 'Z' as ::core::ffi::c_int
+                            {
+                                *(*innames.offset(i as isize))
+                                    .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
+                                    as ::core::ffi::c_int
+                            } else {
+                                *(*innames.offset(i as isize))
+                                    .offset((len_0 - 1 as ::core::ffi::c_int) as isize)
+                                    as ::core::ffi::c_int
+                                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
+                            }) as uint8_t as ::core::ffi::c_char;
                     }
                 }
                 i += 1;
@@ -10370,8 +9990,7 @@ unsafe extern "C" fn mkspell(
                     *innames.offset(i_0 as isize),
                 );
                 if os_path_exists(fname) {
-                    afile[i_0 as usize] = spell_read_aff(&raw mut spin, fname)
-                        as *mut afffile_T;
+                    afile[i_0 as usize] = spell_read_aff(&raw mut spin, fname) as *mut afffile_T;
                     if afile[i_0 as usize].is_null() {
                         error = true_0 != 0;
                     } else {
@@ -10390,10 +10009,7 @@ unsafe extern "C" fn mkspell(
                             error = true_0 != 0;
                         }
                     }
-                } else if spell_read_wordfile(
-                    &raw mut spin,
-                    *innames.offset(i_0 as isize),
-                ) == FAIL
+                } else if spell_read_wordfile(&raw mut spin, *innames.offset(i_0 as isize)) == FAIL
                 {
                     error = true_0 != 0;
                 }
@@ -10404,8 +10020,7 @@ unsafe extern "C" fn mkspell(
                 );
                 i_0 += 1;
             }
-            if !spin.si_compflags.is_null() && spin.si_nobreak as ::core::ffi::c_int != 0
-            {
+            if !spin.si_compflags.is_null() && spin.si_nobreak as ::core::ffi::c_int != 0 {
                 msg(
                     gettext(
                         b"Warning: both compounding and NOBREAK specified\0".as_ptr()
@@ -10436,16 +10051,10 @@ unsafe extern "C" fn mkspell(
                 vim_snprintf(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
-                    gettext(
-                        b"Writing spell file %s...\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Writing spell file %s...\0".as_ptr() as *const ::core::ffi::c_char),
                     wfname,
                 );
-                spell_message(
-                    &raw mut spin,
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
-                );
+                spell_message(&raw mut spin, &raw mut IObuff as *mut ::core::ffi::c_char);
                 error = write_vim_spell(&raw mut spin, wfname) == FAIL;
                 spell_message(
                     &raw mut spin,
@@ -10454,16 +10063,11 @@ unsafe extern "C" fn mkspell(
                 vim_snprintf(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
-                    gettext(
-                        b"Estimated runtime memory use: %d bytes\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Estimated runtime memory use: %d bytes\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     spin.si_memtot,
                 );
-                spell_message(
-                    &raw mut spin,
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
-                );
+                spell_message(&raw mut spin, &raw mut IObuff as *mut ::core::ffi::c_char);
                 if !error {
                     spell_reload_one(wfname, added_word);
                 }
@@ -10513,9 +10117,7 @@ pub unsafe extern "C" fn ex_spell(mut eap: *mut exarg_T) {
         strlen((*eap).arg) as ::core::ffi::c_int,
         (if (*eap).cmdidx as ::core::ffi::c_int == CMD_spellwrong as ::core::ffi::c_int {
             SPELL_ADD_BAD as ::core::ffi::c_int
-        } else if (*eap).cmdidx as ::core::ffi::c_int
-            == CMD_spellrare as ::core::ffi::c_int
-        {
+        } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_spellrare as ::core::ffi::c_int {
             SPELL_ADD_RARE as ::core::ffi::c_int
         } else {
             SPELL_ADD_GOOD as ::core::ffi::c_int
@@ -10539,16 +10141,10 @@ pub unsafe extern "C" fn spell_add_word(
     let mut fd: *mut FILE = ::core::ptr::null_mut::<FILE>();
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     let mut new_spf: bool = false_0 != 0;
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut fnamebuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut fnamebuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut line: [::core::ffi::c_char; 508] = [0; 508];
-    let mut spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !valid_spell_word(word, word.offset(len as isize)) {
         emsg(gettext(e_illegal_character_in_word));
         return;
@@ -10589,10 +10185,8 @@ pub unsafe extern "C" fn spell_add_word(
             }
             if *spf as ::core::ffi::c_int == NUL {
                 semsg(
-                    gettext(
-                        b"E765: 'spellfile' does not have %d entries\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"E765: 'spellfile' does not have %d entries\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     idx,
                 );
                 xfree(fnamebuf as *mut ::core::ffi::c_void);
@@ -10605,14 +10199,15 @@ pub unsafe extern "C" fn spell_add_word(
             buf = ::core::ptr::null_mut::<buf_T>();
         }
         if !buf.is_null() && bufIsChanged(buf) as ::core::ffi::c_int != 0 {
-            emsg(gettext(&raw const e_bufloaded as *const ::core::ffi::c_char));
+            emsg(gettext(
+                &raw const e_bufloaded as *const ::core::ffi::c_char,
+            ));
             xfree(fnamebuf as *mut ::core::ffi::c_void);
             return;
         }
         fname = fnamebuf;
     }
-    if what as ::core::ffi::c_uint
-        == SPELL_ADD_BAD as ::core::ffi::c_int as ::core::ffi::c_uint
+    if what as ::core::ffi::c_uint == SPELL_ADD_BAD as ::core::ffi::c_int as ::core::ffi::c_uint
         || undo as ::core::ffi::c_int != 0
     {
         let mut fpos_next: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -10634,8 +10229,7 @@ pub unsafe extern "C" fn spell_add_word(
                     &raw mut line as *mut ::core::ffi::c_char,
                     len as size_t,
                 ) == 0 as ::core::ffi::c_int
-                    && (line[len as usize] as ::core::ffi::c_int
-                        == '/' as ::core::ffi::c_int
+                    && (line[len as usize] as ::core::ffi::c_int == '/' as ::core::ffi::c_int
                         || (line[len as usize] as uint8_t as ::core::ffi::c_int)
                             < ' ' as ::core::ffi::c_int))
                 {
@@ -10646,9 +10240,7 @@ pub unsafe extern "C" fn spell_add_word(
                 if fd.is_null() {
                     break;
                 }
-                if fseek(fd, fpos as ::core::ffi::c_long, SEEK_SET)
-                    == 0 as ::core::ffi::c_int
-                {
+                if fseek(fd, fpos as ::core::ffi::c_long, SEEK_SET) == 0 as ::core::ffi::c_int {
                     fputc('#' as ::core::ffi::c_int, fd);
                     if undo {
                         home_replace(
@@ -10660,27 +10252,21 @@ pub unsafe extern "C" fn spell_add_word(
                         );
                         smsg(
                             0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Word '%.*s' removed from %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"Word '%.*s' removed from %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             len,
                             word,
                             &raw mut NameBuff as *mut ::core::ffi::c_char,
                         );
                     }
                 }
-                if fseek(fd, fpos_next as ::core::ffi::c_long, SEEK_SET)
-                    == 0 as ::core::ffi::c_int
+                if fseek(fd, fpos_next as ::core::ffi::c_long, SEEK_SET) == 0 as ::core::ffi::c_int
                 {
                     continue;
                 }
                 semsg(
                     b"%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    gettext(
-                        b"Seek error in spellfile\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Seek error in spellfile\0".as_ptr() as *const ::core::ffi::c_char),
                     strerror(*__errno_location()),
                 );
                 break;
@@ -10693,15 +10279,11 @@ pub unsafe extern "C" fn spell_add_word(
     if !undo {
         fd = os_fopen(fname, b"a\0".as_ptr() as *const ::core::ffi::c_char);
         if fd.is_null() && new_spf as ::core::ffi::c_int != 0 {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
-            if !dir_of_file_exists(fname)
-                && {
-                    p = path_tail_with_sep(fname);
-                    p != fname
-                }
-            {
+            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            if !dir_of_file_exists(fname) && {
+                p = path_tail_with_sep(fname);
+                p != fname
+            } {
                 let mut c: ::core::ffi::c_char = *p;
                 *p = NUL as ::core::ffi::c_char;
                 os_mkdir(fname, 0o755 as int32_t);
@@ -10710,7 +10292,10 @@ pub unsafe extern "C" fn spell_add_word(
             }
         }
         if fd.is_null() {
-            semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+            semsg(
+                gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+                fname,
+            );
         } else {
             if what as ::core::ffi::c_uint
                 == SPELL_ADD_BAD as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -10748,9 +10333,7 @@ pub unsafe extern "C" fn spell_add_word(
             );
             smsg(
                 0 as ::core::ffi::c_int,
-                gettext(
-                    b"Word '%.*s' added to %s\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Word '%.*s' added to %s\0".as_ptr() as *const ::core::ffi::c_char),
                 len,
                 word,
                 &raw mut NameBuff as *mut ::core::ffi::c_char,
@@ -10773,9 +10356,7 @@ pub unsafe extern "C" fn spell_add_word(
     xfree(fnamebuf as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn init_spellfile() {
-    let mut lend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut lend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut aspath: bool = false_0 != 0;
     let mut lstart: *mut ::core::ffi::c_char = (*curbuf).b_s.b_p_spl;
     if *(*(*curwin).w_s).b_p_spl as ::core::ffi::c_int == NUL
@@ -10786,10 +10367,10 @@ unsafe extern "C" fn init_spellfile() {
     lend = (*(*curwin).w_s).b_p_spl;
     while *lend as ::core::ffi::c_int != NUL
         && vim_strchr(
-                b",._\0".as_ptr() as *const ::core::ffi::c_char,
-                *lend as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b",._\0".as_ptr() as *const ::core::ffi::c_char,
+            *lend as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
     {
         if vim_ispathsep(*lend as ::core::ffi::c_int) {
             aspath = true_0 != 0;
@@ -10797,17 +10378,19 @@ unsafe extern "C" fn init_spellfile() {
         }
         lend = lend.offset(1);
     }
-    let mut buf: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut buf: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     let mut buf_len: size_t = MAXPATHL as size_t;
     if !aspath {
         let mut xdg_path: *mut ::core::ffi::c_char = get_xdg_home(kXDGDataHome);
         xstrlcpy(buf, xdg_path, buf_len);
         xfree(xdg_path as *mut ::core::ffi::c_void);
-        xstrlcat(buf, b"/site/spell\0".as_ptr() as *const ::core::ffi::c_char, buf_len);
-        let mut failed_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        xstrlcat(
+            buf,
+            b"/site/spell\0".as_ptr() as *const ::core::ffi::c_char,
+            buf_len,
+        );
+        let mut failed_dir: *mut ::core::ffi::c_char =
+            ::core::ptr::null_mut::<::core::ffi::c_char>();
         if os_mkdir_recurse(
             buf,
             0o755 as int32_t,
@@ -10840,11 +10423,14 @@ unsafe extern "C" fn init_spellfile() {
     let mut fname: *mut ::core::ffi::c_char = (*(*((*(*curwin).w_s).b_langp.ga_data
         as *mut langp_T)
         .offset(0 as ::core::ffi::c_int as isize))
-        .lp_slang)
+    .lp_slang)
         .sl_fname;
     let mut enc_suffix: *const ::core::ffi::c_char = if !fname.is_null()
-        && !strstr(path_tail(fname), b".ascii.\0".as_ptr() as *const ::core::ffi::c_char)
-            .is_null()
+        && !strstr(
+            path_tail(fname),
+            b".ascii.\0".as_ptr() as *const ::core::ffi::c_char,
+        )
+        .is_null()
     {
         b"ascii\0".as_ptr() as *const ::core::ffi::c_char
     } else {
@@ -10885,19 +10471,20 @@ unsafe extern "C" fn set_spell_charflags(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 128 as ::core::ffi::c_int {
         if i < cnt {
-            new_st.st_isw[(i + 128 as ::core::ffi::c_int) as usize] = *flags
-                .offset(i as isize) as ::core::ffi::c_int & CF_WORD as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_int;
-            new_st.st_isu[(i + 128 as ::core::ffi::c_int) as usize] = *flags
-                .offset(i as isize) as ::core::ffi::c_int
-                & CF_UPPER as ::core::ffi::c_int != 0 as ::core::ffi::c_int;
+            new_st.st_isw[(i + 128 as ::core::ffi::c_int) as usize] =
+                *flags.offset(i as isize) as ::core::ffi::c_int & CF_WORD as ::core::ffi::c_int
+                    != 0 as ::core::ffi::c_int;
+            new_st.st_isu[(i + 128 as ::core::ffi::c_int) as usize] =
+                *flags.offset(i as isize) as ::core::ffi::c_int & CF_UPPER as ::core::ffi::c_int
+                    != 0 as ::core::ffi::c_int;
         }
         if *p as ::core::ffi::c_int != NUL {
             let mut c: ::core::ffi::c_int = mb_ptr2char_adv(&raw mut p);
             new_st.st_fold[(i + 128 as ::core::ffi::c_int) as usize] = c as uint8_t;
             if i + 128 as ::core::ffi::c_int != c
-                && new_st.st_isu[(i + 128 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int != 0 && c < 256 as ::core::ffi::c_int
+                && new_st.st_isu[(i + 128 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                    != 0
+                && c < 256 as ::core::ffi::c_int
             {
                 new_st.st_upper[c as usize] = (i + 128 as ::core::ffi::c_int) as uint8_t;
             }
@@ -10906,9 +10493,7 @@ unsafe extern "C" fn set_spell_charflags(
     }
     set_spell_finish(&raw mut new_st);
 }
-unsafe extern "C" fn set_spell_finish(
-    mut new_st: *mut spelltab_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
     if did_set_spelltab {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < 256 as ::core::ffi::c_int {
@@ -10921,12 +10506,10 @@ unsafe extern "C" fn set_spell_finish(
                 || spelltab.st_upper[i as usize] as ::core::ffi::c_int
                     != (*new_st).st_upper[i as usize] as ::core::ffi::c_int
             {
-                emsg(
-                    gettext(
-                        b"E763: Word characters differ between spell files\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    b"E763: Word characters differ between spell files\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                ));
                 return FAIL;
             }
             i += 1;
@@ -10943,7 +10526,8 @@ unsafe extern "C" fn write_spell_prefcond(
     mut fwv: *mut size_t,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if (*gap).ga_len >= 0 as ::core::ffi::c_int {} else {
+        if (*gap).ga_len >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"gap->ga_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
@@ -10960,21 +10544,21 @@ unsafe extern "C" fn write_spell_prefcond(
     let mut totlen: size_t = (2 as size_t).wrapping_add((*gap).ga_len as size_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*gap).ga_len {
-        let mut p: *mut ::core::ffi::c_char = *((*gap).ga_data
-            as *mut *mut ::core::ffi::c_char)
-            .offset(i as isize);
+        let mut p: *mut ::core::ffi::c_char =
+            *((*gap).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize);
         if !p.is_null() {
             let mut len: size_t = strlen(p);
             if !fd.is_null() {
                 '_c2rust_label_0: {
-                    if len <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+                    if len <= 2147483647 as ::core::ffi::c_int as size_t {
+                    } else {
                         __assert_fail(
                             b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             5710 as ::core::ffi::c_uint,
-                            b"int write_spell_prefcond(FILE *, garray_T *, size_t *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"int write_spell_prefcond(FILE *, garray_T *, size_t *)\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         );
                     }
                 };
@@ -10990,7 +10574,8 @@ unsafe extern "C" fn write_spell_prefcond(
         i += 1;
     }
     '_c2rust_label_1: {
-        if totlen <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+        if totlen <= 2147483647 as ::core::ffi::c_int as size_t {
+        } else {
             __assert_fail(
                 b"totlen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/spellfile.c\0".as_ptr()
@@ -11003,10 +10588,7 @@ unsafe extern "C" fn write_spell_prefcond(
     };
     return totlen as ::core::ffi::c_int;
 }
-unsafe extern "C" fn set_map_str(
-    mut lp: *mut slang_T,
-    mut map: *const ::core::ffi::c_char,
-) {
+unsafe extern "C" fn set_map_str(mut lp: *mut slang_T, mut map: *const ::core::ffi::c_char) {
     let mut headc: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if *map as ::core::ffi::c_int == NUL {
         (*lp).sl_has_map = false_0 != 0;
@@ -11033,28 +10615,26 @@ unsafe extern "C" fn set_map_str(
                 let mut headcl: ::core::ffi::c_int = utf_char2len(headc);
                 let mut hash: hash_T = 0;
                 let mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
-                let mut b: *mut ::core::ffi::c_char = xmalloc(
-                    ((cl + headcl) as size_t).wrapping_add(2 as size_t),
-                ) as *mut ::core::ffi::c_char;
+                let mut b: *mut ::core::ffi::c_char =
+                    xmalloc(((cl + headcl) as size_t).wrapping_add(2 as size_t))
+                        as *mut ::core::ffi::c_char;
                 utf_char2bytes(c, b);
                 *b.offset(cl as isize) = NUL as ::core::ffi::c_char;
                 utf_char2bytes(
                     headc,
-                    b.offset(cl as isize).offset(1 as ::core::ffi::c_int as isize),
+                    b.offset(cl as isize)
+                        .offset(1 as ::core::ffi::c_int as isize),
                 );
-                *b.offset((cl + 1 as ::core::ffi::c_int + headcl) as isize) = NUL
-                    as ::core::ffi::c_char;
+                *b.offset((cl + 1 as ::core::ffi::c_int + headcl) as isize) =
+                    NUL as ::core::ffi::c_char;
                 hash = hash_hash(b);
                 hi = hash_lookup(&raw mut (*lp).sl_map_hash, b, strlen(b), hash);
                 if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
                     hash_add_item(&raw mut (*lp).sl_map_hash, hi, b, hash);
                 } else {
-                    emsg(
-                        gettext(
-                            &raw const e_duplicate_char_in_map_entry
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(
+                        &raw const e_duplicate_char_in_map_entry as *const ::core::ffi::c_char,
+                    ));
                     xfree(b as *mut ::core::ffi::c_void);
                 }
             } else {

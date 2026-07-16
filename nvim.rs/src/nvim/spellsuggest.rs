@@ -64,10 +64,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xmemcpyz(
         dst: *mut ::core::ffi::c_void,
         src: *const ::core::ffi::c_void,
@@ -87,10 +84,7 @@ extern "C" {
     );
     static mut p_sps: *mut ::core::ffi::c_char;
     static mut p_verbose: OptInt;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -118,10 +112,7 @@ extern "C" {
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
     fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
-    fn hash_find(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-    ) -> *mut hashitem_T;
+    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
     fn hash_lookup(
         ht: *const hashtab_T,
         key: *const ::core::ffi::c_char,
@@ -136,11 +127,7 @@ extern "C" {
     );
     fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn internal_error(where_0: *const ::core::ffi::c_char);
@@ -159,22 +146,11 @@ extern "C" {
         list: *mut list_T,
         ret_word: *mut *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn vim_fgets(
-        buf: *mut ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-        fp: *mut FILE,
-    ) -> bool;
+    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
-    fn ga_append_via_ptr(
-        gap: *mut garray_T,
-        item_size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn beep_flush();
     fn ResetRedobuff();
     fn AppendToRedobuff(s: *const ::core::ffi::c_char);
@@ -206,10 +182,7 @@ extern "C" {
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_iscomposing_legacy(c: ::core::ffi::c_int) -> bool;
     fn utf_fold(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn mb_isupper(a: ::core::ffi::c_int) -> bool;
@@ -220,11 +193,8 @@ extern "C" {
     fn mb_charlen(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     static utf8len_tab: [uint8_t; 256];
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn end_visual_mode();
     fn copy_option_part(
         option: *mut *mut ::core::ffi::c_char,
@@ -232,10 +202,7 @@ extern "C" {
         maxlen: size_t,
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_breakcheck();
     fn line_breakcheck();
     fn profile_setlimit(msec: int64_t) -> proftime_T;
@@ -269,10 +236,7 @@ extern "C" {
         slang: *mut slang_T,
         cond_req: bool,
     ) -> ::core::ffi::c_int;
-    fn spell_valid_case(
-        wordflags: ::core::ffi::c_int,
-        treeflags: ::core::ffi::c_int,
-    ) -> bool;
+    fn spell_valid_case(wordflags: ::core::ffi::c_int, treeflags: ::core::ffi::c_int) -> bool;
     fn spell_move_to(
         wp: *mut win_T,
         dir: ::core::ffi::c_int,
@@ -2273,9 +2237,7 @@ pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -2291,8 +2253,7 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2 as ::core::ffi::c_ulong;
 pub const WF_MIXCAP: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 static mut spell_suggest_timeout: ::core::ffi::c_int = 5000 as ::core::ffi::c_int;
@@ -2303,9 +2264,7 @@ unsafe extern "C" fn can_be_compound(
     mut flag: ::core::ffi::c_int,
 ) -> bool {
     if !byte_in_str(
-        if (*sp).ts_complen as ::core::ffi::c_int
-            == (*sp).ts_compsplit as ::core::ffi::c_int
-        {
+        if (*sp).ts_complen as ::core::ffi::c_int == (*sp).ts_compsplit as ::core::ffi::c_int {
             (*slang).sl_compstartflags
         } else {
             (*slang).sl_compallflags
@@ -2315,15 +2274,12 @@ unsafe extern "C" fn can_be_compound(
         return false_0 != 0;
     }
     if !(*slang).sl_comprules.is_null()
-        && (*sp).ts_complen as ::core::ffi::c_int
-            > (*sp).ts_compsplit as ::core::ffi::c_int
+        && (*sp).ts_complen as ::core::ffi::c_int > (*sp).ts_compsplit as ::core::ffi::c_int
     {
         *compflags.offset((*sp).ts_complen as isize) = flag as uint8_t;
         *compflags
-            .offset(
-                ((*sp).ts_complen as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                    as isize,
-            ) = NUL as uint8_t;
+            .offset(((*sp).ts_complen as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize) =
+            NUL as uint8_t;
         let mut v: bool = match_compoundrule(
             slang,
             compflags.offset((*sp).ts_compsplit as ::core::ffi::c_int as isize),
@@ -2344,12 +2300,10 @@ unsafe extern "C" fn score_wordcount_adj(
     if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
         return score;
     }
-    let mut wc: *mut wordcount_T = (*hi).hi_key.offset(-(WC_KEY_OFF as isize))
-        as *mut wordcount_T;
+    let mut wc: *mut wordcount_T = (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) as *mut wordcount_T;
     if ((*wc).wc_count as ::core::ffi::c_int) < SCORE_THRES2 as ::core::ffi::c_int {
         bonus = SCORE_COMMON1 as ::core::ffi::c_int;
-    } else if ((*wc).wc_count as ::core::ffi::c_int) < SCORE_THRES3 as ::core::ffi::c_int
-    {
+    } else if ((*wc).wc_count as ::core::ffi::c_int) < SCORE_THRES3 as ::core::ffi::c_int {
         bonus = SCORE_COMMON2 as ::core::ffi::c_int;
     } else {
         bonus = SCORE_COMMON3 as ::core::ffi::c_int;
@@ -2403,9 +2357,7 @@ unsafe extern "C" fn badword_captype(
     }
     return flags;
 }
-unsafe extern "C" fn bytes2offset(
-    mut pp: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn bytes2offset(mut pp: *mut *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut uint8_t = *pp as *mut uint8_t;
     let mut nr: ::core::ffi::c_int = 0;
     let c2rust_fresh18 = p;
@@ -2463,15 +2415,10 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
             b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
         let mut f: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if ascii_isdigit(
-            *(&raw mut buf as *mut ::core::ffi::c_char) as ::core::ffi::c_int,
-        ) {
-            let mut s: *mut ::core::ffi::c_char = &raw mut buf
-                as *mut ::core::ffi::c_char;
+        if ascii_isdigit(*(&raw mut buf as *mut ::core::ffi::c_char) as ::core::ffi::c_int) {
+            let mut s: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
             sps_limit = getdigits_int(&raw mut s, true_0 != 0, 0 as ::core::ffi::c_int);
-            if *s as ::core::ffi::c_int != NUL
-                && !ascii_isdigit(*s as ::core::ffi::c_int)
-            {
+            if *s as ::core::ffi::c_int != NUL && !ascii_isdigit(*s as ::core::ffi::c_int) {
                 f = -1 as ::core::ffi::c_int;
             }
         } else if strcmp(
@@ -2507,14 +2454,13 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
                 b"timeout:\0".as_ptr() as *const ::core::ffi::c_char,
                 8 as size_t,
             ) != 0 as ::core::ffi::c_int
-                || !ascii_isdigit(
-                    buf[8 as ::core::ffi::c_int as usize] as ::core::ffi::c_int,
-                )
+                || !ascii_isdigit(buf[8 as ::core::ffi::c_int as usize] as ::core::ffi::c_int)
                     && !(buf[8 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
                         == '-' as ::core::ffi::c_int
                         && ascii_isdigit(
                             buf[9 as ::core::ffi::c_int as usize] as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int != 0))
+                        ) as ::core::ffi::c_int
+                            != 0))
         {
             f = -1 as ::core::ffi::c_int;
         }
@@ -2537,9 +2483,7 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
     let mut need_cap: ::core::ffi::c_int = 0;
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut sug: suginfo_T = suginfo_T {
         su_ga: garray_T {
             ga_len: 0,
@@ -2595,9 +2539,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
         } else {
             if VIsual_active {
                 if (*curwin).w_cursor.lnum != VIsual.lnum {
-                    vim_beep(
-                        kOptBoFlagSpell as ::core::ffi::c_int as ::core::ffi::c_uint,
-                    );
+                    vim_beep(kOptBoFlagSpell as ::core::ffi::c_int as ::core::ffi::c_uint);
                     break '_skip;
                 } else {
                     badlen = (*curwin).w_cursor.col - VIsual.col;
@@ -2611,8 +2553,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     badlen = if badlen < get_cursor_line_len() - (*curwin).w_cursor.col {
                         badlen
                     } else {
-                        get_cursor_line_len()
-                            - (*curwin).w_cursor.col as ::core::ffi::c_int
+                        get_cursor_line_len() - (*curwin).w_cursor.col as ::core::ffi::c_int
                     };
                 }
             } else if spell_move_to(
@@ -2621,22 +2562,18 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 SMT_ALL,
                 true_0 != 0,
                 ::core::ptr::null_mut::<hlf_T>(),
-            ) == 0 as size_t || (*curwin).w_cursor.col > prev_cursor.col
+            ) == 0 as size_t
+                || (*curwin).w_cursor.col > prev_cursor.col
             {
                 (*curwin).w_cursor = prev_cursor;
                 let mut curline: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-                let mut p: *mut ::core::ffi::c_char = curline
-                    .offset((*curwin).w_cursor.col as isize);
-                while p > curline
-                    && spell_iswordp_nmw(p, curwin) as ::core::ffi::c_int != 0
-                {
-                    p = p
-                        .offset(
-                            -((utf_head_off(
-                                curline,
-                                p.offset(-(1 as ::core::ffi::c_int as isize)),
-                            ) + 1 as ::core::ffi::c_int) as isize),
-                        );
+                let mut p: *mut ::core::ffi::c_char =
+                    curline.offset((*curwin).w_cursor.col as isize);
+                while p > curline && spell_iswordp_nmw(p, curwin) as ::core::ffi::c_int != 0 {
+                    p = p.offset(
+                        -((utf_head_off(curline, p.offset(-(1 as ::core::ffi::c_int as isize)))
+                            + 1 as ::core::ffi::c_int) as isize),
+                    );
                 }
                 while *p as ::core::ffi::c_int != NUL && !spell_iswordp_nmw(p, curwin) {
                     p = p.offset(utfc_ptr2len(p) as isize);
@@ -2648,11 +2585,8 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     (*curwin).w_cursor.col = p.offset_from(curline) as colnr_T;
                 }
             }
-            need_cap = check_need_cap(
-                curwin,
-                (*curwin).w_cursor.lnum,
-                (*curwin).w_cursor.col,
-            ) as ::core::ffi::c_int;
+            need_cap = check_need_cap(curwin, (*curwin).w_cursor.lnum, (*curwin).w_cursor.col)
+                as ::core::ffi::c_int;
             line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
             spell_suggest_timeout = 5000 as ::core::ffi::c_int;
             sug = suginfo_T {
@@ -2718,10 +2652,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 if count > sug.su_ga.ga_len {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Only %ld suggestions\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Only %ld suggestions\0".as_ptr() as *const ::core::ffi::c_char),
                         sug.su_ga.ga_len as int64_t,
                     );
                 }
@@ -2730,9 +2661,8 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 msg_start();
                 msg_row = Rows - 1 as ::core::ffi::c_int;
                 lines_left = Rows;
-                let mut fmt: *mut ::core::ffi::c_char = gettext(
-                    b"Change \"%.*s\" to:\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                let mut fmt: *mut ::core::ffi::c_char =
+                    gettext(b"Change \"%.*s\" to:\0".as_ptr() as *const ::core::ffi::c_char);
                 if cmdmsg_rl as ::core::ffi::c_int != 0
                     && strncmp(
                         fmt,
@@ -2756,21 +2686,21 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                 msg_scroll = true_0;
                 let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i < sug.su_ga.ga_len {
-                    let mut stp: *mut suggest_T = (sug.su_ga.ga_data as *mut suggest_T)
-                        .offset(i as isize);
+                    let mut stp: *mut suggest_T =
+                        (sug.su_ga.ga_data as *mut suggest_T).offset(i as isize);
                     let mut wcopy: [::core::ffi::c_char; 256] = [0; 256];
                     xstrlcpy(
                         &raw mut wcopy as *mut ::core::ffi::c_char,
                         (*stp).st_word,
-                        (MAXWLEN as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                            as size_t,
+                        (MAXWLEN as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t,
                     );
                     let mut el: ::core::ffi::c_int = sug.su_badlen - (*stp).st_orglen;
                     if el > 0 as ::core::ffi::c_int
                         && (*stp).st_wordlen + el <= MAXWLEN as ::core::ffi::c_int
                     {
                         '_c2rust_label: {
-                            if !sug.su_badptr.is_null() {} else {
+                            if !sug.su_badptr.is_null() {
+                            } else {
                                 __assert_fail(
                                     b"sug.su_badptr != NULL\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -2815,9 +2745,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         vim_snprintf(
                             &raw mut IObuff as *mut ::core::ffi::c_char,
                             IOSIZE as size_t,
-                            gettext(
-                                b" < \"%.*s\"\0".as_ptr() as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b" < \"%.*s\"\0".as_ptr() as *const ::core::ffi::c_char),
                             (*stp).st_orglen,
                             sug.su_badptr,
                         );
@@ -2825,8 +2753,8 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     }
                     if p_verbose > 0 as OptInt {
                         if sps_flags
-                            & (SPS_DOUBLE as ::core::ffi::c_int
-                                | SPS_BEST as ::core::ffi::c_int) != 0
+                            & (SPS_DOUBLE as ::core::ffi::c_int | SPS_BEST as ::core::ffi::c_int)
+                            != 0
                         {
                             vim_snprintf(
                                 &raw mut IObuff as *mut ::core::ffi::c_char,
@@ -2858,9 +2786,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         msg_advance(30 as ::core::ffi::c_int);
                         msg_puts(&raw mut IObuff as *mut ::core::ffi::c_char);
                     }
-                    if !ui_has(kUIMessages)
-                        || i < sug.su_ga.ga_len - 1 as ::core::ffi::c_int
-                    {
+                    if !ui_has(kUIMessages) || i < sug.su_ga.ga_len - 1 as ::core::ffi::c_int {
                         msg_putchar('\n' as ::core::ffi::c_int);
                     }
                     i += 1;
@@ -2874,22 +2800,23 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                     &raw mut mouse_used,
                 );
                 if mouse_used {
-                    selected = sug.su_ga.ga_len + 1 as ::core::ffi::c_int
-                        - (cmdline_row - mouse_row);
+                    selected =
+                        sug.su_ga.ga_len + 1 as ::core::ffi::c_int - (cmdline_row - mouse_row);
                 }
                 lines_left = Rows;
                 msg_scroll = msg_scroll_save;
             }
-            if selected > 0 as ::core::ffi::c_int && selected <= sug.su_ga.ga_len
+            if selected > 0 as ::core::ffi::c_int
+                && selected <= sug.su_ga.ga_len
                 && u_save_cursor() == OK
             {
-                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut repl_from
-                    as *mut *mut ::core::ffi::c_void;
+                let mut ptr_: *mut *mut ::core::ffi::c_void =
+                    &raw mut repl_from as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
                 *ptr_;
-                let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut repl_to
-                    as *mut *mut ::core::ffi::c_void;
+                let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                    &raw mut repl_to as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr__0);
                 *ptr__0 = NULL;
                 *ptr__0;
@@ -2915,9 +2842,10 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
                         .wrapping_sub((*stp_0).st_orglen as size_t)
                         .wrapping_add((*stp_0).st_wordlen as size_t)
                         .wrapping_add(1 as size_t),
-                ) as *mut ::core::ffi::c_char;
-                let mut c: ::core::ffi::c_int = sug.su_badptr.offset_from(line)
-                    as ::core::ffi::c_int;
+                )
+                    as *mut ::core::ffi::c_char;
+                let mut c: ::core::ffi::c_int =
+                    sug.su_badptr.offset_from(line) as ::core::ffi::c_int;
                 memmove(
                     p_0 as *mut ::core::ffi::c_void,
                     line as *const ::core::ffi::c_void,
@@ -3012,8 +2940,7 @@ pub unsafe extern "C" fn spell_suggest_list(
     ga_grow(gap, sug.su_ga.ga_len);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < sug.su_ga.ga_len {
-        let mut stp: *mut suggest_T = (sug.su_ga.ga_data as *mut suggest_T)
-            .offset(i as isize);
+        let mut stp: *mut suggest_T = (sug.su_ga.ga_data as *mut suggest_T).offset(i as isize);
         let mut wcopy: *mut ::core::ffi::c_char = xmalloc(
             ((*stp).st_wordlen as size_t)
                 .wrapping_add(strlen(sug.su_badptr.offset((*stp).st_orglen as isize)))
@@ -3026,8 +2953,7 @@ pub unsafe extern "C" fn spell_suggest_list(
         );
         let c2rust_fresh26 = (*gap).ga_len;
         (*gap).ga_len = (*gap).ga_len + 1;
-        let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data
-            as *mut *mut ::core::ffi::c_char)
+        let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data as *mut *mut ::core::ffi::c_char)
             .offset(c2rust_fresh26 as isize);
         *c2rust_lvalue_ptr = wcopy;
         i += 1;
@@ -3079,11 +3005,12 @@ unsafe extern "C" fn spell_find_suggest(
             false_0 != 0,
         );
         '_c2rust_label: {
-            if tmplen <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if tmplen <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"tmplen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/spellsuggest.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/spellsuggest.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     715 as ::core::ffi::c_uint,
                     b"void spell_find_suggest(char *, int, suginfo_T *, int, _Bool, _Bool, _Bool)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -3094,16 +3021,13 @@ unsafe extern "C" fn spell_find_suggest(
     }
     (*su).su_maxcount = maxcount;
     (*su).su_maxscore = SCORE_MAXINIT as ::core::ffi::c_int;
-    (*su).su_badlen = if (*su).su_badlen
-        < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-    {
+    (*su).su_badlen = if (*su).su_badlen < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
         (*su).su_badlen
     } else {
         MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
     };
     xmemcpyz(
-        &raw mut (*su).su_badword as *mut ::core::ffi::c_char
-            as *mut ::core::ffi::c_void,
+        &raw mut (*su).su_badword as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
         (*su).su_badptr as *const ::core::ffi::c_void,
         (*su).su_badlen as size_t,
     );
@@ -3124,8 +3048,8 @@ unsafe extern "C" fn spell_find_suggest(
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*curbuf).b_s.b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*curbuf).b_s.b_langp.ga_data as *mut langp_T)
-            .offset(i as isize);
+        let mut lp: *mut langp_T =
+            ((*curbuf).b_s.b_langp.ga_data as *mut langp_T).offset(i as isize);
         if !(*lp).lp_sallang.is_null() {
             (*su).su_sallang = (*lp).lp_sallang;
             break;
@@ -3147,8 +3071,7 @@ unsafe extern "C" fn spell_find_suggest(
     } else {
         spelltab.st_isu[c as usize] as ::core::ffi::c_int
     }) == 0
-        && attr as ::core::ffi::c_uint
-            == HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
+        && attr as ::core::ffi::c_uint == HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         make_case_word(
             &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
@@ -3202,8 +3125,7 @@ unsafe extern "C" fn spell_find_suggest(
         {
             spell_suggest_file(
                 su,
-                (&raw mut buf as *mut ::core::ffi::c_char)
-                    .offset(5 as ::core::ffi::c_int as isize),
+                (&raw mut buf as *mut ::core::ffi::c_char).offset(5 as ::core::ffi::c_int as isize),
             );
         } else if strncmp(
             &raw mut buf as *mut ::core::ffi::c_char,
@@ -3212,8 +3134,7 @@ unsafe extern "C" fn spell_find_suggest(
         ) == 0 as ::core::ffi::c_int
         {
             spell_suggest_timeout = atoi(
-                (&raw mut buf as *mut ::core::ffi::c_char)
-                    .offset(8 as ::core::ffi::c_int as isize),
+                (&raw mut buf as *mut ::core::ffi::c_char).offset(8 as ::core::ffi::c_int as isize),
             );
         } else if !did_intern {
             spell_suggest_intern(su, interactive);
@@ -3233,10 +3154,8 @@ unsafe extern "C" fn spell_suggest_expr(
     mut expr: *mut ::core::ffi::c_char,
 ) {
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let list: *mut list_T = eval_spell_expr(
-        &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
-        expr,
-    );
+    let list: *mut list_T =
+        eval_spell_expr(&raw mut (*su).su_badword as *mut ::core::ffi::c_char, expr);
     if !list.is_null() {
         let l_: *mut list_T = list;
         if !l_.is_null() {
@@ -3245,10 +3164,8 @@ unsafe extern "C" fn spell_suggest_expr(
                 if (*li).li_tv.v_type as ::core::ffi::c_uint
                     == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    let mut score: ::core::ffi::c_int = get_spellword(
-                        (*li).li_tv.vval.v_list,
-                        &raw mut p,
-                    );
+                    let mut score: ::core::ffi::c_int =
+                        get_spellword((*li).li_tv.vval.v_list, &raw mut p);
                     if score >= 0 as ::core::ffi::c_int && score <= (*su).su_maxscore {
                         add_suggestion(
                             su,
@@ -3278,12 +3195,12 @@ unsafe extern "C" fn spell_suggest_file(
     let mut line: [::core::ffi::c_char; 508] = [0; 508];
     let mut len: ::core::ffi::c_int = 0;
     let mut cword: [::core::ffi::c_char; 254] = [0; 254];
-    let mut fd: *mut FILE = os_fopen(
-        fname,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(fname, b"r\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
-        semsg(gettext(&raw const e_notopen as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
+            fname,
+        );
         return;
     }
     while !vim_fgets(
@@ -3315,9 +3232,7 @@ unsafe extern "C" fn spell_suggest_file(
                 len += 1;
             }
             *p.offset(len as isize) = NUL as ::core::ffi::c_char;
-            if captype(p, ::core::ptr::null::<::core::ffi::c_char>())
-                == 0 as ::core::ffi::c_int
-            {
+            if captype(p, ::core::ptr::null::<::core::ffi::c_char>()) == 0 as ::core::ffi::c_int {
                 make_case_word(
                     p,
                     &raw mut cword as *mut ::core::ffi::c_char,
@@ -3342,10 +3257,7 @@ unsafe extern "C" fn spell_suggest_file(
     check_suggestions(su, &raw mut (*su).su_ga);
     cleanup_suggestions(&raw mut (*su).su_ga, (*su).su_maxscore, (*su).su_maxcount);
 }
-unsafe extern "C" fn spell_suggest_intern(
-    mut su: *mut suginfo_T,
-    mut interactive: bool,
-) {
+unsafe extern "C" fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactive: bool) {
     suggest_load_files();
     suggest_try_special(su);
     suggest_try_change(su);
@@ -3358,8 +3270,7 @@ unsafe extern "C" fn spell_suggest_intern(
         }
         suggest_try_soundalike_prep();
         (*su).su_maxscore = SCORE_SFMAX1 as ::core::ffi::c_int;
-        (*su).su_sfmaxscore = SCORE_MAXINIT as ::core::ffi::c_int
-            * 3 as ::core::ffi::c_int;
+        (*su).su_sfmaxscore = SCORE_MAXINIT as ::core::ffi::c_int * 3 as ::core::ffi::c_int;
         suggest_try_soundalike(su);
         if (*su).su_ga.ga_len
             < (if (*su).su_maxcount < 130 as ::core::ffi::c_int {
@@ -3404,8 +3315,7 @@ unsafe extern "C" fn spell_find_cleanup(mut su: *mut suginfo_T) {
     if !(*_gap).ga_data.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*_gap).ga_len {
-            let mut _item: *mut suggest_T = ((*_gap).ga_data as *mut suggest_T)
-                .offset(i as isize);
+            let mut _item: *mut suggest_T = ((*_gap).ga_data as *mut suggest_T).offset(i as isize);
             xfree((*_item).st_word as *mut ::core::ffi::c_void);
             i += 1;
         }
@@ -3415,8 +3325,8 @@ unsafe extern "C" fn spell_find_cleanup(mut su: *mut suginfo_T) {
     if !(*_gap_0).ga_data.is_null() {
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_0 < (*_gap_0).ga_len {
-            let mut _item_0: *mut suggest_T = ((*_gap_0).ga_data as *mut suggest_T)
-                .offset(i_0 as isize);
+            let mut _item_0: *mut suggest_T =
+                ((*_gap_0).ga_data as *mut suggest_T).offset(i_0 as isize);
             xfree((*_item_0).st_word as *mut ::core::ffi::c_void);
             i_0 += 1;
         }
@@ -3426,15 +3336,17 @@ unsafe extern "C" fn spell_find_cleanup(mut su: *mut suginfo_T) {
 }
 unsafe extern "C" fn suggest_try_special(mut su: *mut suginfo_T) {
     let mut word: [::core::ffi::c_char; 254] = [0; 254];
-    let mut p: *mut ::core::ffi::c_char = skiptowhite(
-        &raw mut (*su).su_fbadword as *mut ::core::ffi::c_char,
-    );
-    let mut len: size_t = p
-        .offset_from(&raw mut (*su).su_fbadword as *mut ::core::ffi::c_char) as size_t;
+    let mut p: *mut ::core::ffi::c_char =
+        skiptowhite(&raw mut (*su).su_fbadword as *mut ::core::ffi::c_char);
+    let mut len: size_t =
+        p.offset_from(&raw mut (*su).su_fbadword as *mut ::core::ffi::c_char) as size_t;
     p = skipwhite(p);
     if strlen(p) == len
-        && strncmp(&raw mut (*su).su_fbadword as *mut ::core::ffi::c_char, p, len)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            &raw mut (*su).su_fbadword as *mut ::core::ffi::c_char,
+            p,
+            len,
+        ) == 0 as ::core::ffi::c_int
     {
         let mut c: ::core::ffi::c_char = (*su).su_fbadword[len as usize];
         (*su).su_fbadword[len as usize] = NUL as ::core::ffi::c_char;
@@ -3449,8 +3361,8 @@ unsafe extern "C" fn suggest_try_special(mut su: *mut suginfo_T) {
             &raw mut (*su).su_ga,
             &raw mut word as *mut ::core::ffi::c_char,
             (*su).su_badlen,
-            (3 as ::core::ffi::c_int * SCORE_REP as ::core::ffi::c_int
-                + 0 as ::core::ffi::c_int) / 4 as ::core::ffi::c_int,
+            (3 as ::core::ffi::c_int * SCORE_REP as ::core::ffi::c_int + 0 as ::core::ffi::c_int)
+                / 4 as ::core::ffi::c_int,
             0 as ::core::ffi::c_int,
             true_0 != 0,
             (*su).su_sallang,
@@ -3464,11 +3376,9 @@ unsafe extern "C" fn suggest_try_change(mut su: *mut suginfo_T) {
         &raw mut fword as *mut ::core::ffi::c_char,
         &raw mut (*su).su_fbadword as *mut ::core::ffi::c_char,
     );
-    let mut n: ::core::ffi::c_int = strlen(&raw mut fword as *mut ::core::ffi::c_char)
-        as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = (*su)
-        .su_badptr
-        .offset((*su).su_badlen as isize);
+    let mut n: ::core::ffi::c_int =
+        strlen(&raw mut fword as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
+    let mut p: *mut ::core::ffi::c_char = (*su).su_badptr.offset((*su).su_badlen as isize);
     spell_casefold(
         curwin,
         p,
@@ -3482,8 +3392,8 @@ unsafe extern "C" fn suggest_try_change(mut su: *mut suginfo_T) {
     }
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         if !(*(*lp).lp_slang).sl_fbyts.is_null() {
             suggest_trie_walk(
                 su,
@@ -4307,8 +4217,8 @@ unsafe extern "C" fn suggest_trie_walk(
     let mut goodword_ends: bool = false;
     let mut breakcheckcount: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
     let mut depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut sp: *mut trystate_T = (&raw mut stack as *mut trystate_T)
-        .offset(0 as ::core::ffi::c_int as isize);
+    let mut sp: *mut trystate_T =
+        (&raw mut stack as *mut trystate_T).offset(0 as ::core::ffi::c_int as isize);
     memset(
         sp as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -4350,9 +4260,7 @@ unsafe extern "C" fn suggest_trie_walk(
         let mut len: ::core::ffi::c_int = 0;
         let mut flags_0: ::core::ffi::c_int = 0;
         let mut fword_ends: bool = false;
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut compound_ok: bool = false;
         let mut newscore_0: ::core::ffi::c_int = 0;
         let mut gap: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
@@ -4372,18 +4280,21 @@ unsafe extern "C" fn suggest_trie_walk(
                                     {
                                         n = 0 as ::core::ffi::c_int;
                                         while n < len
-                                            && *byts.offset((arridx as ::core::ffi::c_int + n) as isize)
-                                                as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                                            && *byts
+                                                .offset((arridx as ::core::ffi::c_int + n) as isize)
+                                                as ::core::ffi::c_int
+                                                == 0 as ::core::ffi::c_int
                                         {
                                             n += 1;
                                         }
-                                        (*sp).ts_curi = ((*sp).ts_curi as ::core::ffi::c_int + n)
-                                            as int16_t;
+                                        (*sp).ts_curi =
+                                            ((*sp).ts_curi as ::core::ffi::c_int + n) as int16_t;
                                         n = (*sp).ts_state as ::core::ffi::c_int;
                                         (*sp).ts_state = STATE_ENDNUL;
                                         (*sp).ts_save_badflags = (*su).su_badflags as uint8_t;
                                         if depth
-                                            < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                                            < MAXWLEN as ::core::ffi::c_int
+                                                - 1 as ::core::ffi::c_int
                                             && (*byts.offset(arridx as isize) as ::core::ffi::c_int
                                                 == 0 as ::core::ffi::c_int
                                                 || n == STATE_NOPREFIX as ::core::ffi::c_int)
@@ -4409,23 +4320,30 @@ unsafe extern "C" fn suggest_trie_walk(
                                             depth += 1;
                                             sp = (&raw mut stack as *mut trystate_T)
                                                 .offset(depth as isize);
-                                            (*sp).ts_prefixdepth = (depth - 1 as ::core::ffi::c_int)
-                                                as uint8_t;
+                                            (*sp).ts_prefixdepth =
+                                                (depth - 1 as ::core::ffi::c_int) as uint8_t;
                                             byts = fbyts;
                                             idxs = fidxs;
                                             (*sp).ts_arridx = 0 as ::core::ffi::c_int as idx_T;
-                                            tword[(*sp).ts_twordlen as usize] = NUL
-                                                as ::core::ffi::c_char;
+                                            tword[(*sp).ts_twordlen as usize] =
+                                                NUL as ::core::ffi::c_char;
                                             make_case_word(
                                                 (&raw mut tword as *mut ::core::ffi::c_char)
-                                                    .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                    .offset(
+                                                        (*sp).ts_splitoff as ::core::ffi::c_int
+                                                            as isize,
+                                                    ),
                                                 (&raw mut preword as *mut ::core::ffi::c_char)
-                                                    .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                    .offset(
+                                                        (*sp).ts_prewordlen as ::core::ffi::c_int
+                                                            as isize,
+                                                    ),
                                                 flags,
                                             );
                                             (*sp).ts_prewordlen = strlen(
                                                 &raw mut preword as *mut ::core::ffi::c_char,
-                                            ) as uint8_t;
+                                            )
+                                                as uint8_t;
                                             (*sp).ts_splitoff = (*sp).ts_twordlen;
                                         }
                                         break 's_2231;
@@ -4443,24 +4361,32 @@ unsafe extern "C" fn suggest_trie_walk(
                                             break 's_2231;
                                         } else {
                                             fword_ends = *fword.offset((*sp).ts_fidx as isize)
-                                                as ::core::ffi::c_int == NUL
+                                                as ::core::ffi::c_int
+                                                == NUL
                                                 || (if soundfold as ::core::ffi::c_int != 0 {
                                                     ascii_iswhite(
-                                                        *fword.offset((*sp).ts_fidx as isize) as ::core::ffi::c_int,
-                                                    ) as ::core::ffi::c_int
+                                                        *fword.offset((*sp).ts_fidx as isize)
+                                                            as ::core::ffi::c_int,
+                                                    )
+                                                        as ::core::ffi::c_int
                                                 } else {
                                                     !spell_iswordp(
-                                                        fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize),
+                                                        fword.offset(
+                                                            (*sp).ts_fidx as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                         curwin,
-                                                    ) as ::core::ffi::c_int
+                                                    )
+                                                        as ::core::ffi::c_int
                                                 }) != 0;
-                                            tword[(*sp).ts_twordlen as usize] = NUL
-                                                as ::core::ffi::c_char;
+                                            tword[(*sp).ts_twordlen as usize] =
+                                                NUL as ::core::ffi::c_char;
                                             if (*sp).ts_prefixdepth as ::core::ffi::c_int
                                                 <= PFD_NOTSPECIAL as ::core::ffi::c_int
                                                 && (*sp).ts_flags as ::core::ffi::c_int
                                                     & TSF_PREFIXOK as ::core::ffi::c_int
-                                                    == 0 as ::core::ffi::c_int && !pbyts.is_null()
+                                                    == 0 as ::core::ffi::c_int
+                                                && !pbyts.is_null()
                                             {
                                                 n = stack[(*sp).ts_prefixdepth as usize].ts_arridx
                                                     as ::core::ffi::c_int;
@@ -4470,7 +4396,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                                     as ::core::ffi::c_int;
                                                 c = 0 as ::core::ffi::c_int;
                                                 while c < len
-                                                    && *pbyts.offset((n + c) as isize) as ::core::ffi::c_int
+                                                    && *pbyts.offset((n + c) as isize)
+                                                        as ::core::ffi::c_int
                                                         == 0 as ::core::ffi::c_int
                                                 {
                                                     c += 1;
@@ -4480,19 +4407,28 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         c,
                                                         n,
                                                         flags_0,
-                                                        (&raw mut tword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                        (&raw mut tword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(
+                                                                (*sp).ts_splitoff
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ),
                                                         slang,
                                                         false_0 != 0,
                                                     );
                                                     if c == 0 as ::core::ffi::c_int {
                                                         break 's_2231;
                                                     } else {
-                                                        if c & WF_RAREPFX as ::core::ffi::c_int != 0 {
-                                                            flags_0 |= WF_RARE as ::core::ffi::c_int;
+                                                        if c & WF_RAREPFX as ::core::ffi::c_int != 0
+                                                        {
+                                                            flags_0 |=
+                                                                WF_RARE as ::core::ffi::c_int;
                                                         }
-                                                        (*sp).ts_flags = ((*sp).ts_flags as ::core::ffi::c_int
-                                                            | TSF_PREFIXOK as ::core::ffi::c_int) as uint8_t;
+                                                        (*sp).ts_flags = ((*sp).ts_flags
+                                                            as ::core::ffi::c_int
+                                                            | TSF_PREFIXOK as ::core::ffi::c_int)
+                                                            as uint8_t;
                                                     }
                                                 }
                                             }
@@ -4514,32 +4450,53 @@ unsafe extern "C" fn suggest_trie_walk(
                                                     if (*sp).ts_fidx as ::core::ffi::c_int
                                                         - (*sp).ts_splitfidx as ::core::ffi::c_int
                                                         == (*sp).ts_twordlen as ::core::ffi::c_int
-                                                            - (*sp).ts_splitoff as ::core::ffi::c_int
+                                                            - (*sp).ts_splitoff
+                                                                as ::core::ffi::c_int
                                                         && strncmp(
-                                                            fword
-                                                                .offset((*sp).ts_splitfidx as ::core::ffi::c_int as isize),
-                                                            (&raw mut tword as *mut ::core::ffi::c_char)
-                                                                .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                            fword.offset(
+                                                                (*sp).ts_splitfidx
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ),
+                                                            (&raw mut tword
+                                                                as *mut ::core::ffi::c_char)
+                                                                .offset(
+                                                                    (*sp).ts_splitoff
+                                                                        as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
                                                             ((*sp).ts_fidx as ::core::ffi::c_int
-                                                                - (*sp).ts_splitfidx as ::core::ffi::c_int) as size_t,
+                                                                - (*sp).ts_splitfidx
+                                                                    as ::core::ffi::c_int)
+                                                                as size_t,
                                                         ) == 0 as ::core::ffi::c_int
                                                     {
-                                                        preword[(*sp).ts_prewordlen as usize] = NUL
-                                                            as ::core::ffi::c_char;
-                                                        let mut newscore: ::core::ffi::c_int = score_wordcount_adj(
-                                                            slang,
-                                                            (*sp).ts_score,
-                                                            (&raw mut preword as *mut ::core::ffi::c_char)
-                                                                .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
-                                                            (*sp).ts_prewordlen as ::core::ffi::c_int
-                                                                > 0 as ::core::ffi::c_int,
-                                                        );
+                                                        preword[(*sp).ts_prewordlen as usize] =
+                                                            NUL as ::core::ffi::c_char;
+                                                        let mut newscore: ::core::ffi::c_int =
+                                                            score_wordcount_adj(
+                                                                slang,
+                                                                (*sp).ts_score,
+                                                                (&raw mut preword
+                                                                    as *mut ::core::ffi::c_char)
+                                                                    .offset(
+                                                                        (*sp).ts_prewordlen
+                                                                            as ::core::ffi::c_int
+                                                                            as isize,
+                                                                    ),
+                                                                (*sp).ts_prewordlen
+                                                                    as ::core::ffi::c_int
+                                                                    > 0 as ::core::ffi::c_int,
+                                                            );
                                                         if newscore <= (*su).su_maxscore {
                                                             add_suggestion(
                                                                 su,
                                                                 &raw mut (*su).su_ga,
-                                                                &raw mut preword as *mut ::core::ffi::c_char,
-                                                                (*sp).ts_splitfidx as ::core::ffi::c_int - repextra,
+                                                                &raw mut preword
+                                                                    as *mut ::core::ffi::c_char,
+                                                                (*sp).ts_splitfidx
+                                                                    as ::core::ffi::c_int
+                                                                    - repextra,
                                                                 newscore,
                                                                 0 as ::core::ffi::c_int,
                                                                 false_0 != 0,
@@ -4550,102 +4507,166 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         break 's_2231;
                                                     }
                                                 } else if flags_0 as ::core::ffi::c_uint
-                                                    >> 24 as ::core::ffi::c_int == 0 as ::core::ffi::c_uint
+                                                    >> 24 as ::core::ffi::c_int
+                                                    == 0 as ::core::ffi::c_uint
                                                     || ((*sp).ts_twordlen as ::core::ffi::c_int
                                                         - (*sp).ts_splitoff as ::core::ffi::c_int)
                                                         < (*slang).sl_compminlen
                                                 {
                                                     break 's_2231;
-                                                } else if (*slang).sl_compminlen > 0 as ::core::ffi::c_int
+                                                } else if (*slang).sl_compminlen
+                                                    > 0 as ::core::ffi::c_int
                                                     && mb_charlen(
-                                                        (&raw mut tword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                        (&raw mut tword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(
+                                                                (*sp).ts_splitoff
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ),
                                                     ) < (*slang).sl_compminlen
                                                 {
                                                     break 's_2231;
                                                 } else {
                                                     compflags[(*sp).ts_complen as usize] = (flags_0
-                                                        as ::core::ffi::c_uint >> 24 as ::core::ffi::c_int)
+                                                        as ::core::ffi::c_uint
+                                                        >> 24 as ::core::ffi::c_int)
                                                         as uint8_t;
-                                                    compflags[((*sp).ts_complen as ::core::ffi::c_int
-                                                        + 1 as ::core::ffi::c_int) as usize] = NUL as uint8_t;
+                                                    compflags[((*sp).ts_complen
+                                                        as ::core::ffi::c_int
+                                                        + 1 as ::core::ffi::c_int)
+                                                        as usize] = NUL as uint8_t;
                                                     xmemcpyz(
-                                                        (&raw mut preword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize)
+                                                        (&raw mut preword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(
+                                                                (*sp).ts_prewordlen
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            )
                                                             as *mut ::core::ffi::c_void,
                                                         (&raw mut tword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize)
+                                                            .offset(
+                                                                (*sp).ts_splitoff
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            )
                                                             as *const ::core::ffi::c_void,
                                                         ((*sp).ts_twordlen as ::core::ffi::c_int
-                                                            - (*sp).ts_splitoff as ::core::ffi::c_int) as size_t,
+                                                            - (*sp).ts_splitoff
+                                                                as ::core::ffi::c_int)
+                                                            as size_t,
                                                     );
                                                     if match_checkcompoundpattern(
-                                                        &raw mut preword as *mut ::core::ffi::c_char,
+                                                        &raw mut preword
+                                                            as *mut ::core::ffi::c_char,
                                                         (*sp).ts_prewordlen as ::core::ffi::c_int,
                                                         &raw mut (*slang).sl_comppat,
                                                     ) {
                                                         compound_ok = false_0 != 0;
                                                     }
                                                     if compound_ok {
-                                                        p = &raw mut preword as *mut ::core::ffi::c_char;
-                                                        while *skiptowhite(p) as ::core::ffi::c_int != NUL {
+                                                        p = &raw mut preword
+                                                            as *mut ::core::ffi::c_char;
+                                                        while *skiptowhite(p) as ::core::ffi::c_int
+                                                            != NUL
+                                                        {
                                                             p = skipwhite(skiptowhite(p));
                                                         }
                                                         if fword_ends as ::core::ffi::c_int != 0
                                                             && !can_compound(
                                                                 slang,
                                                                 p,
-                                                                (&raw mut compflags as *mut uint8_t)
-                                                                    .offset((*sp).ts_compsplit as ::core::ffi::c_int as isize),
+                                                                (&raw mut compflags
+                                                                    as *mut uint8_t)
+                                                                    .offset(
+                                                                        (*sp).ts_compsplit
+                                                                            as ::core::ffi::c_int
+                                                                            as isize,
+                                                                    ),
                                                             )
                                                         {
                                                             compound_ok = false_0 != 0;
                                                         }
                                                     }
-                                                    p = (&raw mut preword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize);
-                                                    p = p
+                                                    p = (&raw mut preword
+                                                        as *mut ::core::ffi::c_char)
                                                         .offset(
-                                                            -((utf_head_off(
-                                                                &raw mut preword as *mut ::core::ffi::c_char,
-                                                                p.offset(-(1 as ::core::ffi::c_int as isize)),
-                                                            ) + 1 as ::core::ffi::c_int) as isize),
+                                                            (*sp).ts_prewordlen
+                                                                as ::core::ffi::c_int
+                                                                as isize,
                                                         );
+                                                    p = p.offset(
+                                                        -((utf_head_off(
+                                                            &raw mut preword
+                                                                as *mut ::core::ffi::c_char,
+                                                            p.offset(
+                                                                -(1 as ::core::ffi::c_int as isize),
+                                                            ),
+                                                        ) + 1 as ::core::ffi::c_int)
+                                                            as isize),
+                                                    );
                                                 }
                                             }
                                             if soundfold {
                                                 strcpy(
                                                     (&raw mut preword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                        .offset(
+                                                            (*sp).ts_prewordlen
+                                                                as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                     (&raw mut tword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                        .offset(
+                                                            (*sp).ts_splitoff as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                 );
-                                            } else if flags_0 & WF_KEEPCAP as ::core::ffi::c_int != 0 {
+                                            } else if flags_0 & WF_KEEPCAP as ::core::ffi::c_int
+                                                != 0
+                                            {
                                                 find_keepcap_word(
                                                     slang,
                                                     (&raw mut tword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                        .offset(
+                                                            (*sp).ts_splitoff as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                     (&raw mut preword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                        .offset(
+                                                            (*sp).ts_prewordlen
+                                                                as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                 );
                                             } else {
                                                 c = (*su).su_badflags;
                                                 if c & WF_ALLCAP as ::core::ffi::c_int != 0
-                                                    && (*su).su_badlen == utfc_ptr2len((*su).su_badptr)
+                                                    && (*su).su_badlen
+                                                        == utfc_ptr2len((*su).su_badptr)
                                                 {
                                                     c = WF_ONECAP as ::core::ffi::c_int;
                                                 }
                                                 c |= flags_0;
                                                 if !p.is_null()
-                                                    && spell_iswordp_nmw(p, curwin) as ::core::ffi::c_int != 0
+                                                    && spell_iswordp_nmw(p, curwin)
+                                                        as ::core::ffi::c_int
+                                                        != 0
                                                 {
                                                     c &= !(WF_ONECAP as ::core::ffi::c_int);
                                                 }
                                                 make_case_word(
                                                     (&raw mut tword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                        .offset(
+                                                            (*sp).ts_splitoff as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                     (&raw mut preword as *mut ::core::ffi::c_char)
-                                                        .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                        .offset(
+                                                            (*sp).ts_prewordlen
+                                                                as ::core::ffi::c_int
+                                                                as isize,
+                                                        ),
                                                     c,
                                                 );
                                             }
@@ -4653,36 +4674,55 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 if flags_0 & WF_BANNED as ::core::ffi::c_int != 0 {
                                                     add_banned(
                                                         su,
-                                                        (&raw mut preword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                        (&raw mut preword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(
+                                                                (*sp).ts_prewordlen
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ),
                                                     );
                                                     break 's_2231;
                                                 } else if (*sp).ts_complen as ::core::ffi::c_int
                                                     == (*sp).ts_compsplit as ::core::ffi::c_int
                                                     && !((*hash_find(
                                                         &raw mut (*su).su_banned,
-                                                        (&raw mut preword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                        (&raw mut preword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(
+                                                                (*sp).ts_prewordlen
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ),
                                                     ))
-                                                        .hi_key
-                                                        .is_null()
+                                                    .hi_key
+                                                    .is_null()
                                                         || (*hash_find(
                                                             &raw mut (*su).su_banned,
-                                                            (&raw mut preword as *mut ::core::ffi::c_char)
-                                                                .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                            (&raw mut preword
+                                                                as *mut ::core::ffi::c_char)
+                                                                .offset(
+                                                                    (*sp).ts_prewordlen
+                                                                        as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
                                                         ))
-                                                            .hi_key == &raw mut hash_removed)
+                                                        .hi_key
+                                                            == &raw mut hash_removed)
                                                     || !((*hash_find(
                                                         &raw mut (*su).su_banned,
-                                                        &raw mut preword as *mut ::core::ffi::c_char,
+                                                        &raw mut preword
+                                                            as *mut ::core::ffi::c_char,
                                                     ))
-                                                        .hi_key
-                                                        .is_null()
+                                                    .hi_key
+                                                    .is_null()
                                                         || (*hash_find(
                                                             &raw mut (*su).su_banned,
-                                                            &raw mut preword as *mut ::core::ffi::c_char,
+                                                            &raw mut preword
+                                                                as *mut ::core::ffi::c_char,
                                                         ))
-                                                            .hi_key == &raw mut hash_removed)
+                                                        .hi_key
+                                                            == &raw mut hash_removed)
                                                 {
                                                     if (*slang).sl_compprog.is_null() {
                                                         break 's_2231;
@@ -4699,7 +4739,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         & (*lp).lp_region as ::core::ffi::c_uint
                                                         == 0 as ::core::ffi::c_uint
                                                 {
-                                                    newscore_0 += SCORE_REGION as ::core::ffi::c_int;
+                                                    newscore_0 +=
+                                                        SCORE_REGION as ::core::ffi::c_int;
                                                 }
                                                 if flags_0 & WF_RARE as ::core::ffi::c_int != 0 {
                                                     newscore_0 += SCORE_RARE as ::core::ffi::c_int;
@@ -4707,8 +4748,13 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 if !spell_valid_case(
                                                     (*su).su_badflags,
                                                     captype(
-                                                        (&raw mut preword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
+                                                        (&raw mut preword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(
+                                                                (*sp).ts_prewordlen
+                                                                    as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ),
                                                         ::core::ptr::null::<::core::ffi::c_char>(),
                                                     ),
                                                 ) {
@@ -4724,56 +4770,79 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 if soundfold {
                                                     add_sound_suggest(
                                                         su,
-                                                        &raw mut preword as *mut ::core::ffi::c_char,
+                                                        &raw mut preword
+                                                            as *mut ::core::ffi::c_char,
                                                         (*sp).ts_score,
                                                         lp,
                                                     );
                                                 } else if (*sp).ts_fidx as ::core::ffi::c_int
                                                     > 0 as ::core::ffi::c_int
                                                 {
-                                                    p = fword
-                                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
-                                                    p = p
-                                                        .offset(
-                                                            -((utf_head_off(
-                                                                fword,
-                                                                p.offset(-(1 as ::core::ffi::c_int as isize)),
-                                                            ) + 1 as ::core::ffi::c_int) as isize),
-                                                        );
+                                                    p = fword.offset(
+                                                        (*sp).ts_fidx as ::core::ffi::c_int
+                                                            as isize,
+                                                    );
+                                                    p = p.offset(
+                                                        -((utf_head_off(
+                                                            fword,
+                                                            p.offset(
+                                                                -(1 as ::core::ffi::c_int as isize),
+                                                            ),
+                                                        ) + 1 as ::core::ffi::c_int)
+                                                            as isize),
+                                                    );
                                                     if !spell_iswordp(p, curwin)
-                                                        && *(&raw mut preword as *mut ::core::ffi::c_char)
-                                                            as ::core::ffi::c_int != NUL
+                                                        && *(&raw mut preword
+                                                            as *mut ::core::ffi::c_char)
+                                                            as ::core::ffi::c_int
+                                                            != NUL
                                                     {
-                                                        p = (&raw mut preword as *mut ::core::ffi::c_char)
-                                                            .offset(
-                                                                strlen(&raw mut preword as *mut ::core::ffi::c_char)
-                                                                    as isize,
-                                                            );
-                                                        p = p
-                                                            .offset(
-                                                                -((utf_head_off(
-                                                                    &raw mut preword as *mut ::core::ffi::c_char,
-                                                                    p.offset(-(1 as ::core::ffi::c_int as isize)),
-                                                                ) + 1 as ::core::ffi::c_int) as isize),
-                                                            );
+                                                        p = (&raw mut preword
+                                                            as *mut ::core::ffi::c_char)
+                                                            .offset(strlen(
+                                                                &raw mut preword
+                                                                    as *mut ::core::ffi::c_char,
+                                                            )
+                                                                as isize);
+                                                        p = p.offset(
+                                                            -((utf_head_off(
+                                                                &raw mut preword
+                                                                    as *mut ::core::ffi::c_char,
+                                                                p.offset(
+                                                                    -(1 as ::core::ffi::c_int
+                                                                        as isize),
+                                                                ),
+                                                            ) + 1 as ::core::ffi::c_int)
+                                                                as isize),
+                                                        );
                                                         if spell_iswordp(p, curwin) {
-                                                            newscore_0 += SCORE_NONWORD as ::core::ffi::c_int;
+                                                            newscore_0 +=
+                                                                SCORE_NONWORD as ::core::ffi::c_int;
                                                         }
                                                     }
-                                                    let mut score: ::core::ffi::c_int = score_wordcount_adj(
-                                                        slang,
-                                                        (*sp).ts_score + newscore_0,
-                                                        (&raw mut preword as *mut ::core::ffi::c_char)
-                                                            .offset((*sp).ts_prewordlen as ::core::ffi::c_int as isize),
-                                                        (*sp).ts_prewordlen as ::core::ffi::c_int
-                                                            > 0 as ::core::ffi::c_int,
-                                                    );
+                                                    let mut score: ::core::ffi::c_int =
+                                                        score_wordcount_adj(
+                                                            slang,
+                                                            (*sp).ts_score + newscore_0,
+                                                            (&raw mut preword
+                                                                as *mut ::core::ffi::c_char)
+                                                                .offset(
+                                                                    (*sp).ts_prewordlen
+                                                                        as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
+                                                            (*sp).ts_prewordlen
+                                                                as ::core::ffi::c_int
+                                                                > 0 as ::core::ffi::c_int,
+                                                        );
                                                     if score <= (*su).su_maxscore {
                                                         add_suggestion(
                                                             su,
                                                             &raw mut (*su).su_ga,
-                                                            &raw mut preword as *mut ::core::ffi::c_char,
-                                                            (*sp).ts_fidx as ::core::ffi::c_int - repextra,
+                                                            &raw mut preword
+                                                                as *mut ::core::ffi::c_char,
+                                                            (*sp).ts_fidx as ::core::ffi::c_int
+                                                                - repextra,
                                                             score,
                                                             0 as ::core::ffi::c_int,
                                                             false_0 != 0,
@@ -4782,11 +4851,16 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         );
                                                         if (*su).su_badflags & WF_MIXCAP != 0 {
                                                             c = captype(
-                                                                &raw mut preword as *mut ::core::ffi::c_char,
-                                                                ::core::ptr::null::<::core::ffi::c_char>(),
+                                                                &raw mut preword
+                                                                    as *mut ::core::ffi::c_char,
+                                                                ::core::ptr::null::<
+                                                                    ::core::ffi::c_char,
+                                                                >(
+                                                                ),
                                                             );
                                                             if c == 0 as ::core::ffi::c_int
-                                                                || c == WF_ALLCAP as ::core::ffi::c_int
+                                                                || c == WF_ALLCAP
+                                                                    as ::core::ffi::c_int
                                                             {
                                                                 make_case_word(
                                                                     (&raw mut tword as *mut ::core::ffi::c_char)
@@ -4802,9 +4876,14 @@ unsafe extern "C" fn suggest_trie_walk(
                                                                 add_suggestion(
                                                                     su,
                                                                     &raw mut (*su).su_ga,
-                                                                    &raw mut preword as *mut ::core::ffi::c_char,
-                                                                    (*sp).ts_fidx as ::core::ffi::c_int - repextra,
-                                                                    score + SCORE_ICASE as ::core::ffi::c_int,
+                                                                    &raw mut preword
+                                                                        as *mut ::core::ffi::c_char,
+                                                                    (*sp).ts_fidx
+                                                                        as ::core::ffi::c_int
+                                                                        - repextra,
+                                                                    score
+                                                                        + SCORE_ICASE
+                                                                            as ::core::ffi::c_int,
                                                                     0 as ::core::ffi::c_int,
                                                                     false_0 != 0,
                                                                     (*lp).lp_sallang,
@@ -4823,40 +4902,59 @@ unsafe extern "C" fn suggest_trie_walk(
                                             {
                                                 let mut try_compound: bool = false;
                                                 let mut try_split: ::core::ffi::c_int = 0;
-                                                try_split = ((*sp).ts_fidx as ::core::ffi::c_int - repextra
-                                                    < (*su).su_badlen && !soundfold) as ::core::ffi::c_int;
+                                                try_split = ((*sp).ts_fidx as ::core::ffi::c_int
+                                                    - repextra
+                                                    < (*su).su_badlen
+                                                    && !soundfold)
+                                                    as ::core::ffi::c_int;
                                                 try_compound = false_0 != 0;
-                                                if !soundfold && !(*slang).sl_nocompoundsugs
+                                                if !soundfold
+                                                    && !(*slang).sl_nocompoundsugs
                                                     && !(*slang).sl_compprog.is_null()
                                                     && flags_0 as ::core::ffi::c_uint
-                                                        >> 24 as ::core::ffi::c_int != 0 as ::core::ffi::c_uint
+                                                        >> 24 as ::core::ffi::c_int
+                                                        != 0 as ::core::ffi::c_uint
                                                     && (*sp).ts_twordlen as ::core::ffi::c_int
                                                         - (*sp).ts_splitoff as ::core::ffi::c_int
                                                         >= (*slang).sl_compminlen
-                                                    && ((*slang).sl_compminlen == 0 as ::core::ffi::c_int
+                                                    && ((*slang).sl_compminlen
+                                                        == 0 as ::core::ffi::c_int
                                                         || mb_charlen(
-                                                            (&raw mut tword as *mut ::core::ffi::c_char)
-                                                                .offset((*sp).ts_splitoff as ::core::ffi::c_int as isize),
+                                                            (&raw mut tword
+                                                                as *mut ::core::ffi::c_char)
+                                                                .offset(
+                                                                    (*sp).ts_splitoff
+                                                                        as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
                                                         ) >= (*slang).sl_compminlen)
-                                                    && ((*slang).sl_compsylmax < MAXWLEN as ::core::ffi::c_int
+                                                    && ((*slang).sl_compsylmax
+                                                        < MAXWLEN as ::core::ffi::c_int
                                                         || ((*sp).ts_complen as ::core::ffi::c_int
                                                             + 1 as ::core::ffi::c_int
-                                                            - (*sp).ts_compsplit as ::core::ffi::c_int)
+                                                            - (*sp).ts_compsplit
+                                                                as ::core::ffi::c_int)
                                                             < (*slang).sl_compmax)
                                                     && can_be_compound(
                                                         sp,
                                                         slang,
                                                         &raw mut compflags as *mut uint8_t,
-                                                        (flags_0 as ::core::ffi::c_uint >> 24 as ::core::ffi::c_int)
+                                                        (flags_0 as ::core::ffi::c_uint
+                                                            >> 24 as ::core::ffi::c_int)
                                                             as ::core::ffi::c_int,
-                                                    ) as ::core::ffi::c_int != 0
+                                                    )
+                                                        as ::core::ffi::c_int
+                                                        != 0
                                                 {
                                                     try_compound = true_0 != 0;
                                                     compflags[(*sp).ts_complen as usize] = (flags_0
-                                                        as ::core::ffi::c_uint >> 24 as ::core::ffi::c_int)
+                                                        as ::core::ffi::c_uint
+                                                        >> 24 as ::core::ffi::c_int)
                                                         as uint8_t;
-                                                    compflags[((*sp).ts_complen as ::core::ffi::c_int
-                                                        + 1 as ::core::ffi::c_int) as usize] = NUL as uint8_t;
+                                                    compflags[((*sp).ts_complen
+                                                        as ::core::ffi::c_int
+                                                        + 1 as ::core::ffi::c_int)
+                                                        as usize] = NUL as uint8_t;
                                                 }
                                                 if (*slang).sl_nobreak as ::core::ffi::c_int != 0
                                                     && !(*slang).sl_nocompoundsugs
@@ -4869,26 +4967,42 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         == 0 as ::core::ffi::c_int
                                                 {
                                                     try_compound = false_0 != 0;
-                                                    (*sp).ts_flags = ((*sp).ts_flags as ::core::ffi::c_int
-                                                        | TSF_DIDSPLIT as ::core::ffi::c_int) as uint8_t;
+                                                    (*sp).ts_flags = ((*sp).ts_flags
+                                                        as ::core::ffi::c_int
+                                                        | TSF_DIDSPLIT as ::core::ffi::c_int)
+                                                        as uint8_t;
                                                     (*sp).ts_curi -= 1;
-                                                    compflags[(*sp).ts_complen as usize] = NUL as uint8_t;
+                                                    compflags[(*sp).ts_complen as usize] =
+                                                        NUL as uint8_t;
                                                 } else {
-                                                    (*sp).ts_flags = ((*sp).ts_flags as ::core::ffi::c_int
-                                                        & !(TSF_DIDSPLIT as ::core::ffi::c_int) as uint8_t
-                                                            as ::core::ffi::c_int) as uint8_t;
+                                                    (*sp).ts_flags = ((*sp).ts_flags
+                                                        as ::core::ffi::c_int
+                                                        & !(TSF_DIDSPLIT as ::core::ffi::c_int)
+                                                            as uint8_t
+                                                            as ::core::ffi::c_int)
+                                                        as uint8_t;
                                                 }
-                                                if try_split != 0 || try_compound as ::core::ffi::c_int != 0
+                                                if try_split != 0
+                                                    || try_compound as ::core::ffi::c_int != 0
                                                 {
-                                                    if !try_compound && (!fword_ends || !goodword_ends) {
+                                                    if !try_compound
+                                                        && (!fword_ends || !goodword_ends)
+                                                    {
                                                         if (*sp).ts_complen as ::core::ffi::c_int
-                                                            == (*sp).ts_compsplit as ::core::ffi::c_int
-                                                            && flags_0 & WF_NEEDCOMP as ::core::ffi::c_int != 0
+                                                            == (*sp).ts_compsplit
+                                                                as ::core::ffi::c_int
+                                                            && flags_0
+                                                                & WF_NEEDCOMP as ::core::ffi::c_int
+                                                                != 0
                                                         {
                                                             break 's_2231;
                                                         } else {
-                                                            p = &raw mut preword as *mut ::core::ffi::c_char;
-                                                            while *skiptowhite(p) as ::core::ffi::c_int != NUL {
+                                                            p = &raw mut preword
+                                                                as *mut ::core::ffi::c_char;
+                                                            while *skiptowhite(p)
+                                                                as ::core::ffi::c_int
+                                                                != NUL
+                                                            {
                                                                 p = skipwhite(skiptowhite(p));
                                                             }
                                                             if (*sp).ts_complen as ::core::ffi::c_int
@@ -4918,8 +5032,10 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         }
                                                     }
                                                     if depth
-                                                        < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                                                        && stack[depth as usize].ts_score + newscore_0
+                                                        < MAXWLEN as ::core::ffi::c_int
+                                                            - 1 as ::core::ffi::c_int
+                                                        && stack[depth as usize].ts_score
+                                                            + newscore_0
                                                             < (*su).su_maxscore
                                                     {
                                                         go_deeper(
@@ -4927,35 +5043,49 @@ unsafe extern "C" fn suggest_trie_walk(
                                                             depth,
                                                             newscore_0,
                                                         );
-                                                        (*sp).ts_save_badflags = (*su).su_badflags as uint8_t;
+                                                        (*sp).ts_save_badflags =
+                                                            (*su).su_badflags as uint8_t;
                                                         (*sp).ts_state = STATE_SPLITUNDO;
                                                         depth += 1;
                                                         sp = (&raw mut stack as *mut trystate_T)
                                                             .offset(depth as isize);
                                                         if !try_compound && !fword_ends {
                                                             strcat(
-                                                                &raw mut preword as *mut ::core::ffi::c_char,
-                                                                b" \0".as_ptr() as *const ::core::ffi::c_char,
+                                                                &raw mut preword
+                                                                    as *mut ::core::ffi::c_char,
+                                                                b" \0".as_ptr()
+                                                                    as *const ::core::ffi::c_char,
                                                             );
                                                         }
                                                         (*sp).ts_prewordlen = strlen(
-                                                            &raw mut preword as *mut ::core::ffi::c_char,
-                                                        ) as uint8_t;
+                                                            &raw mut preword
+                                                                as *mut ::core::ffi::c_char,
+                                                        )
+                                                            as uint8_t;
                                                         (*sp).ts_splitoff = (*sp).ts_twordlen;
                                                         (*sp).ts_splitfidx = (*sp).ts_fidx;
                                                         if (!try_compound
                                                             && !spell_iswordp_nmw(
-                                                                fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize),
+                                                                fword.offset(
+                                                                    (*sp).ts_fidx
+                                                                        as ::core::ffi::c_int
+                                                                        as isize,
+                                                                ),
                                                                 curwin,
-                                                            ) || fword_ends as ::core::ffi::c_int != 0)
+                                                            )
+                                                            || fword_ends as ::core::ffi::c_int
+                                                                != 0)
                                                             && *fword.offset((*sp).ts_fidx as isize)
-                                                                as ::core::ffi::c_int != NUL
-                                                            && goodword_ends as ::core::ffi::c_int != 0
+                                                                as ::core::ffi::c_int
+                                                                != NUL
+                                                            && goodword_ends as ::core::ffi::c_int
+                                                                != 0
                                                         {
                                                             let mut l: ::core::ffi::c_int = 0;
-                                                            l = utfc_ptr2len(
-                                                                fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize),
-                                                            );
+                                                            l = utfc_ptr2len(fword.offset(
+                                                                (*sp).ts_fidx as ::core::ffi::c_int
+                                                                    as isize,
+                                                            ));
                                                             if fword_ends {
                                                                 memmove(
                                                                     (&raw mut preword as *mut ::core::ffi::c_char)
@@ -4965,24 +5095,33 @@ unsafe extern "C" fn suggest_trie_walk(
                                                                         as *const ::core::ffi::c_void,
                                                                     l as size_t,
                                                                 );
-                                                                (*sp).ts_prewordlen = ((*sp).ts_prewordlen
-                                                                    as ::core::ffi::c_int + l) as uint8_t;
-                                                                preword[(*sp).ts_prewordlen as usize] = NUL
-                                                                    as ::core::ffi::c_char;
+                                                                (*sp).ts_prewordlen = ((*sp)
+                                                                    .ts_prewordlen
+                                                                    as ::core::ffi::c_int
+                                                                    + l)
+                                                                    as uint8_t;
+                                                                preword[(*sp).ts_prewordlen
+                                                                    as usize] =
+                                                                    NUL as ::core::ffi::c_char;
                                                             } else {
-                                                                (*sp).ts_score
-                                                                    -= SCORE_SPLIT as ::core::ffi::c_int
-                                                                        - SCORE_SUBST as ::core::ffi::c_int;
+                                                                (*sp).ts_score -= SCORE_SPLIT
+                                                                    as ::core::ffi::c_int
+                                                                    - SCORE_SUBST
+                                                                        as ::core::ffi::c_int;
                                                             }
-                                                            (*sp).ts_fidx = ((*sp).ts_fidx as ::core::ffi::c_int + l)
+                                                            (*sp).ts_fidx = ((*sp).ts_fidx
+                                                                as ::core::ffi::c_int
+                                                                + l)
                                                                 as uint8_t;
                                                         }
                                                         if try_compound {
-                                                            (*sp).ts_complen = (*sp).ts_complen.wrapping_add(1);
+                                                            (*sp).ts_complen =
+                                                                (*sp).ts_complen.wrapping_add(1);
                                                         } else {
                                                             (*sp).ts_compsplit = (*sp).ts_complen;
                                                         }
-                                                        (*sp).ts_prefixdepth = PFD_NOPREFIX as ::core::ffi::c_int
+                                                        (*sp).ts_prefixdepth = PFD_NOPREFIX
+                                                            as ::core::ffi::c_int
                                                             as uint8_t;
                                                         n = nofold_len(
                                                             fword,
@@ -4991,13 +5130,17 @@ unsafe extern "C" fn suggest_trie_walk(
                                                         );
                                                         (*su).su_badflags = badword_captype(
                                                             (*su).su_badptr.offset(n as isize),
-                                                            (*su).su_badptr.offset((*su).su_badlen as isize),
+                                                            (*su)
+                                                                .su_badptr
+                                                                .offset((*su).su_badlen as isize),
                                                         );
-                                                        (*sp).ts_arridx = 0 as ::core::ffi::c_int as idx_T;
+                                                        (*sp).ts_arridx =
+                                                            0 as ::core::ffi::c_int as idx_T;
                                                         if !pbyts.is_null() {
                                                             byts = pbyts;
                                                             idxs = pidxs;
-                                                            (*sp).ts_prefixdepth = PFD_PREFIXTREE as ::core::ffi::c_int
+                                                            (*sp).ts_prefixdepth = PFD_PREFIXTREE
+                                                                as ::core::ffi::c_int
                                                                 as uint8_t;
                                                             (*sp).ts_state = STATE_NOPREFIX;
                                                         }
@@ -5013,18 +5156,18 @@ unsafe extern "C" fn suggest_trie_walk(
                                     }
                                 }
                                 2 => {
-                                    (*su).su_badflags = (*sp).ts_save_badflags
-                                        as ::core::ffi::c_int;
+                                    (*su).su_badflags =
+                                        (*sp).ts_save_badflags as ::core::ffi::c_int;
                                     (*sp).ts_state = STATE_START;
                                     byts = fbyts;
                                     idxs = fidxs;
                                     break 's_2231;
                                 }
                                 3 => {
-                                    (*su).su_badflags = (*sp).ts_save_badflags
-                                        as ::core::ffi::c_int;
-                                    if *fword.offset((*sp).ts_fidx as isize)
-                                        as ::core::ffi::c_int == NUL
+                                    (*su).su_badflags =
+                                        (*sp).ts_save_badflags as ::core::ffi::c_int;
+                                    if *fword.offset((*sp).ts_fidx as isize) as ::core::ffi::c_int
+                                        == NUL
                                         && (*sp).ts_tcharlen as ::core::ffi::c_int
                                             == 0 as ::core::ffi::c_int
                                     {
@@ -5051,17 +5194,21 @@ unsafe extern "C" fn suggest_trie_walk(
                                             && (*sp).ts_fidx as ::core::ffi::c_int
                                                 == 0 as ::core::ffi::c_int
                                             && *fword.offset((*sp).ts_fidx as isize)
-                                                as ::core::ffi::c_int == '*' as ::core::ffi::c_int
+                                                as ::core::ffi::c_int
+                                                == '*' as ::core::ffi::c_int
                                         {
                                             newscore_0 = 2 as ::core::ffi::c_int
-                                                * SCORE_DEL as ::core::ffi::c_int / 3 as ::core::ffi::c_int;
+                                                * SCORE_DEL as ::core::ffi::c_int
+                                                / 3 as ::core::ffi::c_int;
                                         } else {
                                             newscore_0 = SCORE_DEL as ::core::ffi::c_int;
                                         }
                                         if *fword.offset((*sp).ts_fidx as isize)
-                                            as ::core::ffi::c_int != NUL
+                                            as ::core::ffi::c_int
+                                            != NUL
                                             && (depth
-                                                < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                                                < MAXWLEN as ::core::ffi::c_int
+                                                    - 1 as ::core::ffi::c_int
                                                 && stack[depth as usize].ts_score + newscore_0
                                                     < (*su).su_maxscore)
                                         {
@@ -5072,32 +5219,35 @@ unsafe extern "C" fn suggest_trie_walk(
                                             );
                                             depth += 1;
                                             stack[depth as usize].ts_flags = (stack[depth as usize]
-                                                .ts_flags as ::core::ffi::c_int
-                                                | TSF_DIDDEL as ::core::ffi::c_int) as uint8_t;
+                                                .ts_flags
+                                                as ::core::ffi::c_int
+                                                | TSF_DIDDEL as ::core::ffi::c_int)
+                                                as uint8_t;
                                             stack[depth as usize].ts_delidx = (*sp).ts_fidx;
-                                            c = utf_ptr2char(
-                                                fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize),
-                                            );
+                                            c = utf_ptr2char(fword.offset(
+                                                (*sp).ts_fidx as ::core::ffi::c_int as isize,
+                                            ));
                                             stack[depth as usize].ts_fidx = (stack[depth as usize]
-                                                .ts_fidx as ::core::ffi::c_int
-                                                + utfc_ptr2len(
-                                                    fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize),
-                                                )) as uint8_t;
+                                                .ts_fidx
+                                                as ::core::ffi::c_int
+                                                + utfc_ptr2len(fword.offset(
+                                                    (*sp).ts_fidx as ::core::ffi::c_int as isize,
+                                                )))
+                                                as uint8_t;
                                             if utf_iscomposing_legacy(c) {
-                                                stack[depth as usize].ts_score
-                                                    -= SCORE_DEL as ::core::ffi::c_int
-                                                        - SCORE_DELCOMP as ::core::ffi::c_int;
+                                                stack[depth as usize].ts_score -= SCORE_DEL
+                                                    as ::core::ffi::c_int
+                                                    - SCORE_DELCOMP as ::core::ffi::c_int;
                                             } else if c
-                                                == utf_ptr2char(
-                                                    fword
-                                                        .offset(
-                                                            stack[depth as usize].ts_fidx as ::core::ffi::c_int as isize,
-                                                        ),
-                                                )
+                                                == utf_ptr2char(fword.offset(
+                                                    stack[depth as usize].ts_fidx
+                                                        as ::core::ffi::c_int
+                                                        as isize,
+                                                ))
                                             {
-                                                stack[depth as usize].ts_score
-                                                    -= SCORE_DEL as ::core::ffi::c_int
-                                                        - SCORE_DELDUP as ::core::ffi::c_int;
+                                                stack[depth as usize].ts_score -= SCORE_DEL
+                                                    as ::core::ffi::c_int
+                                                    - SCORE_DELDUP as ::core::ffi::c_int;
                                             }
                                             break 's_2231;
                                         } else {
@@ -5126,18 +5276,20 @@ unsafe extern "C" fn suggest_trie_walk(
                                             c = *byts.offset(n as isize) as ::core::ffi::c_int;
                                             if soundfold as ::core::ffi::c_int != 0
                                                 && (*sp).ts_twordlen as ::core::ffi::c_int
-                                                    == 0 as ::core::ffi::c_int && c == '*' as ::core::ffi::c_int
+                                                    == 0 as ::core::ffi::c_int
+                                                && c == '*' as ::core::ffi::c_int
                                             {
                                                 newscore_0 = 2 as ::core::ffi::c_int
-                                                    * SCORE_INS as ::core::ffi::c_int / 3 as ::core::ffi::c_int;
+                                                    * SCORE_INS as ::core::ffi::c_int
+                                                    / 3 as ::core::ffi::c_int;
                                             } else {
                                                 newscore_0 = SCORE_INS as ::core::ffi::c_int;
                                             }
-                                            if c
-                                                != *fword.offset((*sp).ts_fidx as isize) as uint8_t
-                                                    as ::core::ffi::c_int
+                                            if c != *fword.offset((*sp).ts_fidx as isize) as uint8_t
+                                                as ::core::ffi::c_int
                                                 && (depth
-                                                    < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                                                    < MAXWLEN as ::core::ffi::c_int
+                                                        - 1 as ::core::ffi::c_int
                                                     && stack[depth as usize].ts_score + newscore_0
                                                         < (*su).su_maxscore)
                                             {
@@ -5150,26 +5302,33 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 sp = (&raw mut stack as *mut trystate_T)
                                                     .offset(depth as isize);
                                                 let c2rust_fresh9 = (*sp).ts_twordlen;
-                                                (*sp).ts_twordlen = (*sp).ts_twordlen.wrapping_add(1);
-                                                tword[c2rust_fresh9 as usize] = c as ::core::ffi::c_char;
+                                                (*sp).ts_twordlen =
+                                                    (*sp).ts_twordlen.wrapping_add(1);
+                                                tword[c2rust_fresh9 as usize] =
+                                                    c as ::core::ffi::c_char;
                                                 (*sp).ts_arridx = *idxs.offset(n as isize);
                                                 fl = utf8len_tab[c as usize] as ::core::ffi::c_int;
                                                 if fl > 1 as ::core::ffi::c_int {
                                                     (*sp).ts_tcharlen = fl as uint8_t;
                                                     (*sp).ts_tcharidx = 1 as uint8_t;
-                                                    (*sp).ts_isdiff = DIFF_INSERT as ::core::ffi::c_int
+                                                    (*sp).ts_isdiff = DIFF_INSERT
+                                                        as ::core::ffi::c_int
                                                         as uint8_t;
                                                 }
                                                 if fl == 1 as ::core::ffi::c_int {
                                                     if (*sp).ts_twordlen as ::core::ffi::c_int
                                                         >= 2 as ::core::ffi::c_int
-                                                        && tword[((*sp).ts_twordlen as ::core::ffi::c_int
-                                                            - 2 as ::core::ffi::c_int) as usize] as uint8_t
-                                                            as ::core::ffi::c_int == c
+                                                        && tword[((*sp).ts_twordlen
+                                                            as ::core::ffi::c_int
+                                                            - 2 as ::core::ffi::c_int)
+                                                            as usize]
+                                                            as uint8_t
+                                                            as ::core::ffi::c_int
+                                                            == c
                                                     {
-                                                        (*sp).ts_score
-                                                            -= SCORE_INS as ::core::ffi::c_int
-                                                                - SCORE_INSDUP as ::core::ffi::c_int;
+                                                        (*sp).ts_score -= SCORE_INS
+                                                            as ::core::ffi::c_int
+                                                            - SCORE_INSDUP as ::core::ffi::c_int;
                                                     }
                                                 }
                                             }
@@ -5178,8 +5337,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     }
                                 }
                                 8 => {
-                                    p = fword
-                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                    p = fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
                                     c = *p as uint8_t as ::core::ffi::c_int;
                                     if c == NUL {
                                         (*sp).ts_state = STATE_FINAL;
@@ -5207,9 +5365,11 @@ unsafe extern "C" fn suggest_trie_walk(
                                             break 's_2231;
                                         } else {
                                             if depth
-                                                < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                                                < MAXWLEN as ::core::ffi::c_int
+                                                    - 1 as ::core::ffi::c_int
                                                 && (stack[depth as usize].ts_score
-                                                    + SCORE_SWAP as ::core::ffi::c_int) < (*su).su_maxscore
+                                                    + SCORE_SWAP as ::core::ffi::c_int)
+                                                    < (*su).su_maxscore
                                             {
                                                 go_deeper(
                                                     &raw mut stack as *mut trystate_T,
@@ -5221,12 +5381,14 @@ unsafe extern "C" fn suggest_trie_walk(
                                                 fl = utf_char2len(c2);
                                                 memmove(
                                                     p as *mut ::core::ffi::c_void,
-                                                    p.offset(n as isize) as *const ::core::ffi::c_void,
+                                                    p.offset(n as isize)
+                                                        as *const ::core::ffi::c_void,
                                                     fl as size_t,
                                                 );
                                                 utf_char2bytes(c, p.offset(fl as isize));
-                                                stack[depth as usize].ts_fidxtry = ((*sp).ts_fidx
-                                                    as ::core::ffi::c_int + n + fl) as uint8_t;
+                                                stack[depth as usize].ts_fidxtry =
+                                                    ((*sp).ts_fidx as ::core::ffi::c_int + n + fl)
+                                                        as uint8_t;
                                             } else {
                                                 (*sp).ts_state = STATE_REP_INI;
                                             }
@@ -5235,8 +5397,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     }
                                 }
                                 9 => {
-                                    p = fword
-                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                    p = fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
                                     n = utfc_ptr2len(p);
                                     c = utf_ptr2char(p.offset(n as isize));
                                     memmove(
@@ -5252,8 +5413,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     break 'c_37069;
                                 }
                                 11 => {
-                                    p = fword
-                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                    p = fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
                                     n = utfc_ptr2len(p);
                                     c2 = utf_ptr2char(p.offset(n as isize));
                                     fl = utfc_ptr2len(p.offset(n as isize));
@@ -5273,9 +5433,11 @@ unsafe extern "C" fn suggest_trie_walk(
                                         break 's_2231;
                                     } else {
                                         if depth
-                                            < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                                            < MAXWLEN as ::core::ffi::c_int
+                                                - 1 as ::core::ffi::c_int
                                             && (stack[depth as usize].ts_score
-                                                + SCORE_SWAP3 as ::core::ffi::c_int) < (*su).su_maxscore
+                                                + SCORE_SWAP3 as ::core::ffi::c_int)
+                                                < (*su).su_maxscore
                                         {
                                             go_deeper(
                                                 &raw mut stack as *mut trystate_T,
@@ -5284,20 +5446,24 @@ unsafe extern "C" fn suggest_trie_walk(
                                             );
                                             (*sp).ts_state = STATE_UNROT3L;
                                             depth += 1;
-                                            p = fword
-                                                .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                            p = fword.offset(
+                                                (*sp).ts_fidx as ::core::ffi::c_int as isize,
+                                            );
                                             n = utf_ptr2len(p);
                                             c = utf_ptr2char(p);
                                             fl = utf_ptr2len(p.offset(n as isize));
-                                            fl += utf_ptr2len(p.offset(n as isize).offset(fl as isize));
+                                            fl += utf_ptr2len(
+                                                p.offset(n as isize).offset(fl as isize),
+                                            );
                                             memmove(
                                                 p as *mut ::core::ffi::c_void,
                                                 p.offset(n as isize) as *const ::core::ffi::c_void,
                                                 fl as size_t,
                                             );
                                             utf_char2bytes(c, p.offset(fl as isize));
-                                            stack[depth as usize].ts_fidxtry = ((*sp).ts_fidx
-                                                as ::core::ffi::c_int + n + fl) as uint8_t;
+                                            stack[depth as usize].ts_fidxtry =
+                                                ((*sp).ts_fidx as ::core::ffi::c_int + n + fl)
+                                                    as uint8_t;
                                         } else {
                                             (*sp).ts_state = STATE_REP_INI;
                                         }
@@ -5305,8 +5471,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                     }
                                 }
                                 12 => {
-                                    p = fword
-                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                    p = fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
                                     n = utfc_ptr2len(p);
                                     n += utfc_ptr2len(p.offset(n as isize));
                                     c = utf_ptr2char(p.offset(n as isize));
@@ -5320,7 +5485,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                     if depth
                                         < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                                         && (stack[depth as usize].ts_score
-                                            + SCORE_SWAP3 as ::core::ffi::c_int) < (*su).su_maxscore
+                                            + SCORE_SWAP3 as ::core::ffi::c_int)
+                                            < (*su).su_maxscore
                                     {
                                         go_deeper(
                                             &raw mut stack as *mut trystate_T,
@@ -5341,16 +5507,16 @@ unsafe extern "C" fn suggest_trie_walk(
                                             n as size_t,
                                         );
                                         utf_char2bytes(c, p);
-                                        stack[depth as usize].ts_fidxtry = ((*sp).ts_fidx
-                                            as ::core::ffi::c_int + n + tl) as uint8_t;
+                                        stack[depth as usize].ts_fidxtry =
+                                            ((*sp).ts_fidx as ::core::ffi::c_int + n + tl)
+                                                as uint8_t;
                                     } else {
                                         (*sp).ts_state = STATE_REP_INI;
                                     }
                                     break 's_2231;
                                 }
                                 13 => {
-                                    p = fword
-                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                    p = fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
                                     c = utf_ptr2char(p);
                                     tl = utfc_ptr2len(p);
                                     n = utfc_ptr2len(p.offset(tl as isize));
@@ -5377,8 +5543,7 @@ unsafe extern "C" fn suggest_trie_walk(
                                         .offset(-(1 as ::core::ffi::c_int as isize));
                                     fl = strlen((*ftp_0).ft_from) as ::core::ffi::c_int;
                                     tl = strlen((*ftp_0).ft_to) as ::core::ffi::c_int;
-                                    p = fword
-                                        .offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
+                                    p = fword.offset((*sp).ts_fidx as ::core::ffi::c_int as isize);
                                     if fl != tl {
                                         memmove(
                                             p.offset(fl as isize) as *mut ::core::ffi::c_void,
@@ -5410,7 +5575,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                         os_breakcheck();
                                         breakcheckcount = 1000 as ::core::ffi::c_int;
                                         if spell_suggest_timeout > 0 as ::core::ffi::c_int
-                                            && profile_passed_limit(time_limit) as ::core::ffi::c_int
+                                            && profile_passed_limit(time_limit)
+                                                as ::core::ffi::c_int
                                                 != 0
                                         {
                                             got_int = true_0 != 0;
@@ -5429,17 +5595,13 @@ unsafe extern "C" fn suggest_trie_walk(
                                 break 's_2231;
                             } else {
                                 if soundfold {
-                                    (*sp).ts_curi = (*slang)
-                                        .sl_repsal_first[*fword.offset((*sp).ts_fidx as isize)
-                                        as uint8_t as usize];
+                                    (*sp).ts_curi = (*slang).sl_repsal_first
+                                        [*fword.offset((*sp).ts_fidx as isize) as uint8_t as usize];
                                 } else {
-                                    (*sp).ts_curi = (*(*lp).lp_replang)
-                                        .sl_rep_first[*fword.offset((*sp).ts_fidx as isize)
-                                        as uint8_t as usize];
+                                    (*sp).ts_curi = (*(*lp).lp_replang).sl_rep_first
+                                        [*fword.offset((*sp).ts_fidx as isize) as uint8_t as usize];
                                 }
-                                if ((*sp).ts_curi as ::core::ffi::c_int)
-                                    < 0 as ::core::ffi::c_int
-                                {
+                                if ((*sp).ts_curi as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
                                     (*sp).ts_state = STATE_FINAL;
                                     break 's_2231;
                                 } else {
@@ -5454,10 +5616,7 @@ unsafe extern "C" fn suggest_trie_walk(
                         fl = utf_ptr2len(p.offset(n as isize));
                         c2 = utf_ptr2char(p.offset(n as isize));
                         if !soundfold
-                            && !spell_iswordp(
-                                p.offset(n as isize).offset(fl as isize),
-                                curwin,
-                            )
+                            && !spell_iswordp(p.offset(n as isize).offset(fl as isize), curwin)
                         {
                             c3 = c;
                         } else {
@@ -5467,10 +5626,10 @@ unsafe extern "C" fn suggest_trie_walk(
                             (*sp).ts_state = STATE_REP_INI;
                             break 's_2231;
                         } else {
-                            if depth
-                                < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                            if depth < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                                 && (stack[depth as usize].ts_score
-                                    + SCORE_SWAP3 as ::core::ffi::c_int) < (*su).su_maxscore
+                                    + SCORE_SWAP3 as ::core::ffi::c_int)
+                                    < (*su).su_maxscore
                             {
                                 go_deeper(
                                     &raw mut stack as *mut trystate_T,
@@ -5487,20 +5646,16 @@ unsafe extern "C" fn suggest_trie_walk(
                                     tl as size_t,
                                 );
                                 utf_char2bytes(c2, p.offset(tl as isize));
-                                utf_char2bytes(
-                                    c,
-                                    p.offset(fl as isize).offset(tl as isize),
-                                );
-                                stack[depth as usize].ts_fidxtry = ((*sp).ts_fidx
-                                    as ::core::ffi::c_int + n + fl + tl) as uint8_t;
+                                utf_char2bytes(c, p.offset(fl as isize).offset(tl as isize));
+                                stack[depth as usize].ts_fidxtry =
+                                    ((*sp).ts_fidx as ::core::ffi::c_int + n + fl + tl) as uint8_t;
                             } else {
                                 (*sp).ts_state = STATE_REP_INI;
                             }
                             break 's_2231;
                         }
                     }
-                    if (*sp).ts_flags as ::core::ffi::c_int
-                        & TSF_DIDDEL as ::core::ffi::c_int != 0
+                    if (*sp).ts_flags as ::core::ffi::c_int & TSF_DIDDEL as ::core::ffi::c_int != 0
                     {
                         (*sp).ts_state = STATE_SWAP;
                         break 's_2231;
@@ -5514,7 +5669,8 @@ unsafe extern "C" fn suggest_trie_walk(
                                 break;
                             } else if *byts
                                 .offset((n + (*sp).ts_curi as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int != NUL
+                                as ::core::ffi::c_int
+                                != NUL
                             {
                                 (*sp).ts_state = STATE_INS;
                                 break;
@@ -5541,11 +5697,8 @@ unsafe extern "C" fn suggest_trie_walk(
                     (*sp).ts_curi = (*sp).ts_curi + 1;
                     arridx += c2rust_fresh6 as ::core::ffi::c_int;
                     c = *byts.offset(arridx as isize) as ::core::ffi::c_int;
-                    if c
-                        == *fword.offset((*sp).ts_fidx as isize) as uint8_t
-                            as ::core::ffi::c_int
-                        || (*sp).ts_tcharlen as ::core::ffi::c_int
-                            > 0 as ::core::ffi::c_int
+                    if c == *fword.offset((*sp).ts_fidx as isize) as uint8_t as ::core::ffi::c_int
+                        || (*sp).ts_tcharlen as ::core::ffi::c_int > 0 as ::core::ffi::c_int
                             && (*sp).ts_isdiff as ::core::ffi::c_int
                                 != DIFF_NONE as ::core::ffi::c_int
                     {
@@ -5559,20 +5712,15 @@ unsafe extern "C" fn suggest_trie_walk(
                             && ((*sp).ts_flags as ::core::ffi::c_int
                                 & TSF_DIDDEL as ::core::ffi::c_int
                                 == 0 as ::core::ffi::c_int
-                                || c
-                                    != *fword.offset((*sp).ts_delidx as isize) as uint8_t
-                                        as ::core::ffi::c_int))
-                        && (depth
-                            < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                            && stack[depth as usize].ts_score + newscore_0
-                                < (*su).su_maxscore)
+                                || c != *fword.offset((*sp).ts_delidx as isize) as uint8_t
+                                    as ::core::ffi::c_int))
+                        && (depth < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                            && stack[depth as usize].ts_score + newscore_0 < (*su).su_maxscore)
                     {
                         go_deeper(&raw mut stack as *mut trystate_T, depth, newscore_0);
                         depth += 1;
                         sp = (&raw mut stack as *mut trystate_T).offset(depth as isize);
-                        if *fword.offset((*sp).ts_fidx as isize) as ::core::ffi::c_int
-                            != NUL
-                        {
+                        if *fword.offset((*sp).ts_fidx as isize) as ::core::ffi::c_int != NUL {
                             (*sp).ts_fidx = (*sp).ts_fidx.wrapping_add(1);
                         }
                         let c2rust_fresh7 = (*sp).ts_twordlen;
@@ -5582,13 +5730,12 @@ unsafe extern "C" fn suggest_trie_walk(
                         if newscore_0 == SCORE_SUBST as ::core::ffi::c_int {
                             (*sp).ts_isdiff = DIFF_YES as ::core::ffi::c_int as uint8_t;
                         }
-                        if (*sp).ts_tcharlen as ::core::ffi::c_int
-                            == 0 as ::core::ffi::c_int
-                        {
+                        if (*sp).ts_tcharlen as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                             (*sp).ts_tcharidx = 0 as uint8_t;
                             (*sp).ts_tcharlen = utf8len_tab[c as usize];
                             (*sp).ts_fcharstart = ((*sp).ts_fidx as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as uint8_t;
+                                - 1 as ::core::ffi::c_int)
+                                as uint8_t;
                             (*sp).ts_isdiff = (if newscore_0 != 0 as ::core::ffi::c_int {
                                 DIFF_YES as ::core::ffi::c_int
                             } else {
@@ -5596,8 +5743,7 @@ unsafe extern "C" fn suggest_trie_walk(
                             }) as uint8_t;
                         } else if (*sp).ts_isdiff as ::core::ffi::c_int
                             == DIFF_INSERT as ::core::ffi::c_int
-                            && (*sp).ts_fidx as ::core::ffi::c_int
-                                > 0 as ::core::ffi::c_int
+                            && (*sp).ts_fidx as ::core::ffi::c_int > 0 as ::core::ffi::c_int
                         {
                             (*sp).ts_fidx = (*sp).ts_fidx.wrapping_sub(1);
                         }
@@ -5609,45 +5755,47 @@ unsafe extern "C" fn suggest_trie_walk(
                                 == DIFF_YES as ::core::ffi::c_int
                             {
                                 (*sp).ts_fidx = ((*sp).ts_fcharstart as ::core::ffi::c_int
-                                    + utfc_ptr2len(
-                                        fword
-                                            .offset((*sp).ts_fcharstart as ::core::ffi::c_int as isize),
-                                    )) as uint8_t;
-                                if utf_iscomposing_legacy(
-                                    utf_ptr2char(
-                                        (&raw mut tword as *mut ::core::ffi::c_char)
-                                            .offset((*sp).ts_twordlen as ::core::ffi::c_int as isize)
-                                            .offset(-((*sp).ts_tcharlen as ::core::ffi::c_int as isize)),
-                                    ),
-                                ) as ::core::ffi::c_int != 0
-                                    && utf_iscomposing_legacy(
-                                        utf_ptr2char(
-                                            fword
-                                                .offset((*sp).ts_fcharstart as ::core::ffi::c_int as isize),
+                                    + utfc_ptr2len(fword.offset(
+                                        (*sp).ts_fcharstart as ::core::ffi::c_int as isize,
+                                    ))) as uint8_t;
+                                if utf_iscomposing_legacy(utf_ptr2char(
+                                    (&raw mut tword as *mut ::core::ffi::c_char)
+                                        .offset((*sp).ts_twordlen as ::core::ffi::c_int as isize)
+                                        .offset(
+                                            -((*sp).ts_tcharlen as ::core::ffi::c_int as isize),
                                         ),
-                                    ) as ::core::ffi::c_int != 0
+                                )) as ::core::ffi::c_int
+                                    != 0
+                                    && utf_iscomposing_legacy(utf_ptr2char(fword.offset(
+                                        (*sp).ts_fcharstart as ::core::ffi::c_int as isize,
+                                    ))) as ::core::ffi::c_int
+                                        != 0
                                 {
-                                    (*sp).ts_score
-                                        -= SCORE_SUBST as ::core::ffi::c_int
-                                            - SCORE_SUBCOMP as ::core::ffi::c_int;
+                                    (*sp).ts_score -= SCORE_SUBST as ::core::ffi::c_int
+                                        - SCORE_SUBCOMP as ::core::ffi::c_int;
                                 } else if !soundfold
                                     && (*slang).sl_has_map as ::core::ffi::c_int != 0
                                     && similar_chars(
                                         slang,
                                         utf_ptr2char(
                                             (&raw mut tword as *mut ::core::ffi::c_char)
-                                                .offset((*sp).ts_twordlen as ::core::ffi::c_int as isize)
-                                                .offset(-((*sp).ts_tcharlen as ::core::ffi::c_int as isize)),
+                                                .offset(
+                                                    (*sp).ts_twordlen as ::core::ffi::c_int
+                                                        as isize,
+                                                )
+                                                .offset(
+                                                    -((*sp).ts_tcharlen as ::core::ffi::c_int
+                                                        as isize),
+                                                ),
                                         ),
-                                        utf_ptr2char(
-                                            fword
-                                                .offset((*sp).ts_fcharstart as ::core::ffi::c_int as isize),
-                                        ),
-                                    ) as ::core::ffi::c_int != 0
+                                        utf_ptr2char(fword.offset(
+                                            (*sp).ts_fcharstart as ::core::ffi::c_int as isize,
+                                        )),
+                                    ) as ::core::ffi::c_int
+                                        != 0
                                 {
-                                    (*sp).ts_score
-                                        -= SCORE_SUBST as ::core::ffi::c_int
-                                            - SCORE_SIMILAR as ::core::ffi::c_int;
+                                    (*sp).ts_score -= SCORE_SUBST as ::core::ffi::c_int
+                                        - SCORE_SIMILAR as ::core::ffi::c_int;
                                 }
                             } else if (*sp).ts_isdiff as ::core::ffi::c_int
                                 == DIFF_INSERT as ::core::ffi::c_int
@@ -5656,26 +5804,22 @@ unsafe extern "C" fn suggest_trie_walk(
                             {
                                 p = (&raw mut tword as *mut ::core::ffi::c_char)
                                     .offset((*sp).ts_twordlen as ::core::ffi::c_int as isize)
-                                    .offset(
-                                        -((*sp).ts_tcharlen as ::core::ffi::c_int as isize),
-                                    );
+                                    .offset(-((*sp).ts_tcharlen as ::core::ffi::c_int as isize));
                                 c = utf_ptr2char(p);
                                 if utf_iscomposing_legacy(c) {
-                                    (*sp).ts_score
-                                        -= SCORE_INS as ::core::ffi::c_int
-                                            - SCORE_INSCOMP as ::core::ffi::c_int;
+                                    (*sp).ts_score -= SCORE_INS as ::core::ffi::c_int
+                                        - SCORE_INSCOMP as ::core::ffi::c_int;
                                 } else {
-                                    p = p
-                                        .offset(
-                                            -((utf_head_off(
-                                                &raw mut tword as *mut ::core::ffi::c_char,
-                                                p.offset(-(1 as ::core::ffi::c_int as isize)),
-                                            ) + 1 as ::core::ffi::c_int) as isize),
-                                        );
+                                    p = p.offset(
+                                        -((utf_head_off(
+                                            &raw mut tword as *mut ::core::ffi::c_char,
+                                            p.offset(-(1 as ::core::ffi::c_int as isize)),
+                                        ) + 1 as ::core::ffi::c_int)
+                                            as isize),
+                                    );
                                     if c == utf_ptr2char(p) {
-                                        (*sp).ts_score
-                                            -= SCORE_INS as ::core::ffi::c_int
-                                                - SCORE_INSDUP as ::core::ffi::c_int;
+                                        (*sp).ts_score -= SCORE_INS as ::core::ffi::c_int
+                                            - SCORE_INSDUP as ::core::ffi::c_int;
                                     }
                                 }
                             }
@@ -5702,10 +5846,9 @@ unsafe extern "C" fn suggest_trie_walk(
                 } else {
                     if !(strncmp((*ftp).ft_from, p, strlen((*ftp).ft_from))
                         == 0 as ::core::ffi::c_int
-                        && (depth
-                            < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                            && (stack[depth as usize].ts_score
-                                + SCORE_REP as ::core::ffi::c_int) < (*su).su_maxscore))
+                        && (depth < MAXWLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                            && (stack[depth as usize].ts_score + SCORE_REP as ::core::ffi::c_int)
+                                < (*su).su_maxscore))
                     {
                         continue;
                     }
@@ -5731,8 +5874,8 @@ unsafe extern "C" fn suggest_trie_walk(
                         (*ftp).ft_to as *const ::core::ffi::c_void,
                         tl as size_t,
                     );
-                    stack[depth as usize].ts_fidxtry = ((*sp).ts_fidx
-                        as ::core::ffi::c_int + tl) as uint8_t;
+                    stack[depth as usize].ts_fidxtry =
+                        ((*sp).ts_fidx as ::core::ffi::c_int + tl) as uint8_t;
                     stack[depth as usize].ts_tcharlen = 0 as uint8_t;
                     break;
                 }
@@ -5751,12 +5894,10 @@ unsafe extern "C" fn go_deeper(
     mut depth: ::core::ffi::c_int,
     mut score_add: ::core::ffi::c_int,
 ) {
-    *stack.offset((depth + 1 as ::core::ffi::c_int) as isize) = *stack
-        .offset(depth as isize);
+    *stack.offset((depth + 1 as ::core::ffi::c_int) as isize) = *stack.offset(depth as isize);
     (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_state = STATE_START;
-    (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_score = (*stack
-        .offset(depth as isize))
-        .ts_score + score_add;
+    (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_score =
+        (*stack.offset(depth as isize)).ts_score + score_add;
     (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_curi = 1 as int16_t;
     (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_flags = 0 as uint8_t;
 }
@@ -5788,16 +5929,13 @@ unsafe extern "C" fn find_keepcap_word(
     uwordidx[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
     kwordlen[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
     while depth >= 0 as ::core::ffi::c_int {
-        if *fword.offset(fwordidx[depth as usize] as isize) as ::core::ffi::c_int == NUL
-        {
-            if *byts
-                .offset(
-                    (arridx[depth as usize] as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int) as isize,
-                ) as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        if *fword.offset(fwordidx[depth as usize] as isize) as ::core::ffi::c_int == NUL {
+            if *byts.offset(
+                (arridx[depth as usize] as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize,
+            ) as ::core::ffi::c_int
+                == 0 as ::core::ffi::c_int
             {
-                *kword.offset(kwordlen[depth as usize] as isize) = NUL
-                    as ::core::ffi::c_char;
+                *kword.offset(kwordlen[depth as usize] as isize) = NUL as ::core::ffi::c_char;
                 return;
             }
             depth -= 1;
@@ -5806,9 +5944,8 @@ unsafe extern "C" fn find_keepcap_word(
             if round[depth as usize] > 2 as ::core::ffi::c_int {
                 depth -= 1;
             } else {
-                let mut flen: ::core::ffi::c_int = utf_ptr2len(
-                    fword.offset(fwordidx[depth as usize] as isize),
-                );
+                let mut flen: ::core::ffi::c_int =
+                    utf_ptr2len(fword.offset(fwordidx[depth as usize] as isize));
                 let mut ulen: ::core::ffi::c_int = utf_ptr2len(
                     (&raw mut uword as *mut ::core::ffi::c_char)
                         .offset(uwordidx[depth as usize] as isize),
@@ -5825,22 +5962,20 @@ unsafe extern "C" fn find_keepcap_word(
                 while l > 0 as ::core::ffi::c_int {
                     let c2rust_fresh15 = tryidx;
                     tryidx = tryidx + 1;
-                    let mut len: ::core::ffi::c_int = *byts
-                        .offset(c2rust_fresh15 as isize) as ::core::ffi::c_int;
+                    let mut len: ::core::ffi::c_int =
+                        *byts.offset(c2rust_fresh15 as isize) as ::core::ffi::c_int;
                     let c2rust_fresh16 = p;
                     p = p.offset(1);
-                    let mut c: ::core::ffi::c_int = *c2rust_fresh16 as uint8_t
-                        as ::core::ffi::c_int;
+                    let mut c: ::core::ffi::c_int =
+                        *c2rust_fresh16 as uint8_t as ::core::ffi::c_int;
                     let mut lo: idx_T = tryidx;
                     let mut hi: idx_T = tryidx + len as idx_T - 1 as idx_T;
                     while lo < hi {
                         let mut m: idx_T = (lo + hi) / 2 as idx_T;
                         if *byts.offset(m as isize) as ::core::ffi::c_int > c {
-                            hi = (m as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                                as idx_T;
+                            hi = (m as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as idx_T;
                         } else if (*byts.offset(m as isize) as ::core::ffi::c_int) < c {
-                            lo = (m as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                                as idx_T;
+                            lo = (m as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as idx_T;
                         } else {
                             hi = m;
                             lo = hi;
@@ -5860,8 +5995,8 @@ unsafe extern "C" fn find_keepcap_word(
                             fword.offset(fwordidx[depth as usize] as isize),
                             flen as size_t,
                         );
-                        kwordlen[(depth + 1 as ::core::ffi::c_int) as usize] = kwordlen[depth
-                            as usize] + flen;
+                        kwordlen[(depth + 1 as ::core::ffi::c_int) as usize] =
+                            kwordlen[depth as usize] + flen;
                     } else {
                         strncpy(
                             kword.offset(kwordlen[depth as usize] as isize),
@@ -5869,13 +6004,13 @@ unsafe extern "C" fn find_keepcap_word(
                                 .offset(uwordidx[depth as usize] as isize),
                             ulen as size_t,
                         );
-                        kwordlen[(depth + 1 as ::core::ffi::c_int) as usize] = kwordlen[depth
-                            as usize] + ulen;
+                        kwordlen[(depth + 1 as ::core::ffi::c_int) as usize] =
+                            kwordlen[depth as usize] + ulen;
                     }
-                    fwordidx[(depth + 1 as ::core::ffi::c_int) as usize] = fwordidx[depth
-                        as usize] + flen;
-                    uwordidx[(depth + 1 as ::core::ffi::c_int) as usize] = uwordidx[depth
-                        as usize] + ulen;
+                    fwordidx[(depth + 1 as ::core::ffi::c_int) as usize] =
+                        fwordidx[depth as usize] + flen;
+                    uwordidx[(depth + 1 as ::core::ffi::c_int) as usize] =
+                        uwordidx[depth as usize] + ulen;
                     depth += 1;
                     arridx[depth as usize] = tryidx;
                     round[depth as usize] = 0 as ::core::ffi::c_int;
@@ -5890,8 +6025,8 @@ unsafe extern "C" fn score_comp_sal(mut su: *mut suginfo_T) {
     ga_grow(&raw mut (*su).su_sga, (*su).su_ga.ga_len);
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         if !((*(*lp).lp_slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) {
             spell_soundfold(
                 (*lp).lp_slang,
@@ -5901,8 +6036,8 @@ unsafe extern "C" fn score_comp_sal(mut su: *mut suginfo_T) {
             );
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < (*su).su_ga.ga_len {
-                let mut stp: *mut suggest_T = ((*su).su_ga.ga_data as *mut suggest_T)
-                    .offset(i as isize);
+                let mut stp: *mut suggest_T =
+                    ((*su).su_ga.ga_data as *mut suggest_T).offset(i as isize);
                 let mut score: ::core::ffi::c_int = stp_sal_score(
                     stp,
                     su,
@@ -5910,8 +6045,7 @@ unsafe extern "C" fn score_comp_sal(mut su: *mut suginfo_T) {
                     &raw mut badsound as *mut ::core::ffi::c_char,
                 );
                 if score < SCORE_MAXMAX as ::core::ffi::c_int {
-                    let mut sstp: *mut suggest_T = ((*su).su_sga.ga_data
-                        as *mut suggest_T)
+                    let mut sstp: *mut suggest_T = ((*su).su_sga.ga_data as *mut suggest_T)
                         .offset((*su).su_sga.ga_len as isize);
                     (*sstp).st_word = xstrdup((*stp).st_word);
                     (*sstp).st_wordlen = (*stp).st_wordlen;
@@ -5941,8 +6075,8 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
     let mut slang: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         if !((*(*lp).lp_slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) {
             slang = (*lp).lp_slang;
             spell_soundfold(
@@ -5953,8 +6087,8 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
             );
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < (*su).su_ga.ga_len {
-                let mut stp: *mut suggest_T = ((*su).su_ga.ga_data as *mut suggest_T)
-                    .offset(i as isize);
+                let mut stp: *mut suggest_T =
+                    ((*su).su_ga.ga_data as *mut suggest_T).offset(i as isize);
                 (*stp).st_altscore = stp_sal_score(
                     stp,
                     su,
@@ -5967,7 +6101,8 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
                         / 4 as ::core::ffi::c_int;
                 } else {
                     (*stp).st_score = ((*stp).st_score * 3 as ::core::ffi::c_int
-                        + (*stp).st_altscore) / 4 as ::core::ffi::c_int;
+                        + (*stp).st_altscore)
+                        / 4 as ::core::ffi::c_int;
                 }
                 (*stp).st_salscore = false_0 != 0;
                 i += 1;
@@ -5983,8 +6118,8 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
     }
     let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_0 < (*su).su_sga.ga_len {
-        let mut stp_0: *mut suggest_T = ((*su).su_sga.ga_data as *mut suggest_T)
-            .offset(i_0 as isize);
+        let mut stp_0: *mut suggest_T =
+            ((*su).su_sga.ga_data as *mut suggest_T).offset(i_0 as isize);
         (*stp_0).st_altscore = spell_edit_score(
             slang,
             &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
@@ -5992,11 +6127,14 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
         );
         if (*stp_0).st_score == SCORE_MAXMAX as ::core::ffi::c_int {
             (*stp_0).st_score = (SCORE_INS as ::core::ffi::c_int
-                * 3 as ::core::ffi::c_int * 7 as ::core::ffi::c_int
-                + (*stp_0).st_altscore) / 8 as ::core::ffi::c_int;
+                * 3 as ::core::ffi::c_int
+                * 7 as ::core::ffi::c_int
+                + (*stp_0).st_altscore)
+                / 8 as ::core::ffi::c_int;
         } else {
             (*stp_0).st_score = ((*stp_0).st_score * 7 as ::core::ffi::c_int
-                + (*stp_0).st_altscore) / 8 as ::core::ffi::c_int;
+                + (*stp_0).st_altscore)
+                / 8 as ::core::ffi::c_int;
         }
         (*stp_0).st_salscore = true_0 != 0;
         i_0 += 1;
@@ -6011,8 +6149,8 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
         1 as ::core::ffi::c_int,
     );
     ga_grow(&raw mut ga, (*su).su_ga.ga_len + (*su).su_sga.ga_len);
-    let mut stp_1: *mut suggest_T = (ga.ga_data as *mut suggest_T)
-        .offset(0 as ::core::ffi::c_int as isize);
+    let mut stp_1: *mut suggest_T =
+        (ga.ga_data as *mut suggest_T).offset(0 as ::core::ffi::c_int as isize);
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_1 < (*su).su_ga.ga_len || i_1 < (*su).su_sga.ga_len {
         let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -6027,9 +6165,7 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
                 let mut j: ::core::ffi::c_int = 0;
                 j = 0 as ::core::ffi::c_int;
                 while j < ga.ga_len {
-                    if strcmp((*stp_1.offset(j as isize)).st_word, p)
-                        == 0 as ::core::ffi::c_int
-                    {
+                    if strcmp((*stp_1.offset(j as isize)).st_word, p) == 0 as ::core::ffi::c_int {
                         break;
                     }
                     j += 1;
@@ -6037,9 +6173,8 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
                 if j == ga.ga_len {
                     let c2rust_fresh0 = ga.ga_len;
                     ga.ga_len = ga.ga_len + 1;
-                    *stp_1.offset(c2rust_fresh0 as isize) = *((*gap).ga_data
-                        as *mut suggest_T)
-                        .offset(i_1 as isize);
+                    *stp_1.offset(c2rust_fresh0 as isize) =
+                        *((*gap).ga_data as *mut suggest_T).offset(i_1 as isize);
                 } else {
                     xfree(p as *mut ::core::ffi::c_void);
                 }
@@ -6066,12 +6201,8 @@ unsafe extern "C" fn stp_sal_score(
     mut slang: *mut slang_T,
     mut badsound: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut pbad: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut pgood: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pbad: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut pgood: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut badsound2: [::core::ffi::c_char; 254] = [0; 254];
     let mut fword: [::core::ffi::c_char; 254] = [0; 254];
     let mut goodsound: [::core::ffi::c_char; 254] = [0; 254];
@@ -6087,13 +6218,12 @@ unsafe extern "C" fn stp_sal_score(
             &raw mut fword as *mut ::core::ffi::c_char,
             MAXWLEN as ::core::ffi::c_int,
         );
-        if ascii_iswhite(
-            *(*su).su_badptr.offset((*su).su_badlen as isize) as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+        if ascii_iswhite(*(*su).su_badptr.offset((*su).su_badlen as isize) as ::core::ffi::c_int)
+            as ::core::ffi::c_int
+            != 0
             && *skiptowhite((*stp).st_word) as ::core::ffi::c_int == NUL
         {
-            let mut p: *mut ::core::ffi::c_char = &raw mut fword
-                as *mut ::core::ffi::c_char;
+            let mut p: *mut ::core::ffi::c_char = &raw mut fword as *mut ::core::ffi::c_char;
             loop {
                 p = skiptowhite(p);
                 if *p as ::core::ffi::c_int == NUL {
@@ -6101,10 +6231,8 @@ unsafe extern "C" fn stp_sal_score(
                 }
                 memmove(
                     p as *mut ::core::ffi::c_void,
-                    p.offset(1 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
-                    strlen(p.offset(1 as ::core::ffi::c_int as isize))
-                        .wrapping_add(1 as size_t),
+                    p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                    strlen(p.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
                 );
             }
         }
@@ -6119,12 +6247,17 @@ unsafe extern "C" fn stp_sal_score(
     if lendiff > 0 as ::core::ffi::c_int
         && (*stp).st_wordlen + lendiff < MAXWLEN as ::core::ffi::c_int
     {
-        strcpy(&raw mut goodword as *mut ::core::ffi::c_char, (*stp).st_word);
+        strcpy(
+            &raw mut goodword as *mut ::core::ffi::c_char,
+            (*stp).st_word,
+        );
         xmemcpyz(
-            (&raw mut goodword as *mut ::core::ffi::c_char)
-                .offset((*stp).st_wordlen as isize) as *mut ::core::ffi::c_void,
-            (*su).su_badptr.offset((*su).su_badlen as isize).offset(-(lendiff as isize))
-                as *const ::core::ffi::c_void,
+            (&raw mut goodword as *mut ::core::ffi::c_char).offset((*stp).st_wordlen as isize)
+                as *mut ::core::ffi::c_void,
+            (*su)
+                .su_badptr
+                .offset((*su).su_badlen as isize)
+                .offset(-(lendiff as isize)) as *const ::core::ffi::c_void,
             lendiff as size_t,
         );
         pgood = &raw mut goodword as *mut ::core::ffi::c_char;
@@ -6146,12 +6279,10 @@ static mut dumsft: sftword_T = sftword_T {
 unsafe extern "C" fn suggest_try_soundalike_prep() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
-        if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int)
-            && !(*slang).sl_sbyts.is_null()
-        {
+        if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) && !(*slang).sl_sbyts.is_null() {
             hash_init(&raw mut (*slang).sl_sounddone);
         }
         lpi += 1;
@@ -6161,12 +6292,10 @@ unsafe extern "C" fn suggest_try_soundalike(mut su: *mut suginfo_T) {
     let mut salword: [::core::ffi::c_char; 254] = [0; 254];
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
-        if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int)
-            && !(*slang).sl_sbyts.is_null()
-        {
+        if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) && !(*slang).sl_sbyts.is_null() {
             spell_soundfold(
                 slang,
                 &raw mut (*su).su_fbadword as *mut ::core::ffi::c_char,
@@ -6186,24 +6315,20 @@ unsafe extern "C" fn suggest_try_soundalike(mut su: *mut suginfo_T) {
 unsafe extern "C" fn suggest_try_soundalike_finish() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin).w_s).b_langp.ga_len {
-        let mut lp: *mut langp_T = ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T)
-            .offset(lpi as isize);
+        let mut lp: *mut langp_T =
+            ((*(*curwin).w_s).b_langp.ga_data as *mut langp_T).offset(lpi as isize);
         let mut slang: *mut slang_T = (*lp).lp_slang;
-        if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int)
-            && !(*slang).sl_sbyts.is_null()
-        {
-            let mut todo: ::core::ffi::c_int = (*slang).sl_sounddone.ht_used
-                as ::core::ffi::c_int;
+        if !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int) && !(*slang).sl_sbyts.is_null() {
+            let mut todo: ::core::ffi::c_int = (*slang).sl_sounddone.ht_used as ::core::ffi::c_int;
             let mut hi: *mut hashitem_T = (*slang).sl_sounddone.ht_array;
             while todo > 0 as ::core::ffi::c_int {
                 if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
                     xfree(
-                        (*hi)
-                            .hi_key
-                            .offset(
-                                -((&raw mut dumsft.sft_word as *mut uint8_t)
-                                    .offset_from(&raw mut dumsft as *mut uint8_t) as isize),
-                            ) as *mut sftword_T as *mut ::core::ffi::c_void,
+                        (*hi).hi_key.offset(
+                            -((&raw mut dumsft.sft_word as *mut uint8_t)
+                                .offset_from(&raw mut dumsft as *mut uint8_t)
+                                as isize),
+                        ) as *mut sftword_T as *mut ::core::ffi::c_void,
                     );
                     todo -= 1;
                 }
@@ -6231,15 +6356,14 @@ unsafe extern "C" fn add_sound_suggest(
     let mut sft: *mut sftword_T = ::core::ptr::null_mut::<sftword_T>();
     let mut hash: hash_T = hash_hash(goodword);
     let goodword_len: size_t = strlen(goodword);
-    let mut hi: *mut hashitem_T = hash_lookup(
-        &raw mut (*slang).sl_sounddone,
-        goodword,
-        goodword_len,
-        hash,
-    );
+    let mut hi: *mut hashitem_T =
+        hash_lookup(&raw mut (*slang).sl_sounddone, goodword, goodword_len, hash);
     if (*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed {
-        sft = xmalloc((2 as size_t).wrapping_add(goodword_len).wrapping_add(1 as size_t))
-            as *mut sftword_T;
+        sft = xmalloc(
+            (2 as size_t)
+                .wrapping_add(goodword_len)
+                .wrapping_add(1 as size_t),
+        ) as *mut sftword_T;
         (*sft).sft_score = score as int16_t;
         memcpy(
             &raw mut (*sft).sft_word as *mut uint8_t as *mut ::core::ffi::c_void,
@@ -6253,12 +6377,10 @@ unsafe extern "C" fn add_sound_suggest(
             hash,
         );
     } else {
-        sft = (*hi)
-            .hi_key
-            .offset(
-                -((&raw mut dumsft.sft_word as *mut uint8_t)
-                    .offset_from(&raw mut dumsft as *mut uint8_t) as isize),
-            ) as *mut sftword_T;
+        sft = (*hi).hi_key.offset(
+            -((&raw mut dumsft.sft_word as *mut uint8_t)
+                .offset_from(&raw mut dumsft as *mut uint8_t) as isize),
+        ) as *mut sftword_T;
         if score >= (*sft).sft_score as ::core::ffi::c_int {
             return;
         }
@@ -6269,10 +6391,8 @@ unsafe extern "C" fn add_sound_suggest(
         internal_error(b"add_sound_suggest()\0".as_ptr() as *const ::core::ffi::c_char);
         return;
     }
-    let mut nrline: *mut ::core::ffi::c_char = ml_get_buf(
-        (*slang).sl_sugbuf,
-        sfwordnr as linenr_T + 1 as linenr_T,
-    );
+    let mut nrline: *mut ::core::ffi::c_char =
+        ml_get_buf((*slang).sl_sugbuf, sfwordnr as linenr_T + 1 as linenr_T);
     let mut orgnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while *nrline as ::core::ffi::c_int != NUL {
         orgnr += bytes2offset(&raw mut nrline);
@@ -6284,23 +6404,18 @@ unsafe extern "C" fn add_sound_suggest(
         '_badword: while wlen < MAXWLEN as ::core::ffi::c_int - 3 as ::core::ffi::c_int {
             i = 1 as ::core::ffi::c_int;
             if wordcount == orgnr
-                && *byts.offset((n + 1 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int == NUL
+                && *byts.offset((n + 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int == NUL
             {
                 break;
             }
-            if *byts.offset((n + 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                == NUL
-            {
+            if *byts.offset((n + 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int == NUL {
                 wordcount += 1;
             }
             while *byts.offset((n + i) as isize) as ::core::ffi::c_int == NUL {
                 if i > *byts.offset(n as isize) as ::core::ffi::c_int {
                     strcpy(
-                        (&raw mut theword as *mut ::core::ffi::c_char)
-                            .offset(wlen as isize),
-                        b"BAD\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        (&raw mut theword as *mut ::core::ffi::c_char).offset(wlen as isize),
+                        b"BAD\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     );
                     wlen += 3 as ::core::ffi::c_int;
                     break '_badword;
@@ -6309,16 +6424,14 @@ unsafe extern "C" fn add_sound_suggest(
                 }
             }
             while i < *byts.offset(n as isize) as ::core::ffi::c_int {
-                wc = *idxs.offset(*idxs.offset((n + i) as isize) as isize)
-                    as ::core::ffi::c_int;
+                wc = *idxs.offset(*idxs.offset((n + i) as isize) as isize) as ::core::ffi::c_int;
                 if wordcount + wc > orgnr {
                     break;
                 }
                 wordcount += wc;
                 i += 1;
             }
-            theword[wlen as usize] = *byts.offset((n + i) as isize)
-                as ::core::ffi::c_char;
+            theword[wlen as usize] = *byts.offset((n + i) as isize) as ::core::ffi::c_char;
             n = *idxs.offset((n + i) as isize) as ::core::ffi::c_int;
             wlen += 1;
         }
@@ -6327,9 +6440,7 @@ unsafe extern "C" fn add_sound_suggest(
             && *byts.offset((n + i) as isize) as ::core::ffi::c_int == NUL
         {
             let mut cword: [::core::ffi::c_char; 254] = [0; 254];
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut flags: ::core::ffi::c_int = *idxs.offset((n + i) as isize);
             if flags & WF_NOSUGGEST as ::core::ffi::c_int == 0 {
                 if flags & WF_KEEPCAP as ::core::ffi::c_int != 0 {
@@ -6341,9 +6452,7 @@ unsafe extern "C" fn add_sound_suggest(
                     p = &raw mut cword as *mut ::core::ffi::c_char;
                 } else {
                     flags |= (*su).su_badflags;
-                    if flags & WF_CAPMASK as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_int
-                    {
+                    if flags & WF_CAPMASK as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
                         make_case_word(
                             &raw mut theword as *mut ::core::ffi::c_char,
                             &raw mut cword as *mut ::core::ffi::c_char,
@@ -6385,9 +6494,8 @@ unsafe extern "C" fn add_sound_suggest(
                         spelltab.st_isu[gc as usize] as ::core::ffi::c_int
                     } != 0
                     {
-                        let mut bc: ::core::ffi::c_int = utf_ptr2char(
-                            &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
-                        );
+                        let mut bc: ::core::ffi::c_int =
+                            utf_ptr2char(&raw mut (*su).su_badword as *mut ::core::ffi::c_char);
                         if (if bc >= 128 as ::core::ffi::c_int {
                             mb_isupper(bc) as ::core::ffi::c_int
                         } else {
@@ -6397,46 +6505,37 @@ unsafe extern "C" fn add_sound_suggest(
                                 utf_fold(bc)
                             } else {
                                 spelltab.st_fold[bc as usize] as ::core::ffi::c_int
+                            }) != (if gc >= 128 as ::core::ffi::c_int {
+                                utf_fold(gc)
+                            } else {
+                                spelltab.st_fold[gc as usize] as ::core::ffi::c_int
                             })
-                                != (if gc >= 128 as ::core::ffi::c_int {
-                                    utf_fold(gc)
-                                } else {
-                                    spelltab.st_fold[gc as usize] as ::core::ffi::c_int
-                                })
                         {
-                            goodscore
-                                += SCORE_ICASE as ::core::ffi::c_int
-                                    / 2 as ::core::ffi::c_int;
+                            goodscore +=
+                                SCORE_ICASE as ::core::ffi::c_int / 2 as ::core::ffi::c_int;
                         }
                     }
-                    let mut limit: ::core::ffi::c_int = (4 as ::core::ffi::c_int
-                        * ((*su).su_sfmaxscore - goodscore) - score)
-                        / 3 as ::core::ffi::c_int;
+                    let mut limit: ::core::ffi::c_int =
+                        (4 as ::core::ffi::c_int * ((*su).su_sfmaxscore - goodscore) - score)
+                            / 3 as ::core::ffi::c_int;
                     if limit > SCORE_LIMITMAX as ::core::ffi::c_int {
-                        goodscore
-                            += spell_edit_score(
-                                slang,
-                                &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
-                                p,
-                            );
+                        goodscore += spell_edit_score(
+                            slang,
+                            &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
+                            p,
+                        );
                     } else {
-                        goodscore
-                            += spell_edit_score_limit(
-                                slang,
-                                &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
-                                p,
-                                limit,
-                            );
+                        goodscore += spell_edit_score_limit(
+                            slang,
+                            &raw mut (*su).su_badword as *mut ::core::ffi::c_char,
+                            p,
+                            limit,
+                        );
                     }
                     if goodscore < SCORE_MAXMAX as ::core::ffi::c_int {
-                        goodscore = score_wordcount_adj(
-                            slang,
-                            goodscore,
-                            p,
-                            false_0 != 0,
-                        );
-                        goodscore = (3 as ::core::ffi::c_int * goodscore + score)
-                            / 4 as ::core::ffi::c_int;
+                        goodscore = score_wordcount_adj(slang, goodscore, p, false_0 != 0);
+                        goodscore =
+                            (3 as ::core::ffi::c_int * goodscore + score) / 4 as ::core::ffi::c_int;
                         if goodscore <= (*su).su_sfmaxscore {
                             add_suggestion(
                                 su,
@@ -6470,8 +6569,8 @@ unsafe extern "C" fn soundfold_find(
     loop {
         let c2rust_fresh17 = arridx;
         arridx = arridx + 1;
-        let mut len: ::core::ffi::c_int = *byts.offset(c2rust_fresh17 as isize)
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            *byts.offset(c2rust_fresh17 as isize) as ::core::ffi::c_int;
         let mut c: ::core::ffi::c_int = *ptr.offset(wlen as isize) as ::core::ffi::c_int;
         if *byts.offset(arridx as isize) as ::core::ffi::c_int == NUL {
             if c == NUL {
@@ -6495,9 +6594,7 @@ unsafe extern "C" fn soundfold_find(
             c = ' ' as ::core::ffi::c_int;
         }
         while (*byts.offset(arridx as isize) as ::core::ffi::c_int) < c {
-            wordnr
-                += *idxs.offset(*idxs.offset(arridx as isize) as isize)
-                    as ::core::ffi::c_int;
+            wordnr += *idxs.offset(*idxs.offset(arridx as isize) as isize) as ::core::ffi::c_int;
             arridx += 1;
             len -= 1;
             if len == 0 as ::core::ffi::c_int {
@@ -6510,8 +6607,7 @@ unsafe extern "C" fn soundfold_find(
         arridx = *idxs.offset(arridx as isize);
         wlen += 1;
         if c == ' ' as ::core::ffi::c_int {
-            while *ptr.offset(wlen as isize) as ::core::ffi::c_int
-                == ' ' as ::core::ffi::c_int
+            while *ptr.offset(wlen as isize) as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
                 || *ptr.offset(wlen as isize) as ::core::ffi::c_int == TAB
             {
                 wlen += 1;
@@ -6529,8 +6625,8 @@ unsafe extern "C" fn similar_chars(
     let mut m2: ::core::ffi::c_int = 0;
     let mut buf: [::core::ffi::c_char; 7] = [0; 7];
     if c1 >= 256 as ::core::ffi::c_int {
-        buf[utf_char2bytes(c1, &raw mut buf as *mut ::core::ffi::c_char) as usize] = 0
-            as ::core::ffi::c_char;
+        buf[utf_char2bytes(c1, &raw mut buf as *mut ::core::ffi::c_char) as usize] =
+            0 as ::core::ffi::c_char;
         let mut hi: *mut hashitem_T = hash_find(
             &raw mut (*slang).sl_map_hash,
             &raw mut buf as *mut ::core::ffi::c_char,
@@ -6552,8 +6648,8 @@ unsafe extern "C" fn similar_chars(
         return false_0 != 0;
     }
     if c2 >= 256 as ::core::ffi::c_int {
-        buf[utf_char2bytes(c2, &raw mut buf as *mut ::core::ffi::c_char) as usize] = 0
-            as ::core::ffi::c_char;
+        buf[utf_char2bytes(c2, &raw mut buf as *mut ::core::ffi::c_char) as usize] =
+            0 as ::core::ffi::c_char;
         let mut hi_0: *mut hashitem_T = hash_find(
             &raw mut (*slang).sl_map_hash,
             &raw mut buf as *mut ::core::ffi::c_char,
@@ -6596,8 +6692,7 @@ unsafe extern "C" fn add_suggestion(
         st_had_bonus: false,
         st_slang: ::core::ptr::null_mut::<slang_T>(),
     };
-    let mut pgood: *const ::core::ffi::c_char = goodword
-        .offset(strlen(goodword) as isize);
+    let mut pgood: *const ::core::ffi::c_char = goodword.offset(strlen(goodword) as isize);
     let mut pbad: *mut ::core::ffi::c_char = (*su).su_badptr.offset(badlenarg as isize);
     loop {
         goodlen = pgood.offset_from(goodword) as ::core::ffi::c_int;
@@ -6605,21 +6700,18 @@ unsafe extern "C" fn add_suggestion(
         if goodlen <= 0 as ::core::ffi::c_int || badlen <= 0 as ::core::ffi::c_int {
             break;
         }
-        pgood = pgood
-            .offset(
-                -((utf_head_off(
-                    goodword as *mut ::core::ffi::c_char,
-                    (pgood as *mut ::core::ffi::c_char)
-                        .offset(-(1 as ::core::ffi::c_int as isize)),
-                ) + 1 as ::core::ffi::c_int) as isize),
-            );
-        pbad = pbad
-            .offset(
-                -((utf_head_off(
-                    (*su).su_badptr,
-                    pbad.offset(-(1 as ::core::ffi::c_int as isize)),
-                ) + 1 as ::core::ffi::c_int) as isize),
-            );
+        pgood = pgood.offset(
+            -((utf_head_off(
+                goodword as *mut ::core::ffi::c_char,
+                (pgood as *mut ::core::ffi::c_char).offset(-(1 as ::core::ffi::c_int as isize)),
+            ) + 1 as ::core::ffi::c_int) as isize),
+        );
+        pbad = pbad.offset(
+            -((utf_head_off(
+                (*su).su_badptr,
+                pbad.offset(-(1 as ::core::ffi::c_int as isize)),
+            ) + 1 as ::core::ffi::c_int) as isize),
+        );
         if utf_ptr2char(pgood) != utf_ptr2char(pbad) {
             break;
         }
@@ -6631,17 +6723,17 @@ unsafe extern "C" fn add_suggestion(
     if (*gap).ga_len <= 0 as ::core::ffi::c_int {
         i = -1 as ::core::ffi::c_int;
     } else {
-        let mut stp: *mut suggest_T = ((*gap).ga_data as *mut suggest_T)
-            .offset(0 as ::core::ffi::c_int as isize);
+        let mut stp: *mut suggest_T =
+            ((*gap).ga_data as *mut suggest_T).offset(0 as ::core::ffi::c_int as isize);
         i = (*gap).ga_len;
         loop {
             i -= 1;
             if i < 0 as ::core::ffi::c_int {
                 break;
             }
-            if (*stp).st_wordlen == goodlen && (*stp).st_orglen == badlen
-                && strncmp((*stp).st_word, goodword, goodlen as size_t)
-                    == 0 as ::core::ffi::c_int
+            if (*stp).st_wordlen == goodlen
+                && (*stp).st_orglen == badlen
+                && strncmp((*stp).st_word, goodword, goodlen as size_t) == 0 as ::core::ffi::c_int
             {
                 if (*stp).st_slang.is_null() {
                     (*stp).st_slang = slang;
@@ -6649,9 +6741,7 @@ unsafe extern "C" fn add_suggestion(
                 new_sug.st_score = score;
                 new_sug.st_altscore = altscore;
                 new_sug.st_had_bonus = had_bonus;
-                if (*stp).st_had_bonus as ::core::ffi::c_int
-                    != had_bonus as ::core::ffi::c_int
-                {
+                if (*stp).st_had_bonus as ::core::ffi::c_int != had_bonus as ::core::ffi::c_int {
                     if had_bonus {
                         rescore_one(su, stp);
                     } else {
@@ -6674,14 +6764,10 @@ unsafe extern "C" fn add_suggestion(
         }
     }
     if i < 0 as ::core::ffi::c_int {
-        let mut stp_0: *mut suggest_T = ga_append_via_ptr(
-            gap,
-            ::core::mem::size_of::<suggest_T>(),
-        ) as *mut suggest_T;
-        (*stp_0).st_word = xmemdupz(
-            goodword as *const ::core::ffi::c_void,
-            goodlen as size_t,
-        ) as *mut ::core::ffi::c_char;
+        let mut stp_0: *mut suggest_T =
+            ga_append_via_ptr(gap, ::core::mem::size_of::<suggest_T>()) as *mut suggest_T;
+        (*stp_0).st_word = xmemdupz(goodword as *const ::core::ffi::c_void, goodlen as size_t)
+            as *mut ::core::ffi::c_char;
         (*stp_0).st_wordlen = goodlen;
         (*stp_0).st_score = score;
         (*stp_0).st_altscore = altscore;
@@ -6724,8 +6810,8 @@ unsafe extern "C" fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut gar
     if (*gap).ga_len == 0 as ::core::ffi::c_int {
         return;
     }
-    let mut stp: *mut suggest_T = ((*gap).ga_data as *mut suggest_T)
-        .offset(0 as ::core::ffi::c_int as isize);
+    let mut stp: *mut suggest_T =
+        ((*gap).ga_data as *mut suggest_T).offset(0 as ::core::ffi::c_int as isize);
     let mut i: ::core::ffi::c_int = (*gap).ga_len - 1 as ::core::ffi::c_int;
     while i >= 0 as ::core::ffi::c_int {
         xstrlcpy(
@@ -6736,7 +6822,9 @@ unsafe extern "C" fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut gar
         let mut len: ::core::ffi::c_int = (*stp.offset(i as isize)).st_wordlen;
         xstrlcpy(
             (&raw mut longword as *mut ::core::ffi::c_char).offset(len as isize),
-            (*su).su_badptr.offset((*stp.offset(i as isize)).st_orglen as isize),
+            (*su)
+                .su_badptr
+                .offset((*stp.offset(i as isize)).st_orglen as isize),
             ((MAXWLEN as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t)
                 .wrapping_sub(len as size_t),
         );
@@ -6748,50 +6836,41 @@ unsafe extern "C" fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut gar
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
             false_0 != 0,
         );
-        if attr as ::core::ffi::c_uint
-            != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if attr as ::core::ffi::c_uint != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint {
             xfree((*stp.offset(i as isize)).st_word as *mut ::core::ffi::c_void);
             (*gap).ga_len -= 1;
             if i < (*gap).ga_len {
                 memmove(
                     stp.offset(i as isize) as *mut ::core::ffi::c_void,
-                    stp.offset(i as isize).offset(1 as ::core::ffi::c_int as isize)
+                    stp.offset(i as isize)
+                        .offset(1 as ::core::ffi::c_int as isize)
                         as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<suggest_T>()
-                        .wrapping_mul(((*gap).ga_len - i) as size_t),
+                    ::core::mem::size_of::<suggest_T>().wrapping_mul(((*gap).ga_len - i) as size_t),
                 );
             }
         }
         i -= 1;
     }
 }
-unsafe extern "C" fn add_banned(
-    mut su: *mut suginfo_T,
-    mut word: *mut ::core::ffi::c_char,
-) {
+unsafe extern "C" fn add_banned(mut su: *mut suginfo_T, mut word: *mut ::core::ffi::c_char) {
     let mut hash: hash_T = hash_hash(word);
     let word_len: size_t = strlen(word);
-    let mut hi: *mut hashitem_T = hash_lookup(
-        &raw mut (*su).su_banned,
-        word,
-        word_len,
-        hash,
-    );
+    let mut hi: *mut hashitem_T = hash_lookup(&raw mut (*su).su_banned, word, word_len, hash);
     if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
         return;
     }
-    let mut s: *mut ::core::ffi::c_char = xmemdupz(
-        word as *const ::core::ffi::c_void,
-        word_len,
-    ) as *mut ::core::ffi::c_char;
+    let mut s: *mut ::core::ffi::c_char =
+        xmemdupz(word as *const ::core::ffi::c_void, word_len) as *mut ::core::ffi::c_char;
     hash_add_item(&raw mut (*su).su_banned, hi, s, hash);
 }
 unsafe extern "C" fn rescore_suggestions(mut su: *mut suginfo_T) {
     if !(*su).su_sallang.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*su).su_ga.ga_len {
-            rescore_one(su, ((*su).su_ga.ga_data as *mut suggest_T).offset(i as isize));
+            rescore_one(
+                su,
+                ((*su).su_ga.ga_data as *mut suggest_T).offset(i as isize),
+            );
             i += 1;
         }
     }
@@ -6799,12 +6878,11 @@ unsafe extern "C" fn rescore_suggestions(mut su: *mut suginfo_T) {
 unsafe extern "C" fn rescore_one(mut su: *mut suginfo_T, mut stp: *mut suggest_T) {
     let mut slang: *mut slang_T = (*stp).st_slang;
     let mut sal_badword: [::core::ffi::c_char; 254] = [0; 254];
-    if !slang.is_null() && !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int)
+    if !slang.is_null()
+        && !((*slang).sl_sal.ga_len <= 0 as ::core::ffi::c_int)
         && !(*stp).st_had_bonus
     {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if slang == (*su).su_sallang {
             p = &raw mut (*su).su_sal_badword as *mut ::core::ffi::c_char;
         } else {
@@ -6818,11 +6896,10 @@ unsafe extern "C" fn rescore_one(mut su: *mut suginfo_T, mut stp: *mut suggest_T
         }
         (*stp).st_altscore = stp_sal_score(stp, su, slang, p);
         if (*stp).st_altscore == SCORE_MAXMAX as ::core::ffi::c_int {
-            (*stp).st_altscore = SCORE_INS as ::core::ffi::c_int
-                * 3 as ::core::ffi::c_int;
+            (*stp).st_altscore = SCORE_INS as ::core::ffi::c_int * 3 as ::core::ffi::c_int;
         }
-        (*stp).st_score = (3 as ::core::ffi::c_int * (*stp).st_score
-            + (*stp).st_altscore) / 4 as ::core::ffi::c_int;
+        (*stp).st_score = (3 as ::core::ffi::c_int * (*stp).st_score + (*stp).st_altscore)
+            / 4 as ::core::ffi::c_int;
         (*stp).st_had_bonus = true_0 != 0;
     }
 }
@@ -6874,8 +6951,8 @@ unsafe extern "C" fn cleanup_suggestions(
         ),
     );
     if (*gap).ga_len > keep {
-        let stp: *mut suggest_T = ((*gap).ga_data as *mut suggest_T)
-            .offset(0 as ::core::ffi::c_int as isize);
+        let stp: *mut suggest_T =
+            ((*gap).ga_data as *mut suggest_T).offset(0 as ::core::ffi::c_int as isize);
         let mut i: ::core::ffi::c_int = keep;
         while i < (*gap).ga_len {
             xfree((*stp.offset(i as isize)).st_word as *mut ::core::ffi::c_void);
@@ -6899,37 +6976,27 @@ unsafe extern "C" fn soundalike_score(
         || *goodsound as ::core::ffi::c_int == '*' as ::core::ffi::c_int)
         && *badsound as ::core::ffi::c_int != *goodsound as ::core::ffi::c_int
     {
-        if *badsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == NUL
-            && *goodsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL
-            || *goodsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL
-                && *badsound.offset(1 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == NUL
+        if *badsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+            && *goodsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+            || *goodsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+                && *badsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
             return SCORE_DEL as ::core::ffi::c_int;
         }
-        if *badsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == NUL
-            || *goodsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL
+        if *badsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+            || *goodsound.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
             return SCORE_MAXMAX as ::core::ffi::c_int;
         }
         if !(*badsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == *goodsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            || *badsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
-                && *goodsound.offset(1 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int != NUL
-                && *badsound.offset(2 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
-                    == *goodsound.offset(2 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int)
+            || *badsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+                && *goodsound.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+                && *badsound.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == *goodsound.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
         {
-            score = 2 as ::core::ffi::c_int * SCORE_DEL as ::core::ffi::c_int
-                / 3 as ::core::ffi::c_int;
+            score =
+                2 as ::core::ffi::c_int * SCORE_DEL as ::core::ffi::c_int / 3 as ::core::ffi::c_int;
             if *badsound as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
                 badsound = badsound.offset(1);
             } else {
@@ -6953,18 +7020,13 @@ unsafe extern "C" fn soundalike_score(
     } else {
         goodsound
     };
-    while *pl as ::core::ffi::c_int == *ps as ::core::ffi::c_int
-        && *pl as ::core::ffi::c_int != NUL
+    while *pl as ::core::ffi::c_int == *ps as ::core::ffi::c_int && *pl as ::core::ffi::c_int != NUL
     {
         pl = pl.offset(1);
         ps = ps.offset(1);
     }
-    let mut pl2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut ps2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pl2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut ps2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match n {
         -2 | 2 => {
             pl = pl.offset(1);
@@ -6972,9 +7034,7 @@ unsafe extern "C" fn soundalike_score(
                 pl = pl.offset(1);
                 ps = ps.offset(1);
             }
-            if strcmp(pl.offset(1 as ::core::ffi::c_int as isize), ps)
-                == 0 as ::core::ffi::c_int
-            {
+            if strcmp(pl.offset(1 as ::core::ffi::c_int as isize), ps) == 0 as ::core::ffi::c_int {
                 return score + SCORE_DEL as ::core::ffi::c_int * 2 as ::core::ffi::c_int;
             }
         }
@@ -6991,23 +7051,20 @@ unsafe extern "C" fn soundalike_score(
             if *pl2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == *ps2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 && *pl2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == *ps2.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
+                    == *ps2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 && strcmp(
                     pl2.offset(2 as ::core::ffi::c_int as isize),
                     ps2.offset(2 as ::core::ffi::c_int as isize),
                 ) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_DEL as ::core::ffi::c_int
-                    + SCORE_SWAP as ::core::ffi::c_int;
+                return score + SCORE_DEL as ::core::ffi::c_int + SCORE_SWAP as ::core::ffi::c_int;
             }
             if strcmp(
                 pl2.offset(1 as ::core::ffi::c_int as isize),
                 ps2.offset(1 as ::core::ffi::c_int as isize),
             ) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_DEL as ::core::ffi::c_int
-                    + SCORE_SUBST as ::core::ffi::c_int;
+                return score + SCORE_DEL as ::core::ffi::c_int + SCORE_SUBST as ::core::ffi::c_int;
             }
             if *pl.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == *ps.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -7023,7 +7080,8 @@ unsafe extern "C" fn soundalike_score(
                 if strcmp(pl2.offset(1 as ::core::ffi::c_int as isize), ps2)
                     == 0 as ::core::ffi::c_int
                 {
-                    return score + SCORE_SWAP as ::core::ffi::c_int
+                    return score
+                        + SCORE_SWAP as ::core::ffi::c_int
                         + SCORE_DEL as ::core::ffi::c_int;
                 }
             }
@@ -7033,11 +7091,9 @@ unsafe extern "C" fn soundalike_score(
                 pl2 = pl2.offset(1);
                 ps2 = ps2.offset(1);
             }
-            if strcmp(pl2.offset(1 as ::core::ffi::c_int as isize), ps2)
-                == 0 as ::core::ffi::c_int
+            if strcmp(pl2.offset(1 as ::core::ffi::c_int as isize), ps2) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_SUBST as ::core::ffi::c_int
-                    + SCORE_DEL as ::core::ffi::c_int;
+                return score + SCORE_SUBST as ::core::ffi::c_int + SCORE_DEL as ::core::ffi::c_int;
             }
         }
         0 => {
@@ -7059,18 +7115,16 @@ unsafe extern "C" fn soundalike_score(
                     ps2 = ps2.offset(1);
                 }
                 if *pl2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == *ps2.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                    && *pl2.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
-                        == *ps2.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
+                    == *ps2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    && *pl2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == *ps2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     && strcmp(
                         pl2.offset(2 as ::core::ffi::c_int as isize),
                         ps2.offset(2 as ::core::ffi::c_int as isize),
                     ) == 0 as ::core::ffi::c_int
                 {
-                    return score + SCORE_SWAP as ::core::ffi::c_int
+                    return score
+                        + SCORE_SWAP as ::core::ffi::c_int
                         + SCORE_SWAP as ::core::ffi::c_int;
                 }
                 if strcmp(
@@ -7078,7 +7132,8 @@ unsafe extern "C" fn soundalike_score(
                     ps2.offset(1 as ::core::ffi::c_int as isize),
                 ) == 0 as ::core::ffi::c_int
                 {
-                    return score + SCORE_SWAP as ::core::ffi::c_int
+                    return score
+                        + SCORE_SWAP as ::core::ffi::c_int
                         + SCORE_SUBST as ::core::ffi::c_int;
                 }
             }
@@ -7094,14 +7149,14 @@ unsafe extern "C" fn soundalike_score(
             if *pl2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == *ps2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 && *pl2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == *ps2.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int
+                    == *ps2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 && strcmp(
                     pl2.offset(2 as ::core::ffi::c_int as isize),
                     ps2.offset(2 as ::core::ffi::c_int as isize),
                 ) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_SUBST as ::core::ffi::c_int
+                return score
+                    + SCORE_SUBST as ::core::ffi::c_int
                     + SCORE_SWAP as ::core::ffi::c_int;
             }
             if strcmp(
@@ -7109,7 +7164,8 @@ unsafe extern "C" fn soundalike_score(
                 ps2.offset(1 as ::core::ffi::c_int as isize),
             ) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_SUBST as ::core::ffi::c_int
+                return score
+                    + SCORE_SUBST as ::core::ffi::c_int
                     + SCORE_SUBST as ::core::ffi::c_int;
             }
             pl2 = pl;
@@ -7118,11 +7174,9 @@ unsafe extern "C" fn soundalike_score(
                 pl2 = pl2.offset(1);
                 ps2 = ps2.offset(1);
             }
-            if strcmp(pl2.offset(1 as ::core::ffi::c_int as isize), ps2)
-                == 0 as ::core::ffi::c_int
+            if strcmp(pl2.offset(1 as ::core::ffi::c_int as isize), ps2) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_INS as ::core::ffi::c_int
-                    + SCORE_DEL as ::core::ffi::c_int;
+                return score + SCORE_INS as ::core::ffi::c_int + SCORE_DEL as ::core::ffi::c_int;
             }
             pl2 = pl.offset(1 as ::core::ffi::c_int as isize);
             ps2 = ps;
@@ -7130,11 +7184,9 @@ unsafe extern "C" fn soundalike_score(
                 pl2 = pl2.offset(1);
                 ps2 = ps2.offset(1);
             }
-            if strcmp(pl2, ps2.offset(1 as ::core::ffi::c_int as isize))
-                == 0 as ::core::ffi::c_int
+            if strcmp(pl2, ps2.offset(1 as ::core::ffi::c_int as isize)) == 0 as ::core::ffi::c_int
             {
-                return score + SCORE_INS as ::core::ffi::c_int
-                    + SCORE_DEL as ::core::ffi::c_int;
+                return score + SCORE_INS as ::core::ffi::c_int + SCORE_DEL as ::core::ffi::c_int;
             }
         }
         _ => {}
@@ -7175,19 +7227,14 @@ unsafe extern "C" fn spell_edit_score(
             .wrapping_mul((badlen as size_t).wrapping_add(1 as size_t))
             .wrapping_mul((goodlen as size_t).wrapping_add(1 as size_t)),
     ) as *mut ::core::ffi::c_int;
-    *cnt
-        .offset(
-            (0 as ::core::ffi::c_int
-                + 0 as ::core::ffi::c_int * (badlen + 1 as ::core::ffi::c_int)) as isize,
-        ) = 0 as ::core::ffi::c_int;
+    *cnt.offset(
+        (0 as ::core::ffi::c_int + 0 as ::core::ffi::c_int * (badlen + 1 as ::core::ffi::c_int))
+            as isize,
+    ) = 0 as ::core::ffi::c_int;
     let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while j <= goodlen {
-        *cnt
-            .offset(
-                (0 as ::core::ffi::c_int + j * (badlen + 1 as ::core::ffi::c_int))
-                    as isize,
-            ) = *cnt
-            .offset(
+        *cnt.offset((0 as ::core::ffi::c_int + j * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+            *cnt.offset(
                 (0 as ::core::ffi::c_int
                     + (j - 1 as ::core::ffi::c_int) * (badlen + 1 as ::core::ffi::c_int))
                     as isize,
@@ -7196,147 +7243,117 @@ unsafe extern "C" fn spell_edit_score(
     }
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while i <= badlen {
-        *cnt
-            .offset(
-                (i + 0 as ::core::ffi::c_int * (badlen + 1 as ::core::ffi::c_int))
-                    as isize,
-            ) = *cnt
-            .offset(
+        *cnt.offset((i + 0 as ::core::ffi::c_int * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+            *cnt.offset(
                 (i - 1 as ::core::ffi::c_int
                     + 0 as ::core::ffi::c_int * (badlen + 1 as ::core::ffi::c_int))
                     as isize,
             ) + SCORE_DEL as ::core::ffi::c_int;
         let mut j_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
         while j_0 <= goodlen {
-            let mut bc: ::core::ffi::c_int = wbadword[(i - 1 as ::core::ffi::c_int)
-                as usize];
-            let mut gc: ::core::ffi::c_int = wgoodword[(j_0 - 1 as ::core::ffi::c_int)
-                as usize];
+            let mut bc: ::core::ffi::c_int = wbadword[(i - 1 as ::core::ffi::c_int) as usize];
+            let mut gc: ::core::ffi::c_int = wgoodword[(j_0 - 1 as ::core::ffi::c_int) as usize];
             if bc == gc {
-                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) = *cnt
-                    .offset(
-                        (i - 1 as ::core::ffi::c_int
-                            + (j_0 - 1 as ::core::ffi::c_int)
-                                * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                    );
+                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) = *cnt.offset(
+                    (i - 1 as ::core::ffi::c_int
+                        + (j_0 - 1 as ::core::ffi::c_int) * (badlen + 1 as ::core::ffi::c_int))
+                        as isize,
+                );
             } else {
                 if (if bc >= 128 as ::core::ffi::c_int {
                     utf_fold(bc)
                 } else {
                     spelltab.st_fold[bc as usize] as ::core::ffi::c_int
-                })
-                    == (if gc >= 128 as ::core::ffi::c_int {
-                        utf_fold(gc)
-                    } else {
-                        spelltab.st_fold[gc as usize] as ::core::ffi::c_int
-                    })
-                {
-                    *cnt
-                        .offset(
-                            (i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                        ) = SCORE_ICASE as ::core::ffi::c_int
-                        + *cnt
-                            .offset(
+                }) == (if gc >= 128 as ::core::ffi::c_int {
+                    utf_fold(gc)
+                } else {
+                    spelltab.st_fold[gc as usize] as ::core::ffi::c_int
+                }) {
+                    *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+                        SCORE_ICASE as ::core::ffi::c_int
+                            + *cnt.offset(
                                 (i - 1 as ::core::ffi::c_int
                                     + (j_0 - 1 as ::core::ffi::c_int)
-                                        * (badlen + 1 as ::core::ffi::c_int)) as isize,
+                                        * (badlen + 1 as ::core::ffi::c_int))
+                                    as isize,
                             );
                 } else if !slang.is_null()
                     && (*slang).sl_has_map as ::core::ffi::c_int != 0
                     && similar_chars(slang, gc, bc) as ::core::ffi::c_int != 0
                 {
-                    *cnt
-                        .offset(
-                            (i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                        ) = SCORE_SIMILAR as ::core::ffi::c_int
-                        + *cnt
-                            .offset(
+                    *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+                        SCORE_SIMILAR as ::core::ffi::c_int
+                            + *cnt.offset(
                                 (i - 1 as ::core::ffi::c_int
                                     + (j_0 - 1 as ::core::ffi::c_int)
-                                        * (badlen + 1 as ::core::ffi::c_int)) as isize,
+                                        * (badlen + 1 as ::core::ffi::c_int))
+                                    as isize,
                             );
                 } else {
-                    *cnt
-                        .offset(
-                            (i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                        ) = SCORE_SUBST as ::core::ffi::c_int
-                        + *cnt
-                            .offset(
+                    *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+                        SCORE_SUBST as ::core::ffi::c_int
+                            + *cnt.offset(
                                 (i - 1 as ::core::ffi::c_int
                                     + (j_0 - 1 as ::core::ffi::c_int)
-                                        * (badlen + 1 as ::core::ffi::c_int)) as isize,
+                                        * (badlen + 1 as ::core::ffi::c_int))
+                                    as isize,
                             );
                 }
                 if i > 1 as ::core::ffi::c_int && j_0 > 1 as ::core::ffi::c_int {
-                    let mut pbc: ::core::ffi::c_int = wbadword[(i
-                        - 2 as ::core::ffi::c_int) as usize];
-                    let mut pgc: ::core::ffi::c_int = wgoodword[(j_0
-                        - 2 as ::core::ffi::c_int) as usize];
+                    let mut pbc: ::core::ffi::c_int =
+                        wbadword[(i - 2 as ::core::ffi::c_int) as usize];
+                    let mut pgc: ::core::ffi::c_int =
+                        wgoodword[(j_0 - 2 as ::core::ffi::c_int) as usize];
                     if bc == pgc && pbc == gc {
                         let mut t: ::core::ffi::c_int = SCORE_SWAP as ::core::ffi::c_int
-                            + *cnt
-                                .offset(
-                                    (i - 2 as ::core::ffi::c_int
-                                        + (j_0 - 2 as ::core::ffi::c_int)
-                                            * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                                );
-                        *cnt
-                            .offset(
-                                (i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                            ) = if *cnt
-                            .offset(
-                                (i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                            ) < t
-                        {
-                            *cnt
-                                .offset(
-                                    (i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                                )
-                        } else {
-                            t
-                        };
+                            + *cnt.offset(
+                                (i - 2 as ::core::ffi::c_int
+                                    + (j_0 - 2 as ::core::ffi::c_int)
+                                        * (badlen + 1 as ::core::ffi::c_int))
+                                    as isize,
+                            );
+                        *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+                            if *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
+                                < t
+                            {
+                                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
+                            } else {
+                                t
+                            };
                     }
                 }
                 let mut t_0: ::core::ffi::c_int = SCORE_DEL as ::core::ffi::c_int
-                    + *cnt
-                        .offset(
-                            (i - 1 as ::core::ffi::c_int
-                                + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                        );
-                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) = if *cnt
-                    .offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
-                    < t_0
-                {
-                    *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
-                } else {
-                    t_0
-                };
+                    + *cnt.offset(
+                        (i - 1 as ::core::ffi::c_int + j_0 * (badlen + 1 as ::core::ffi::c_int))
+                            as isize,
+                    );
+                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+                    if *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) < t_0 {
+                        *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
+                    } else {
+                        t_0
+                    };
                 t_0 = SCORE_INS as ::core::ffi::c_int
-                    + *cnt
-                        .offset(
-                            (i
-                                + (j_0 - 1 as ::core::ffi::c_int)
-                                    * (badlen + 1 as ::core::ffi::c_int)) as isize,
-                        );
-                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) = if *cnt
-                    .offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
-                    < t_0
-                {
-                    *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
-                } else {
-                    t_0
-                };
+                    + *cnt.offset(
+                        (i + (j_0 - 1 as ::core::ffi::c_int) * (badlen + 1 as ::core::ffi::c_int))
+                            as isize,
+                    );
+                *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) =
+                    if *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize) < t_0 {
+                        *cnt.offset((i + j_0 * (badlen + 1 as ::core::ffi::c_int)) as isize)
+                    } else {
+                        t_0
+                    };
             }
             j_0 += 1;
         }
         i += 1;
     }
-    let mut i_0: ::core::ffi::c_int = *cnt
-        .offset(
-            (badlen - 1 as ::core::ffi::c_int
-                + (goodlen - 1 as ::core::ffi::c_int)
-                    * (badlen + 1 as ::core::ffi::c_int)) as isize,
-        );
+    let mut i_0: ::core::ffi::c_int = *cnt.offset(
+        (badlen - 1 as ::core::ffi::c_int
+            + (goodlen - 1 as ::core::ffi::c_int) * (badlen + 1 as ::core::ffi::c_int))
+            as isize,
+    );
     xfree(cnt as *mut ::core::ffi::c_void);
     return i_0;
 }
@@ -7430,11 +7447,9 @@ unsafe extern "C" fn spell_edit_score_limit_w(
                                 SCORE_INS as ::core::ffi::c_int
                             });
                         if score_off < minscore {
-                            if score_off + SCORE_SIMILAR as ::core::ffi::c_int
-                                >= minscore
-                            {
-                                let mut bi2: ::core::ffi::c_int = bi
-                                    + 1 as ::core::ffi::c_int - round;
+                            if score_off + SCORE_SIMILAR as ::core::ffi::c_int >= minscore {
+                                let mut bi2: ::core::ffi::c_int =
+                                    bi + 1 as ::core::ffi::c_int - round;
                                 let mut gi2: ::core::ffi::c_int = gi + round;
                                 while wgoodword[gi2 as usize] == wbadword[bi2 as usize] {
                                     if wgoodword[gi2 as usize] == NUL {
@@ -7446,8 +7461,8 @@ unsafe extern "C" fn spell_edit_score_limit_w(
                                     }
                                 }
                             } else {
-                                stack[stackidx as usize].badi = bi + 1 as ::core::ffi::c_int
-                                    - round;
+                                stack[stackidx as usize].badi =
+                                    bi + 1 as ::core::ffi::c_int - round;
                                 stack[stackidx as usize].goodi = gi + round;
                                 stack[stackidx as usize].score = score_off;
                                 stackidx += 1;
@@ -7469,13 +7484,11 @@ unsafe extern "C" fn spell_edit_score_limit_w(
                         utf_fold(bc)
                     } else {
                         spelltab.st_fold[bc as usize] as ::core::ffi::c_int
-                    })
-                        == (if gc >= 128 as ::core::ffi::c_int {
-                            utf_fold(gc)
-                        } else {
-                            spelltab.st_fold[gc as usize] as ::core::ffi::c_int
-                        })
-                    {
+                    }) == (if gc >= 128 as ::core::ffi::c_int {
+                        utf_fold(gc)
+                    } else {
+                        spelltab.st_fold[gc as usize] as ::core::ffi::c_int
+                    }) {
                         score += SCORE_ICASE as ::core::ffi::c_int;
                     } else if !slang.is_null()
                         && (*slang).sl_has_map as ::core::ffi::c_int != 0

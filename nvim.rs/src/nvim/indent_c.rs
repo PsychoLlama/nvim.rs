@@ -1712,9 +1712,7 @@ pub const FM_BLOCKSTOP: C2Rust_Unnamed_16 = 4;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const FM_SKIPCOMM: C2Rust_Unnamed_16 = 8;
 pub const FM_FORWARD: C2Rust_Unnamed_16 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
@@ -1735,26 +1733,23 @@ pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"_Bool in_cinkeys(int, int, _Bool)\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"_Bool in_cinkeys(int, int, _Bool)\0",
+    )
 };
 unsafe extern "C" fn ind_find_start_comment() -> *mut pos_T {
     return find_start_comment((*curbuf).b_ind_maxcomment);
 }
 #[no_mangle]
-pub unsafe extern "C" fn find_start_comment(
-    mut ind_maxcomment: ::core::ffi::c_int,
-) -> *mut pos_T {
+pub unsafe extern "C" fn find_start_comment(mut ind_maxcomment: ::core::ffi::c_int) -> *mut pos_T {
     let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut cur_maxcomment: int64_t = ind_maxcomment as int64_t;
     loop {
@@ -1770,8 +1765,7 @@ pub unsafe extern "C" fn find_start_comment(
         if is_pos_in_string(ml_get((*pos).lnum), (*pos).col) == 0 {
             break;
         }
-        cur_maxcomment = ((*curwin).w_cursor.lnum - (*pos).lnum - 1 as linenr_T)
-            as int64_t;
+        cur_maxcomment = ((*curwin).w_cursor.lnum - (*pos).lnum - 1 as linenr_T) as int64_t;
         if cur_maxcomment > 0 as int64_t {
             continue;
         }
@@ -1802,9 +1796,7 @@ unsafe extern "C" fn ind_find_start_CORS(mut is_raw: *mut linenr_T) -> *mut pos_
     }
     return comment_pos;
 }
-unsafe extern "C" fn find_start_rawstring(
-    mut ind_maxcomment: ::core::ffi::c_int,
-) -> *mut pos_T {
+unsafe extern "C" fn find_start_rawstring(mut ind_maxcomment: ::core::ffi::c_int) -> *mut pos_T {
     let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut cur_maxcomment: ::core::ffi::c_int = ind_maxcomment;
     loop {
@@ -1820,8 +1812,8 @@ unsafe extern "C" fn find_start_rawstring(
         if is_pos_in_string(ml_get((*pos).lnum), (*pos).col) == 0 {
             break;
         }
-        cur_maxcomment = ((*curwin).w_cursor.lnum - (*pos).lnum - 1 as linenr_T)
-            as ::core::ffi::c_int;
+        cur_maxcomment =
+            ((*curwin).w_cursor.lnum - (*pos).lnum - 1 as linenr_T) as ::core::ffi::c_int;
         if cur_maxcomment > 0 as ::core::ffi::c_int {
             continue;
         }
@@ -1830,9 +1822,7 @@ unsafe extern "C" fn find_start_rawstring(
     }
     return pos;
 }
-unsafe extern "C" fn skip_string(
-    mut p: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn skip_string(mut p: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char {
     let mut i: ::core::ffi::c_int = 0;
     loop {
         if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -1844,21 +1834,17 @@ unsafe extern "C" fn skip_string(
             i = 2 as ::core::ffi::c_int;
             if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '\\' as ::core::ffi::c_int
-                && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 i += 1;
                 while ascii_isdigit(
-                    *p.offset((i - 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_int,
+                    *p.offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
                 ) {
                     i += 1;
                 }
             }
-            if !(*p.offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                != NUL
-                && *p.offset(i as isize) as ::core::ffi::c_int
-                    == '\'' as ::core::ffi::c_int)
+            if !(*p.offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int != NUL
+                && *p.offset(i as isize) as ::core::ffi::c_int == '\'' as ::core::ffi::c_int)
             {
                 break;
             }
@@ -1870,12 +1856,11 @@ unsafe extern "C" fn skip_string(
             while *p.offset(0 as ::core::ffi::c_int as isize) != 0 {
                 if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
-                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != NUL
+                    && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
                 {
                     p = p.offset(1);
-                } else if *p.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == '"' as ::core::ffi::c_int
+                } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == '"' as ::core::ffi::c_int
                 {
                     break;
                 }
@@ -1894,12 +1879,9 @@ unsafe extern "C" fn skip_string(
             {
                 break;
             }
-            let mut delim: *const ::core::ffi::c_char = p
-                .offset(2 as ::core::ffi::c_int as isize);
-            let mut paren: *const ::core::ffi::c_char = vim_strchr(
-                delim,
-                '(' as ::core::ffi::c_int,
-            );
+            let mut delim: *const ::core::ffi::c_char = p.offset(2 as ::core::ffi::c_int as isize);
+            let mut paren: *const ::core::ffi::c_char =
+                vim_strchr(delim, '(' as ::core::ffi::c_int);
             if paren.is_null() {
                 break;
             }
@@ -1913,8 +1895,8 @@ unsafe extern "C" fn skip_string(
                         delim,
                         delim_len as size_t,
                     ) == 0 as ::core::ffi::c_int
-                    && *p.offset((delim_len + 1 as ptrdiff_t) as isize)
-                        as ::core::ffi::c_int == '"' as ::core::ffi::c_int
+                    && *p.offset((delim_len + 1 as ptrdiff_t) as isize) as ::core::ffi::c_int
+                        == '"' as ::core::ffi::c_int
                 {
                     p = p.offset((delim_len + 1 as ptrdiff_t) as isize);
                     break;
@@ -1952,8 +1934,7 @@ pub unsafe extern "C" fn is_pos_in_string(
 pub unsafe extern "C" fn cin_is_cinword(mut line: *const ::core::ffi::c_char) -> bool {
     let mut retval: bool = false_0 != 0;
     let mut cinw_len: size_t = strlen((*curbuf).b_p_cinw).wrapping_add(1 as size_t);
-    let mut cinw_buf: *mut ::core::ffi::c_char = xmalloc(cinw_len)
-        as *mut ::core::ffi::c_char;
+    let mut cinw_buf: *mut ::core::ffi::c_char = xmalloc(cinw_len) as *mut ::core::ffi::c_char;
     line = skipwhite(line);
     let mut cinw: *mut ::core::ffi::c_char = (*curbuf).b_p_cinw;
     while *cinw != 0 {
@@ -1989,7 +1970,8 @@ unsafe extern "C" fn cin_skipcomment(
     while *s != 0 {
         let mut prev_s: *const ::core::ffi::c_char = s;
         s = skipwhite(s);
-        if (*curbuf).b_ind_hash_comment != 0 as ::core::ffi::c_int && s != prev_s
+        if (*curbuf).b_ind_hash_comment != 0 as ::core::ffi::c_int
+            && s != prev_s
             && *s as ::core::ffi::c_int == '#' as ::core::ffi::c_int
         {
             s = s.offset(strlen(s) as isize);
@@ -2010,8 +1992,8 @@ unsafe extern "C" fn cin_skipcomment(
                 while *s != 0 {
                     if *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '*' as ::core::ffi::c_int
-                        && *s.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '/' as ::core::ffi::c_int
+                        && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '/' as ::core::ffi::c_int
                     {
                         s = s.offset(2 as ::core::ffi::c_int as isize);
                         break;
@@ -2024,9 +2006,7 @@ unsafe extern "C" fn cin_skipcomment(
     }
     return s;
 }
-unsafe extern "C" fn cin_nocode(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cin_nocode(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return (*cin_skipcomment(s) as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
 }
 unsafe extern "C" fn find_line_comment() -> *mut pos_T {
@@ -2035,9 +2015,7 @@ unsafe extern "C" fn find_line_comment() -> *mut pos_T {
         col: 0,
         coladd: 0,
     };
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     pos = (*curwin).w_cursor;
     loop {
@@ -2072,9 +2050,7 @@ unsafe extern "C" fn cin_has_js_key(mut text: *const ::core::ffi::c_char) -> boo
     while vim_isIDc(*s as uint8_t as ::core::ffi::c_int) {
         s = s.offset(1);
     }
-    if *s as ::core::ffi::c_int != 0
-        && *s as ::core::ffi::c_int == quote as ::core::ffi::c_int
-    {
+    if *s as ::core::ffi::c_int != 0 && *s as ::core::ffi::c_int == quote as ::core::ffi::c_int {
         s = s.offset(1);
     }
     s = cin_skipcomment(s);
@@ -2090,11 +2066,10 @@ unsafe extern "C" fn cin_islabel_skip(mut s: *mut *const ::core::ffi::c_char) ->
         *s = (*s).offset(utfc_ptr2len(*s) as isize);
     }
     *s = cin_skipcomment(*s);
-    return **s as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-        && {
-            *s = (*s).offset(1);
-            **s as ::core::ffi::c_int != ':' as ::core::ffi::c_int
-        };
+    return **s as ::core::ffi::c_int == ':' as ::core::ffi::c_int && {
+        *s = (*s).offset(1);
+        **s as ::core::ffi::c_int != ':' as ::core::ffi::c_int
+    };
 }
 unsafe extern "C" fn cin_islabel() -> bool {
     let mut s: *const ::core::ffi::c_char = cin_skipcomment(get_cursor_line_ptr());
@@ -2116,9 +2091,7 @@ unsafe extern "C" fn cin_islabel() -> bool {
         coladd: 0,
     };
     let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     cursor_save = (*curwin).w_cursor;
     while (*curwin).w_cursor.lnum > 1 as linenr_T {
         (*curwin).w_cursor.lnum -= 1;
@@ -2139,8 +2112,7 @@ unsafe extern "C" fn cin_islabel() -> bool {
         if cin_isterminated(line, true_0, false_0) as ::core::ffi::c_int != 0
             || cin_isscopedecl(line) as ::core::ffi::c_int != 0
             || cin_iscase(line, true_0 != 0) as ::core::ffi::c_int != 0
-            || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0
-                && cin_nocode(line) != 0
+            || cin_islabel_skip(&raw mut line) as ::core::ffi::c_int != 0 && cin_nocode(line) != 0
         {
             return true_0 != 0;
         }
@@ -2178,14 +2150,11 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             b"return\0".as_ptr() as *const ::core::ffi::c_char,
             6 as size_t,
         ) == 0
-            && !vim_isIDc(
-                *p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            )
+            && !vim_isIDc(*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             && (p == s
                 || p > s
                     && !vim_isIDc(
-                        *p.offset(-1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int,
+                        *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     ))
         {
             r = cin_skipcomment(p.offset(6 as ::core::ffi::c_int as isize));
@@ -2211,11 +2180,9 @@ unsafe extern "C" fn cin_is_compound_init(mut s: *const ::core::ffi::c_char) -> 
             if cin_nocode(p) != 0 {
                 return true_0 != 0;
             }
-            open_count
-                += (*p as ::core::ffi::c_int == '(' as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
-                    - (*p as ::core::ffi::c_int == ')' as ::core::ffi::c_int)
-                        as ::core::ffi::c_int;
+            open_count += (*p as ::core::ffi::c_int == '(' as ::core::ffi::c_int)
+                as ::core::ffi::c_int
+                - (*p as ::core::ffi::c_int == ')' as ::core::ffi::c_int) as ::core::ffi::c_int;
             if open_count == 0 {
                 break;
             }
@@ -2235,8 +2202,7 @@ unsafe extern "C" fn cin_isinit() -> bool {
     static mut skip: [*mut ::core::ffi::c_char; 4] = [
         b"static\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"public\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"protected\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"protected\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"private\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ];
     s = cin_skipcomment(get_cursor_line_ptr());
@@ -2247,14 +2213,13 @@ unsafe extern "C" fn cin_isinit() -> bool {
         let mut i: ::core::ffi::c_int = 0;
         let mut l: ::core::ffi::c_int = 0;
         i = 0 as ::core::ffi::c_int;
-        while i
-            < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) as ::core::ffi::c_int
+        while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
+            .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+            .wrapping_div(
+                (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
+                    .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                    == 0) as ::core::ffi::c_int as usize,
+            ) as ::core::ffi::c_int
         {
             l = strlen(skip[i as usize]) as ::core::ffi::c_int;
             if cin_starts_with(s, skip[i as usize]) != 0 {
@@ -2274,10 +2239,7 @@ unsafe extern "C" fn cin_isinit() -> bool {
     }
     return cin_is_compound_init(s);
 }
-unsafe extern "C" fn cin_iscase(
-    mut s: *const ::core::ffi::c_char,
-    mut strict: bool,
-) -> bool {
+unsafe extern "C" fn cin_iscase(mut s: *const ::core::ffi::c_char, mut strict: bool) -> bool {
     s = cin_skipcomment(s);
     if cin_starts_with(s, b"case\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
         s = s.offset(4 as ::core::ffi::c_int as isize);
@@ -2292,7 +2254,7 @@ unsafe extern "C" fn cin_iscase(
                 {
                     s = s.offset(1);
                 } else {
-                    return true_0 != 0
+                    return true_0 != 0;
                 }
             }
             if *s as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
@@ -2307,7 +2269,7 @@ unsafe extern "C" fn cin_iscase(
                     || *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '/' as ::core::ffi::c_int)
             {
-                return false_0 != 0
+                return false_0 != 0;
             } else if *s as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
                 if strict {
                     return false_0 != 0;
@@ -2323,11 +2285,12 @@ unsafe extern "C" fn cin_iscase(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn cin_isdefault(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    return (strncmp(s, b"default\0".as_ptr() as *const ::core::ffi::c_char, 7 as size_t)
-        == 0 as ::core::ffi::c_int
+unsafe extern "C" fn cin_isdefault(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+    return (strncmp(
+        s,
+        b"default\0".as_ptr() as *const ::core::ffi::c_char,
+        7 as size_t,
+    ) == 0 as ::core::ffi::c_int
         && {
             s = cin_skipcomment(s.offset(7 as ::core::ffi::c_int as isize));
             *s as ::core::ffi::c_int == ':' as ::core::ffi::c_int
@@ -2338,8 +2301,7 @@ unsafe extern "C" fn cin_isdefault(
 unsafe extern "C" fn cin_isscopedecl(mut p: *const ::core::ffi::c_char) -> bool {
     let mut s: *const ::core::ffi::c_char = cin_skipcomment(p);
     let cinsd_len: size_t = strlen((*curbuf).b_p_cinsd).wrapping_add(1 as size_t);
-    let mut cinsd_buf: *mut ::core::ffi::c_char = xmalloc(cinsd_len)
-        as *mut ::core::ffi::c_char;
+    let mut cinsd_buf: *mut ::core::ffi::c_char = xmalloc(cinsd_len) as *mut ::core::ffi::c_char;
     let mut found: bool = false_0 != 0;
     let mut cinsd: *mut ::core::ffi::c_char = (*curbuf).b_p_cinsd;
     while *cinsd != 0 {
@@ -2352,9 +2314,7 @@ unsafe extern "C" fn cin_isscopedecl(mut p: *const ::core::ffi::c_char) -> bool 
         if strncmp(s, cinsd_buf, len) != 0 as ::core::ffi::c_int {
             continue;
         }
-        let mut skip: *const ::core::ffi::c_char = cin_skipcomment(
-            s.offset(len as isize),
-        );
+        let mut skip: *const ::core::ffi::c_char = cin_skipcomment(s.offset(len as isize));
         if !(*skip as ::core::ffi::c_int == ':' as ::core::ffi::c_int
             && *skip.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != ':' as ::core::ffi::c_int)
@@ -2373,24 +2333,31 @@ unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::c_char) -> 
     let mut has_name: bool = false_0 != 0;
     let mut has_name_start: bool = false_0 != 0;
     s = cin_skipcomment(s);
-    while (strncmp(s, b"inline\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-        == 0 as ::core::ffi::c_int
-        || strncmp(s, b"export\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-            == 0 as ::core::ffi::c_int)
+    while (strncmp(
+        s,
+        b"inline\0".as_ptr() as *const ::core::ffi::c_char,
+        6 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        || strncmp(
+            s,
+            b"export\0".as_ptr() as *const ::core::ffi::c_char,
+            6 as size_t,
+        ) == 0 as ::core::ffi::c_int)
         && (*s.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
             || !vim_iswordc(
-                *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int,
+                *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             ))
     {
         s = cin_skipcomment(skipwhite(s.offset(6 as ::core::ffi::c_int as isize)));
     }
-    if strncmp(s, b"namespace\0".as_ptr() as *const ::core::ffi::c_char, 9 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        s,
+        b"namespace\0".as_ptr() as *const ::core::ffi::c_char,
+        9 as size_t,
+    ) == 0 as ::core::ffi::c_int
         && (*s.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
             || !vim_iswordc(
-                *s.offset(9 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int,
+                *s.offset(9 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             ))
     {
         p = cin_skipcomment(skipwhite(s.offset(9 as ::core::ffi::c_int as isize)));
@@ -2408,21 +2375,20 @@ unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::c_char) -> 
                         return false_0 != 0;
                     }
                     p = p.offset(1);
-                } else if *p.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+                } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == ':' as ::core::ffi::c_int
                     && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == ':' as ::core::ffi::c_int
-                    && vim_iswordc(
-                        *p.offset(2 as ::core::ffi::c_int as isize) as uint8_t
-                            as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                    && vim_iswordc(*p.offset(2 as ::core::ffi::c_int as isize) as uint8_t
+                        as ::core::ffi::c_int) as ::core::ffi::c_int
+                        != 0
                 {
                     if !has_name_start || has_name as ::core::ffi::c_int != 0 {
                         return false_0 != 0;
                     }
                     p = p.offset(3 as ::core::ffi::c_int as isize);
                 } else {
-                    return false_0 != 0
+                    return false_0 != 0;
                 }
             }
         }
@@ -2430,19 +2396,14 @@ unsafe extern "C" fn cin_is_cpp_namespace(mut s: *const ::core::ffi::c_char) -> 
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn after_label(
-    mut l: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn after_label(mut l: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char {
     while *l != 0 {
         if *l as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
             if *l.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == ':' as ::core::ffi::c_int
             {
                 l = l.offset(1);
-            } else if !cin_iscase(
-                l.offset(1 as ::core::ffi::c_int as isize),
-                false_0 != 0,
-            ) {
+            } else if !cin_iscase(l.offset(1 as ::core::ffi::c_int as isize), false_0 != 0) {
                 break;
             }
         } else if *l as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
@@ -2520,9 +2481,7 @@ unsafe extern "C" fn skip_label(
     return amount;
 }
 unsafe extern "C" fn cin_first_id_amount() -> ::core::ffi::c_int {
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: ::core::ffi::c_int = 0;
@@ -2536,25 +2495,37 @@ unsafe extern "C" fn cin_first_id_amount() -> ::core::ffi::c_int {
     p = skipwhite(line);
     len = skiptowhite(p).offset_from(p) as ::core::ffi::c_int;
     if len == 6 as ::core::ffi::c_int
-        && strncmp(p, b"static\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            p,
+            b"static\0".as_ptr() as *const ::core::ffi::c_char,
+            6 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
         len = skiptowhite(p).offset_from(p) as ::core::ffi::c_int;
     }
     if len == 6 as ::core::ffi::c_int
-        && strncmp(p, b"struct\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            p,
+            b"struct\0".as_ptr() as *const ::core::ffi::c_char,
+            6 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
     } else if len == 4 as ::core::ffi::c_int
-        && strncmp(p, b"enum\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            p,
+            b"enum\0".as_ptr() as *const ::core::ffi::c_char,
+            4 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         p = skipwhite(p.offset(4 as ::core::ffi::c_int as isize));
     } else if len == 8 as ::core::ffi::c_int
-        && strncmp(p, b"unsigned\0".as_ptr() as *const ::core::ffi::c_char, 8 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            p,
+            b"unsigned\0".as_ptr() as *const ::core::ffi::c_char,
+            8 as size_t,
+        ) == 0 as ::core::ffi::c_int
         || len == 6 as ::core::ffi::c_int
             && strncmp(
                 p,
@@ -2563,26 +2534,38 @@ unsafe extern "C" fn cin_first_id_amount() -> ::core::ffi::c_int {
             ) == 0 as ::core::ffi::c_int
     {
         s = skipwhite(p.offset(len as isize));
-        if strncmp(s, b"int\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-            == 0 as ::core::ffi::c_int
-            && ascii_iswhite(
-                *s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
-            || strncmp(s, b"long\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-                == 0 as ::core::ffi::c_int
-                && ascii_iswhite(
-                    *s.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
-            || strncmp(s, b"short\0".as_ptr() as *const ::core::ffi::c_char, 5 as size_t)
-                == 0 as ::core::ffi::c_int
-                && ascii_iswhite(
-                    *s.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
-            || strncmp(s, b"char\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-                == 0 as ::core::ffi::c_int
-                && ascii_iswhite(
-                    *s.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
+        if strncmp(
+            s,
+            b"int\0".as_ptr() as *const ::core::ffi::c_char,
+            3 as size_t,
+        ) == 0 as ::core::ffi::c_int
+            && ascii_iswhite(*s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                as ::core::ffi::c_int
+                != 0
+            || strncmp(
+                s,
+                b"long\0".as_ptr() as *const ::core::ffi::c_char,
+                4 as size_t,
+            ) == 0 as ::core::ffi::c_int
+                && ascii_iswhite(*s.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    != 0
+            || strncmp(
+                s,
+                b"short\0".as_ptr() as *const ::core::ffi::c_char,
+                5 as size_t,
+            ) == 0 as ::core::ffi::c_int
+                && ascii_iswhite(*s.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    != 0
+            || strncmp(
+                s,
+                b"char\0".as_ptr() as *const ::core::ffi::c_char,
+                4 as size_t,
+            ) == 0 as ::core::ffi::c_int
+                && ascii_iswhite(*s.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    != 0
         {
             p = s;
         }
@@ -2610,9 +2593,7 @@ unsafe extern "C" fn cin_first_id_amount() -> ::core::ffi::c_int {
     return col;
 }
 unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::core::ffi::c_int {
-    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut col: colnr_T = 0;
     let mut fp: pos_T = pos_T {
@@ -2623,8 +2604,8 @@ unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::core::ffi::c_
     if lnum > 1 as linenr_T {
         line = ml_get(lnum - 1 as linenr_T);
         if *line as ::core::ffi::c_int != NUL
-            && *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize)
-                as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+            && *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                == '\\' as ::core::ffi::c_int
         {
             return -1 as ::core::ffi::c_int;
         }
@@ -2633,10 +2614,10 @@ unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::core::ffi::c_
     line = s;
     while *s as ::core::ffi::c_int != NUL
         && vim_strchr(
-                b"=;{}\"'\0".as_ptr() as *const ::core::ffi::c_char,
-                *s as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"=;{}\"'\0".as_ptr() as *const ::core::ffi::c_char,
+            *s as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
     {
         if cin_iscomment(s) != 0 {
             s = cin_skipcomment(s);
@@ -2665,9 +2646,7 @@ unsafe extern "C" fn cin_get_equal_amount(mut lnum: linenr_T) -> ::core::ffi::c_
     );
     return col;
 }
-unsafe extern "C" fn cin_ispreproc(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cin_ispreproc(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *skipwhite(s) as ::core::ffi::c_int == '#' as ::core::ffi::c_int {
         return true_0;
     }
@@ -2683,8 +2662,8 @@ unsafe extern "C" fn cin_ispreproc_cont(
     let mut retval: ::core::ffi::c_int = false_0;
     let mut candidate_amount: ::core::ffi::c_int = *amount;
     if *line as ::core::ffi::c_int != NUL
-        && *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize)
-            as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+        && *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+            == '\\' as ::core::ffi::c_int
     {
         candidate_amount = get_indent_lnum(lnum);
     }
@@ -2701,7 +2680,8 @@ unsafe extern "C" fn cin_ispreproc_cont(
             line = ml_get(lnum);
             if *line as ::core::ffi::c_int == NUL
                 || *line.offset(strlen(line).wrapping_sub(1 as size_t) as isize)
-                    as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+                    as ::core::ffi::c_int
+                    != '\\' as ::core::ffi::c_int
             {
                 break;
             }
@@ -2715,9 +2695,7 @@ unsafe extern "C" fn cin_ispreproc_cont(
     }
     return retval;
 }
-unsafe extern "C" fn cin_iscomment(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cin_iscomment(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return (*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '/' as ::core::ffi::c_int
         && (*p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -2725,9 +2703,7 @@ unsafe extern "C" fn cin_iscomment(
             || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '/' as ::core::ffi::c_int)) as ::core::ffi::c_int;
 }
-unsafe extern "C" fn cin_islinecomment(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cin_islinecomment(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return (*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '/' as ::core::ffi::c_int
         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -2760,16 +2736,13 @@ unsafe extern "C" fn cin_isterminated(
         if (is_else == 0 || n_open == 0 as ::core::ffi::c_uint)
             && (*s as ::core::ffi::c_int == ';' as ::core::ffi::c_int
                 || *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
-                || incl_comma != 0
-                    && *s as ::core::ffi::c_int == ',' as ::core::ffi::c_int)
+                || incl_comma != 0 && *s as ::core::ffi::c_int == ',' as ::core::ffi::c_int)
             && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
         {
-            return *s
+            return *s;
         } else if *s as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-            if incl_open != 0
-                && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0
-            {
-                return *s
+            if incl_open != 0 && cin_nocode(s.offset(1 as ::core::ffi::c_int as isize)) != 0 {
+                return *s;
             } else {
                 n_open = n_open.wrapping_add(1);
             }
@@ -2797,12 +2770,10 @@ unsafe extern "C" fn cin_isfuncdecl(
         s = *sp;
     }
     (*curwin).w_cursor.lnum = lnum;
-    if find_last_paren(s, '(' as ::core::ffi::c_char, ')' as ::core::ffi::c_char) != 0
-        && {
-            trypos = find_match_paren((*curbuf).b_ind_maxparen);
-            !trypos.is_null()
-        }
-    {
+    if find_last_paren(s, '(' as ::core::ffi::c_char, ')' as ::core::ffi::c_char) != 0 && {
+        trypos = find_match_paren((*curbuf).b_ind_maxparen);
+        !trypos.is_null()
+    } {
         lnum = (*trypos).lnum;
         if lnum < min_lnum {
             (*curwin).w_cursor.lnum = save_lnum;
@@ -2828,7 +2799,7 @@ unsafe extern "C" fn cin_isfuncdecl(
             {
                 s = s.offset(2 as ::core::ffi::c_int as isize);
             } else {
-                return false_0
+                return false_0;
             }
         } else {
             s = s.offset(1);
@@ -2848,8 +2819,8 @@ unsafe extern "C" fn cin_isfuncdecl(
             lnum = first_lnum - 1 as linenr_T;
             s = ml_get(lnum);
             if *s as ::core::ffi::c_int == NUL
-                || *s.offset(strlen(s).wrapping_sub(1 as size_t) as isize)
-                    as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+                || *s.offset(strlen(s).wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                    != '\\' as ::core::ffi::c_int
             {
                 retval = true_0;
             }
@@ -2859,8 +2830,8 @@ unsafe extern "C" fn cin_isfuncdecl(
             || *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
             || cin_nocode(s) != 0
         {
-            let mut comma: ::core::ffi::c_int = (*s as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int) as ::core::ffi::c_int;
+            let mut comma: ::core::ffi::c_int =
+                (*s as ::core::ffi::c_int == ',' as ::core::ffi::c_int) as ::core::ffi::c_int;
             while lnum < (*curbuf).b_ml.ml_line_count {
                 lnum += 1;
                 s = ml_get(lnum);
@@ -2873,7 +2844,8 @@ unsafe extern "C" fn cin_isfuncdecl(
             }
             s = skipwhite(s);
             if just_started == 0
-                && (comma == 0 && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
+                && (comma == 0
+                    && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
                     && *s as ::core::ffi::c_int != ')' as ::core::ffi::c_int)
             {
                 break;
@@ -2892,30 +2864,34 @@ unsafe extern "C" fn cin_isfuncdecl(
     return retval;
 }
 unsafe extern "C" fn cin_isif(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return (strncmp(p, b"if\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-        == 0 as ::core::ffi::c_int
-        && !vim_isIDc(
-            *p.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
-        )) as ::core::ffi::c_int;
+    return (strncmp(
+        p,
+        b"if\0".as_ptr() as *const ::core::ffi::c_char,
+        2 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        && !vim_isIDc(*p.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int))
+        as ::core::ffi::c_int;
 }
-unsafe extern "C" fn cin_iselse(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cin_iselse(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *p as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
         p = cin_skipcomment(p.offset(1 as ::core::ffi::c_int as isize));
     }
-    return (strncmp(p, b"else\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-        == 0 as ::core::ffi::c_int
-        && !vim_isIDc(
-            *p.offset(4 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
-        )) as ::core::ffi::c_int;
+    return (strncmp(
+        p,
+        b"else\0".as_ptr() as *const ::core::ffi::c_char,
+        4 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        && !vim_isIDc(*p.offset(4 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int))
+        as ::core::ffi::c_int;
 }
 unsafe extern "C" fn cin_isdo(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return (strncmp(p, b"do\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-        == 0 as ::core::ffi::c_int
-        && !vim_isIDc(
-            *p.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
-        )) as ::core::ffi::c_int;
+    return (strncmp(
+        p,
+        b"do\0".as_ptr() as *const ::core::ffi::c_char,
+        2 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        && !vim_isIDc(*p.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int))
+        as ::core::ffi::c_int;
 }
 unsafe extern "C" fn cin_iswhileofdo(
     mut p: *const ::core::ffi::c_char,
@@ -2937,8 +2913,7 @@ unsafe extern "C" fn cin_iswhileofdo(
         (*curwin).w_cursor.lnum = lnum;
         (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
         p = get_cursor_line_ptr();
-        while *p as ::core::ffi::c_int != 0
-            && *p as ::core::ffi::c_int != 'w' as ::core::ffi::c_int
+        while *p as ::core::ffi::c_int != 0 && *p as ::core::ffi::c_int != 'w' as ::core::ffi::c_int
         {
             p = p.offset(1);
             (*curwin).w_cursor.col += 1;
@@ -2950,9 +2925,9 @@ unsafe extern "C" fn cin_iswhileofdo(
             (*curbuf).b_ind_maxparen as int64_t,
         );
         if !trypos.is_null()
-            && *cin_skipcomment(
-                ml_get_pos(trypos).offset(1 as ::core::ffi::c_int as isize),
-            ) as ::core::ffi::c_int == ';' as ::core::ffi::c_int
+            && *cin_skipcomment(ml_get_pos(trypos).offset(1 as ::core::ffi::c_int as isize))
+                as ::core::ffi::c_int
+                == ';' as ::core::ffi::c_int
         {
             retval = true_0;
         }
@@ -2971,8 +2946,8 @@ unsafe extern "C" fn cin_is_if_for_while_before_offset(
         return 0 as ::core::ffi::c_int;
     }
     while offset > 2 as ::core::ffi::c_int
-        && ascii_iswhite(*line.offset(offset as isize) as ::core::ffi::c_int)
-            as ::core::ffi::c_int != 0
+        && ascii_iswhite(*line.offset(offset as isize) as ::core::ffi::c_int) as ::core::ffi::c_int
+            != 0
     {
         offset -= 1;
     }
@@ -3019,12 +2994,8 @@ unsafe extern "C" fn cin_is_if_for_while_before_offset(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn cin_iswhileofdo_end(
-    mut terminated: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+unsafe extern "C" fn cin_iswhileofdo_end(mut terminated: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
@@ -3049,11 +3020,7 @@ unsafe extern "C" fn cin_iswhileofdo_end(
                     if *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int {
                         s = cin_skipcomment(s.offset(1 as ::core::ffi::c_int as isize));
                     }
-                    if cin_starts_with(
-                        s,
-                        b"while\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) != 0
-                    {
+                    if cin_starts_with(s, b"while\0".as_ptr() as *const ::core::ffi::c_char) != 0 {
                         (*curwin).w_cursor.lnum = (*trypos).lnum;
                         return true_0;
                     }
@@ -3068,14 +3035,14 @@ unsafe extern "C" fn cin_iswhileofdo_end(
     }
     return false_0;
 }
-unsafe extern "C" fn cin_isbreak(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    return (strncmp(p, b"break\0".as_ptr() as *const ::core::ffi::c_char, 5 as size_t)
-        == 0 as ::core::ffi::c_int
-        && !vim_isIDc(
-            *p.offset(5 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
-        )) as ::core::ffi::c_int;
+unsafe extern "C" fn cin_isbreak(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+    return (strncmp(
+        p,
+        b"break\0".as_ptr() as *const ::core::ffi::c_char,
+        5 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        && !vim_isIDc(*p.offset(5 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int))
+        as ::core::ffi::c_int;
 }
 unsafe extern "C" fn cin_is_cpp_baseclass(
     mut cached: *mut cpp_baseclass_cache_T,
@@ -3105,8 +3072,7 @@ unsafe extern "C" fn cin_is_cpp_baseclass(
     while lnum > 1 as linenr_T {
         line = ml_get(lnum - 1 as linenr_T);
         s = skipwhite(line);
-        if *s as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-            || *s as ::core::ffi::c_int == NUL
+        if *s as ::core::ffi::c_int == '#' as ::core::ffi::c_int || *s as ::core::ffi::c_int == NUL
         {
             break;
         }
@@ -3180,8 +3146,7 @@ unsafe extern "C" fn cin_is_cpp_baseclass(
             5 as size_t,
         ) == 0 as ::core::ffi::c_int
             && !vim_isIDc(
-                *s.offset(5 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int,
+                *s.offset(5 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             )
             || strncmp(
                 s,
@@ -3189,8 +3154,7 @@ unsafe extern "C" fn cin_is_cpp_baseclass(
                 6 as size_t,
             ) == 0 as ::core::ffi::c_int
                 && !vim_isIDc(
-                    *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t
-                        as ::core::ffi::c_int,
+                    *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
                 )
         {
             class_or_struct = true_0;
@@ -3219,10 +3183,9 @@ unsafe extern "C" fn cin_is_cpp_baseclass(
             } else if *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '?' as ::core::ffi::c_int
             {
-                return false_0
+                return false_0;
             } else if !vim_isIDc(
-                *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int,
+                *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             ) {
                 class_or_struct = false_0;
                 lookfor_ctor_init = false_0;
@@ -3247,9 +3210,7 @@ unsafe extern "C" fn cin_is_cpp_baseclass(
     }
     return cpp_base_class;
 }
-unsafe extern "C" fn get_baseclass_amount(
-    mut col: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn get_baseclass_amount(mut col: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut amount: ::core::ffi::c_int = 0;
     let mut vcol: colnr_T = 0;
     let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
@@ -3320,18 +3281,18 @@ unsafe extern "C" fn cin_starts_with(
         && !vim_isIDc(*s.offset(l as isize) as uint8_t as ::core::ffi::c_int))
         as ::core::ffi::c_int;
 }
-unsafe extern "C" fn cin_is_cpp_extern_c(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cin_is_cpp_extern_c(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut has_string_literal: ::core::ffi::c_int = false_0;
     s = cin_skipcomment(s);
-    if strncmp(s, b"extern\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        s,
+        b"extern\0".as_ptr() as *const ::core::ffi::c_char,
+        6 as size_t,
+    ) == 0 as ::core::ffi::c_int
         && (*s.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
             || !vim_iswordc(
-                *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int,
+                *s.offset(6 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             ))
     {
         p = cin_skipcomment(skipwhite(s.offset(6 as ::core::ffi::c_int as isize)));
@@ -3354,8 +3315,8 @@ unsafe extern "C" fn cin_is_cpp_extern_c(
                     }
                     has_string_literal = true_0;
                     p = p.offset(3 as ::core::ffi::c_int as isize);
-                } else if *p.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == '"' as ::core::ffi::c_int
+                } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == '"' as ::core::ffi::c_int
                     && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == 'C' as ::core::ffi::c_int
                     && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -3371,27 +3332,25 @@ unsafe extern "C" fn cin_is_cpp_extern_c(
                     has_string_literal = true_0;
                     p = p.offset(5 as ::core::ffi::c_int as isize);
                 } else {
-                    return false_0
+                    return false_0;
                 }
             }
         }
-        return if has_string_literal != 0 { true_0 } else { false_0 };
+        return if has_string_literal != 0 {
+            true_0
+        } else {
+            false_0
+        };
     }
     return false_0;
 }
 unsafe extern "C" fn cin_skip2pos(mut trypos: *mut pos_T) -> ::core::ffi::c_int {
-    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut new_p: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut new_p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     line = ml_get((*trypos).lnum);
     p = line;
-    while *p as ::core::ffi::c_int != 0
-        && (p.offset_from(line) as colnr_T) < (*trypos).col
-    {
+    while *p as ::core::ffi::c_int != 0 && (p.offset_from(line) as colnr_T) < (*trypos).col {
         if cin_iscomment(p) != 0 {
             p = cin_skipcomment(p);
         } else {
@@ -3433,12 +3392,10 @@ unsafe extern "C" fn find_start_brace() -> *mut pos_T {
         trypos = &raw mut pos_copy;
         (*curwin).w_cursor = *trypos;
         pos = ::core::ptr::null_mut::<pos_T>();
-        if cin_skip2pos(trypos) == (*trypos).col
-            && {
-                pos = ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>());
-                pos.is_null()
-            }
-        {
+        if cin_skip2pos(trypos) == (*trypos).col && {
+            pos = ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>());
+            pos.is_null()
+        } {
             break;
         }
         if !pos.is_null() {
@@ -3448,9 +3405,7 @@ unsafe extern "C" fn find_start_brace() -> *mut pos_T {
     (*curwin).w_cursor = cursor_save;
     return trypos;
 }
-unsafe extern "C" fn find_match_paren(
-    mut ind_maxparen: ::core::ffi::c_int,
-) -> *mut pos_T {
+unsafe extern "C" fn find_match_paren(mut ind_maxparen: ::core::ffi::c_int) -> *mut pos_T {
     return find_match_char('(' as ::core::ffi::c_char, ind_maxparen);
 }
 unsafe extern "C" fn find_match_char(
@@ -3482,8 +3437,8 @@ unsafe extern "C" fn find_match_char(
             break;
         }
         if cin_skip2pos(trypos) > (*trypos).col {
-            ind_maxp_wk = (ind_maxparen as linenr_T
-                - (cursor_save.lnum - (*trypos).lnum)) as ::core::ffi::c_int;
+            ind_maxp_wk = (ind_maxparen as linenr_T - (cursor_save.lnum - (*trypos).lnum))
+                as ::core::ffi::c_int;
             if ind_maxp_wk > 0 as ::core::ffi::c_int {
                 (*curwin).w_cursor = *trypos;
                 (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
@@ -3500,8 +3455,8 @@ unsafe extern "C" fn find_match_char(
             if trypos_wk.is_null() {
                 break;
             }
-            ind_maxp_wk = (ind_maxparen as linenr_T
-                - (cursor_save.lnum - (*trypos_wk).lnum)) as ::core::ffi::c_int;
+            ind_maxp_wk = (ind_maxparen as linenr_T - (cursor_save.lnum - (*trypos_wk).lnum))
+                as ::core::ffi::c_int;
             if ind_maxp_wk > 0 as ::core::ffi::c_int {
                 (*curwin).w_cursor = *trypos_wk;
             } else {
@@ -3533,11 +3488,9 @@ unsafe extern "C" fn find_match_paren_after_brace(
     return trypos;
 }
 unsafe extern "C" fn corr_ind_maxparen(mut startpos: *mut pos_T) -> ::core::ffi::c_int {
-    let mut n: ::core::ffi::c_int = (*startpos).lnum as ::core::ffi::c_int
-        - (*curwin).w_cursor.lnum as ::core::ffi::c_int;
-    if n > 0 as ::core::ffi::c_int
-        && n < (*curbuf).b_ind_maxparen / 2 as ::core::ffi::c_int
-    {
+    let mut n: ::core::ffi::c_int =
+        (*startpos).lnum as ::core::ffi::c_int - (*curwin).w_cursor.lnum as ::core::ffi::c_int;
+    if n > 0 as ::core::ffi::c_int && n < (*curbuf).b_ind_maxparen / 2 as ::core::ffi::c_int {
         return (*curbuf).b_ind_maxparen - n;
     }
     return (*curbuf).b_ind_maxparen;
@@ -3557,9 +3510,7 @@ unsafe extern "C" fn find_last_paren(
         i = skip_string(l.offset(i as isize)).offset_from(l) as ::core::ffi::c_int;
         if *l.offset(i as isize) as ::core::ffi::c_int == start as ::core::ffi::c_int {
             open_count += 1;
-        } else if *l.offset(i as isize) as ::core::ffi::c_int
-            == end as ::core::ffi::c_int
-        {
+        } else if *l.offset(i as isize) as ::core::ffi::c_int == end as ::core::ffi::c_int {
             if open_count > 0 as ::core::ffi::c_int {
                 open_count -= 1;
             } else {
@@ -3624,11 +3575,8 @@ pub unsafe extern "C" fn parse_cino(mut buf: *mut buf_T) {
             p = p.offset(1);
         }
         let mut digits_start: *mut ::core::ffi::c_char = p;
-        let mut n: int64_t = getdigits_int(
-            &raw mut p,
-            true_0 != 0,
-            0 as ::core::ffi::c_int,
-        ) as int64_t;
+        let mut n: int64_t =
+            getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) as int64_t;
         divider = 0 as ::core::ffi::c_int;
         if *p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
             p = p.offset(1);
@@ -3648,10 +3596,9 @@ pub unsafe extern "C" fn parse_cino(mut buf: *mut buf_T) {
             } else {
                 n *= sw as int64_t;
                 if divider != 0 {
-                    n
-                        += (sw as int64_t * fraction as int64_t
-                            + (divider / 2 as ::core::ffi::c_int) as int64_t)
-                            / divider as int64_t;
+                    n += (sw as int64_t * fraction as int64_t
+                        + (divider / 2 as ::core::ffi::c_int) as int64_t)
+                        / divider as int64_t;
                 }
             }
             p = p.offset(1);
@@ -3792,12 +3739,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
     let mut scope_amount: ::core::ffi::c_int = 0;
     let mut cur_amount: ::core::ffi::c_int = MAXCOL as ::core::ffi::c_int;
     let mut col: colnr_T = 0;
-    let mut theline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut linecopy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut theline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut linecopy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut trypos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut comment_pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     let mut tryposBrace: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
@@ -3811,15 +3754,11 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
         col: 0,
         coladd: 0,
     };
-    let mut start: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut start: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut start_brace: ::core::ffi::c_int = 0;
     let mut ourscope: linenr_T = 0;
     let mut l: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut look: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut look: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut terminated: ::core::ffi::c_char = 0;
     let mut lookfor: ::core::ffi::c_int = 0;
     let mut whilelevel: ::core::ffi::c_int = 0;
@@ -3861,8 +3800,7 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
     }
     trypos = find_start_rawstring((*curbuf).b_ind_maxcomment);
     if !trypos.is_null()
-        && (comment_pos.is_null()
-            || lt(*trypos, *comment_pos) as ::core::ffi::c_int != 0)
+        && (comment_pos.is_null() || lt(*trypos, *comment_pos) as ::core::ffi::c_int != 0)
     {
         amount = -1 as ::core::ffi::c_int;
     } else {
@@ -3873,11 +3811,11 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                         '#' as ::core::ffi::c_int,
                         ' ' as ::core::ffi::c_int,
                         true_0 != 0,
-                    ) as ::core::ffi::c_int != 0)
+                    ) as ::core::ffi::c_int
+                        != 0)
             {
-                let directive: *const ::core::ffi::c_char = skipwhite(
-                    theline.offset(1 as ::core::ffi::c_int as isize),
-                );
+                let directive: *const ::core::ffi::c_char =
+                    skipwhite(theline.offset(1 as ::core::ffi::c_int as isize));
                 if (*curbuf).b_ind_pragma == 0 as ::core::ffi::c_int
                     || strncmp(
                         directive,
@@ -3889,7 +3827,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                     break '_theend;
                 }
             }
-            if original_line_islabel != 0 && (*curbuf).b_ind_js == 0
+            if original_line_islabel != 0
+                && (*curbuf).b_ind_js == 0
                 && (*curbuf).b_ind_jump_label < 0 as ::core::ffi::c_int
             {
                 amount = 0 as ::core::ffi::c_int;
@@ -3902,9 +3841,9 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                     };
                     trypos = find_line_comment();
                     if trypos.is_null() && (*curwin).w_cursor.lnum > 1 as linenr_T {
-                        linecomment_pos.col = check_linecomment(
-                            ml_get((*curwin).w_cursor.lnum - 1 as linenr_T),
-                        ) as colnr_T;
+                        linecomment_pos.col =
+                            check_linecomment(ml_get((*curwin).w_cursor.lnum - 1 as linenr_T))
+                                as colnr_T;
                         if linecomment_pos.col != MAXCOL as ::core::ffi::c_int {
                             trypos = &raw mut linecomment_pos;
                             (*trypos).lnum = (*curwin).w_cursor.lnum - 1 as linenr_T;
@@ -3924,15 +3863,13 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                 }
                 if cin_iscomment(theline) == 0 && !comment_pos.is_null() {
                     let mut lead_start_len: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-                    let mut lead_middle_len: ::core::ffi::c_int = 1
-                        as ::core::ffi::c_int;
+                    let mut lead_middle_len: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
                     let mut lead_start: [::core::ffi::c_char; 50] = [0; 50];
                     let mut lead_middle: [::core::ffi::c_char; 50] = [0; 50];
                     let mut lead_end: [::core::ffi::c_char; 50] = [0; 50];
                     let mut lead_end_len: ::core::ffi::c_int = 0;
-                    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut p: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                     let mut start_align: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     let mut start_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     let mut done: ::core::ffi::c_int = false_0;
@@ -3944,10 +3881,9 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                         ::core::ptr::null_mut::<colnr_T>(),
                     );
                     amount = col as ::core::ffi::c_int;
-                    *(&raw mut lead_start as *mut ::core::ffi::c_char) = NUL
-                        as ::core::ffi::c_char;
-                    *(&raw mut lead_middle as *mut ::core::ffi::c_char) = NUL
-                        as ::core::ffi::c_char;
+                    *(&raw mut lead_start as *mut ::core::ffi::c_char) = NUL as ::core::ffi::c_char;
+                    *(&raw mut lead_middle as *mut ::core::ffi::c_char) =
+                        NUL as ::core::ffi::c_char;
                     p = (*curbuf).b_p_com;
                     while *p as ::core::ffi::c_int != NUL {
                         let mut align: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3962,24 +3898,20 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                             {
                                 let c2rust_fresh1 = p;
                                 p = p.offset(1);
-                                what = *c2rust_fresh1 as ::core::ffi::c_uchar
-                                    as ::core::ffi::c_int;
+                                what = *c2rust_fresh1 as ::core::ffi::c_uchar as ::core::ffi::c_int;
                             } else if *p as ::core::ffi::c_int == COM_LEFT
                                 || *p as ::core::ffi::c_int == COM_RIGHT
                             {
                                 let c2rust_fresh2 = p;
                                 p = p.offset(1);
-                                align = *c2rust_fresh2 as ::core::ffi::c_uchar
-                                    as ::core::ffi::c_int;
-                            } else if ascii_isdigit(*p as ::core::ffi::c_int)
-                                as ::core::ffi::c_int != 0
+                                align =
+                                    *c2rust_fresh2 as ::core::ffi::c_uchar as ::core::ffi::c_int;
+                            } else if ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int
+                                != 0
                                 || *p as ::core::ffi::c_int == '-' as ::core::ffi::c_int
                             {
-                                off = getdigits_int(
-                                    &raw mut p,
-                                    true_0 != 0,
-                                    0 as ::core::ffi::c_int,
-                                );
+                                off =
+                                    getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int);
                             } else {
                                 p = p.offset(1);
                             }
@@ -4025,9 +3957,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                             {
                                 done = true_0;
                                 if (*curwin).w_cursor.lnum > 1 as linenr_T {
-                                    look = skipwhite(
-                                        ml_get((*curwin).w_cursor.lnum - 1 as linenr_T),
-                                    );
+                                    look =
+                                        skipwhite(ml_get((*curwin).w_cursor.lnum - 1 as linenr_T));
                                     if strncmp(
                                         look,
                                         &raw mut lead_start as *mut ::core::ffi::c_char,
@@ -4060,13 +3991,11 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                 if start_off != 0 as ::core::ffi::c_int {
                                     amount += start_off;
                                 } else if start_align == COM_RIGHT {
-                                    amount
-                                        += vim_strsize(
-                                            &raw mut lead_start as *mut ::core::ffi::c_char,
-                                        )
-                                            - vim_strsize(
-                                                &raw mut lead_middle as *mut ::core::ffi::c_char,
-                                            );
+                                    amount += vim_strsize(
+                                        &raw mut lead_start as *mut ::core::ffi::c_char,
+                                    ) - vim_strsize(
+                                        &raw mut lead_middle as *mut ::core::ffi::c_char,
+                                    );
                                 }
                                 break;
                             } else {
@@ -4083,19 +4012,15 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                 {
                                     continue;
                                 }
-                                amount = get_indent_lnum(
-                                    (*curwin).w_cursor.lnum - 1 as linenr_T,
-                                );
+                                amount = get_indent_lnum((*curwin).w_cursor.lnum - 1 as linenr_T);
                                 if off != 0 as ::core::ffi::c_int {
                                     amount += off;
                                 } else if align == COM_RIGHT {
-                                    amount
-                                        += vim_strsize(
-                                            &raw mut lead_start as *mut ::core::ffi::c_char,
-                                        )
-                                            - vim_strsize(
-                                                &raw mut lead_middle as *mut ::core::ffi::c_char,
-                                            );
+                                    amount += vim_strsize(
+                                        &raw mut lead_start as *mut ::core::ffi::c_char,
+                                    ) - vim_strsize(
+                                        &raw mut lead_middle as *mut ::core::ffi::c_char,
+                                    );
                                 }
                                 done = true_0;
                                 break;
@@ -4103,8 +4028,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                         }
                     }
                     if done == 0 {
-                        if *theline.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '*' as ::core::ffi::c_int
+                        if *theline.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '*' as ::core::ffi::c_int
                         {
                             amount += 1 as ::core::ffi::c_int;
                         } else {
@@ -4125,8 +4050,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         .offset((*comment_pos).col as isize)
                                         .offset(2 as ::core::ffi::c_int as isize);
                                     if *look as ::core::ffi::c_int != NUL {
-                                        (*comment_pos).col = skipwhite(look).offset_from(start)
-                                            as colnr_T;
+                                        (*comment_pos).col =
+                                            skipwhite(look).offset_from(start) as colnr_T;
                                     }
                                 }
                                 getvcol(
@@ -4145,25 +4070,22 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                             }
                         }
                     }
-                } else if *skipwhite(theline) as ::core::ffi::c_int
-                    == ']' as ::core::ffi::c_int
+                } else if *skipwhite(theline) as ::core::ffi::c_int == ']' as ::core::ffi::c_int
                     && {
-                        trypos = find_match_char(
-                            '[' as ::core::ffi::c_char,
-                            (*curbuf).b_ind_maxparen,
-                        );
+                        trypos =
+                            find_match_char('[' as ::core::ffi::c_char, (*curbuf).b_ind_maxparen);
                         !trypos.is_null()
                     }
                 {
                     amount = get_indent_lnum((*trypos).lnum);
                 } else {
                     trypos = find_match_paren((*curbuf).b_ind_maxparen);
-                    if !trypos.is_null()
-                        && (*curbuf).b_ind_java == 0 as ::core::ffi::c_int
+                    if !trypos.is_null() && (*curbuf).b_ind_java == 0 as ::core::ffi::c_int
                         || {
                             tryposBrace = find_start_brace();
                             !tryposBrace.is_null()
-                        } || !trypos.is_null()
+                        }
+                        || !trypos.is_null()
                     {
                         if !trypos.is_null() && !tryposBrace.is_null() {
                             if if (*trypos).lnum != (*tryposBrace).lnum {
@@ -4180,12 +4102,11 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                         if !trypos.is_null() {
                             our_paren_pos = *trypos;
                             if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == ')' as ::core::ffi::c_int
+                                as ::core::ffi::c_int
+                                == ')' as ::core::ffi::c_int
                                 && (*curbuf).b_ind_paren_prev != 0
                             {
-                                amount = get_indent_lnum(
-                                    (*curwin).w_cursor.lnum - 1 as linenr_T,
-                                );
+                                amount = get_indent_lnum((*curwin).w_cursor.lnum - 1 as linenr_T);
                             } else {
                                 amount = -1 as ::core::ffi::c_int;
                                 lnum = cur_curpos.lnum - 1 as linenr_T;
@@ -4199,23 +4120,29 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         ) == 0
                                         {
                                             (*curwin).w_cursor.lnum = lnum;
-                                            trypos = ind_find_start_CORS(
-                                                ::core::ptr::null_mut::<linenr_T>(),
-                                            );
+                                            trypos = ind_find_start_CORS(::core::ptr::null_mut::<
+                                                linenr_T,
+                                            >(
+                                            ));
                                             if !trypos.is_null() {
                                                 lnum = (*trypos).lnum + 1 as linenr_T;
                                             } else {
-                                                trypos = find_match_paren(
-                                                    corr_ind_maxparen(&raw mut cur_curpos),
-                                                );
-                                                if !trypos.is_null() && (*trypos).lnum == our_paren_pos.lnum
+                                                trypos = find_match_paren(corr_ind_maxparen(
+                                                    &raw mut cur_curpos,
+                                                ));
+                                                if !trypos.is_null()
+                                                    && (*trypos).lnum == our_paren_pos.lnum
                                                     && (*trypos).col == our_paren_pos.col
                                                 {
                                                     amount = get_indent_lnum(lnum);
-                                                    if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                        as ::core::ffi::c_int == ')' as ::core::ffi::c_int
+                                                    if *theline
+                                                        .offset(0 as ::core::ffi::c_int as isize)
+                                                        as ::core::ffi::c_int
+                                                        == ')' as ::core::ffi::c_int
                                                     {
-                                                        if our_paren_pos.lnum != lnum && cur_amount > amount {
+                                                        if our_paren_pos.lnum != lnum
+                                                            && cur_amount > amount
+                                                        {
                                                             cur_amount = amount;
                                                         }
                                                         amount = -1 as ::core::ffi::c_int;
@@ -4229,10 +4156,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                 }
                             }
                             if amount == -1 as ::core::ffi::c_int {
-                                let mut ignore_paren_col: ::core::ffi::c_int = 0
-                                    as ::core::ffi::c_int;
-                                let mut is_if_for_while: ::core::ffi::c_int = 0
-                                    as ::core::ffi::c_int;
+                                let mut ignore_paren_col: ::core::ffi::c_int =
+                                    0 as ::core::ffi::c_int;
+                                let mut is_if_for_while: ::core::ffi::c_int =
+                                    0 as ::core::ffi::c_int;
                                 if (*curbuf).b_ind_if_for_while != 0 {
                                     let mut cursor_save: pos_T = (*curwin).w_cursor;
                                     let mut outermost: pos_T = pos_T {
@@ -4240,9 +4167,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         col: 0,
                                         coladd: 0,
                                     };
-                                    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                                        ::core::ffi::c_char,
-                                    >();
+                                    let mut line: *mut ::core::ffi::c_char =
+                                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                                     trypos = &raw mut our_paren_pos;
                                     loop {
                                         outermost = *trypos;
@@ -4263,25 +4189,24 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                 }
                                 amount = skip_label(our_paren_pos.lnum, &raw mut look);
                                 look = skipwhite(look);
-                                if *look as ::core::ffi::c_int == '(' as ::core::ffi::c_int
-                                {
+                                if *look as ::core::ffi::c_int == '(' as ::core::ffi::c_int {
                                     let mut save_lnum: linenr_T = (*curwin).w_cursor.lnum;
-                                    let mut line_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                                        ::core::ffi::c_char,
-                                    >();
+                                    let mut line_0: *mut ::core::ffi::c_char =
+                                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                                     let mut look_col: ::core::ffi::c_int = 0;
                                     (*curwin).w_cursor.lnum = our_paren_pos.lnum;
                                     line_0 = get_cursor_line_ptr();
                                     look_col = look.offset_from(line_0) as ::core::ffi::c_int;
-                                    (*curwin).w_cursor.col = (look_col
-                                        + 1 as ::core::ffi::c_int) as colnr_T;
+                                    (*curwin).w_cursor.col =
+                                        (look_col + 1 as ::core::ffi::c_int) as colnr_T;
                                     trypos = findmatchlimit(
                                         ::core::ptr::null_mut::<oparg_T>(),
                                         ')' as ::core::ffi::c_int,
                                         0 as ::core::ffi::c_int,
                                         (*curbuf).b_ind_maxparen as int64_t,
                                     );
-                                    if !trypos.is_null() && (*trypos).lnum == our_paren_pos.lnum
+                                    if !trypos.is_null()
+                                        && (*trypos).lnum == our_paren_pos.lnum
                                         && (*trypos).col < our_paren_pos.col
                                     {
                                         ignore_paren_col = (*trypos).col as ::core::ffi::c_int
@@ -4291,7 +4216,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                     look = ml_get(our_paren_pos.lnum).offset(look_col as isize);
                                 }
                                 if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int == ')' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == ')' as ::core::ffi::c_int
                                     || (*curbuf).b_ind_unclosed == 0 as ::core::ffi::c_int
                                         && is_if_for_while == 0 as ::core::ffi::c_int
                                     || (*curbuf).b_ind_unclosed_noignore == 0
@@ -4299,7 +4225,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         && ignore_paren_col == 0 as ::core::ffi::c_int
                                 {
                                     if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int != ')' as ::core::ffi::c_int
+                                        as ::core::ffi::c_int
+                                        != ')' as ::core::ffi::c_int
                                     {
                                         cur_amount = MAXCOL as ::core::ffi::c_int;
                                         l = ml_get(our_paren_pos.lnum);
@@ -4312,7 +4239,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                             n = 1 as ::core::ffi::c_int;
                                             col = 0 as ::core::ffi::c_int as colnr_T;
                                             while col < our_paren_pos.col {
-                                                match *l.offset(col as isize) as ::core::ffi::c_int {
+                                                match *l.offset(col as isize) as ::core::ffi::c_int
+                                                {
                                                     40 | 123 => {
                                                         n += 1;
                                                     }
@@ -4331,13 +4259,15 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                             our_paren_pos.col += 1;
                                         } else {
                                             col = (our_paren_pos.col as ::core::ffi::c_int
-                                                + 1 as ::core::ffi::c_int) as colnr_T;
+                                                + 1 as ::core::ffi::c_int)
+                                                as colnr_T;
                                             while ascii_iswhite(
-                                                *l.offset(col as isize) as ::core::ffi::c_int,
+                                                *l.offset(col as isize) as ::core::ffi::c_int
                                             ) {
                                                 col += 1;
                                             }
-                                            if *l.offset(col as isize) as ::core::ffi::c_int != NUL {
+                                            if *l.offset(col as isize) as ::core::ffi::c_int != NUL
+                                            {
                                                 our_paren_pos.col = col;
                                             } else {
                                                 our_paren_pos.col += 1;
@@ -4358,13 +4288,15 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                     }
                                 }
                                 if !(*theline.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int == ')' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == ')' as ::core::ffi::c_int
                                     && (*curbuf).b_ind_matching_paren != 0)
                                 {
                                     if (*curbuf).b_ind_unclosed == 0 as ::core::ffi::c_int
                                         && is_if_for_while == 0 as ::core::ffi::c_int
                                         || (*curbuf).b_ind_unclosed_noignore == 0
-                                            && *look as ::core::ffi::c_int == '(' as ::core::ffi::c_int
+                                            && *look as ::core::ffi::c_int
+                                                == '(' as ::core::ffi::c_int
                                             && ignore_paren_col == 0 as ::core::ffi::c_int
                                     {
                                         if cur_amount != MAXCOL as ::core::ffi::c_int {
@@ -4393,8 +4325,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         } else {
                                             (*curwin).w_cursor.lnum = our_paren_pos.lnum;
                                             (*curwin).w_cursor.col = col;
-                                            if !find_match_paren_after_brace((*curbuf).b_ind_maxparen)
-                                                .is_null()
+                                            if !find_match_paren_after_brace(
+                                                (*curbuf).b_ind_maxparen,
+                                            )
+                                            .is_null()
                                             {
                                                 amount += (*curbuf).b_ind_unclosed2;
                                             } else if is_if_for_while != 0 {
@@ -4428,8 +4362,7 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                     ::core::ptr::null_mut::<colnr_T>(),
                                 );
                                 amount = col as ::core::ffi::c_int;
-                                if *start as ::core::ffi::c_int == '{' as ::core::ffi::c_int
-                                {
+                                if *start as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
                                     start_brace = BRACE_IN_COL0;
                                 } else {
                                     start_brace = BRACE_AT_START;
@@ -4449,12 +4382,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                 {
                                     lnum = (*trypos).lnum;
                                 }
-                                if ((*curbuf).b_ind_js != 0
-                                    || (*curbuf).b_ind_keep_case_label != 0)
-                                    && cin_iscase(
-                                        skipwhite(get_cursor_line_ptr()),
-                                        false_0 != 0,
-                                    ) as ::core::ffi::c_int != 0
+                                if ((*curbuf).b_ind_js != 0 || (*curbuf).b_ind_keep_case_label != 0)
+                                    && cin_iscase(skipwhite(get_cursor_line_ptr()), false_0 != 0)
+                                        as ::core::ffi::c_int
+                                        != 0
                                 {
                                     amount = get_indent();
                                 } else if (*curbuf).b_ind_js != 0 {
@@ -4470,7 +4401,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                 false_0
                             } != 0;
                             if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == '}' as ::core::ffi::c_int
+                                as ::core::ffi::c_int
+                                == '}' as ::core::ffi::c_int
                             {
                                 amount += (*curbuf).b_ind_close_extra;
                             } else {
@@ -4516,8 +4448,7 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                     lookfor = LOOKFOR_SCOPEDECL;
                                     amount += (*curbuf).b_ind_scopedecl;
                                 } else {
-                                    if (*curbuf).b_ind_case_break != 0
-                                        && cin_isbreak(theline) != 0
+                                    if (*curbuf).b_ind_case_break != 0 && cin_isbreak(theline) != 0
                                     {
                                         lookfor_break = true_0;
                                     }
@@ -4534,7 +4465,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         if lookfor == LOOKFOR_ENUM_OR_INIT {
                                             if (*curwin).w_cursor.lnum == 0 as linenr_T
                                                 || (*curwin).w_cursor.lnum
-                                                    < ourscope - (*curbuf).b_ind_maxparen as linenr_T
+                                                    < ourscope
+                                                        - (*curbuf).b_ind_maxparen as linenr_T
                                             {
                                                 if cont_amount > 0 as ::core::ffi::c_int {
                                                     amount = cont_amount;
@@ -4543,12 +4475,16 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                 }
                                                 break;
                                             } else {
-                                                trypos = ind_find_start_CORS(
-                                                    ::core::ptr::null_mut::<linenr_T>(),
-                                                );
+                                                trypos =
+                                                    ind_find_start_CORS(::core::ptr::null_mut::<
+                                                        linenr_T,
+                                                    >(
+                                                    ));
                                                 if !trypos.is_null() {
-                                                    (*curwin).w_cursor.lnum = (*trypos).lnum + 1 as linenr_T;
-                                                    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                                    (*curwin).w_cursor.lnum =
+                                                        (*trypos).lnum + 1 as linenr_T;
+                                                    (*curwin).w_cursor.col =
+                                                        0 as ::core::ffi::c_int as colnr_T;
                                                 } else {
                                                     l = get_cursor_line_ptr();
                                                     if cin_ispreproc_cont(
@@ -4562,7 +4498,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                     if cin_nocode(l) != 0 {
                                                         continue;
                                                     }
-                                                    terminated = cin_isterminated(l, false_0, true_0);
+                                                    terminated =
+                                                        cin_isterminated(l, false_0, true_0);
                                                     if start_brace != BRACE_IN_COL0
                                                         || cin_isfuncdecl(
                                                             &raw mut l,
@@ -4577,7 +4514,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                         }
                                                         if terminated as ::core::ffi::c_int
                                                             != ';' as ::core::ffi::c_int
-                                                            && cin_isinit() as ::core::ffi::c_int != 0
+                                                            && cin_isinit() as ::core::ffi::c_int
+                                                                != 0
                                                         {
                                                             break;
                                                         }
@@ -4599,7 +4537,9 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                             ')' as ::core::ffi::c_char,
                                                         ) != 0
                                                         {
-                                                            trypos = find_match_paren((*curbuf).b_ind_maxparen);
+                                                            trypos = find_match_paren(
+                                                                (*curbuf).b_ind_maxparen,
+                                                            );
                                                         }
                                                         if trypos.is_null()
                                                             && find_last_paren(
@@ -4611,8 +4551,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                             trypos = find_start_brace();
                                                         }
                                                         if !trypos.is_null() {
-                                                            (*curwin).w_cursor.lnum = (*trypos).lnum + 1 as linenr_T;
-                                                            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                                            (*curwin).w_cursor.lnum =
+                                                                (*trypos).lnum + 1 as linenr_T;
+                                                            (*curwin).w_cursor.col =
+                                                                0 as ::core::ffi::c_int as colnr_T;
                                                             continue;
                                                         }
                                                     }
@@ -4638,7 +4580,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                             {
                                                 amount = scope_amount;
                                                 if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                    as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                    as ::core::ffi::c_int
+                                                    == '{' as ::core::ffi::c_int
                                                 {
                                                     amount += (*curbuf).b_ind_open_extra;
                                                     added_to_amount = (*curbuf).b_ind_open_extra;
@@ -4656,12 +4599,15 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                             {
                                                 break;
                                             }
-                                            trypos = ind_find_start_CORS(
-                                                ::core::ptr::null_mut::<linenr_T>(),
-                                            );
+                                            trypos = ind_find_start_CORS(::core::ptr::null_mut::<
+                                                linenr_T,
+                                            >(
+                                            ));
                                             if !trypos.is_null() {
-                                                (*curwin).w_cursor.lnum = (*trypos).lnum + 1 as linenr_T;
-                                                (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                                (*curwin).w_cursor.lnum =
+                                                    (*trypos).lnum + 1 as linenr_T;
+                                                (*curwin).w_cursor.col =
+                                                    0 as ::core::ffi::c_int as colnr_T;
                                             } else {
                                                 l = get_cursor_line_ptr();
                                                 if cin_ispreproc_cont(
@@ -4673,10 +4619,12 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                     continue;
                                                 }
                                                 if cin_is_cpp_namespace(l) {
-                                                    amount += (*curbuf).b_ind_cpp_namespace - added_to_amount;
+                                                    amount += (*curbuf).b_ind_cpp_namespace
+                                                        - added_to_amount;
                                                     break;
                                                 } else if cin_is_cpp_extern_c(l) != 0 {
-                                                    amount += (*curbuf).b_ind_cpp_extern_c - added_to_amount;
+                                                    amount += (*curbuf).b_ind_cpp_extern_c
+                                                        - added_to_amount;
                                                     break;
                                                 } else if cin_nocode(l) == 0 {
                                                     break;
@@ -4686,8 +4634,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                     } else {
                                         trypos = ind_find_start_CORS(&raw mut raw_string_start);
                                         if !trypos.is_null() {
-                                            (*curwin).w_cursor.lnum = (*trypos).lnum + 1 as linenr_T;
-                                            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                            (*curwin).w_cursor.lnum =
+                                                (*trypos).lnum + 1 as linenr_T;
+                                            (*curwin).w_cursor.col =
+                                                0 as ::core::ffi::c_int as colnr_T;
                                         } else {
                                             l = get_cursor_line_ptr();
                                             let mut iscase: bool = cin_iscase(l, false_0 != 0);
@@ -4711,11 +4661,14 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                     break;
                                                 } else if iscase as ::core::ffi::c_int != 0
                                                     && lookfor == LOOKFOR_CASE
-                                                    || iscase as ::core::ffi::c_int != 0 && lookfor_break != 0
+                                                    || iscase as ::core::ffi::c_int != 0
+                                                        && lookfor_break != 0
                                                     || !iscase && lookfor == LOOKFOR_SCOPEDECL
                                                 {
                                                     trypos = find_start_brace();
-                                                    if !(trypos.is_null() || (*trypos).lnum == ourscope) {
+                                                    if !(trypos.is_null()
+                                                        || (*trypos).lnum == ourscope)
+                                                    {
                                                         continue;
                                                     }
                                                     amount = get_indent();
@@ -4734,25 +4687,34 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                         amount = n;
                                                         l = after_label(get_cursor_line_ptr());
                                                         if !l.is_null()
-                                                            && cin_is_cinword(l) as ::core::ffi::c_int != 0
+                                                            && cin_is_cinword(l)
+                                                                as ::core::ffi::c_int
+                                                                != 0
                                                         {
-                                                            if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                                as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                            if *theline.offset(
+                                                                0 as ::core::ffi::c_int as isize,
+                                                            )
+                                                                as ::core::ffi::c_int
+                                                                == '{' as ::core::ffi::c_int
                                                             {
-                                                                amount += (*curbuf).b_ind_open_extra;
+                                                                amount +=
+                                                                    (*curbuf).b_ind_open_extra;
                                                             } else {
-                                                                amount += (*curbuf).b_ind_level + (*curbuf).b_ind_no_brace;
+                                                                amount += (*curbuf).b_ind_level
+                                                                    + (*curbuf).b_ind_no_brace;
                                                             }
                                                         }
                                                         break;
                                                     } else {
                                                         scope_amount = get_indent()
-                                                            + (if iscase as ::core::ffi::c_int != 0 {
+                                                            + (if iscase as ::core::ffi::c_int != 0
+                                                            {
                                                                 (*curbuf).b_ind_case_code
                                                             } else {
                                                                 (*curbuf).b_ind_scopedecl_code
                                                             });
-                                                        lookfor = if (*curbuf).b_ind_case_break != 0 {
+                                                        lookfor = if (*curbuf).b_ind_case_break != 0
+                                                        {
                                                             LOOKFOR_NOBREAK
                                                         } else {
                                                             LOOKFOR_ANY
@@ -4772,8 +4734,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                         !trypos.is_null()
                                                     }
                                                 {
-                                                    (*curwin).w_cursor.lnum = (*trypos).lnum + 1 as linenr_T;
-                                                    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                                    (*curwin).w_cursor.lnum =
+                                                        (*trypos).lnum + 1 as linenr_T;
+                                                    (*curwin).w_cursor.col =
+                                                        0 as ::core::ffi::c_int as colnr_T;
                                                 }
                                             } else {
                                                 if (*curbuf).b_ind_js == 0
@@ -4789,15 +4753,19 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                     &raw mut l,
                                                     &raw mut (*curwin).w_cursor.lnum,
                                                     &raw mut amount,
-                                                ) != 0 || cin_nocode(l) != 0
+                                                ) != 0
+                                                    || cin_nocode(l) != 0
                                                 {
                                                     continue;
                                                 }
                                                 n = 0 as ::core::ffi::c_int;
                                                 if lookfor != LOOKFOR_TERM
-                                                    && (*curbuf).b_ind_cpp_baseclass > 0 as ::core::ffi::c_int
+                                                    && (*curbuf).b_ind_cpp_baseclass
+                                                        > 0 as ::core::ffi::c_int
                                                 {
-                                                    n = cin_is_cpp_baseclass(&raw mut cache_cpp_baseclass);
+                                                    n = cin_is_cpp_baseclass(
+                                                        &raw mut cache_cpp_baseclass,
+                                                    );
                                                     l = get_cursor_line_ptr();
                                                 }
                                                 if n != 0 {
@@ -4808,14 +4776,17 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                             amount += ind_continuation;
                                                         }
                                                         break;
-                                                    } else if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                        as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                    } else if *theline
+                                                        .offset(0 as ::core::ffi::c_int as isize)
+                                                        as ::core::ffi::c_int
+                                                        == '{' as ::core::ffi::c_int
                                                     {
                                                         lookfor = LOOKFOR_UNTERM;
                                                         ind_continuation = 0 as ::core::ffi::c_int;
                                                     } else {
                                                         amount = get_baseclass_amount(
-                                                            cache_cpp_baseclass.lpos.col as ::core::ffi::c_int,
+                                                            cache_cpp_baseclass.lpos.col
+                                                                as ::core::ffi::c_int,
                                                         );
                                                         break;
                                                     }
@@ -4824,7 +4795,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                         break;
                                                     }
                                                 } else {
-                                                    terminated = cin_isterminated(l, false_0, true_0);
+                                                    terminated =
+                                                        cin_isterminated(l, false_0, true_0);
                                                     if js_cur_has_key {
                                                         js_cur_has_key = false_0 != 0;
                                                         if (*curbuf).b_ind_js != 0
@@ -4835,14 +4807,16 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                         }
                                                     }
                                                     if lookfor == LOOKFOR_JS_KEY
-                                                        && cin_has_js_key(l) as ::core::ffi::c_int != 0
+                                                        && cin_has_js_key(l) as ::core::ffi::c_int
+                                                            != 0
                                                     {
                                                         amount = get_indent();
                                                         break;
                                                     } else {
                                                         if lookfor == LOOKFOR_COMMA {
                                                             if !tryposBrace.is_null()
-                                                                && (*tryposBrace).lnum >= (*curwin).w_cursor.lnum
+                                                                && (*tryposBrace).lnum
+                                                                    >= (*curwin).w_cursor.lnum
                                                             {
                                                                 break;
                                                             }
@@ -4852,7 +4826,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                 break;
                                                             } else {
                                                                 amount = get_indent();
-                                                                if (*curwin).w_cursor.lnum - 1 as linenr_T == ourscope {
+                                                                if (*curwin).w_cursor.lnum
+                                                                    - 1 as linenr_T
+                                                                    == ourscope
+                                                                {
                                                                     break;
                                                                 }
                                                             }
@@ -4864,10 +4841,18 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                     == ',' as ::core::ffi::c_int
                                                         {
                                                             if lookfor != LOOKFOR_ENUM_OR_INIT
-                                                                && (*skipwhite(l) as ::core::ffi::c_int
+                                                                && (*skipwhite(l)
+                                                                    as ::core::ffi::c_int
                                                                     == '[' as ::core::ffi::c_int
-                                                                    || *l.offset(strlen(l).wrapping_sub(1 as size_t) as isize)
-                                                                        as ::core::ffi::c_int == '[' as ::core::ffi::c_int)
+                                                                    || *l.offset(
+                                                                        strlen(l).wrapping_sub(
+                                                                            1 as size_t,
+                                                                        )
+                                                                            as isize,
+                                                                    )
+                                                                        as ::core::ffi::c_int
+                                                                        == '['
+                                                                            as ::core::ffi::c_int)
                                                             {
                                                                 amount += ind_continuation;
                                                             }
@@ -4877,14 +4862,21 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                 ')' as ::core::ffi::c_char,
                                                             );
                                                             trypos = find_match_paren(
-                                                                corr_ind_maxparen(&raw mut cur_curpos),
+                                                                corr_ind_maxparen(
+                                                                    &raw mut cur_curpos,
+                                                                ),
                                                             );
                                                             if !trypos.is_null()
-                                                                && ((*trypos).lnum < (*tryposBrace).lnum
-                                                                    || (*trypos).lnum == (*tryposBrace).lnum
-                                                                        && (*trypos).col < (*tryposBrace).col)
+                                                                && ((*trypos).lnum
+                                                                    < (*tryposBrace).lnum
+                                                                    || (*trypos).lnum
+                                                                        == (*tryposBrace).lnum
+                                                                        && (*trypos).col
+                                                                            < (*tryposBrace).col)
                                                             {
-                                                                trypos = ::core::ptr::null_mut::<pos_T>();
+                                                                trypos =
+                                                                    ::core::ptr::null_mut::<pos_T>(
+                                                                    );
                                                             }
                                                             l = get_cursor_line_ptr();
                                                             if trypos.is_null()
@@ -4904,19 +4896,30 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                             if !trypos.is_null() {
                                                                 (*curwin).w_cursor = *trypos;
                                                                 l = get_cursor_line_ptr();
-                                                                if cin_iscase(l, false_0 != 0) as ::core::ffi::c_int != 0
-                                                                    || cin_isscopedecl(l) as ::core::ffi::c_int != 0
+                                                                if cin_iscase(l, false_0 != 0)
+                                                                    as ::core::ffi::c_int
+                                                                    != 0
+                                                                    || cin_isscopedecl(l)
+                                                                        as ::core::ffi::c_int
+                                                                        != 0
                                                                 {
                                                                     (*curwin).w_cursor.lnum += 1;
-                                                                    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                                                    (*curwin).w_cursor.col = 0
+                                                                        as ::core::ffi::c_int
+                                                                        as colnr_T;
                                                                     continue;
                                                                 }
                                                             }
                                                             if terminated as ::core::ffi::c_int
                                                                 == ',' as ::core::ffi::c_int
                                                             {
-                                                                while (*curwin).w_cursor.lnum > 1 as linenr_T {
-                                                                    l = ml_get((*curwin).w_cursor.lnum - 1 as linenr_T);
+                                                                while (*curwin).w_cursor.lnum
+                                                                    > 1 as linenr_T
+                                                                {
+                                                                    l = ml_get(
+                                                                        (*curwin).w_cursor.lnum
+                                                                            - 1 as linenr_T,
+                                                                    );
                                                                     if *l as ::core::ffi::c_int == NUL
                                                                         || *l.offset(strlen(l).wrapping_sub(1 as size_t) as isize)
                                                                             as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
@@ -4924,7 +4927,9 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                         break;
                                                                     }
                                                                     (*curwin).w_cursor.lnum -= 1;
-                                                                    (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                                                    (*curwin).w_cursor.col = 0
+                                                                        as ::core::ffi::c_int
+                                                                        as colnr_T;
                                                                 }
                                                                 l = get_cursor_line_ptr();
                                                             }
@@ -4937,29 +4942,42 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                 );
                                                             }
                                                             if terminated as ::core::ffi::c_int
-                                                                != ',' as ::core::ffi::c_int && lookfor != LOOKFOR_TERM
-                                                                && *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                                    as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                                != ',' as ::core::ffi::c_int
+                                                                && lookfor != LOOKFOR_TERM
+                                                                && *theline.offset(
+                                                                    0 as ::core::ffi::c_int
+                                                                        as isize,
+                                                                )
+                                                                    as ::core::ffi::c_int
+                                                                    == '{' as ::core::ffi::c_int
                                                             {
                                                                 amount = cur_amount;
-                                                                if *skipwhite(l) as ::core::ffi::c_int
+                                                                if *skipwhite(l)
+                                                                    as ::core::ffi::c_int
                                                                     != '{' as ::core::ffi::c_int
                                                                 {
-                                                                    amount += (*curbuf).b_ind_open_extra;
+                                                                    amount +=
+                                                                        (*curbuf).b_ind_open_extra;
                                                                 }
-                                                                if !((*curbuf).b_ind_cpp_baseclass != 0
+                                                                if !((*curbuf).b_ind_cpp_baseclass
+                                                                    != 0
                                                                     && (*curbuf).b_ind_js == 0)
                                                                 {
                                                                     break;
                                                                 }
                                                                 lookfor = LOOKFOR_CPP_BASECLASS;
-                                                            } else if cin_is_cinword(l) as ::core::ffi::c_int != 0
+                                                            } else if cin_is_cinword(l)
+                                                                as ::core::ffi::c_int
+                                                                != 0
                                                                 || cin_iselse(skipwhite(l)) != 0
                                                             {
                                                                 if lookfor == LOOKFOR_UNTERM
-                                                                    || lookfor == LOOKFOR_ENUM_OR_INIT
+                                                                    || lookfor
+                                                                        == LOOKFOR_ENUM_OR_INIT
                                                                 {
-                                                                    if cont_amount > 0 as ::core::ffi::c_int {
+                                                                    if cont_amount
+                                                                        > 0 as ::core::ffi::c_int
+                                                                    {
                                                                         amount = cont_amount;
                                                                     } else {
                                                                         amount += ind_continuation;
@@ -4967,16 +4985,26 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                     break;
                                                                 } else {
                                                                     amount = cur_amount;
-                                                                    if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                                        as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                                    if *theline.offset(
+                                                                        0 as ::core::ffi::c_int
+                                                                            as isize,
+                                                                    )
+                                                                        as ::core::ffi::c_int
+                                                                        == '{' as ::core::ffi::c_int
                                                                     {
-                                                                        amount += (*curbuf).b_ind_open_extra;
+                                                                        amount += (*curbuf)
+                                                                            .b_ind_open_extra;
                                                                     }
                                                                     if lookfor != LOOKFOR_TERM {
-                                                                        amount += (*curbuf).b_ind_level + (*curbuf).b_ind_no_brace;
+                                                                        amount += (*curbuf)
+                                                                            .b_ind_level
+                                                                            + (*curbuf)
+                                                                                .b_ind_no_brace;
                                                                         break;
                                                                     } else {
-                                                                        l = skipwhite(get_cursor_line_ptr());
+                                                                        l = skipwhite(
+                                                                            get_cursor_line_ptr(),
+                                                                        );
                                                                         if cin_isdo(l) != 0 {
                                                                             if whilelevel == 0 as ::core::ffi::c_int {
                                                                                 break;
@@ -4995,7 +5023,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                         }
                                                                         trypos = find_start_brace();
                                                                         if trypos.is_null()
-                                                                            || find_match(LOOKFOR_IF, (*trypos).lnum) == FAIL
+                                                                            || find_match(
+                                                                                LOOKFOR_IF,
+                                                                                (*trypos).lnum,
+                                                                            ) == FAIL
                                                                         {
                                                                             break;
                                                                         }
@@ -5008,11 +5039,14 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                     amount += ind_continuation;
                                                                 }
                                                                 break;
-                                                            } else if lookfor == LOOKFOR_ENUM_OR_INIT {
+                                                            } else if lookfor
+                                                                == LOOKFOR_ENUM_OR_INIT
+                                                            {
                                                                 if terminated as ::core::ffi::c_int
                                                                     == ',' as ::core::ffi::c_int
                                                                 {
-                                                                    if (*curbuf).b_ind_cpp_baseclass == 0 as ::core::ffi::c_int
+                                                                    if (*curbuf).b_ind_cpp_baseclass
+                                                                        == 0 as ::core::ffi::c_int
                                                                     {
                                                                         break;
                                                                     }
@@ -5036,11 +5070,15 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                     break;
                                                                 }
                                                                 if lookfor == LOOKFOR_INITIAL
-                                                                    && terminated as ::core::ffi::c_int
+                                                                    && terminated
+                                                                        as ::core::ffi::c_int
                                                                         == ',' as ::core::ffi::c_int
                                                                 {
                                                                     if (*curbuf).b_ind_js != 0 {
-                                                                        if cin_iscomment(skipwhite(l)) != 0 {
+                                                                        if cin_iscomment(skipwhite(
+                                                                            l,
+                                                                        )) != 0
+                                                                        {
                                                                             break;
                                                                         }
                                                                         lookfor = LOOKFOR_COMMA;
@@ -5051,14 +5089,20 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                         if trypos.is_null() {
                                                                             continue;
                                                                         }
-                                                                        if (*trypos).lnum == (*curwin).w_cursor.lnum - 1 as linenr_T
+                                                                        if (*trypos).lnum
+                                                                            == (*curwin)
+                                                                                .w_cursor
+                                                                                .lnum
+                                                                                - 1 as linenr_T
                                                                         {
                                                                             break;
                                                                         }
                                                                         ourscope = (*trypos).lnum;
                                                                     } else {
-                                                                        lookfor = LOOKFOR_ENUM_OR_INIT;
-                                                                        cont_amount = cin_first_id_amount();
+                                                                        lookfor =
+                                                                            LOOKFOR_ENUM_OR_INIT;
+                                                                        cont_amount =
+                                                                            cin_first_id_amount();
                                                                     }
                                                                 } else {
                                                                     if lookfor == LOOKFOR_INITIAL
@@ -5068,46 +5112,65 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                     {
                                                                         cont_amount = cin_get_equal_amount((*curwin).w_cursor.lnum);
                                                                     }
-                                                                    if lookfor != LOOKFOR_TERM && lookfor != LOOKFOR_JS_KEY
+                                                                    if lookfor != LOOKFOR_TERM
+                                                                        && lookfor != LOOKFOR_JS_KEY
                                                                         && lookfor != LOOKFOR_COMMA
-                                                                        && raw_string_start != (*curwin).w_cursor.lnum
+                                                                        && raw_string_start
+                                                                            != (*curwin)
+                                                                                .w_cursor
+                                                                                .lnum
                                                                     {
                                                                         lookfor = LOOKFOR_UNTERM;
                                                                     }
                                                                 }
                                                             }
                                                         } else if cin_iswhileofdo_end(
-                                                            terminated as uint8_t as ::core::ffi::c_int,
+                                                            terminated as uint8_t
+                                                                as ::core::ffi::c_int,
                                                         ) != 0
                                                         {
                                                             if lookfor == LOOKFOR_UNTERM
                                                                 || lookfor == LOOKFOR_ENUM_OR_INIT
                                                             {
-                                                                if cont_amount > 0 as ::core::ffi::c_int {
+                                                                if cont_amount
+                                                                    > 0 as ::core::ffi::c_int
+                                                                {
                                                                     amount = cont_amount;
                                                                 } else {
                                                                     amount += ind_continuation;
                                                                 }
                                                                 break;
                                                             } else {
-                                                                if whilelevel == 0 as ::core::ffi::c_int {
+                                                                if whilelevel
+                                                                    == 0 as ::core::ffi::c_int
+                                                                {
                                                                     lookfor = LOOKFOR_TERM;
                                                                     amount = get_indent();
-                                                                    if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                                        as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                                    if *theline.offset(
+                                                                        0 as ::core::ffi::c_int
+                                                                            as isize,
+                                                                    )
+                                                                        as ::core::ffi::c_int
+                                                                        == '{' as ::core::ffi::c_int
                                                                     {
-                                                                        amount += (*curbuf).b_ind_open_extra;
+                                                                        amount += (*curbuf)
+                                                                            .b_ind_open_extra;
                                                                     }
                                                                 }
                                                                 whilelevel += 1;
                                                             }
                                                         } else if lookfor == LOOKFOR_NOBREAK
-                                                            && cin_isbreak(skipwhite(get_cursor_line_ptr())) != 0
+                                                            && cin_isbreak(skipwhite(
+                                                                get_cursor_line_ptr(),
+                                                            )) != 0
                                                         {
                                                             lookfor = LOOKFOR_ANY;
                                                         } else {
-                                                            if whilelevel > 0 as ::core::ffi::c_int {
-                                                                l = cin_skipcomment(get_cursor_line_ptr());
+                                                            if whilelevel > 0 as ::core::ffi::c_int
+                                                            {
+                                                                l = cin_skipcomment(
+                                                                    get_cursor_line_ptr(),
+                                                                );
                                                                 if cin_isdo(l) != 0 {
                                                                     amount = get_indent();
                                                                     whilelevel -= 1;
@@ -5117,7 +5180,9 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                             if lookfor == LOOKFOR_UNTERM
                                                                 || lookfor == LOOKFOR_ENUM_OR_INIT
                                                             {
-                                                                if cont_amount > 0 as ::core::ffi::c_int {
+                                                                if cont_amount
+                                                                    > 0 as ::core::ffi::c_int
+                                                                {
                                                                     amount = cont_amount;
                                                                 } else {
                                                                     amount += ind_continuation;
@@ -5125,7 +5190,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                 break;
                                                             } else if lookfor == LOOKFOR_TERM {
                                                                 if lookfor_break == 0
-                                                                    && whilelevel == 0 as ::core::ffi::c_int
+                                                                    && whilelevel
+                                                                        == 0 as ::core::ffi::c_int
                                                                 {
                                                                     break;
                                                                 }
@@ -5142,7 +5208,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                             !trypos.is_null()
                                                                         }
                                                                     {
-                                                                        (*curwin).w_cursor = *trypos;
+                                                                        (*curwin).w_cursor =
+                                                                            *trypos;
                                                                         l = get_cursor_line_ptr();
                                                                         if cin_iscase(l, false_0 != 0) as ::core::ffi::c_int != 0
                                                                             || cin_isscopedecl(l) as ::core::ffi::c_int != 0
@@ -5152,19 +5219,40 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                                             break;
                                                                         }
                                                                     }
-                                                                    iscase = (*curbuf).b_ind_keep_case_label != 0
-                                                                        && cin_iscase(l, false_0 != 0) as ::core::ffi::c_int != 0;
-                                                                    amount = skip_label((*curwin).w_cursor.lnum, &raw mut l);
-                                                                    if *theline.offset(0 as ::core::ffi::c_int as isize)
-                                                                        as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                                                                    iscase = (*curbuf)
+                                                                        .b_ind_keep_case_label
+                                                                        != 0
+                                                                        && cin_iscase(
+                                                                            l,
+                                                                            false_0 != 0,
+                                                                        )
+                                                                            as ::core::ffi::c_int
+                                                                            != 0;
+                                                                    amount = skip_label(
+                                                                        (*curwin).w_cursor.lnum,
+                                                                        &raw mut l,
+                                                                    );
+                                                                    if *theline.offset(
+                                                                        0 as ::core::ffi::c_int
+                                                                            as isize,
+                                                                    )
+                                                                        as ::core::ffi::c_int
+                                                                        == '{' as ::core::ffi::c_int
                                                                     {
-                                                                        amount += (*curbuf).b_ind_open_extra;
+                                                                        amount += (*curbuf)
+                                                                            .b_ind_open_extra;
                                                                     }
                                                                     l = skipwhite(l);
-                                                                    if *l as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-                                                                        amount -= (*curbuf).b_ind_open_extra;
+                                                                    if *l as ::core::ffi::c_int
+                                                                        == '{' as ::core::ffi::c_int
+                                                                    {
+                                                                        amount -= (*curbuf)
+                                                                            .b_ind_open_extra;
                                                                     }
-                                                                    lookfor = if iscase as ::core::ffi::c_int != 0 {
+                                                                    lookfor = if iscase
+                                                                        as ::core::ffi::c_int
+                                                                        != 0
+                                                                    {
                                                                         LOOKFOR_ANY
                                                                     } else {
                                                                         LOOKFOR_TERM
@@ -5227,26 +5315,22 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                             amount -= (*curbuf).b_ind_jump_label;
                         }
                     } else if *theline.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                        as ::core::ffi::c_int
+                        == '{' as ::core::ffi::c_int
                     {
                         amount = (*curbuf).b_ind_first_open;
                     } else if cur_curpos.lnum < (*curbuf).b_ml.ml_line_count
                         && cin_nocode(theline) == 0
                         && vim_strchr(theline, '{' as ::core::ffi::c_int).is_null()
                         && vim_strchr(theline, '}' as ::core::ffi::c_int).is_null()
-                        && cin_ends_in(
-                            theline,
-                            b":\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) == 0
-                        && cin_ends_in(
-                            theline,
-                            b",\0".as_ptr() as *const ::core::ffi::c_char,
-                        ) == 0
+                        && cin_ends_in(theline, b":\0".as_ptr() as *const ::core::ffi::c_char) == 0
+                        && cin_ends_in(theline, b",\0".as_ptr() as *const ::core::ffi::c_char) == 0
                         && cin_isfuncdecl(
                             ::core::ptr::null_mut::<*const ::core::ffi::c_char>(),
                             cur_curpos.lnum + 1 as linenr_T,
                             cur_curpos.lnum + 1 as linenr_T,
-                        ) != 0 && cin_isterminated(theline, false_0, true_0) == 0
+                        ) != 0
+                        && cin_isterminated(theline, false_0, true_0) == 0
                     {
                         amount = (*curbuf).b_ind_func_type;
                     } else {
@@ -5256,16 +5340,13 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                             (*curwin).w_cursor.lnum -= 1;
                             (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
                             l = get_cursor_line_ptr();
-                            trypos = ind_find_start_CORS(
-                                ::core::ptr::null_mut::<linenr_T>(),
-                            );
+                            trypos = ind_find_start_CORS(::core::ptr::null_mut::<linenr_T>());
                             if !trypos.is_null() {
                                 (*curwin).w_cursor.lnum = (*trypos).lnum + 1 as linenr_T;
                                 (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
                             } else {
                                 n = 0 as ::core::ffi::c_int;
-                                if (*curbuf).b_ind_cpp_baseclass != 0 as ::core::ffi::c_int
-                                {
+                                if (*curbuf).b_ind_cpp_baseclass != 0 as ::core::ffi::c_int {
                                     n = cin_is_cpp_baseclass(&raw mut cache_cpp_baseclass);
                                     l = get_cursor_line_ptr();
                                 }
@@ -5286,16 +5367,17 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                     if cin_nocode(l) != 0 {
                                         continue;
                                     }
-                                    if cin_ends_in(
-                                        l,
-                                        b",\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ) != 0
-                                        || *l as ::core::ffi::c_int != NUL
-                                            && {
-                                                n = *l.offset(strlen(l).wrapping_sub(1 as size_t) as isize)
-                                                    as uint8_t as ::core::ffi::c_int;
-                                                n == '\\' as ::core::ffi::c_int
-                                            }
+                                    if cin_ends_in(l, b",\0".as_ptr() as *const ::core::ffi::c_char)
+                                        != 0
+                                        || *l as ::core::ffi::c_int != NUL && {
+                                            n =
+                                                *l.offset(
+                                                    strlen(l).wrapping_sub(1 as size_t) as isize
+                                                )
+                                                    as uint8_t
+                                                    as ::core::ffi::c_int;
+                                            n == '\\' as ::core::ffi::c_int
+                                        }
                                     {
                                         if find_last_paren(
                                             l,
@@ -5314,13 +5396,17 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                         {
                                             l = ml_get((*curwin).w_cursor.lnum - 1 as linenr_T);
                                             if *l as ::core::ffi::c_int == NUL
-                                                || *l.offset(strlen(l).wrapping_sub(1 as size_t) as isize)
-                                                    as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+                                                || *l
+                                                    .offset(strlen(l).wrapping_sub(1 as size_t)
+                                                        as isize)
+                                                    as ::core::ffi::c_int
+                                                    != '\\' as ::core::ffi::c_int
                                             {
                                                 break;
                                             }
                                             (*curwin).w_cursor.lnum -= 1;
-                                            (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
+                                            (*curwin).w_cursor.col =
+                                                0 as ::core::ffi::c_int as colnr_T;
                                         }
                                         amount = get_indent();
                                         if amount == 0 as ::core::ffi::c_int {
@@ -5361,9 +5447,11 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                             break;
                                         } else {
                                             look = skipwhite(l);
-                                            if *look as ::core::ffi::c_int == ';' as ::core::ffi::c_int
-                                                && cin_nocode(look.offset(1 as ::core::ffi::c_int as isize))
-                                                    != 0
+                                            if *look as ::core::ffi::c_int
+                                                == ';' as ::core::ffi::c_int
+                                                && cin_nocode(
+                                                    look.offset(1 as ::core::ffi::c_int as isize),
+                                                ) != 0
                                             {
                                                 let mut curpos_save: pos_T = (*curwin).w_cursor;
                                                 while (*curwin).w_cursor.lnum > 1 as linenr_T {
@@ -5382,7 +5470,8 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                 if (*curwin).w_cursor.lnum > 0 as linenr_T
                                                     && cin_ends_in(
                                                         look,
-                                                        b"}\0".as_ptr() as *const ::core::ffi::c_char,
+                                                        b"}\0".as_ptr()
+                                                            as *const ::core::ffi::c_char,
                                                     ) != 0
                                                 {
                                                     break;
@@ -5403,14 +5492,21 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                                                     b";\0".as_ptr() as *const ::core::ffi::c_char,
                                                 ) != 0
                                                 {
-                                                    l = ml_get((*curwin).w_cursor.lnum - 1 as linenr_T);
+                                                    l = ml_get(
+                                                        (*curwin).w_cursor.lnum - 1 as linenr_T,
+                                                    );
                                                     if cin_ends_in(
                                                         l,
-                                                        b",\0".as_ptr() as *const ::core::ffi::c_char,
+                                                        b",\0".as_ptr()
+                                                            as *const ::core::ffi::c_char,
                                                     ) != 0
                                                         || *l as ::core::ffi::c_int != NUL
-                                                            && *l.offset(strlen(l).wrapping_sub(1 as size_t) as isize)
-                                                                as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+                                                            && *l.offset(
+                                                                strlen(l).wrapping_sub(1 as size_t)
+                                                                    as isize,
+                                                            )
+                                                                as ::core::ffi::c_int
+                                                                == '\\' as ::core::ffi::c_int
                                                     {
                                                         break;
                                                     }
@@ -5440,11 +5536,10 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
                             l = ml_get(cur_curpos.lnum - 1 as linenr_T);
                             if *l as ::core::ffi::c_int != NUL
                                 && *l.offset(strlen(l).wrapping_sub(1 as size_t) as isize)
-                                    as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == '\\' as ::core::ffi::c_int
                             {
-                                cur_amount = cin_get_equal_amount(
-                                    cur_curpos.lnum - 1 as linenr_T,
-                                );
+                                cur_amount = cin_get_equal_amount(cur_curpos.lnum - 1 as linenr_T);
                                 if cur_amount > 0 as ::core::ffi::c_int {
                                     amount = cur_amount;
                                 } else if cur_amount == 0 as ::core::ffi::c_int {
@@ -5484,13 +5579,9 @@ unsafe extern "C" fn find_match(
     mut lookfor: ::core::ffi::c_int,
     mut ourscope: linenr_T,
 ) -> ::core::ffi::c_int {
-    let mut look: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut look: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut theirscope: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut mightbeif: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut mightbeif: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut elselevel: ::core::ffi::c_int = 0;
     let mut whilelevel: ::core::ffi::c_int = 0;
     if lookfor == LOOKFOR_IF {
@@ -5505,7 +5596,9 @@ unsafe extern "C" fn find_match(
         (*curwin).w_cursor.lnum -= 1;
         (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
         look = cin_skipcomment(get_cursor_line_ptr());
-        if cin_iselse(look) == 0 && cin_isif(look) == 0 && cin_isdo(look) == 0
+        if cin_iselse(look) == 0
+            && cin_isif(look) == 0
+            && cin_isdo(look) == 0
             && cin_iswhileofdo(look, (*curwin).w_cursor.lnum) == 0
         {
             continue;
@@ -5523,9 +5616,7 @@ unsafe extern "C" fn find_match(
         look = cin_skipcomment(get_cursor_line_ptr());
         if !(lookfor == LOOKFOR_IF && whilelevel != 0) {
             if cin_iselse(look) != 0 {
-                mightbeif = cin_skipcomment(
-                    look.offset(4 as ::core::ffi::c_int as isize),
-                );
+                mightbeif = cin_skipcomment(look.offset(4 as ::core::ffi::c_int as isize));
                 if cin_isif(mightbeif) == 0 {
                     elselevel += 1;
                 }
@@ -5543,9 +5634,7 @@ unsafe extern "C" fn find_match(
             if cin_isdo(look) != 0 {
                 whilelevel -= 1;
             }
-            if elselevel <= 0 as ::core::ffi::c_int
-                && whilelevel <= 0 as ::core::ffi::c_int
-            {
+            if elselevel <= 0 as ::core::ffi::c_int && whilelevel <= 0 as ::core::ffi::c_int {
                 return OK;
             }
         }
@@ -5558,9 +5647,7 @@ pub unsafe extern "C" fn in_cinkeys(
     mut when: ::core::ffi::c_int,
     mut line_is_empty: bool,
 ) -> bool {
-    let mut look: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut look: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut try_match: bool = false;
     let mut try_match_word: bool = false;
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5607,16 +5694,14 @@ pub unsafe extern "C" fn in_cinkeys(
         {
             if try_match as ::core::ffi::c_int != 0
                 && keytyped
-                    == (if (*look.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int) < 'a' as ::core::ffi::c_int
-                        || *look.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
+                    == (if (*look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                        < 'a' as ::core::ffi::c_int
+                        || *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            > 'z' as ::core::ffi::c_int
                     {
-                        *look.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
+                        *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     } else {
-                        *look.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
+                        *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
                     }) ^ 0x40 as ::core::ffi::c_int
             {
@@ -5644,12 +5729,10 @@ pub unsafe extern "C" fn in_cinkeys(
             {
                 p = get_cursor_line_ptr();
                 if skipwhite(p)
-                    == p
-                        .offset((*curwin).w_cursor.col as isize)
+                    == p.offset((*curwin).w_cursor.col as isize)
                         .offset(-(4 as ::core::ffi::c_int as isize))
                     && strncmp(
-                        p
-                            .offset((*curwin).w_cursor.col as isize)
+                        p.offset((*curwin).w_cursor.col as isize)
                             .offset(-(4 as ::core::ffi::c_int as isize)),
                         b"else\0".as_ptr() as *const ::core::ffi::c_char,
                         4 as size_t,
@@ -5660,9 +5743,7 @@ pub unsafe extern "C" fn in_cinkeys(
             }
             look = look.offset(1);
         } else if *look as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
-            if try_match as ::core::ffi::c_int != 0
-                && keytyped == ':' as ::core::ffi::c_int
-            {
+            if try_match as ::core::ffi::c_int != 0 && keytyped == ':' as ::core::ffi::c_int {
                 p = get_cursor_line_ptr();
                 if cin_iscase(p, false_0 != 0) as ::core::ffi::c_int != 0
                     || cin_isscopedecl(p) as ::core::ffi::c_int != 0
@@ -5672,31 +5753,29 @@ pub unsafe extern "C" fn in_cinkeys(
                 }
                 p = get_cursor_line_ptr();
                 if (*curwin).w_cursor.col > 2 as ::core::ffi::c_int
-                    && *p
-                        .offset(
-                            ((*curwin).w_cursor.col as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as isize,
-                        ) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                    && *p
-                        .offset(
-                            ((*curwin).w_cursor.col as ::core::ffi::c_int
-                                - 2 as ::core::ffi::c_int) as isize,
-                        ) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+                    && *p.offset(
+                        ((*curwin).w_cursor.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                            as isize,
+                    ) as ::core::ffi::c_int
+                        == ':' as ::core::ffi::c_int
+                    && *p.offset(
+                        ((*curwin).w_cursor.col as ::core::ffi::c_int - 2 as ::core::ffi::c_int)
+                            as isize,
+                    ) as ::core::ffi::c_int
+                        == ':' as ::core::ffi::c_int
                 {
-                    *p
-                        .offset(
-                            ((*curwin).w_cursor.col as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as isize,
-                        ) = ' ' as ::core::ffi::c_char;
+                    *p.offset(
+                        ((*curwin).w_cursor.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                            as isize,
+                    ) = ' ' as ::core::ffi::c_char;
                     let i: bool = cin_iscase(p, false_0 != 0) as ::core::ffi::c_int != 0
                         || cin_isscopedecl(p) as ::core::ffi::c_int != 0
                         || cin_islabel() as ::core::ffi::c_int != 0;
                     p = get_cursor_line_ptr();
-                    *p
-                        .offset(
-                            ((*curwin).w_cursor.col as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as isize,
-                        ) = ':' as ::core::ffi::c_char;
+                    *p.offset(
+                        ((*curwin).w_cursor.col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
+                            as isize,
+                    ) = ':' as ::core::ffi::c_char;
                     if i {
                         return true_0 != 0;
                     }
@@ -5706,22 +5785,16 @@ pub unsafe extern "C" fn in_cinkeys(
         } else if *look as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
             if try_match {
                 if !vim_strchr(
-                        b"<>!*oOe0:\0".as_ptr() as *const ::core::ffi::c_char,
-                        *look.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                            as ::core::ffi::c_int,
-                    )
-                    .is_null()
+                    b"<>!*oOe0:\0".as_ptr() as *const ::core::ffi::c_char,
+                    *look.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
+                )
+                .is_null()
                     && keytyped
-                        == *look.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
+                        == *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 {
                     return true_0 != 0;
                 }
-                if keytyped
-                    == get_special_key_code(
-                        look.offset(1 as ::core::ffi::c_int as isize),
-                    )
-                {
+                if keytyped == get_special_key_code(look.offset(1 as ::core::ffi::c_int as isize)) {
                     return true_0 != 0;
                 }
             }
@@ -5736,8 +5809,7 @@ pub unsafe extern "C" fn in_cinkeys(
         } else if *look as ::core::ffi::c_int == '=' as ::core::ffi::c_int
             && *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != ',' as ::core::ffi::c_int
-            && *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
+            && *look.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         {
             look = look.offset(1);
             if *look as ::core::ffi::c_int == '~' as ::core::ffi::c_int {
@@ -5750,18 +5822,15 @@ pub unsafe extern "C" fn in_cinkeys(
             if p.is_null() {
                 p = look.offset(strlen(look) as isize);
             }
-            if (try_match as ::core::ffi::c_int != 0
-                || try_match_word as ::core::ffi::c_int != 0)
+            if (try_match as ::core::ffi::c_int != 0 || try_match_word as ::core::ffi::c_int != 0)
                 && (*curwin).w_cursor.col >= p.offset_from(look) as colnr_T
             {
                 let mut match_0: bool = false_0 != 0;
                 if keytyped == KEY_COMPLETE as ::core::ffi::c_int {
-                    let mut n: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
-                    let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut n: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
+                    let mut s: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                     let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
                     s = line.offset((*curwin).w_cursor.col as isize);
                     while s > line {
@@ -5773,14 +5842,15 @@ pub unsafe extern "C" fn in_cinkeys(
                     }
                     '_c2rust_label: {
                         if p >= look
-                            && p.offset_from(look) as uintmax_t
-                                <= 18446744073709551615 as uintmax_t
-                        {} else {
+                            && p.offset_from(look) as uintmax_t <= 18446744073709551615 as uintmax_t
+                        {
+                        } else {
                             __assert_fail(
                                 b"p >= look && (uintmax_t)(p - look) <= SIZE_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/indent_c.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 3933 as ::core::ffi::c_uint,
                                 __ASSERT_FUNCTION.as_ptr(),
                             );
@@ -5797,28 +5867,26 @@ pub unsafe extern "C" fn in_cinkeys(
                         match_0 = true_0 != 0;
                     }
                 } else if keytyped
-                    == *p.offset(-1 as ::core::ffi::c_int as isize) as uint8_t
-                        as ::core::ffi::c_int
+                    == *p.offset(-1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
                     || icase as ::core::ffi::c_int != 0
                         && keytyped < 256 as ::core::ffi::c_int
                         && keytyped >= 0 as ::core::ffi::c_int
                         && tolower(keytyped)
-                            == tolower(
-                                *p.offset(-1 as ::core::ffi::c_int as isize) as uint8_t
-                                    as ::core::ffi::c_int,
-                            )
+                            == tolower(*p.offset(-1 as ::core::ffi::c_int as isize) as uint8_t
+                                as ::core::ffi::c_int)
                 {
                     let mut line_0: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
                     '_c2rust_label_0: {
                         if p >= look
-                            && p.offset_from(look) as uintmax_t
-                                <= 18446744073709551615 as uintmax_t
-                        {} else {
+                            && p.offset_from(look) as uintmax_t <= 18446744073709551615 as uintmax_t
+                        {
+                        } else {
                             __assert_fail(
                                 b"p >= look && (uintmax_t)(p - look) <= SIZE_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/indent_c.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 3946 as ::core::ffi::c_uint,
                                 __ASSERT_FUNCTION.as_ptr(),
                             );
@@ -5826,8 +5894,8 @@ pub unsafe extern "C" fn in_cinkeys(
                     };
                     if ((*curwin).w_cursor.col == p.offset_from(look) as colnr_T
                         || !vim_iswordc(
-                            *line_0.offset((-p.offset_from(look) - 1 as isize) as isize)
-                                as uint8_t as ::core::ffi::c_int,
+                            *line_0.offset((-p.offset_from(look) - 1 as isize) as isize) as uint8_t
+                                as ::core::ffi::c_int,
                         ))
                         && (if icase as ::core::ffi::c_int != 0 {
                             mb_strnicmp(
@@ -5847,7 +5915,8 @@ pub unsafe extern "C" fn in_cinkeys(
                     }
                 }
                 if match_0 as ::core::ffi::c_int != 0
-                    && try_match_word as ::core::ffi::c_int != 0 && !try_match
+                    && try_match_word as ::core::ffi::c_int != 0
+                    && !try_match
                 {
                     if getwhitecols_curline()
                         != ((*curwin).w_cursor.col as isize - p.offset_from(look))
@@ -5878,11 +5947,13 @@ pub unsafe extern "C" fn in_cinkeys(
 #[no_mangle]
 pub unsafe extern "C" fn do_c_expr_indent() {
     if *(*curbuf).b_p_inde as ::core::ffi::c_int != NUL {
-        fixthisline(
-            Some(get_expr_indent as unsafe extern "C" fn() -> ::core::ffi::c_int),
-        );
+        fixthisline(Some(
+            get_expr_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
+        ));
     } else {
-        fixthisline(Some(get_c_indent as unsafe extern "C" fn() -> ::core::ffi::c_int));
+        fixthisline(Some(
+            get_c_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
+        ));
     };
 }
 #[no_mangle]

@@ -39,23 +39,11 @@ extern "C" {
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     static mut time_fd: *mut FILE;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn set_helplang_default(lang: *const ::core::ffi::c_char);
     fn os_setenv(
@@ -946,21 +934,15 @@ pub const LC_TIME: ::core::ffi::c_int = __LC_TIME;
 pub const LC_COLLATE: ::core::ffi::c_int = __LC_COLLATE;
 pub const LC_MESSAGES: ::core::ffi::c_int = __LC_MESSAGES;
 pub const LC_ALL: ::core::ffi::c_int = __LC_ALL;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
     return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
 }
-unsafe extern "C" fn get_locale_val(
-    mut what: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    let mut loc: *mut ::core::ffi::c_char = setlocale(
-        what,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-    );
+unsafe extern "C" fn get_locale_val(mut what: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
+    let mut loc: *mut ::core::ffi::c_char =
+        setlocale(what, ::core::ptr::null::<::core::ffi::c_char>());
     return loc;
 }
 unsafe extern "C" fn is_valid_mess_lang(mut lang: *const ::core::ffi::c_char) -> bool {
@@ -5114,19 +5096,16 @@ pub unsafe extern "C" fn init_locale() {
         b"%s\0".as_ptr() as *const ::core::ffi::c_char,
         get_vim_var_str(VV_PROGPATH),
     );
-    let mut tail: *mut ::core::ffi::c_char = path_tail_with_sep(
-        &raw mut localepath as *mut ::core::ffi::c_char,
-    );
+    let mut tail: *mut ::core::ffi::c_char =
+        path_tail_with_sep(&raw mut localepath as *mut ::core::ffi::c_char);
     *tail = NUL as ::core::ffi::c_char;
     tail = path_tail(&raw mut localepath as *mut ::core::ffi::c_char);
     xstrlcpy(
         tail,
         b"share/locale\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4096]>()
-            .wrapping_sub(
-                tail.offset_from(&raw mut localepath as *mut ::core::ffi::c_char)
-                    as size_t,
-            ),
+        ::core::mem::size_of::<[::core::ffi::c_char; 4096]>().wrapping_sub(
+            tail.offset_from(&raw mut localepath as *mut ::core::ffi::c_char) as size_t,
+        ),
     );
     bindtextdomain(
         PROJECT_NAME.as_ptr(),
@@ -5142,12 +5121,10 @@ pub unsafe extern "C" fn init_locale() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
-    let mut loc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut loc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut what: ::core::ffi::c_int = LC_ALL;
-    let mut whatstr: *mut ::core::ffi::c_char = b"\0".as_ptr()
-        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    let mut whatstr: *mut ::core::ffi::c_char =
+        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     let mut name: *mut ::core::ffi::c_char = (*eap).arg;
     let mut p: *mut ::core::ffi::c_char = skiptowhite((*eap).arg);
     if (*p as ::core::ffi::c_int == NUL
@@ -5156,26 +5133,24 @@ pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
     {
         if strncasecmp(
             (*eap).arg,
-            b"messages\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"messages\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             p.offset_from((*eap).arg) as size_t,
         ) == 0 as ::core::ffi::c_int
         {
             what = VIM_LC_MESSAGES;
             name = skipwhite(p);
-            whatstr = b"messages \0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            whatstr =
+                b"messages \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if strncasecmp(
             (*eap).arg,
-            b"ctype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"ctype\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             p.offset_from((*eap).arg) as size_t,
         ) == 0 as ::core::ffi::c_int
         {
             what = LC_CTYPE;
             name = skipwhite(p);
-            whatstr = b"ctype \0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            whatstr =
+                b"ctype \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if strncasecmp(
             (*eap).arg,
             b"time\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -5184,19 +5159,17 @@ pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
         {
             what = LC_TIME;
             name = skipwhite(p);
-            whatstr = b"time \0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            whatstr = b"time \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if strncasecmp(
             (*eap).arg,
-            b"collate\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"collate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             p.offset_from((*eap).arg) as size_t,
         ) == 0 as ::core::ffi::c_int
         {
             what = LC_COLLATE;
             name = skipwhite(p);
-            whatstr = b"collate \0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            whatstr =
+                b"collate \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     }
     if *name as ::core::ffi::c_int == NUL {
@@ -5206,14 +5179,11 @@ pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
             p = setlocale(what, ::core::ptr::null::<::core::ffi::c_char>());
         }
         if p.is_null() || *p as ::core::ffi::c_int == NUL {
-            p = b"Unknown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            p = b"Unknown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         smsg(
             0 as ::core::ffi::c_int,
-            gettext(
-                b"Current %slanguage: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"Current %slanguage: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             whatstr,
             p,
         );
@@ -5223,8 +5193,7 @@ pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
         if loc.is_null() {
             semsg(
                 gettext(
-                    b"E197: Cannot set language to \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"E197: Cannot set language to \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
                 ),
                 name,
             );
@@ -5266,9 +5235,8 @@ pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
     };
 }
 pub const VIM_LC_MESSAGES: ::core::ffi::c_int = LC_MESSAGES;
-static mut locales: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    *mut ::core::ffi::c_char,
->();
+static mut locales: *mut *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
 static mut did_init_locales: bool = false_0 != 0;
 unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
     let mut locales_ga: garray_T = garray_T {
@@ -5278,12 +5246,9 @@ unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    let mut saveptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut saveptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut locale_a: *mut ::core::ffi::c_char = get_cmd_output(
-        b"locale -a\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"locale -a\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
         kShellOptSilent as ::core::ffi::c_int,
         ::core::ptr::null_mut::<size_t>(),
@@ -5304,8 +5269,8 @@ unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
     while !loc.is_null() {
         loc = xstrdup(loc);
         ga_grow(&raw mut locales_ga, 1 as ::core::ffi::c_int);
-        *(locales_ga.ga_data as *mut *mut ::core::ffi::c_char)
-            .offset(locales_ga.ga_len as isize) = loc;
+        *(locales_ga.ga_data as *mut *mut ::core::ffi::c_char).offset(locales_ga.ga_len as isize) =
+            loc;
         locales_ga.ga_len += 1;
         loc = strtok_r(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5315,10 +5280,8 @@ unsafe extern "C" fn find_locales() -> *mut *mut ::core::ffi::c_char {
     }
     xfree(locale_a as *mut ::core::ffi::c_void);
     ga_grow(&raw mut locales_ga, 1 as ::core::ffi::c_int);
-    *(locales_ga.ga_data as *mut *mut ::core::ffi::c_char)
-        .offset(locales_ga.ga_len as isize) = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    *(locales_ga.ga_data as *mut *mut ::core::ffi::c_char).offset(locales_ga.ga_len as isize) =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     return locales_ga.ga_data as *mut *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn init_locales() {
@@ -5334,20 +5297,16 @@ pub unsafe extern "C" fn get_lang_arg(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
-        return b"messages\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"messages\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     if idx == 1 as ::core::ffi::c_int {
-        return b"ctype\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"ctype\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     if idx == 2 as ::core::ffi::c_int {
-        return b"time\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"time\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     if idx == 3 as ::core::ffi::c_int {
-        return b"collate\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"collate\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     init_locales();
     if locales.is_null() {
@@ -5376,6 +5335,5 @@ pub const __LC_TIME: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const __LC_COLLATE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const __LC_MESSAGES: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const __LC_ALL: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const PROJECT_NAME: [::core::ffi::c_char; 5] = unsafe {
-    ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0")
-};
+pub const PROJECT_NAME: [::core::ffi::c_char; 5] =
+    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0") };

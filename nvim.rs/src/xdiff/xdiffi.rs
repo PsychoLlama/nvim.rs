@@ -37,10 +37,7 @@ extern "C" {
         xpp: *const xpparam_t,
         env: *mut xdfenv_t,
     ) -> ::core::ffi::c_int;
-    fn xdl_get_hunk(
-        xscr: *mut *mut xdchange_t,
-        xecfg: *const xdemitconf_t,
-    ) -> *mut xdchange_t;
+    fn xdl_get_hunk(xscr: *mut *mut xdchange_t, xecfg: *const xdemitconf_t) -> *mut xdchange_t;
     fn xdl_bogosqrt(n: ::core::ffi::c_long) -> ::core::ffi::c_long;
     fn xdl_blankline(
         line: *const ::core::ffi::c_char,
@@ -299,28 +296,26 @@ pub struct s_xdpsplit {
     pub min_lo: ::core::ffi::c_int,
     pub min_hi: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const XDF_NEED_MINIMAL: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 0 as ::core::ffi::c_int;
-pub const XDF_IGNORE_BLANK_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 7 as ::core::ffi::c_int;
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF
-    | XDF_HISTOGRAM_DIFF;
-pub const XDF_INDENT_HEURISTIC: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 23 as ::core::ffi::c_int;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const XDF_NEED_MINIMAL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
+pub const XDF_IGNORE_BLANK_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
+pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
+pub const XDF_INDENT_HEURISTIC: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 23 as ::core::ffi::c_int;
 pub const XDL_MAX_COST_MIN: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 pub const XDL_HEUR_MIN_COST: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 pub const XDL_LINE_MAX: ::core::ffi::c_long = ((1 as ::core::ffi::c_ulong)
     << (CHAR_BIT as usize)
         .wrapping_mul(::core::mem::size_of::<::core::ffi::c_long>())
         .wrapping_sub(1 as usize))
-    .wrapping_sub(1 as ::core::ffi::c_ulong) as ::core::ffi::c_long;
+.wrapping_sub(1 as ::core::ffi::c_ulong)
+    as ::core::ffi::c_long;
 pub const XDL_SNAKE_CNT: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const XDL_K_HEUR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 unsafe extern "C" fn xdl_split(
@@ -361,15 +356,13 @@ unsafe extern "C" fn xdl_split(
         let mut got_snake: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if fmin > dmin {
             fmin -= 1;
-            *kvdf.offset((fmin - 1 as ::core::ffi::c_long) as isize) = -1
-                as ::core::ffi::c_long;
+            *kvdf.offset((fmin - 1 as ::core::ffi::c_long) as isize) = -1 as ::core::ffi::c_long;
         } else {
             fmin += 1;
         }
         if fmax < dmax {
             fmax += 1;
-            *kvdf.offset((fmax + 1 as ::core::ffi::c_long) as isize) = -1
-                as ::core::ffi::c_long;
+            *kvdf.offset((fmax + 1 as ::core::ffi::c_long) as isize) = -1 as ::core::ffi::c_long;
         } else {
             fmax -= 1;
         }
@@ -385,9 +378,7 @@ unsafe extern "C" fn xdl_split(
             }
             prev1 = i1;
             i2 = i1 - d;
-            while i1 < lim1 && i2 < lim2
-                && *ha1.offset(i1 as isize) == *ha2.offset(i2 as isize)
-            {
+            while i1 < lim1 && i2 < lim2 && *ha1.offset(i1 as isize) == *ha2.offset(i2 as isize) {
                 i1 += 1;
                 i2 += 1;
             }
@@ -428,7 +419,8 @@ unsafe extern "C" fn xdl_split(
             }
             prev1 = i1;
             i2 = i1 - d;
-            while i1 > off1 && i2 > off2
+            while i1 > off1
+                && i2 > off2
                 && *ha1.offset((i1 - 1 as ::core::ffi::c_long) as isize)
                     == *ha2.offset((i2 - 1 as ::core::ffi::c_long) as isize)
             {
@@ -457,14 +449,15 @@ unsafe extern "C" fn xdl_split(
                     i1 = *kvdf.offset(d as isize);
                     i2 = i1 - d;
                     v = i1 - off1 + (i2 - off2) - dd;
-                    if v > XDL_K_HEUR as ::core::ffi::c_long * ec && v > best
-                        && off1 + (*xenv).snake_cnt <= i1 && i1 < lim1
-                        && off2 + (*xenv).snake_cnt <= i2 && i2 < lim2
+                    if v > XDL_K_HEUR as ::core::ffi::c_long * ec
+                        && v > best
+                        && off1 + (*xenv).snake_cnt <= i1
+                        && i1 < lim1
+                        && off2 + (*xenv).snake_cnt <= i2
+                        && i2 < lim2
                     {
                         k = 1 as ::core::ffi::c_long;
-                        while *ha1.offset((i1 - k) as isize)
-                            == *ha2.offset((i2 - k) as isize)
-                        {
+                        while *ha1.offset((i1 - k) as isize) == *ha2.offset((i2 - k) as isize) {
                             if k == (*xenv).snake_cnt {
                                 best = v;
                                 (*spl).i1 = i1;
@@ -489,14 +482,15 @@ unsafe extern "C" fn xdl_split(
                     i1 = *kvdb.offset(d as isize);
                     i2 = i1 - d;
                     v = lim1 - i1 + (lim2 - i2) - dd;
-                    if v > XDL_K_HEUR as ::core::ffi::c_long * ec && v > best
-                        && off1 < i1 && i1 <= lim1 - (*xenv).snake_cnt && off2 < i2
+                    if v > XDL_K_HEUR as ::core::ffi::c_long * ec
+                        && v > best
+                        && off1 < i1
+                        && i1 <= lim1 - (*xenv).snake_cnt
+                        && off2 < i2
                         && i2 <= lim2 - (*xenv).snake_cnt
                     {
                         k = 0 as ::core::ffi::c_long;
-                        while *ha1.offset((i1 + k) as isize)
-                            == *ha2.offset((i2 + k) as isize)
-                        {
+                        while *ha1.offset((i1 + k) as isize) == *ha2.offset((i2 + k) as isize) {
                             if k == (*xenv).snake_cnt - 1 as ::core::ffi::c_long {
                                 best = v;
                                 (*spl).i1 = i1;
@@ -575,7 +569,7 @@ unsafe extern "C" fn xdl_split(
             }
         }
         ec += 1;
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn xdl_recs_cmp(
@@ -592,13 +586,12 @@ pub unsafe extern "C" fn xdl_recs_cmp(
 ) -> ::core::ffi::c_int {
     let mut ha1: *const ::core::ffi::c_ulong = (*dd1).ha;
     let mut ha2: *const ::core::ffi::c_ulong = (*dd2).ha;
-    while off1 < lim1 && off2 < lim2
-        && *ha1.offset(off1 as isize) == *ha2.offset(off2 as isize)
-    {
+    while off1 < lim1 && off2 < lim2 && *ha1.offset(off1 as isize) == *ha2.offset(off2 as isize) {
         off1 += 1;
         off2 += 1;
     }
-    while off1 < lim1 && off2 < lim2
+    while off1 < lim1
+        && off2 < lim2
         && *ha1.offset((lim1 - 1 as ::core::ffi::c_long) as isize)
             == *ha2.offset((lim2 - 1 as ::core::ffi::c_long) as isize)
     {
@@ -609,16 +602,14 @@ pub unsafe extern "C" fn xdl_recs_cmp(
         let mut rchg2: *mut ::core::ffi::c_char = (*dd2).rchg;
         let mut rindex2: *mut ::core::ffi::c_long = (*dd2).rindex;
         while off2 < lim2 {
-            *rchg2.offset(*rindex2.offset(off2 as isize) as isize) = 1
-                as ::core::ffi::c_char;
+            *rchg2.offset(*rindex2.offset(off2 as isize) as isize) = 1 as ::core::ffi::c_char;
             off2 += 1;
         }
     } else if off2 == lim2 {
         let mut rchg1: *mut ::core::ffi::c_char = (*dd1).rchg;
         let mut rindex1: *mut ::core::ffi::c_long = (*dd1).rindex;
         while off1 < lim1 {
-            *rchg1.offset(*rindex1.offset(off1 as isize) as isize) = 1
-                as ::core::ffi::c_char;
+            *rchg1.offset(*rindex1.offset(off1 as isize) as isize) = 1 as ::core::ffi::c_char;
             off1 += 1;
         }
     } else {
@@ -647,28 +638,10 @@ pub unsafe extern "C" fn xdl_recs_cmp(
             return -1 as ::core::ffi::c_int;
         }
         if xdl_recs_cmp(
-            dd1,
-            off1,
-            spl.i1,
-            dd2,
-            off2,
-            spl.i2,
-            kvdf,
-            kvdb,
-            spl.min_lo,
-            xenv,
+            dd1, off1, spl.i1, dd2, off2, spl.i2, kvdf, kvdb, spl.min_lo, xenv,
         ) < 0 as ::core::ffi::c_int
             || xdl_recs_cmp(
-                dd1,
-                spl.i1,
-                lim1,
-                dd2,
-                spl.i2,
-                lim2,
-                kvdf,
-                kvdb,
-                spl.min_hi,
-                xenv,
+                dd1, spl.i1, lim1, dd2, spl.i2, lim2, kvdf, kvdb, spl.min_hi, xenv,
             ) < 0 as ::core::ffi::c_int
         {
             return -1 as ::core::ffi::c_int;
@@ -684,15 +657,9 @@ pub unsafe extern "C" fn xdl_do_diff(
     mut xe: *mut xdfenv_t,
 ) -> ::core::ffi::c_int {
     let mut ndiags: ::core::ffi::c_long = 0;
-    let mut kvd: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<
-        ::core::ffi::c_long,
-    >();
-    let mut kvdf: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<
-        ::core::ffi::c_long,
-    >();
-    let mut kvdb: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<
-        ::core::ffi::c_long,
-    >();
+    let mut kvd: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<::core::ffi::c_long>();
+    let mut kvdf: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<::core::ffi::c_long>();
+    let mut kvdb: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<::core::ffi::c_long>();
     let mut xenv: xdalgoenv_t = xdalgoenv_t {
         mxcost: 0,
         snake_cnt: 0,
@@ -759,8 +726,8 @@ pub unsafe extern "C" fn xdl_do_diff(
         dd2.nrec,
         kvdf,
         kvdb,
-        ((*xpp).flags & XDF_NEED_MINIMAL as ::core::ffi::c_ulong
-            != 0 as ::core::ffi::c_ulong) as ::core::ffi::c_int,
+        ((*xpp).flags & XDF_NEED_MINIMAL as ::core::ffi::c_ulong != 0 as ::core::ffi::c_ulong)
+            as ::core::ffi::c_int,
         &raw mut xenv,
     ) < 0 as ::core::ffi::c_int
     {
@@ -797,8 +764,8 @@ unsafe extern "C" fn recs_match(
     mut flags: ::core::ffi::c_long,
 ) -> ::core::ffi::c_int {
     return ((*rec1).ha == (*rec2).ha
-        && xdl_recmatch((*rec1).ptr, (*rec1).size, (*rec2).ptr, (*rec2).size, flags)
-            != 0) as ::core::ffi::c_int;
+        && xdl_recmatch((*rec1).ptr, (*rec1).size, (*rec2).ptr, (*rec2).size, flags) != 0)
+        as ::core::ffi::c_int;
 }
 pub const MAX_INDENT: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
 unsafe extern "C" fn xget_indent(mut rec: *mut xrecord_t) -> ::core::ffi::c_int {
@@ -807,13 +774,12 @@ unsafe extern "C" fn xget_indent(mut rec: *mut xrecord_t) -> ::core::ffi::c_int 
     i = 0 as ::core::ffi::c_long;
     while i < (*rec).size {
         let mut c: ::core::ffi::c_char = *(*rec).ptr.offset(i as isize);
-        if *(*__ctype_b_loc())
-            .offset(c as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
+        if *(*__ctype_b_loc()).offset(c as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
             as ::core::ffi::c_int
-            & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int == 0
+            & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            == 0
         {
-            return ret
+            return ret;
         } else if c as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
             ret += 1 as ::core::ffi::c_int;
         } else if c as ::core::ffi::c_int == '\t' as ::core::ffi::c_int {
@@ -878,27 +844,19 @@ pub const END_OF_FILE_PENALTY: ::core::ffi::c_int = 21 as ::core::ffi::c_int;
 pub const TOTAL_BLANK_WEIGHT: ::core::ffi::c_int = -30 as ::core::ffi::c_int;
 pub const POST_BLANK_WEIGHT: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const RELATIVE_INDENT_PENALTY: ::core::ffi::c_int = -4 as ::core::ffi::c_int;
-pub const RELATIVE_INDENT_WITH_BLANK_PENALTY: ::core::ffi::c_int = 10
-    as ::core::ffi::c_int;
+pub const RELATIVE_INDENT_WITH_BLANK_PENALTY: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const RELATIVE_OUTDENT_PENALTY: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
-pub const RELATIVE_OUTDENT_WITH_BLANK_PENALTY: ::core::ffi::c_int = 17
-    as ::core::ffi::c_int;
+pub const RELATIVE_OUTDENT_WITH_BLANK_PENALTY: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
 pub const RELATIVE_DEDENT_PENALTY: ::core::ffi::c_int = 23 as ::core::ffi::c_int;
-pub const RELATIVE_DEDENT_WITH_BLANK_PENALTY: ::core::ffi::c_int = 17
-    as ::core::ffi::c_int;
+pub const RELATIVE_DEDENT_WITH_BLANK_PENALTY: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
 pub const INDENT_WEIGHT: ::core::ffi::c_int = 60 as ::core::ffi::c_int;
 pub const INDENT_HEURISTIC_MAX_SLIDING: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-unsafe extern "C" fn score_add_split(
-    mut m: *const split_measurement,
-    mut s: *mut split_score,
-) {
+unsafe extern "C" fn score_add_split(mut m: *const split_measurement, mut s: *mut split_score) {
     let mut post_blank: ::core::ffi::c_int = 0;
     let mut total_blank: ::core::ffi::c_int = 0;
     let mut indent: ::core::ffi::c_int = 0;
     let mut any_blanks: ::core::ffi::c_int = 0;
-    if (*m).pre_indent == -1 as ::core::ffi::c_int
-        && (*m).pre_blank == 0 as ::core::ffi::c_int
-    {
+    if (*m).pre_indent == -1 as ::core::ffi::c_int && (*m).pre_blank == 0 as ::core::ffi::c_int {
         (*s).penalty += START_OF_FILE_PENALTY;
     }
     if (*m).end_of_file != 0 {
@@ -922,29 +880,24 @@ unsafe extern "C" fn score_add_split(
     if indent != -1 as ::core::ffi::c_int {
         if (*m).pre_indent != -1 as ::core::ffi::c_int {
             if indent > (*m).pre_indent {
-                (*s).penalty
-                    += if any_blanks != 0 {
-                        RELATIVE_INDENT_WITH_BLANK_PENALTY
-                    } else {
-                        RELATIVE_INDENT_PENALTY
-                    };
-            } else if indent != (*m).pre_indent {
-                if (*m).post_indent != -1 as ::core::ffi::c_int
-                    && (*m).post_indent > indent
-                {
-                    (*s).penalty
-                        += if any_blanks != 0 {
-                            RELATIVE_OUTDENT_WITH_BLANK_PENALTY
-                        } else {
-                            RELATIVE_OUTDENT_PENALTY
-                        };
+                (*s).penalty += if any_blanks != 0 {
+                    RELATIVE_INDENT_WITH_BLANK_PENALTY
                 } else {
-                    (*s).penalty
-                        += if any_blanks != 0 {
-                            RELATIVE_DEDENT_WITH_BLANK_PENALTY
-                        } else {
-                            RELATIVE_DEDENT_PENALTY
-                        };
+                    RELATIVE_INDENT_PENALTY
+                };
+            } else if indent != (*m).pre_indent {
+                if (*m).post_indent != -1 as ::core::ffi::c_int && (*m).post_indent > indent {
+                    (*s).penalty += if any_blanks != 0 {
+                        RELATIVE_OUTDENT_WITH_BLANK_PENALTY
+                    } else {
+                        RELATIVE_OUTDENT_PENALTY
+                    };
+                } else {
+                    (*s).penalty += if any_blanks != 0 {
+                        RELATIVE_DEDENT_WITH_BLANK_PENALTY
+                    } else {
+                        RELATIVE_DEDENT_PENALTY
+                    };
                 }
             }
         }
@@ -954,8 +907,8 @@ unsafe extern "C" fn score_cmp(
     mut s1: *mut split_score,
     mut s2: *mut split_score,
 ) -> ::core::ffi::c_int {
-    let mut cmp_indents: ::core::ffi::c_int = ((*s1).effective_indent
-        > (*s2).effective_indent) as ::core::ffi::c_int
+    let mut cmp_indents: ::core::ffi::c_int = ((*s1).effective_indent > (*s2).effective_indent)
+        as ::core::ffi::c_int
         - ((*s1).effective_indent < (*s2).effective_indent) as ::core::ffi::c_int;
     return INDENT_WEIGHT * cmp_indents + ((*s1).penalty - (*s2).penalty);
 }
@@ -991,7 +944,11 @@ unsafe extern "C" fn group_previous(
     }
     (*g).end = (*g).start - 1 as ::core::ffi::c_long;
     (*g).start = (*g).end;
-    while *(*xdf).rchg.offset(((*g).start - 1 as ::core::ffi::c_long) as isize) != 0 {
+    while *(*xdf)
+        .rchg
+        .offset(((*g).start - 1 as ::core::ffi::c_long) as isize)
+        != 0
+    {
         (*g).start -= 1;
     }
     return 0 as ::core::ffi::c_int;
@@ -1019,7 +976,7 @@ unsafe extern "C" fn group_slide_down(
         }
         return 0 as ::core::ffi::c_int;
     } else {
-        return -1 as ::core::ffi::c_int
+        return -1 as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn group_slide_up(
@@ -1029,8 +986,12 @@ unsafe extern "C" fn group_slide_up(
 ) -> ::core::ffi::c_int {
     if (*g).start > 0 as ::core::ffi::c_long
         && recs_match(
-            *(*xdf).recs.offset(((*g).start - 1 as ::core::ffi::c_long) as isize),
-            *(*xdf).recs.offset(((*g).end - 1 as ::core::ffi::c_long) as isize),
+            *(*xdf)
+                .recs
+                .offset(((*g).start - 1 as ::core::ffi::c_long) as isize),
+            *(*xdf)
+                .recs
+                .offset(((*g).end - 1 as ::core::ffi::c_long) as isize),
             flags,
         ) != 0
     {
@@ -1038,17 +999,24 @@ unsafe extern "C" fn group_slide_up(
         *(*xdf).rchg.offset((*g).start as isize) = 1 as ::core::ffi::c_char;
         (*g).end -= 1;
         *(*xdf).rchg.offset((*g).end as isize) = 0 as ::core::ffi::c_char;
-        while *(*xdf).rchg.offset(((*g).start - 1 as ::core::ffi::c_long) as isize) != 0
+        while *(*xdf)
+            .rchg
+            .offset(((*g).start - 1 as ::core::ffi::c_long) as isize)
+            != 0
         {
             (*g).start -= 1;
         }
         return 0 as ::core::ffi::c_int;
     } else {
-        return -1 as ::core::ffi::c_int
+        return -1 as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn xdl_bug(mut msg: *const ::core::ffi::c_char) {
-    fprintf(stderr, b"BUG: %s\n\0".as_ptr() as *const ::core::ffi::c_char, msg);
+    fprintf(
+        stderr,
+        b"BUG: %s\n\0".as_ptr() as *const ::core::ffi::c_char,
+        msg,
+    );
     exit(1 as ::core::ffi::c_int);
 }
 #[no_mangle]
@@ -1071,10 +1039,8 @@ pub unsafe extern "C" fn xdl_change_compact(
                 end_matching_other = -1 as ::core::ffi::c_long;
                 while group_slide_up(xdf, &raw mut g, flags) == 0 {
                     if group_previous(xdfo, &raw mut go) != 0 {
-                        xdl_bug(
-                            b"group sync broken sliding up\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
+                        xdl_bug(b"group sync broken sliding up\0".as_ptr()
+                            as *const ::core::ffi::c_char);
                     }
                 }
                 earliest_end = g.end;
@@ -1083,10 +1049,8 @@ pub unsafe extern "C" fn xdl_change_compact(
                 }
                 while group_slide_down(xdf, &raw mut g, flags) == 0 {
                     if group_next(xdfo, &raw mut go) != 0 {
-                        xdl_bug(
-                            b"group sync broken sliding down\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
+                        xdl_bug(b"group sync broken sliding down\0".as_ptr()
+                            as *const ::core::ffi::c_char);
                     }
                     if go.end > go.start {
                         end_matching_other = g.end;
@@ -1100,16 +1064,11 @@ pub unsafe extern "C" fn xdl_change_compact(
                 if end_matching_other != -1 as ::core::ffi::c_long {
                     while go.end == go.start {
                         if group_slide_up(xdf, &raw mut g, flags) != 0 {
-                            xdl_bug(
-                                b"match disappeared\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
+                            xdl_bug(b"match disappeared\0".as_ptr() as *const ::core::ffi::c_char);
                         }
                         if group_previous(xdfo, &raw mut go) != 0 {
-                            xdl_bug(
-                                b"group sync broken sliding to match\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
+                            xdl_bug(b"group sync broken sliding to match\0".as_ptr()
+                                as *const ::core::ffi::c_char);
                         }
                     }
                 } else if flags & XDF_INDENT_HEURISTIC as ::core::ffi::c_long != 0 {
@@ -1123,11 +1082,8 @@ pub unsafe extern "C" fn xdl_change_compact(
                     if g.end - groupsize - 1 as ::core::ffi::c_long > shift {
                         shift = g.end - groupsize - 1 as ::core::ffi::c_long;
                     }
-                    if g.end - INDENT_HEURISTIC_MAX_SLIDING as ::core::ffi::c_long
-                        > shift
-                    {
-                        shift = g.end
-                            - INDENT_HEURISTIC_MAX_SLIDING as ::core::ffi::c_long;
+                    if g.end - INDENT_HEURISTIC_MAX_SLIDING as ::core::ffi::c_long > shift {
+                        shift = g.end - INDENT_HEURISTIC_MAX_SLIDING as ::core::ffi::c_long;
                     }
                     while shift <= g.end {
                         let mut m: split_measurement = split_measurement {
@@ -1159,15 +1115,12 @@ pub unsafe extern "C" fn xdl_change_compact(
                     while g.end > best_shift {
                         if group_slide_up(xdf, &raw mut g, flags) != 0 {
                             xdl_bug(
-                                b"best shift unreached\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
+                                b"best shift unreached\0".as_ptr() as *const ::core::ffi::c_char
                             );
                         }
                         if group_previous(xdfo, &raw mut go) != 0 {
-                            xdl_bug(
-                                b"group sync broken sliding to blank line\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
+                            xdl_bug(b"group sync broken sliding to blank line\0".as_ptr()
+                                as *const ::core::ffi::c_char);
                         }
                     }
                 }
@@ -1178,15 +1131,12 @@ pub unsafe extern "C" fn xdl_change_compact(
         }
         if group_next(xdfo, &raw mut go) != 0 {
             xdl_bug(
-                b"group sync broken moving to next group\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"group sync broken moving to next group\0".as_ptr() as *const ::core::ffi::c_char
             );
         }
     }
     if group_next(xdfo, &raw mut go) == 0 {
-        xdl_bug(
-            b"group sync broken at end of file\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        xdl_bug(b"group sync broken at end of file\0".as_ptr() as *const ::core::ffi::c_char);
     }
     return 0 as ::core::ffi::c_int;
 }
@@ -1206,10 +1156,8 @@ pub unsafe extern "C" fn xdl_build_script(
     i1 = (*xe).xdf1.nrec;
     i2 = (*xe).xdf2.nrec;
     while i1 >= 0 as ::core::ffi::c_long || i2 >= 0 as ::core::ffi::c_long {
-        if *rchg1.offset((i1 - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int
-            != 0
-            || *rchg2.offset((i2 - 1 as ::core::ffi::c_long) as isize)
-                as ::core::ffi::c_int != 0
+        if *rchg1.offset((i1 - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int != 0
+            || *rchg2.offset((i2 - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int != 0
         {
             l1 = i1;
             while *rchg1.offset((i1 - 1 as ::core::ffi::c_long) as isize) != 0 {
@@ -1242,7 +1190,7 @@ pub unsafe extern "C" fn xdl_free_script(mut xscr: *mut xdchange_t) {
         }
         xscr = (*xscr).next as *mut xdchange_t;
         xfree(xch as *mut ::core::ffi::c_void);
-    };
+    }
 }
 unsafe extern "C" fn xdl_call_hunk_func(
     mut xe: *mut xdfenv_t,
@@ -1258,11 +1206,7 @@ unsafe extern "C" fn xdl_call_hunk_func(
         if xch.is_null() {
             break;
         }
-        if (*xecfg)
-            .hunk_func
-            .expect(
-                "non-null function pointer",
-            )(
+        if (*xecfg).hunk_func.expect("non-null function pointer")(
             (*xch).i1 as ::core::ffi::c_int,
             ((*xche).i1 + (*xche).chg1 - (*xch).i1) as ::core::ffi::c_int,
             (*xch).i2 as ::core::ffi::c_int,
@@ -1405,11 +1349,7 @@ pub unsafe extern "C" fn xdl_diff(
     }
     if !xscr.is_null() {
         if (*xpp).flags & XDF_IGNORE_BLANK_LINES as ::core::ffi::c_ulong != 0 {
-            xdl_mark_ignorable_lines(
-                xscr,
-                &raw mut xe,
-                (*xpp).flags as ::core::ffi::c_long,
-            );
+            xdl_mark_ignorable_lines(xscr, &raw mut xe, (*xpp).flags as ::core::ffi::c_long);
         }
         if ef.expect("non-null function pointer")(&raw mut xe, xscr, ecb, xecfg)
             < 0 as ::core::ffi::c_int

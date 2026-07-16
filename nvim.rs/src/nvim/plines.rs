@@ -10,11 +10,7 @@ extern "C" {
     fn ptr2cells(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn vim_isprintc(c: ::core::ffi::c_int) -> bool;
-    fn decor_conceal_line(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-        check_cursor: bool,
-    ) -> bool;
+    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor: bool) -> bool;
     fn decor_virt_lines(
         wp: *mut win_T,
         start_row: ::core::ffi::c_int,
@@ -44,15 +40,8 @@ extern "C" {
     static mut VIsual: pos_T;
     static mut VIsual_active: bool;
     static mut State: ::core::ffi::c_int;
-    fn tabstop_padding(
-        col: colnr_T,
-        ts_arg: OptInt,
-        vts: *const colnr_T,
-    ) -> ::core::ffi::c_int;
-    fn get_breakindent_win(
-        wp: *mut win_T,
-        line: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn tabstop_padding(col: colnr_T, ts_arg: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int;
+    fn get_breakindent_win(wp: *mut win_T, line: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn marktree_itr_get_filter(
         b: *mut MarkTree,
         row: int32_t,
@@ -1733,25 +1722,20 @@ pub struct CharSize {
     pub head: ::core::ffi::c_int,
 }
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_has_uint32_t(
-    mut set: *mut Set_uint32_t,
-    mut key: uint32_t,
-) -> bool {
+unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
     return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -1760,8 +1744,7 @@ unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
 }
 #[inline(always)]
 unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0
-        || equalpos(a, b) as ::core::ffi::c_int != 0;
+    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
 }
 #[inline]
 unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {
@@ -1781,12 +1764,12 @@ unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
     return breakat_flags[c as uint8_t as usize] != 0;
 }
 pub const kMTFilterSelect: uint32_t = -1 as ::core::ffi::c_int as uint32_t;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALID: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn mt_right(mut key: MTKey) -> bool {
     return key.flags as ::core::ffi::c_int & MT_FLAG_RIGHT_GRAVITY != 0;
@@ -1810,10 +1793,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
         return CharInfo {
             value: first as int32_t,
             len: 1 as ::core::ffi::c_int,
-        }
+        };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize]
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;
@@ -1827,8 +1809,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
 #[inline(always)]
 unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint)
-        as ::core::ffi::c_int as ::core::ffi::c_long != 0
+    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
+        as ::core::ffi::c_long
+        != 0
     {
         return StrCharInfo {
             ptr: next as *mut ::core::ffi::c_char,
@@ -1841,9 +1824,7 @@ unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     return utfc_next_impl(cur);
 }
 #[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(
-    mut ptr: *mut ::core::ffi::c_char,
-) -> StrCharInfo {
+unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
     return StrCharInfo {
         ptr: ptr,
         chr: utf_ptr2CharInfo(ptr),
@@ -1858,9 +1839,9 @@ unsafe extern "C" fn win_charsize(
     mut csarg: *mut CharsizeArg,
 ) -> CharSize {
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
     } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
     };
 }
 #[inline(always)]
@@ -1884,10 +1865,7 @@ unsafe extern "C" fn win_linetabsize(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -1895,9 +1873,9 @@ unsafe extern "C" fn win_linetabsize(
     };
     let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line);
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return linesize_fast(&raw mut csarg, 0 as ::core::ffi::c_int, len)
+        return linesize_fast(&raw mut csarg, 0 as ::core::ffi::c_int, len);
     } else {
-        return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len)
+        return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
     };
 }
 #[no_mangle]
@@ -1933,10 +1911,7 @@ pub unsafe extern "C" fn linetabsize_col(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -1944,16 +1919,13 @@ pub unsafe extern "C" fn linetabsize_col(
     };
     let cstype: CSType = init_charsize_arg(&raw mut csarg, curwin, 0 as linenr_T, s);
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return linesize_fast(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int)
+        return linesize_fast(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
     } else {
-        return linesize_regular(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int)
+        return linesize_regular(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn linetabsize(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn linetabsize(mut wp: *mut win_T, mut lnum: linenr_T) -> ::core::ffi::c_int {
     return win_linetabsize(
         wp,
         lnum,
@@ -1967,9 +1939,7 @@ pub unsafe extern "C" fn linetabsize_eol(
     mut lnum: linenr_T,
 ) -> ::core::ffi::c_int {
     return linetabsize(wp, lnum)
-        + (if (*wp).w_onebuf_opt.wo_list != 0
-            && (*wp).w_p_lcs_chars.eol != NUL as schar_T
-        {
+        + (if (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != NUL as schar_T {
             1 as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
@@ -1990,8 +1960,7 @@ pub unsafe extern "C" fn init_charsize_arg(
     (*csarg).cur_text_width_right = 0 as ::core::ffi::c_int;
     (*csarg).virt_row = -1 as ::core::ffi::c_int;
     (*csarg).indent_width = INT_MIN;
-    (*csarg).use_tabstop = (*wp).w_onebuf_opt.wo_list == 0
-        || (*wp).w_p_lcs_chars.tab1 != 0;
+    (*csarg).use_tabstop = (*wp).w_onebuf_opt.wo_list == 0 || (*wp).w_p_lcs_chars.tab1 != 0;
     if lnum > 0 as linenr_T {
         if marktree_itr_get_filter(
             &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
@@ -2007,12 +1976,13 @@ pub unsafe extern "C" fn init_charsize_arg(
     }
     if (*csarg).virt_row >= 0 as ::core::ffi::c_int
         || (*wp).w_onebuf_opt.wo_wrap != 0
-            && ((*wp).w_onebuf_opt.wo_lbr != 0 || (*wp).w_onebuf_opt.wo_bri != 0
+            && ((*wp).w_onebuf_opt.wo_lbr != 0
+                || (*wp).w_onebuf_opt.wo_bri != 0
                 || *get_showbreak_value(wp) as ::core::ffi::c_int != NUL)
     {
-        return kCharsizeRegular as ::core::ffi::c_int != 0
+        return kCharsizeRegular as ::core::ffi::c_int != 0;
     } else {
-        return kCharsizeFast as ::core::ffi::c_int != 0
+        return kCharsizeFast as ::core::ffi::c_int != 0;
     };
 }
 #[no_mangle]
@@ -2027,11 +1997,11 @@ pub unsafe extern "C" fn charsize_regular(
     let mut wp: *mut win_T = (*csarg).win;
     let mut buf: *mut buf_T = (*wp).w_buffer;
     let mut line: *mut ::core::ffi::c_char = (*csarg).line;
-    let use_tabstop: bool = cur_char == TAB as int32_t
-        && (*csarg).use_tabstop as ::core::ffi::c_int != 0;
+    let use_tabstop: bool =
+        cur_char == TAB as int32_t && (*csarg).use_tabstop as ::core::ffi::c_int != 0;
     let mut mb_added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut has_lcs_eol: bool = (*wp).w_onebuf_opt.wo_list != 0
-        && (*wp).w_p_lcs_chars.eol != NUL as schar_T;
+    let mut has_lcs_eol: bool =
+        (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != NUL as schar_T;
     let mut size: ::core::ffi::c_int = 0;
     let mut is_doublewidth: ::core::ffi::c_int = false_0;
     if use_tabstop {
@@ -2046,35 +2016,27 @@ pub unsafe extern "C" fn charsize_regular(
         size = kInvalidByteCells as ::core::ffi::c_int;
     } else {
         size = ptr2cells(cur);
-        is_doublewidth = (size == 2 as ::core::ffi::c_int && cur_char >= 0x80 as int32_t)
-            as ::core::ffi::c_int;
+        is_doublewidth =
+            (size == 2 as ::core::ffi::c_int && cur_char >= 0x80 as int32_t) as ::core::ffi::c_int;
     }
     if (*csarg).virt_row >= 0 as ::core::ffi::c_int {
         let mut tab_size: ::core::ffi::c_int = size;
         let mut col: ::core::ffi::c_int = cur.offset_from(line) as ::core::ffi::c_int;
         loop {
-            let mut mark: MTKey = marktree_itr_current(
-                &raw mut (*csarg).iter as *mut MarkTreeIter,
-            );
-            if mark.pos.row != (*csarg).virt_row as int32_t
-                || mark.pos.col > col as int32_t
-            {
+            let mut mark: MTKey = marktree_itr_current(&raw mut (*csarg).iter as *mut MarkTreeIter);
+            if mark.pos.row != (*csarg).virt_row as int32_t || mark.pos.col > col as int32_t {
                 break;
             }
             if mark.pos.col == col as int32_t {
-                if !mt_invalid(mark) && ns_in_win(mark.ns, wp) as ::core::ffi::c_int != 0
-                {
+                if !mt_invalid(mark) && ns_in_win(mark.ns, wp) as ::core::ffi::c_int != 0 {
                     let mut decor: DecorInline = mt_decor(mark);
-                    let mut vt: *mut DecorVirtText = if decor.ext as ::core::ffi::c_int
-                        != 0
-                    {
+                    let mut vt: *mut DecorVirtText = if decor.ext as ::core::ffi::c_int != 0 {
                         decor.data.ext.vt
                     } else {
                         ::core::ptr::null_mut::<DecorVirtText>()
                     };
                     while !vt.is_null() {
-                        if (*vt).flags as ::core::ffi::c_int
-                            & kVTIsLines as ::core::ffi::c_int == 0
+                        if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int == 0
                             && (*vt).pos as ::core::ffi::c_uint
                                 == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
@@ -2107,21 +2069,21 @@ pub unsafe extern "C" fn charsize_regular(
             );
         }
     }
-    if is_doublewidth != 0 && (*wp).w_onebuf_opt.wo_wrap != 0
-        && in_win_border(wp, vcol + size as colnr_T - 2 as colnr_T) as ::core::ffi::c_int
-            != 0
+    if is_doublewidth != 0
+        && (*wp).w_onebuf_opt.wo_wrap != 0
+        && in_win_border(wp, vcol + size as colnr_T - 2 as colnr_T) as ::core::ffi::c_int != 0
     {
         size += 1;
         mb_added = 1 as ::core::ffi::c_int;
     }
     let sbr: *mut ::core::ffi::c_char = get_showbreak_value(wp);
     let mut head: ::core::ffi::c_int = mb_added;
-    if size > 0 as ::core::ffi::c_int && (*wp).w_onebuf_opt.wo_wrap != 0
+    if size > 0 as ::core::ffi::c_int
+        && (*wp).w_onebuf_opt.wo_wrap != 0
         && (*sbr as ::core::ffi::c_int != NUL || (*wp).w_onebuf_opt.wo_bri != 0)
     {
         let mut col_off_prev: ::core::ffi::c_int = win_col_off(wp);
-        let mut width2: ::core::ffi::c_int = (*wp).w_view_width - col_off_prev
-            + win_col_off2(wp);
+        let mut width2: ::core::ffi::c_int = (*wp).w_view_width - col_off_prev + win_col_off2(wp);
         let mut wcol: colnr_T = vcol + col_off_prev as colnr_T;
         let mut max_head_vcol: colnr_T = (*csarg).max_head_vcol as colnr_T;
         let mut added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2168,14 +2130,14 @@ pub unsafe extern "C" fn charsize_regular(
                 (*csarg).indent_width = head_mid;
             }
             if head_mid > 0 as ::core::ffi::c_int {
-                let mut prev_rem: ::core::ffi::c_int = (*wp).w_view_width
-                    - wcol as ::core::ffi::c_int;
+                let mut prev_rem: ::core::ffi::c_int =
+                    (*wp).w_view_width - wcol as ::core::ffi::c_int;
                 let mut width: ::core::ffi::c_int = width2 - head_mid;
                 if width <= 0 as ::core::ffi::c_int {
                     width = 1 as ::core::ffi::c_int;
                 }
-                let mut cnt: ::core::ffi::c_int = (size - prev_rem + width
-                    - 1 as ::core::ffi::c_int) / width;
+                let mut cnt: ::core::ffi::c_int =
+                    (size - prev_rem + width - 1 as ::core::ffi::c_int) / width;
                 added += cnt * head_mid;
                 if max_head_vcol == 0 as ::core::ffi::c_int
                     || vcol as ::core::ffi::c_int + size + added < max_head_vcol
@@ -2184,22 +2146,21 @@ pub unsafe extern "C" fn charsize_regular(
                 } else if width2 > 0 as ::core::ffi::c_int
                     && max_head_vcol > vcol as ::core::ffi::c_int + head_prev + prev_rem
                 {
-                    head
-                        += (max_head_vcol as ::core::ffi::c_int
-                            - (vcol as ::core::ffi::c_int + head_prev + prev_rem)
-                            + width2 - 1 as ::core::ffi::c_int) / width2 * head_mid;
+                    head += (max_head_vcol as ::core::ffi::c_int
+                        - (vcol as ::core::ffi::c_int + head_prev + prev_rem)
+                        + width2
+                        - 1 as ::core::ffi::c_int)
+                        / width2
+                        * head_mid;
                 } else if max_head_vcol < 0 as ::core::ffi::c_int {
-                    let mut off: ::core::ffi::c_int = mb_added
-                        + virt_text_cursor_off(csarg, *cur as ::core::ffi::c_int == NUL);
+                    let mut off: ::core::ffi::c_int =
+                        mb_added + virt_text_cursor_off(csarg, *cur as ::core::ffi::c_int == NUL);
                     if off >= prev_rem {
                         if size > off {
-                            head
-                                += (1 as ::core::ffi::c_int + (off - prev_rem) / width)
-                                    * head_mid;
+                            head += (1 as ::core::ffi::c_int + (off - prev_rem) / width) * head_mid;
                         } else {
-                            head
-                                += (off - prev_rem + width - 1 as ::core::ffi::c_int)
-                                    / width * head_mid;
+                            head += (off - prev_rem + width - 1 as ::core::ffi::c_int) / width
+                                * head_mid;
                         }
                     }
                 }
@@ -2208,20 +2169,20 @@ pub unsafe extern "C" fn charsize_regular(
         size += added;
     }
     let mut need_lbr: bool = false_0 != 0;
-    if (*wp).w_onebuf_opt.wo_lbr != 0 && (*wp).w_onebuf_opt.wo_wrap != 0
+    if (*wp).w_onebuf_opt.wo_lbr != 0
+        && (*wp).w_onebuf_opt.wo_wrap != 0
         && (*wp).w_view_width != 0 as ::core::ffi::c_int
         && vim_isbreak(
-            *cur.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+            *cur.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+        ) as ::core::ffi::c_int
+            != 0
         && !vim_isbreak(
-            *cur.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int,
+            *cur.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
         )
     {
         let mut t: *mut ::core::ffi::c_char = (*csarg).line;
         while vim_isbreak(
-            *t.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
+            *t.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
         ) {
             t = t.offset(1);
         }
@@ -2231,16 +2192,13 @@ pub unsafe extern "C" fn charsize_regular(
         let mut s: *mut ::core::ffi::c_char = cur;
         let mut numberextra: ::core::ffi::c_int = win_col_off(wp);
         let mut col_adj: colnr_T = size as colnr_T - 1 as colnr_T;
-        let mut colmax: colnr_T = (*wp).w_view_width as colnr_T - numberextra as colnr_T
-            - col_adj;
+        let mut colmax: colnr_T = (*wp).w_view_width as colnr_T - numberextra as colnr_T - col_adj;
         if vcol >= colmax {
             colmax += col_adj;
-            let mut n: ::core::ffi::c_int = colmax as ::core::ffi::c_int
-                + win_col_off2(wp);
+            let mut n: ::core::ffi::c_int = colmax as ::core::ffi::c_int + win_col_off2(wp);
             if n > 0 as ::core::ffi::c_int {
-                colmax
-                    += (((vcol - colmax) / n as colnr_T + 1 as colnr_T) * n as colnr_T
-                        - col_adj) as ::core::ffi::c_int;
+                colmax += (((vcol - colmax) / n as colnr_T + 1 as colnr_T) * n as colnr_T - col_adj)
+                    as ::core::ffi::c_int;
             }
         }
         let mut vcol2: colnr_T = vcol;
@@ -2249,7 +2207,8 @@ pub unsafe extern "C" fn charsize_regular(
             s = s.offset(utfc_ptr2len(s) as isize);
             let mut c: ::core::ffi::c_int = *s as uint8_t as ::core::ffi::c_int;
             if !(c != NUL
-                && (vim_isbreak(c) as ::core::ffi::c_int != 0 || vcol2 == vcol
+                && (vim_isbreak(c) as ::core::ffi::c_int != 0
+                    || vcol2 == vcol
                     || !vim_isbreak(*ps as uint8_t as ::core::ffi::c_int)))
             {
                 break;
@@ -2283,7 +2242,7 @@ unsafe extern "C" fn charsize_fast_impl(
                 (*(*wp).w_buffer).b_p_vts_array,
             ),
             head: 0,
-        }
+        };
     } else {
         let mut width: ::core::ffi::c_int = 0;
         if cur_char < 0 as int32_t {
@@ -2291,16 +2250,20 @@ unsafe extern "C" fn charsize_fast_impl(
         } else {
             width = ptr2cells(cur);
         }
-        if width == 2 as ::core::ffi::c_int && cur_char >= 0x80 as int32_t
+        if width == 2 as ::core::ffi::c_int
+            && cur_char >= 0x80 as int32_t
             && (*wp).w_onebuf_opt.wo_wrap != 0
             && in_win_border(wp, vcol) as ::core::ffi::c_int != 0
         {
             return CharSize {
                 width: 3 as ::core::ffi::c_int,
                 head: 1 as ::core::ffi::c_int,
-            }
+            };
         } else {
-            return CharSize { width: width, head: 0 }
+            return CharSize {
+                width: width,
+                head: 0,
+            };
         }
     };
 }
@@ -2322,11 +2285,11 @@ pub unsafe extern "C" fn charsize_nowrap(
     mut cur_char: int32_t,
 ) -> ::core::ffi::c_int {
     if cur_char == TAB as int32_t && use_tabstop as ::core::ffi::c_int != 0 {
-        return tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array)
+        return tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array);
     } else if cur_char < 0 as int32_t {
-        return kInvalidByteCells as ::core::ffi::c_int
+        return kInvalidByteCells as ::core::ffi::c_int;
     } else {
-        return ptr2cells(cur)
+        return ptr2cells(cur);
     };
 }
 unsafe extern "C" fn in_win_border(mut wp: *mut win_T, mut vcol: colnr_T) -> bool {
@@ -2344,8 +2307,7 @@ unsafe extern "C" fn in_win_border(mut wp: *mut win_T, mut vcol: colnr_T) -> boo
     if width2 <= 0 as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    return (vcol as ::core::ffi::c_int - width1) % width2
-        == width2 - 1 as ::core::ffi::c_int;
+    return (vcol as ::core::ffi::c_int - width1) % width2 == width2 - 1 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn linesize_regular(
@@ -2356,11 +2318,8 @@ pub unsafe extern "C" fn linesize_regular(
     let line: *mut ::core::ffi::c_char = (*csarg).line;
     let mut vcol: int64_t = vcol_arg as int64_t;
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    while ci.ptr.offset_from(line) < len as isize && *ci.ptr as ::core::ffi::c_int != NUL
-    {
-        vcol
-            += charsize_regular(csarg, ci.ptr, vcol_arg as colnr_T, ci.chr.value).width
-                as int64_t;
+    while ci.ptr.offset_from(line) < len as isize && *ci.ptr as ::core::ffi::c_int != NUL {
+        vcol += charsize_regular(csarg, ci.ptr, vcol_arg as colnr_T, ci.chr.value).width as int64_t;
         ci = utfc_next(ci);
         if vcol > MAXCOL as ::core::ffi::c_int as int64_t {
             vcol_arg = MAXCOL as ::core::ffi::c_int;
@@ -2373,16 +2332,9 @@ pub unsafe extern "C" fn linesize_regular(
         && (*csarg).virt_row >= 0 as ::core::ffi::c_int
         && *ci.ptr as ::core::ffi::c_int == NUL
     {
-        let mut head: ::core::ffi::c_int = charsize_regular(
-                csarg,
-                ci.ptr,
-                vcol_arg as colnr_T,
-                ci.chr.value,
-            )
-            .head;
-        vcol
-            += ((*csarg).cur_text_width_left + (*csarg).cur_text_width_right + head)
-                as int64_t;
+        let mut head: ::core::ffi::c_int =
+            charsize_regular(csarg, ci.ptr, vcol_arg as colnr_T, ci.chr.value).head;
+        vcol += ((*csarg).cur_text_width_left + (*csarg).cur_text_width_right + head) as int64_t;
         vcol_arg = if vcol > MAXCOL as ::core::ffi::c_int as int64_t {
             MAXCOL as ::core::ffi::c_int
         } else {
@@ -2402,17 +2354,9 @@ pub unsafe extern "C" fn linesize_fast(
     let line: *mut ::core::ffi::c_char = (*csarg).line;
     let mut vcol: int64_t = vcol_arg as int64_t;
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    while ci.ptr.offset_from(line) < len as isize && *ci.ptr as ::core::ffi::c_int != NUL
-    {
-        vcol
-            += charsize_fast_impl(
-                    wp,
-                    ci.ptr,
-                    use_tabstop,
-                    vcol_arg as colnr_T,
-                    ci.chr.value,
-                )
-                .width as int64_t;
+    while ci.ptr.offset_from(line) < len as isize && *ci.ptr as ::core::ffi::c_int != NUL {
+        vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg as colnr_T, ci.chr.value).width
+            as int64_t;
         ci = utfc_next(ci);
         if vcol > MAXCOL as ::core::ffi::c_int as int64_t {
             vcol_arg = MAXCOL as ::core::ffi::c_int;
@@ -2460,10 +2404,7 @@ pub unsafe extern "C" fn getvcol(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -2485,13 +2426,7 @@ pub unsafe extern "C" fn getvcol(
                 };
                 break;
             } else {
-                char_size = charsize_fast_impl(
-                    wp,
-                    ci.ptr,
-                    use_tabstop,
-                    vcol,
-                    ci.chr.value,
-                );
+                char_size = charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value);
                 let next: StrCharInfo = utfc_next(ci);
                 if next.ptr.offset_from(line) > end_col as isize {
                     break;
@@ -2504,7 +2439,8 @@ pub unsafe extern "C" fn getvcol(
         loop {
             char_size = charsize_regular(&raw mut csarg, ci.ptr, vcol, ci.chr.value);
             if *ci.ptr as ::core::ffi::c_int == NUL {
-                char_size.width = 1 as ::core::ffi::c_int + csarg.cur_text_width_left
+                char_size.width = 1 as ::core::ffi::c_int
+                    + csarg.cur_text_width_left
                     + csarg.cur_text_width_right;
                 on_NUL = true_0 != 0;
                 break;
@@ -2518,7 +2454,8 @@ pub unsafe extern "C" fn getvcol(
             }
         }
     }
-    if *ci.ptr as ::core::ffi::c_int == NUL && end_col < MAXCOL as ::core::ffi::c_int
+    if *ci.ptr as ::core::ffi::c_int == NUL
+        && end_col < MAXCOL as ::core::ffi::c_int
         && end_col as isize > ci.ptr.offset_from(line)
     {
         (*pos).col = ci.ptr.offset_from(line) as colnr_T;
@@ -2534,13 +2471,13 @@ pub unsafe extern "C" fn getvcol(
     if !cursor.is_null() {
         if ci.chr.value == TAB as int32_t
             && State & MODE_NORMAL as ::core::ffi::c_int != 0
-            && (*wp).w_onebuf_opt.wo_list == 0 && !virtual_active(wp)
+            && (*wp).w_onebuf_opt.wo_list == 0
+            && !virtual_active(wp)
             && !(VIsual_active as ::core::ffi::c_int != 0
                 && (*p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
                     || ltoreq(*pos, VIsual) as ::core::ffi::c_int != 0))
         {
-            *cursor = (vcol as ::core::ffi::c_int + incr - 1 as ::core::ffi::c_int)
-                as colnr_T;
+            *cursor = (vcol as ::core::ffi::c_int + incr - 1 as ::core::ffi::c_int) as colnr_T;
         } else {
             vcol += virt_text_cursor_off(&raw mut csarg, on_NUL);
             *cursor = (vcol as ::core::ffi::c_int + head) as colnr_T;
@@ -2593,12 +2530,9 @@ pub unsafe extern "C" fn getvvcol(
         let mut endadd: colnr_T = 0 as colnr_T;
         let mut ptr: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, (*pos).lnum);
         if (*pos).col < ml_get_buf_len((*wp).w_buffer, (*pos).lnum) {
-            let mut c: ::core::ffi::c_int = utf_ptr2char(
-                ptr.offset((*pos).col as isize),
-            );
+            let mut c: ::core::ffi::c_int = utf_ptr2char(ptr.offset((*pos).col as isize));
             if c != TAB && vim_isprintc(c) as ::core::ffi::c_int != 0 {
-                endadd = ptr2cells(ptr.offset((*pos).col as isize))
-                    - 1 as ::core::ffi::c_int;
+                endadd = ptr2cells(ptr.offset((*pos).col as isize)) - 1 as ::core::ffi::c_int;
                 if coladd > endadd {
                     endadd = 0 as ::core::ffi::c_int as colnr_T;
                 } else {
@@ -2762,10 +2696,7 @@ pub unsafe extern "C" fn plines_win_nofold(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -2801,8 +2732,8 @@ pub unsafe extern "C" fn plines_win_nofold(
     }
     col -= width as int64_t;
     width += win_col_off2(wp);
-    let lines: int64_t = (col + (width - 1 as ::core::ffi::c_int) as int64_t)
-        / width as int64_t + 1 as int64_t;
+    let lines: int64_t =
+        (col + (width - 1 as ::core::ffi::c_int) as int64_t) / width as int64_t + 1 as int64_t;
     return if lines > 0 as int64_t && lines <= INT_MAX as int64_t {
         lines as ::core::ffi::c_int
     } else {
@@ -2837,10 +2768,7 @@ pub unsafe extern "C" fn plines_win_col(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -2851,40 +2779,36 @@ pub unsafe extern "C" fn plines_win_col(
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
         let use_tabstop: bool = csarg.use_tabstop;
-        while *ci.ptr as ::core::ffi::c_int != NUL
-            && {
-                column -= 1;
-                column >= 0 as ::core::ffi::c_long
-            }
-        {
-            vcol
-                += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value).width;
+        while *ci.ptr as ::core::ffi::c_int != NUL && {
+            column -= 1;
+            column >= 0 as ::core::ffi::c_long
+        } {
+            vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value).width;
             ci = utfc_next(ci);
         }
     } else {
-        while *ci.ptr as ::core::ffi::c_int != NUL
-            && {
-                column -= 1;
-                column >= 0 as ::core::ffi::c_long
-            }
-        {
+        while *ci.ptr as ::core::ffi::c_int != NUL && {
+            column -= 1;
+            column >= 0 as ::core::ffi::c_long
+        } {
             vcol += charsize_regular(&raw mut csarg, ci.ptr, vcol, ci.chr.value).width;
             ci = utfc_next(ci);
         }
     }
     let mut col: colnr_T = vcol;
-    if ci.chr.value == TAB as int32_t && State & MODE_NORMAL as ::core::ffi::c_int != 0
+    if ci.chr.value == TAB as int32_t
+        && State & MODE_NORMAL as ::core::ffi::c_int != 0
         && csarg.use_tabstop as ::core::ffi::c_int != 0
     {
-        col
-            += win_charsize(
-                    cstype,
-                    col as ::core::ffi::c_int,
-                    ci.ptr,
-                    ci.chr.value,
-                    &raw mut csarg,
-                )
-                .width - 1 as ::core::ffi::c_int;
+        col += win_charsize(
+            cstype,
+            col as ::core::ffi::c_int,
+            ci.ptr,
+            ci.chr.value,
+            &raw mut csarg,
+        )
+        .width
+            - 1 as ::core::ffi::c_int;
     }
     let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
     if width <= 0 as ::core::ffi::c_int {
@@ -2892,9 +2816,8 @@ pub unsafe extern "C" fn plines_win_col(
     }
     lines += 1 as ::core::ffi::c_int;
     if col > width {
-        lines
-            += (col as ::core::ffi::c_int - width) / (width + win_col_off2(wp))
-                + 1 as ::core::ffi::c_int;
+        lines += (col as ::core::ffi::c_int - width) / (width + win_col_off2(wp))
+            + 1 as ::core::ffi::c_int;
     }
     return lines;
 }
@@ -2946,15 +2869,14 @@ pub unsafe extern "C" fn plines_m_win(
     let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while first <= last && count < max {
         let mut next: linenr_T = first;
-        count
-            += plines_win_full(
-                wp,
-                first,
-                &raw mut next,
-                ::core::ptr::null_mut::<bool>(),
-                false_0 != 0,
-                false_0 != 0,
-            );
+        count += plines_win_full(
+            wp,
+            first,
+            &raw mut next,
+            ::core::ptr::null_mut::<bool>(),
+            false_0 != 0,
+            false_0 != 0,
+        );
         first = next + 1 as linenr_T;
     }
     if first == (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T {
@@ -2968,8 +2890,8 @@ pub unsafe extern "C" fn plines_m_win_fill(
     mut first: linenr_T,
     mut last: linenr_T,
 ) -> ::core::ffi::c_int {
-    let mut count: ::core::ffi::c_int = last as ::core::ffi::c_int
-        - first as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+    let mut count: ::core::ffi::c_int = last as ::core::ffi::c_int - first as ::core::ffi::c_int
+        + 1 as ::core::ffi::c_int
         + decor_virt_lines(
             wp,
             first as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
@@ -2982,12 +2904,19 @@ pub unsafe extern "C" fn plines_m_win_fill(
         let mut lnum: ::core::ffi::c_int = first as ::core::ffi::c_int;
         while lnum as linenr_T <= last {
             let mut n: ::core::ffi::c_int = diff_check_fill(wp, lnum as linenr_T);
-            count
-                += if n > 0 as ::core::ffi::c_int { n } else { 0 as ::core::ffi::c_int };
+            count += if n > 0 as ::core::ffi::c_int {
+                n
+            } else {
+                0 as ::core::ffi::c_int
+            };
             lnum += 1;
         }
     }
-    return if count > 0 as ::core::ffi::c_int { count } else { 0 as ::core::ffi::c_int };
+    return if count > 0 as ::core::ffi::c_int {
+        count
+    } else {
+        0 as ::core::ffi::c_int
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_text_height(
@@ -3022,15 +2951,17 @@ pub unsafe extern "C" fn win_text_height(
         cur_folded = hasFolding(wp, lnum, &raw mut lnum, &raw mut lnum_next);
         height_cur_nofill = plines_win_nofill(wp, lnum, false_0 != 0) as int64_t;
         height_sum_nofill += height_cur_nofill;
-        let row_off: int64_t = if start_vcol < width1 as int64_t
-            || width2 <= 0 as ::core::ffi::c_int
-        {
-            0 as int64_t
+        let row_off: int64_t =
+            if start_vcol < width1 as int64_t || width2 <= 0 as ::core::ffi::c_int {
+                0 as int64_t
+            } else {
+                1 as int64_t + (start_vcol - width1 as int64_t) / width2 as int64_t
+            };
+        height_sum_nofill -= if row_off < height_cur_nofill {
+            row_off
         } else {
-            1 as int64_t + (start_vcol - width1 as int64_t) / width2 as int64_t
+            height_cur_nofill
         };
-        height_sum_nofill
-            -= if row_off < height_cur_nofill { row_off } else { height_cur_nofill };
         lnum = lnum_next + 1 as linenr_T;
     }
     while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
@@ -3055,8 +2986,11 @@ pub unsafe extern "C" fn win_text_height(
                 + (vcol_end - width1 as int64_t + width2 as int64_t - 1 as int64_t)
                     / width2 as int64_t
         };
-        height_sum_nofill
-            += if row_off_0 < height_cur_nofill { row_off_0 } else { height_cur_nofill };
+        height_sum_nofill += if row_off_0 < height_cur_nofill {
+            row_off_0
+        } else {
+            height_cur_nofill
+        };
     }
     if cur_folded {
         vcol_end = 0 as int64_t;
@@ -3078,12 +3012,9 @@ pub unsafe extern "C" fn win_text_height(
         };
     }
     let mut overflow: int64_t = height_sum_nofill + height_sum_fill - max;
-    if overflow > 0 as int64_t && width2 > 0 as ::core::ffi::c_int
-        && vcol_end > width2 as int64_t
-    {
-        vcol_end
-            -= (vcol_end - width1 as int64_t) % width2 as int64_t
-                + (overflow - 1 as int64_t) * width2 as int64_t;
+    if overflow > 0 as int64_t && width2 > 0 as ::core::ffi::c_int && vcol_end > width2 as int64_t {
+        vcol_end -= (vcol_end - width1 as int64_t) % width2 as int64_t
+            + (overflow - 1 as int64_t) * width2 as int64_t;
     }
     *end_lnum = cur_lnum;
     *end_vcol = vcol_end;

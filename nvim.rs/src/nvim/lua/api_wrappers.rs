@@ -3,34 +3,16 @@ extern "C" {
     fn lua_gettop(L: *mut lua_State) -> ::core::ffi::c_int;
     fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
     fn lua_pushcclosure(L: *mut lua_State, fn_0: lua_CFunction, n: ::core::ffi::c_int);
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
-    fn lua_setfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
+    fn lua_setfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
     fn lua_error(L: *mut lua_State) -> ::core::ffi::c_int;
     fn lua_concat(L: *mut lua_State, n: ::core::ffi::c_int);
     fn luaL_where(L: *mut lua_State, lvl: ::core::ffi::c_int);
-    fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
     fn arena_mem_free(mem: ArenaMem);
-    fn KeyDict_empty_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_context_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_empty_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
+    fn KeyDict_context_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn KeyDict_set_decoration_provider_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
@@ -47,10 +29,7 @@ extern "C" {
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_keymap_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_keymap_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn KeyDict_get_commands_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
@@ -67,30 +46,19 @@ extern "C" {
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_runtime_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_runtime_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn KeyDict_eval_statusline_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_option_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_highlight_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_option_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
+    fn KeyDict_highlight_get_field(str: *const ::core::ffi::c_char, len: size_t)
+        -> *mut KeySetLink;
     fn KeyDict_get_highlight_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_get_ns_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_get_ns_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn KeyDict_win_text_height_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
@@ -115,22 +83,12 @@ extern "C" {
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_cmd_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_cmd_opts_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_echo_opts_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_exec_opts_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_cmd_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
+    fn KeyDict_cmd_opts_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
+    fn KeyDict_echo_opts_get_field(str: *const ::core::ffi::c_char, len: size_t)
+        -> *mut KeySetLink;
+    fn KeyDict_exec_opts_get_field(str: *const ::core::ffi::c_char, len: size_t)
+        -> *mut KeySetLink;
     fn KeyDict_buf_attach_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
@@ -139,22 +97,14 @@ extern "C" {
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_open_term_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_open_term_get_field(str: *const ::core::ffi::c_char, len: size_t)
+        -> *mut KeySetLink;
     fn KeyDict_complete_set_get_field(
         str: *const ::core::ffi::c_char,
         len: size_t,
     ) -> *mut KeySetLink;
-    fn KeyDict_redraw_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
-    fn KeyDict_ns_opts_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_redraw_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
+    fn KeyDict_ns_opts_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     static mut empty_table: [KeySetLink; 1];
     static mut context_table: [KeySetLink; 2];
     static mut set_decoration_provider_table: [KeySetLink; 10];
@@ -192,12 +142,7 @@ extern "C" {
     fn api_free_object(value: Object);
     fn api_free_dict(value: Dict);
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_luarefs_free_object(value: Object);
     fn api_luarefs_free_keydict(dict: *mut ::core::ffi::c_void, table: *mut KeySetLink);
     static e_textlock: [::core::ffi::c_char; 0];
@@ -212,41 +157,13 @@ extern "C" {
     fn nlua_push_Boolean(lstate: *mut lua_State, b: Boolean, flags: ::core::ffi::c_int);
     fn nlua_push_Dict(lstate: *mut lua_State, dict: Dict, flags: ::core::ffi::c_int);
     fn nlua_push_Array(lstate: *mut lua_State, array: Array, flags: ::core::ffi::c_int);
-    fn nlua_push_handle(
-        lstate: *mut lua_State,
-        item: handle_T,
-        flags: ::core::ffi::c_int,
-    );
-    fn nlua_push_Object(
-        lstate: *mut lua_State,
-        obj: *mut Object,
-        flags: ::core::ffi::c_int,
-    );
-    fn nlua_pop_String(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> String_0;
-    fn nlua_pop_Integer(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Integer;
-    fn nlua_pop_Boolean(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Boolean;
-    fn nlua_pop_Float(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Float;
-    fn nlua_pop_Array(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
+    fn nlua_push_handle(lstate: *mut lua_State, item: handle_T, flags: ::core::ffi::c_int);
+    fn nlua_push_Object(lstate: *mut lua_State, obj: *mut Object, flags: ::core::ffi::c_int);
+    fn nlua_pop_String(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> String_0;
+    fn nlua_pop_Integer(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Integer;
+    fn nlua_pop_Boolean(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Boolean;
+    fn nlua_pop_Float(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Float;
+    fn nlua_pop_Array(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Array;
     fn nlua_pop_Dict(
         lstate: *mut lua_State,
         ref_0: bool,
@@ -259,16 +176,8 @@ extern "C" {
         arena: *mut Arena,
         err: *mut Error,
     ) -> Object;
-    fn nlua_pop_LuaRef(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> LuaRef;
-    fn nlua_pop_handle(
-        lstate: *mut lua_State,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> handle_T;
+    fn nlua_pop_LuaRef(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> LuaRef;
+    fn nlua_pop_handle(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> handle_T;
     fn nlua_pop_keydict(
         L: *mut lua_State,
         retval: *mut ::core::ffi::c_void,
@@ -298,11 +207,7 @@ extern "C" {
         err: *mut Error,
     ) -> Integer;
     fn nvim_del_autocmd(id: Integer, err: *mut Error);
-    fn nvim_clear_autocmds(
-        opts: *mut KeyDict_clear_autocmds,
-        arena: *mut Arena,
-        err: *mut Error,
-    );
+    fn nvim_clear_autocmds(opts: *mut KeyDict_clear_autocmds, arena: *mut Arena, err: *mut Error);
     fn nvim_create_augroup(
         channel_id: uint64_t,
         name: String_0,
@@ -369,12 +274,7 @@ extern "C" {
         err: *mut Error,
     ) -> Array;
     fn nvim_buf_get_offset(buf: Buffer, index: Integer, err: *mut Error) -> Integer;
-    fn nvim_buf_get_var(
-        buf: Buffer,
-        name: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
+    fn nvim_buf_get_var(buf: Buffer, name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
     fn nvim_buf_get_changedtick(buf: Buffer, err: *mut Error) -> Integer;
     fn nvim_buf_get_keymap(
         buf: Buffer,
@@ -414,12 +314,7 @@ extern "C" {
         opts: *mut KeyDict_empty,
         err: *mut Error,
     ) -> Boolean;
-    fn nvim_buf_get_mark(
-        buf: Buffer,
-        name: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
+    fn nvim_buf_get_mark(buf: Buffer, name: String_0, arena: *mut Arena, err: *mut Error) -> Array;
     fn nvim_buf_call(buf: Buffer, fun: LuaRef, err: *mut Error) -> Object;
     fn nvim__buf_stats(buf: Buffer, arena: *mut Arena, err: *mut Error) -> Dict;
     fn nvim_parse_cmd(
@@ -463,17 +358,9 @@ extern "C" {
         arena: *mut Arena,
         err: *mut Error,
     ) -> Dict;
-    fn nvim_exec(
-        channel_id: uint64_t,
-        src: String_0,
-        output: Boolean,
-        err: *mut Error,
-    ) -> String_0;
-    fn nvim_command_output(
-        channel_id: uint64_t,
-        command: String_0,
-        err: *mut Error,
-    ) -> String_0;
+    fn nvim_exec(channel_id: uint64_t, src: String_0, output: Boolean, err: *mut Error)
+        -> String_0;
+    fn nvim_command_output(channel_id: uint64_t, command: String_0, err: *mut Error) -> String_0;
     fn nvim_buf_get_number(buffer: Buffer, err: *mut Error) -> Integer;
     fn nvim_buf_clear_highlight(
         buffer: Buffer,
@@ -499,12 +386,7 @@ extern "C" {
         opts: *mut KeyDict_empty,
         err: *mut Error,
     ) -> Integer;
-    fn nvim_get_hl_by_id(
-        hl_id: Integer,
-        rgb: Boolean,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
+    fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean, arena: *mut Arena, err: *mut Error) -> Dict;
     fn nvim_get_hl_by_name(
         name: String_0,
         rgb: Boolean,
@@ -512,12 +394,7 @@ extern "C" {
         err: *mut Error,
     ) -> Dict;
     fn nvim_get_option_info(name: String_0, arena: *mut Arena, err: *mut Error) -> Dict;
-    fn nvim_set_option(
-        channel_id: uint64_t,
-        name: String_0,
-        value: Object,
-        err: *mut Error,
-    );
+    fn nvim_set_option(channel_id: uint64_t, name: String_0, value: Object, err: *mut Error);
     fn nvim_get_option(name: String_0, err: *mut Error) -> Object;
     fn nvim_buf_get_option(buffer: Buffer, name: String_0, err: *mut Error) -> Object;
     fn nvim_buf_set_option(
@@ -572,12 +449,7 @@ extern "C" {
         opts: *mut KeyDict_set_extmark,
         err: *mut Error,
     ) -> Integer;
-    fn nvim_buf_del_extmark(
-        buf: Buffer,
-        ns_id: Integer,
-        id: Integer,
-        err: *mut Error,
-    ) -> Boolean;
+    fn nvim_buf_del_extmark(buf: Buffer, ns_id: Integer, id: Integer, err: *mut Error) -> Boolean;
     fn nvim_buf_clear_namespace(
         buf: Buffer,
         ns_id: Integer,
@@ -597,16 +469,8 @@ extern "C" {
         err: *mut Error,
     ) -> String_0;
     fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts, err: *mut Error);
-    fn nvim__ns_get(
-        ns_id: Integer,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> KeyDict_ns_opts;
-    fn nvim_get_option_value(
-        name: String_0,
-        opts: *mut KeyDict_option,
-        err: *mut Error,
-    ) -> Object;
+    fn nvim__ns_get(ns_id: Integer, arena: *mut Arena, err: *mut Error) -> KeyDict_ns_opts;
+    fn nvim_get_option_value(name: String_0, opts: *mut KeyDict_option, err: *mut Error) -> Object;
     fn nvim_set_option_value(
         channel_id: uint64_t,
         name: String_0,
@@ -621,23 +485,14 @@ extern "C" {
         arena: *mut Arena,
         err: *mut Error,
     ) -> Dict;
-    fn nvim_tabpage_list_wins(
-        tabpage: Tabpage,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Array;
+    fn nvim_tabpage_list_wins(tabpage: Tabpage, arena: *mut Arena, err: *mut Error) -> Array;
     fn nvim_tabpage_get_var(
         tabpage: Tabpage,
         name: String_0,
         arena: *mut Arena,
         err: *mut Error,
     ) -> Object;
-    fn nvim_tabpage_set_var(
-        tabpage: Tabpage,
-        name: String_0,
-        value: Object,
-        err: *mut Error,
-    );
+    fn nvim_tabpage_set_var(tabpage: Tabpage, name: String_0, value: Object, err: *mut Error);
     fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0, err: *mut Error);
     fn nvim_tabpage_get_win(tabpage: Tabpage, err: *mut Error) -> Window;
     fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window, err: *mut Error);
@@ -722,11 +577,7 @@ extern "C" {
     fn nvim_get_current_win() -> Window;
     fn nvim_set_current_win(win: Window, err: *mut Error);
     fn nvim_create_buf(listed: Boolean, scratch: Boolean, err: *mut Error) -> Buffer;
-    fn nvim_open_term(
-        buf: Buffer,
-        opts: *mut KeyDict_open_term,
-        err: *mut Error,
-    ) -> Integer;
+    fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term, err: *mut Error) -> Integer;
     fn nvim_chan_send(chan: Integer, data: String_0, err: *mut Error);
     fn nvim_list_tabpages(arena: *mut Arena) -> Array;
     fn nvim_get_current_tabpage() -> Tabpage;
@@ -749,11 +600,7 @@ extern "C" {
     );
     fn nvim_get_color_by_name(name: String_0) -> Integer;
     fn nvim_get_color_map(arena: *mut Arena) -> Dict;
-    fn nvim_get_context(
-        opts: *mut KeyDict_context,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
+    fn nvim_get_context(opts: *mut KeyDict_context, arena: *mut Arena, err: *mut Error) -> Dict;
     fn nvim_load_context(dict: Dict, err: *mut Error) -> Object;
     fn nvim_get_mode(arena: *mut Arena) -> Dict;
     fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array;
@@ -765,12 +612,7 @@ extern "C" {
         opts: *mut KeyDict_keymap,
         err: *mut Error,
     );
-    fn nvim_del_keymap(
-        channel_id: uint64_t,
-        mode: String_0,
-        lhs: String_0,
-        err: *mut Error,
-    );
+    fn nvim_del_keymap(channel_id: uint64_t, mode: String_0, lhs: String_0, err: *mut Error);
     fn nvim_get_chan_info(
         channel_id: uint64_t,
         chan: Integer,
@@ -857,16 +699,8 @@ extern "C" {
         config: *mut KeyDict_win_config,
         err: *mut Error,
     ) -> Window;
-    fn nvim_win_set_config(
-        win: Window,
-        config: *mut KeyDict_win_config,
-        err: *mut Error,
-    );
-    fn nvim_win_get_config(
-        win: Window,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> KeyDict_win_config;
+    fn nvim_win_set_config(win: Window, config: *mut KeyDict_win_config, err: *mut Error);
+    fn nvim_win_get_config(win: Window, arena: *mut Arena, err: *mut Error) -> KeyDict_win_config;
     fn nvim_win_get_buf(win: Window, err: *mut Error) -> Buffer;
     fn nvim_win_set_buf(win: Window, buf: Buffer, err: *mut Error);
     fn nvim_win_get_cursor(win: Window, arena: *mut Arena, err: *mut Error) -> Array;
@@ -875,12 +709,7 @@ extern "C" {
     fn nvim_win_set_height(win: Window, height: Integer, err: *mut Error);
     fn nvim_win_get_width(win: Window, err: *mut Error) -> Integer;
     fn nvim_win_set_width(win: Window, width: Integer, err: *mut Error);
-    fn nvim_win_get_var(
-        win: Window,
-        name: String_0,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
+    fn nvim_win_get_var(win: Window, name: String_0, arena: *mut Arena, err: *mut Error) -> Object;
     fn nvim_win_set_var(win: Window, name: String_0, value: Object, err: *mut Error);
     fn nvim_win_del_var(win: Window, name: String_0, err: *mut Error);
     fn nvim_win_get_position(win: Window, arena: *mut Arena, err: *mut Error) -> Array;
@@ -900,9 +729,7 @@ extern "C" {
     fn nvim_ui_send(channel_id: uint64_t, content: String_0, err: *mut Error);
 }
 pub type size_t = usize;
-pub type lua_CFunction = Option<
-    unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
->;
+pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
 pub type int64_t = i64;
 pub type uint64_t = u64;
 #[derive(Copy, Clone)]
@@ -1004,9 +831,8 @@ pub struct KeySetLink {
     pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
-pub type FieldHashfn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
->;
+pub type FieldHashfn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const kNluaPushFreeRefs: C2Rust_Unnamed_0 = 2;
 pub const kNluaPushSpecial: C2Rust_Unnamed_0 = 1;
@@ -1401,9 +1227,7 @@ pub struct KeyDict_get_autocmds {
     pub buf: Object,
     pub id: Integer,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     pos: 0 as size_t,
@@ -1415,9 +1239,7 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_sub(1 as usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-unsafe extern "C" fn nlua_api_nvim_get_autocmds(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_autocmds(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -1453,9 +1275,7 @@ unsafe extern "C" fn nlua_api_nvim_get_autocmds(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -1499,10 +1319,7 @@ unsafe extern "C" fn nlua_api_nvim_get_autocmds(
             &raw mut arg1 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_autocmds_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -1515,8 +1332,7 @@ unsafe extern "C" fn nlua_api_nvim_get_autocmds(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -1591,9 +1407,7 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -1640,10 +1454,7 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_create_autocmd_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -1652,8 +1463,8 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"event\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"event\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -1704,9 +1515,7 @@ unsafe extern "C" fn nlua_api_nvim_create_autocmd(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_autocmd(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_del_autocmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut err: Error = Error {
@@ -1714,9 +1523,7 @@ unsafe extern "C" fn nlua_api_nvim_del_autocmd(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -1733,8 +1540,7 @@ unsafe extern "C" fn nlua_api_nvim_del_autocmd(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -1793,9 +1599,7 @@ unsafe extern "C" fn nlua_api_nvim_clear_autocmds(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -1832,10 +1636,7 @@ unsafe extern "C" fn nlua_api_nvim_clear_autocmds(
             &raw mut arg1 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_clear_autocmds_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -1895,9 +1696,7 @@ unsafe extern "C" fn nlua_api_nvim_create_augroup(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -1921,10 +1720,7 @@ unsafe extern "C" fn nlua_api_nvim_create_augroup(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_create_augroup_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -1933,17 +1729,12 @@ unsafe extern "C" fn nlua_api_nvim_create_augroup(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
-                ret = nvim_create_augroup(
-                    LUA_INTERNAL_CALL,
-                    arg1,
-                    &raw mut arg2,
-                    &raw mut err,
-                );
+                ret = nvim_create_augroup(LUA_INTERNAL_CALL, arg1, &raw mut arg2, &raw mut err);
                 nlua_push_Integer(
                     lstate,
                     ret,
@@ -1993,9 +1784,7 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_id(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2012,8 +1801,7 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_id(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -2059,9 +1847,7 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_name(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2078,8 +1864,8 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_name(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -2112,9 +1898,7 @@ unsafe extern "C" fn nlua_api_nvim_del_augroup_by_name(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_exec_autocmds(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_exec_autocmds(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Object = Object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
@@ -2143,9 +1927,7 @@ unsafe extern "C" fn nlua_api_nvim_exec_autocmds(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2183,10 +1965,7 @@ unsafe extern "C" fn nlua_api_nvim_exec_autocmds(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_exec_autocmds_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -2195,8 +1974,8 @@ unsafe extern "C" fn nlua_api_nvim_exec_autocmds(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"event\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"event\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -2246,9 +2025,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_line_count(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2265,8 +2042,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_line_count(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -2274,8 +2050,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_line_count(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -2305,9 +2080,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_line_count(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_attach(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_attach(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -2327,9 +2100,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2359,10 +2130,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(
             &raw mut arg3 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_buf_attach_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -2375,21 +2143,14 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    ret = nvim_buf_attach(
-                        LUA_INTERNAL_CALL,
-                        arg1,
-                        arg2,
-                        &raw mut arg3,
-                        &raw mut err,
-                    );
+                    ret =
+                        nvim_buf_attach(LUA_INTERNAL_CALL, arg1, arg2, &raw mut arg3, &raw mut err);
                     nlua_push_Boolean(
                         lstate,
                         ret,
@@ -2430,9 +2191,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_attach(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_lines(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_get_lines(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg4: Boolean = false;
     let mut arg3: Integer = 0;
     let mut arg2: Integer = 0;
@@ -2448,9 +2207,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_lines(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2472,20 +2229,16 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_lines(
         } else {
             arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"end\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"start\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -2540,9 +2293,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_lines(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_lines(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_set_lines(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg5: Array = Array {
         size: 0,
         capacity: 0,
@@ -2558,9 +2309,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 5 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2575,9 +2324,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(
                 b"nvim_buf_set_lines\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -2591,22 +2338,17 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg4 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"strict_indexing\0".as_ptr()
-                        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param = b"strict_indexing\0".as_ptr() as *const ::core::ffi::c_char
+                        as *mut ::core::ffi::c_char;
                 } else {
                     arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"end\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"start\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -2663,9 +2405,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_lines(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_text(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_set_text(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg6: Array = Array {
         size: 0,
         capacity: 0,
@@ -2682,9 +2422,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 6 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2699,9 +2437,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(
                 b"nvim_buf_set_text\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -2715,42 +2451,29 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg5 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"end_col\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"end_row\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
-                            err_param = b"start_col\0".as_ptr()
-                                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                            err_param = b"start_col\0".as_ptr() as *const ::core::ffi::c_char
+                                as *mut ::core::ffi::c_char;
                         } else {
-                            arg2 = nlua_pop_Integer(
-                                lstate,
-                                &raw mut arena,
-                                &raw mut err,
-                            );
+                            arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
                             if err.type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
-                                err_param = b"start_row\0".as_ptr()
-                                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                                err_param = b"start_row\0".as_ptr() as *const ::core::ffi::c_char
+                                    as *mut ::core::ffi::c_char;
                             } else {
-                                arg1 = nlua_pop_handle(
-                                    lstate,
-                                    &raw mut arena,
-                                    &raw mut err,
-                                );
+                                arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
                                 if err.type_0 as ::core::ffi::c_int
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
@@ -2804,9 +2527,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_text(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_text(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_get_text(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg5: Integer = 0;
     let mut arg4: Integer = 0;
     let mut arg3: Integer = 0;
@@ -2824,9 +2545,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 6 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2849,10 +2568,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(
             &raw mut arg6 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_empty_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -2861,29 +2577,24 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_text(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg5 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"end_col\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"end_col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"end_row\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"start_col\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
-                            err_param = b"start_row\0".as_ptr()
-                                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                            err_param = b"start_row\0".as_ptr() as *const ::core::ffi::c_char
+                                as *mut ::core::ffi::c_char;
                         } else {
                             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
                             if err.type_0 as ::core::ffi::c_int
@@ -2963,9 +2674,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -2982,13 +2691,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
         }
         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"index\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"index\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -3028,9 +2737,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_offset(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_get_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -3046,9 +2753,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3065,13 +2770,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_var(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -3122,9 +2827,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_changedtick(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3141,8 +2844,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_changedtick(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -3150,8 +2852,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_changedtick(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -3200,9 +2901,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_keymap(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3219,13 +2918,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_keymap(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -3302,9 +3001,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 5 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3339,10 +3036,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
             &raw mut arg5 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_keymap_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -3351,26 +3045,21 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_keymap(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg4 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"rhs\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"rhs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg3 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"lhs\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"lhs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -3440,9 +3129,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_keymap(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3459,30 +3146,21 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_keymap(
         }
         arg3 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"lhs\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"lhs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    nvim_buf_del_keymap(
-                        LUA_INTERNAL_CALL,
-                        arg1,
-                        arg2,
-                        arg3,
-                        &raw mut err,
-                    );
+                    nvim_buf_del_keymap(LUA_INTERNAL_CALL, arg1, arg2, arg3, &raw mut err);
                     active_lstate = save_active_lstate;
                 }
             }
@@ -3513,9 +3191,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_keymap(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_set_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg3: Object = Object {
@@ -3531,9 +3207,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3550,20 +3224,18 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_var(
         }
         arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -3599,9 +3271,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_del_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -3613,9 +3283,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3632,13 +3300,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_var(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -3672,9 +3340,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_name(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_get_name(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: String_0 = String_0 {
@@ -3686,9 +3352,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_name(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3705,8 +3369,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_name(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -3714,8 +3377,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_name(
             nlua_push_String(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -3745,9 +3407,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_name(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_name(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_set_name(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -3759,9 +3419,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_name(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3778,13 +3436,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_name(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -3818,9 +3476,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_name(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Boolean = false;
@@ -3829,9 +3485,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3848,8 +3502,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -3857,8 +3510,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(
             nlua_push_Boolean(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -3888,9 +3540,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_loaded(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_delete(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_delete(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: KeyDict_buf_delete = KeyDict_buf_delete {
@@ -3903,9 +3553,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_delete(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -3949,11 +3597,9 @@ unsafe extern "C" fn nlua_api_nvim_buf_delete(
             );
             if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -3992,9 +3638,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_delete(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_is_valid(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_is_valid(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Boolean = false;
@@ -4003,9 +3647,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_valid(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4022,8 +3664,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_valid(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -4031,8 +3672,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_valid(
             nlua_push_Boolean(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -4062,9 +3702,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_is_valid(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_del_mark(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_del_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -4077,9 +3715,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_mark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4096,13 +3732,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_mark(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -4142,9 +3778,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_mark(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_set_mark(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_set_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg4: Integer = 0;
     let mut arg3: Integer = 0;
     let mut arg2: String_0 = String_0 {
@@ -4160,9 +3794,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 5 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4185,10 +3817,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(
             &raw mut arg5 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_empty_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -4197,26 +3826,21 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"col\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"line\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -4273,9 +3897,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_mark(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_get_mark(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_get_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -4292,9 +3914,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_mark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4311,13 +3931,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_mark(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -4357,9 +3977,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_mark(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_buf_call(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_buf_call(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Object = Object {
         type_0: kObjectTypeNil,
@@ -4372,9 +3990,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_call(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4391,13 +4007,12 @@ unsafe extern "C" fn nlua_api_nvim_buf_call(
         }
         arg2 = nlua_pop_LuaRef(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"fun\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"fun\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -4438,9 +4053,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_call(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__buf_stats(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__buf_stats(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -4453,9 +4066,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_stats(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4472,8 +4083,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_stats(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -4481,8 +4091,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_stats(
             nlua_push_Dict(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -4512,9 +4121,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_stats(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_parse_cmd(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_parse_cmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -4571,9 +4178,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_cmd(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4589,10 +4194,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_cmd(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_empty_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -4601,8 +4203,8 @@ unsafe extern "C" fn nlua_api_nvim_parse_cmd(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -4645,9 +4247,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_cmd(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_cmd(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_cmd(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -4704,9 +4304,7 @@ unsafe extern "C" fn nlua_api_nvim_cmd(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4727,10 +4325,7 @@ unsafe extern "C" fn nlua_api_nvim_cmd(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_cmd_opts_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -4902,9 +4497,7 @@ unsafe extern "C" fn nlua_api_nvim_create_user_command(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -4960,10 +4553,7 @@ unsafe extern "C" fn nlua_api_nvim_create_user_command(
             &raw mut arg3 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_user_command_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -4972,13 +4562,11 @@ unsafe extern "C" fn nlua_api_nvim_create_user_command(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg2 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"cmd\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
@@ -5039,9 +4627,7 @@ unsafe extern "C" fn nlua_api_nvim_del_user_command(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5058,8 +4644,8 @@ unsafe extern "C" fn nlua_api_nvim_del_user_command(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -5146,9 +4732,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5204,10 +4788,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
             &raw mut arg4 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_user_command_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -5216,20 +4797,16 @@ unsafe extern "C" fn nlua_api_nvim_buf_create_user_command(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"cmd\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -5293,9 +4870,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_user_command(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5312,13 +4887,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_user_command(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -5352,26 +4927,20 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_user_command(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_commands(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_commands(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
         capacity: 0,
         items: ::core::ptr::null_mut::<KeyValuePair>(),
     };
-    let mut arg1: KeyDict_get_commands = KeyDict_get_commands {
-        builtin: false,
-    };
+    let mut arg1: KeyDict_get_commands = KeyDict_get_commands { builtin: false };
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5386,18 +4955,13 @@ unsafe extern "C" fn nlua_api_nvim_get_commands(
                 b"nvim_get_commands\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        arg1 = KeyDict_get_commands {
-            builtin: false,
-        };
+        arg1 = KeyDict_get_commands { builtin: false };
         nlua_pop_keydict(
             lstate,
             &raw mut arg1 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_commands_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -5410,8 +4974,7 @@ unsafe extern "C" fn nlua_api_nvim_get_commands(
             nlua_push_Dict(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -5455,17 +5018,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
         capacity: 0,
         items: ::core::ptr::null_mut::<KeyValuePair>(),
     };
-    let mut arg2: KeyDict_get_commands = KeyDict_get_commands {
-        builtin: false,
-    };
+    let mut arg2: KeyDict_get_commands = KeyDict_get_commands { builtin: false };
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5480,18 +5039,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
                 b"nvim_buf_get_commands\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        arg2 = KeyDict_get_commands {
-            builtin: false,
-        };
+        arg2 = KeyDict_get_commands { builtin: false };
         nlua_pop_keydict(
             lstate,
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_commands_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -5500,17 +5054,12 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
-                ret = nvim_buf_get_commands(
-                    arg1,
-                    &raw mut arg2,
-                    &raw mut arena,
-                    &raw mut err,
-                );
+                ret = nvim_buf_get_commands(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
@@ -5550,9 +5099,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_commands(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_exec(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_exec(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5568,9 +5115,7 @@ unsafe extern "C" fn nlua_api_nvim_exec(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5587,13 +5132,13 @@ unsafe extern "C" fn nlua_api_nvim_exec(
         }
         arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"output\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"output\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"src\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"src\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -5651,9 +5196,7 @@ unsafe extern "C" fn nlua_api_nvim_command_output(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5670,8 +5213,8 @@ unsafe extern "C" fn nlua_api_nvim_command_output(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"command\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"command\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -5679,8 +5222,7 @@ unsafe extern "C" fn nlua_api_nvim_command_output(
             nlua_push_String(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
             api_free_string(ret);
@@ -5722,9 +5264,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_number(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5741,8 +5281,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_number(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -5750,8 +5290,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_number(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -5794,9 +5333,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_highlight(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5813,8 +5350,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_highlight(
         }
         arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"line_end\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"line_end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -5822,16 +5359,12 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_highlight(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -5888,9 +5421,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 6 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -5907,8 +5438,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
         }
         arg6 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"col_end\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"col_end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg5 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -5916,22 +5447,17 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"line\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg3 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"hl_group\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -5940,8 +5466,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_add_highlight(
                             if err.type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
-                                err_param = b"buffer\0".as_ptr()
-                                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                                err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
+                                    as *mut ::core::ffi::c_char;
                             } else {
                                 save_active_lstate = active_lstate;
                                 active_lstate = lstate;
@@ -6012,9 +5538,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 5 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6037,10 +5561,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
             &raw mut arg5 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_empty_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -6049,29 +5570,24 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg4 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"chunks\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"chunks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"line\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"src_id\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
-                            err_param = b"buffer\0".as_ptr()
-                                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                            err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
+                                as *mut ::core::ffi::c_char;
                         } else {
                             save_active_lstate = active_lstate;
                             active_lstate = lstate;
@@ -6125,9 +5641,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_virtual_text(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -6141,9 +5655,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6160,13 +5672,12 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_id(
         }
         arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"rgb\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"rgb\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"hl_id\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"hl_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -6225,9 +5736,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_name(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6244,13 +5753,12 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_by_name(
         }
         arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"rgb\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"rgb\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -6308,9 +5816,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6327,8 +5833,8 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -6336,8 +5842,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info(
             nlua_push_Dict(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -6367,9 +5872,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_option(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_set_option(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: Object = Object {
         type_0: kObjectTypeNil,
@@ -6384,9 +5887,7 @@ unsafe extern "C" fn nlua_api_nvim_set_option(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6403,13 +5904,13 @@ unsafe extern "C" fn nlua_api_nvim_set_option(
         }
         arg2 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -6444,9 +5945,7 @@ unsafe extern "C" fn nlua_api_nvim_set_option(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_option(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_option(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -6461,9 +5960,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6480,8 +5977,8 @@ unsafe extern "C" fn nlua_api_nvim_get_option(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -6489,8 +5986,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
             api_free_object(ret);
@@ -6539,9 +6035,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_option(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6558,13 +6052,13 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_option(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -6623,9 +6117,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_option(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6642,30 +6134,22 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_option(
         }
         arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"buffer\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    nvim_buf_set_option(
-                        LUA_INTERNAL_CALL,
-                        arg1,
-                        arg2,
-                        arg3,
-                        &raw mut err,
-                    );
+                    nvim_buf_set_option(LUA_INTERNAL_CALL, arg1, arg2, arg3, &raw mut err);
                     active_lstate = save_active_lstate;
                 }
             }
@@ -6715,9 +6199,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_option(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6734,13 +6216,13 @@ unsafe extern "C" fn nlua_api_nvim_win_get_option(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"window\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -6799,9 +6281,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_option(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6818,30 +6298,22 @@ unsafe extern "C" fn nlua_api_nvim_win_set_option(
         }
         arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"window\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    nvim_win_set_option(
-                        LUA_INTERNAL_CALL,
-                        arg1,
-                        arg2,
-                        arg3,
-                        &raw mut err,
-                    );
+                    nvim_win_set_option(LUA_INTERNAL_CALL, arg1, arg2, arg3, &raw mut err);
                     active_lstate = save_active_lstate;
                 }
             }
@@ -6873,9 +6345,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_option(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_out_write(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_out_write(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -6886,9 +6356,7 @@ unsafe extern "C" fn nlua_api_nvim_out_write(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6905,8 +6373,7 @@ unsafe extern "C" fn nlua_api_nvim_out_write(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -6939,9 +6406,7 @@ unsafe extern "C" fn nlua_api_nvim_out_write(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_err_write(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_err_write(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -6952,9 +6417,7 @@ unsafe extern "C" fn nlua_api_nvim_err_write(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -6971,8 +6434,7 @@ unsafe extern "C" fn nlua_api_nvim_err_write(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -7005,9 +6467,7 @@ unsafe extern "C" fn nlua_api_nvim_err_write(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_err_writeln(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_err_writeln(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -7018,9 +6478,7 @@ unsafe extern "C" fn nlua_api_nvim_err_writeln(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7037,8 +6495,7 @@ unsafe extern "C" fn nlua_api_nvim_err_writeln(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -7071,9 +6528,7 @@ unsafe extern "C" fn nlua_api_nvim_err_writeln(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_notify(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_notify(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -7094,9 +6549,7 @@ unsafe extern "C" fn nlua_api_nvim_notify(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7113,8 +6566,8 @@ unsafe extern "C" fn nlua_api_nvim_notify(
         }
         arg3 = nlua_pop_Dict(lstate, false_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"opts\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"opts\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -7122,11 +6575,9 @@ unsafe extern "C" fn nlua_api_nvim_notify(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"msg\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"msg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -7181,9 +6632,7 @@ unsafe extern "C" fn nlua_api_nvim_create_namespace(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7200,8 +6649,8 @@ unsafe extern "C" fn nlua_api_nvim_create_namespace(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -7209,8 +6658,7 @@ unsafe extern "C" fn nlua_api_nvim_create_namespace(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -7254,9 +6702,7 @@ unsafe extern "C" fn nlua_api_nvim_get_namespaces(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7277,8 +6723,7 @@ unsafe extern "C" fn nlua_api_nvim_get_namespaces(
         nlua_push_Dict(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -7329,9 +6774,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7356,10 +6799,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
             &raw mut arg4 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_extmark_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -7368,20 +6808,16 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmark_by_id(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -7471,9 +6907,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 5 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7504,10 +6938,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
             &raw mut arg5 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_extmarks_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -7516,31 +6947,21 @@ unsafe extern "C" fn nlua_api_nvim_buf_get_extmarks(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg4 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"end\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                arg3 = nlua_pop_Object(
-                    lstate,
-                    true_0 != 0,
-                    &raw mut arena,
-                    &raw mut err,
-                );
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"start\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -7684,9 +7105,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 5 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7776,10 +7195,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
             &raw mut arg5 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_set_extmark_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -7788,26 +7204,21 @@ unsafe extern "C" fn nlua_api_nvim_buf_set_extmark(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"col\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"line\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
@@ -7877,9 +7288,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_extmark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7896,20 +7305,17 @@ unsafe extern "C" fn nlua_api_nvim_buf_del_extmark(
         }
         arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -7963,9 +7369,7 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_namespace(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -7982,8 +7386,8 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_namespace(
         }
         arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"line_end\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"line_end\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -7991,16 +7395,12 @@ unsafe extern "C" fn nlua_api_nvim_buf_clear_namespace(
                     as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -8060,9 +7460,7 @@ unsafe extern "C" fn nlua_api_nvim_set_decoration_provider(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8094,10 +7492,7 @@ unsafe extern "C" fn nlua_api_nvim_set_decoration_provider(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_set_decoration_provider_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -8106,8 +7501,8 @@ unsafe extern "C" fn nlua_api_nvim_set_decoration_provider(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -8161,9 +7556,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8180,20 +7573,17 @@ unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
         }
         arg3 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"dot\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"dot\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"keys\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"keys\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -8235,9 +7625,7 @@ unsafe extern "C" fn nlua_api_nvim__buf_debug_extmarks(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__ns_set(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__ns_set(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: KeyDict_ns_opts = KeyDict_ns_opts {
@@ -8253,9 +7641,7 @@ unsafe extern "C" fn nlua_api_nvim__ns_set(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8283,10 +7669,7 @@ unsafe extern "C" fn nlua_api_nvim__ns_set(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_ns_opts_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -8295,8 +7678,8 @@ unsafe extern "C" fn nlua_api_nvim__ns_set(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -8334,9 +7717,7 @@ unsafe extern "C" fn nlua_api_nvim__ns_set(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__ns_get(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__ns_get(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: KeyDict_ns_opts = KeyDict_ns_opts {
@@ -8352,9 +7733,7 @@ unsafe extern "C" fn nlua_api_nvim__ns_get(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8371,8 +7750,8 @@ unsafe extern "C" fn nlua_api_nvim__ns_get(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -8440,9 +7819,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_value(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8475,10 +7852,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_value(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_option_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -8487,8 +7861,8 @@ unsafe extern "C" fn nlua_api_nvim_get_option_value(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -8563,9 +7937,7 @@ unsafe extern "C" fn nlua_api_nvim_set_option_value(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8598,10 +7970,7 @@ unsafe extern "C" fn nlua_api_nvim_set_option_value(
             &raw mut arg3 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_option_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -8610,13 +7979,11 @@ unsafe extern "C" fn nlua_api_nvim_set_option_value(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg2 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
@@ -8678,9 +8045,7 @@ unsafe extern "C" fn nlua_api_nvim_get_all_options_info(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8701,8 +8066,7 @@ unsafe extern "C" fn nlua_api_nvim_get_all_options_info(
         nlua_push_Dict(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -8762,9 +8126,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info2(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8797,10 +8159,7 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info2(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_option_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -8809,17 +8168,12 @@ unsafe extern "C" fn nlua_api_nvim_get_option_info2(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
-                ret = nvim_get_option_info2(
-                    arg1,
-                    &raw mut arg2,
-                    &raw mut arena,
-                    &raw mut err,
-                );
+                ret = nvim_get_option_info2(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
@@ -8873,9 +8227,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_list_wins(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8892,8 +8244,8 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_list_wins(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -8901,8 +8253,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_list_wins(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -8950,9 +8301,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -8969,13 +8318,13 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_var(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -9033,9 +8382,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9052,18 +8399,16 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_var(
         }
         arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
@@ -9115,9 +8460,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_del_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9134,13 +8477,13 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_del_var(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -9185,9 +8528,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_win(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9204,8 +8545,8 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_win(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -9213,8 +8554,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_win(
             nlua_push_handle(
                 lstate,
                 ret as handle_T,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -9255,9 +8595,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_win(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9274,13 +8612,12 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_set_win(
         }
         arg2 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -9325,9 +8662,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_number(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9344,8 +8679,8 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_number(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -9353,8 +8688,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_get_number(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -9395,9 +8729,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9414,8 +8746,8 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -9423,8 +8755,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
             nlua_push_Boolean(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -9454,9 +8785,7 @@ unsafe extern "C" fn nlua_api_nvim_tabpage_is_valid(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_open_tabpage(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_open_tabpage(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -9470,9 +8799,7 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9487,9 +8814,7 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(
                 b"nvim_open_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -9517,16 +8842,12 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(
             );
             if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                 arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"enter\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -9536,8 +8857,7 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(
                         nlua_push_handle(
                             lstate,
                             ret as handle_T,
-                            0 as ::core::ffi::c_int
-                                | kNluaPushFreeRefs as ::core::ffi::c_int,
+                            0 as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
                         );
                         active_lstate = save_active_lstate;
                     }
@@ -9574,9 +8894,7 @@ unsafe extern "C" fn nlua_api_nvim_open_tabpage(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_ui_send(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_ui_send(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -9587,9 +8905,7 @@ unsafe extern "C" fn nlua_api_nvim_ui_send(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9606,8 +8922,8 @@ unsafe extern "C" fn nlua_api_nvim_ui_send(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"content\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"content\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -9654,9 +8970,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9673,8 +8987,8 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -9682,8 +8996,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -9713,9 +9026,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_id_by_name(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_hl(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -9738,9 +9049,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -9770,10 +9079,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_highlight_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -9782,8 +9088,8 @@ unsafe extern "C" fn nlua_api_nvim_get_hl(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -9826,9 +9132,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_hl(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_set_hl(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -9909,9 +9213,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10000,10 +9302,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl(
             &raw mut arg3 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_highlight_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -10012,25 +9311,17 @@ unsafe extern "C" fn nlua_api_nvim_set_hl(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    nvim_set_hl(
-                        LUA_INTERNAL_CALL,
-                        arg1,
-                        arg2,
-                        &raw mut arg3,
-                        &raw mut err,
-                    );
+                    nvim_set_hl(LUA_INTERNAL_CALL, arg1, arg2, &raw mut arg3, &raw mut err);
                     active_lstate = save_active_lstate;
                 }
             }
@@ -10065,9 +9356,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_hl_ns(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_hl_ns(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Integer = 0;
     let mut arg1: KeyDict_get_ns = KeyDict_get_ns {
@@ -10079,9 +9368,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_ns(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10105,10 +9392,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_ns(
             &raw mut arg1 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_get_ns_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -10155,9 +9439,7 @@ unsafe extern "C" fn nlua_api_nvim_get_hl_ns(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_hl_ns(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_set_hl_ns(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut err: Error = Error {
@@ -10165,9 +9447,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10184,8 +9464,8 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -10228,9 +9508,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns_fast(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10240,8 +9518,8 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns_fast(
     } else {
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -10274,9 +9552,7 @@ unsafe extern "C" fn nlua_api_nvim_set_hl_ns_fast(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_feedkeys(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_feedkeys(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: Boolean = false;
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -10292,9 +9568,7 @@ unsafe extern "C" fn nlua_api_nvim_feedkeys(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10311,18 +9585,16 @@ unsafe extern "C" fn nlua_api_nvim_feedkeys(
         }
         arg3 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"escape_ks\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"escape_ks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"keys\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
@@ -10359,9 +9631,7 @@ unsafe extern "C" fn nlua_api_nvim_feedkeys(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_input(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_input(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -10373,9 +9643,7 @@ unsafe extern "C" fn nlua_api_nvim_input(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10385,8 +9653,8 @@ unsafe extern "C" fn nlua_api_nvim_input(
     } else {
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"keys\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"keys\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -10394,8 +9662,7 @@ unsafe extern "C" fn nlua_api_nvim_input(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -10425,9 +9692,7 @@ unsafe extern "C" fn nlua_api_nvim_input(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_input_mouse(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_input_mouse(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg6: Integer = 0;
     let mut arg5: Integer = 0;
     let mut arg4: Integer = 0;
@@ -10449,9 +9714,7 @@ unsafe extern "C" fn nlua_api_nvim_input_mouse(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 6 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10461,53 +9724,39 @@ unsafe extern "C" fn nlua_api_nvim_input_mouse(
     } else {
         arg6 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"col\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg5 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"row\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"row\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg4 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"grid\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg3 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"modifier\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
-                            err_param = b"action\0".as_ptr()
-                                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                            err_param = b"action\0".as_ptr() as *const ::core::ffi::c_char
+                                as *mut ::core::ffi::c_char;
                         } else {
                             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
                             if err.type_0 as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
-                                err_param = b"button\0".as_ptr()
-                                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                                err_param = b"button\0".as_ptr() as *const ::core::ffi::c_char
+                                    as *mut ::core::ffi::c_char;
                             } else {
                                 save_active_lstate = active_lstate;
                                 active_lstate = lstate;
-                                nvim_input_mouse(
-                                    arg1,
-                                    arg2,
-                                    arg3,
-                                    arg4,
-                                    arg5,
-                                    arg6,
-                                    &raw mut err,
-                                );
+                                nvim_input_mouse(arg1, arg2, arg3, arg4, arg5, arg6, &raw mut err);
                                 active_lstate = save_active_lstate;
                             }
                         }
@@ -10561,9 +9810,7 @@ unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10580,25 +9827,21 @@ unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
         }
         arg4 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"special\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"special\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg3 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"do_lt\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"do_lt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"from_part\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -10643,9 +9886,7 @@ unsafe extern "C" fn nlua_api_nvim_replace_termcodes(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_strwidth(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_strwidth(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -10657,9 +9898,7 @@ unsafe extern "C" fn nlua_api_nvim_strwidth(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10676,8 +9915,8 @@ unsafe extern "C" fn nlua_api_nvim_strwidth(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"text\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"text\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -10685,8 +9924,7 @@ unsafe extern "C" fn nlua_api_nvim_strwidth(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -10730,9 +9968,7 @@ unsafe extern "C" fn nlua_api_nvim_list_runtime_paths(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10753,8 +9989,7 @@ unsafe extern "C" fn nlua_api_nvim_list_runtime_paths(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -10797,9 +10032,7 @@ unsafe extern "C" fn nlua_api_nvim__runtime_inspect(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10820,8 +10053,7 @@ unsafe extern "C" fn nlua_api_nvim__runtime_inspect(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -10869,9 +10101,7 @@ unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10881,13 +10111,12 @@ unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
     } else {
         arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"all\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -10927,9 +10156,7 @@ unsafe extern "C" fn nlua_api_nvim_get_runtime_file(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__get_lib_dir(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__get_lib_dir(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -10940,9 +10167,7 @@ unsafe extern "C" fn nlua_api_nvim__get_lib_dir(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -10963,8 +10188,7 @@ unsafe extern "C" fn nlua_api_nvim__get_lib_dir(
         nlua_push_String(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
         api_free_string(ret);
@@ -10994,9 +10218,7 @@ unsafe extern "C" fn nlua_api_nvim__get_lib_dir(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__get_runtime(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__get_runtime(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Array = Array {
         size: 0,
@@ -11018,9 +10240,7 @@ unsafe extern "C" fn nlua_api_nvim__get_runtime(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11037,10 +10257,7 @@ unsafe extern "C" fn nlua_api_nvim__get_runtime(
             &raw mut arg3 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_runtime_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -11049,25 +10266,18 @@ unsafe extern "C" fn nlua_api_nvim__get_runtime(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"all\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"pat\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"pat\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    ret = nvim__get_runtime(
-                        arg1,
-                        arg2,
-                        &raw mut arg3,
-                        &raw mut arena,
-                        &raw mut err,
-                    );
+                    ret =
+                        nvim__get_runtime(arg1, arg2, &raw mut arg3, &raw mut arena, &raw mut err);
                     nlua_push_Array(
                         lstate,
                         ret,
@@ -11121,9 +10331,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_dir(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11140,8 +10348,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_dir(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"dir\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"dir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -11187,9 +10394,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_line(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11210,8 +10415,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_line(
         nlua_push_String(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -11253,9 +10457,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_line(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11270,9 +10472,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_line(
                 b"nvim_set_current_line\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -11282,8 +10482,8 @@ unsafe extern "C" fn nlua_api_nvim_set_current_line(
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"line\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -11326,9 +10526,7 @@ unsafe extern "C" fn nlua_api_nvim_del_current_line(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11343,9 +10541,7 @@ unsafe extern "C" fn nlua_api_nvim_del_current_line(
                 b"nvim_del_current_line\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -11384,9 +10580,7 @@ unsafe extern "C" fn nlua_api_nvim_del_current_line(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -11401,9 +10595,7 @@ unsafe extern "C" fn nlua_api_nvim_get_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11420,8 +10612,8 @@ unsafe extern "C" fn nlua_api_nvim_get_var(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -11429,8 +10621,7 @@ unsafe extern "C" fn nlua_api_nvim_get_var(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -11460,9 +10651,7 @@ unsafe extern "C" fn nlua_api_nvim_get_var(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_set_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: Object = Object {
         type_0: kObjectTypeNil,
@@ -11477,9 +10666,7 @@ unsafe extern "C" fn nlua_api_nvim_set_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11496,13 +10683,13 @@ unsafe extern "C" fn nlua_api_nvim_set_var(
         }
         arg2 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -11537,9 +10724,7 @@ unsafe extern "C" fn nlua_api_nvim_set_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_del_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -11550,9 +10735,7 @@ unsafe extern "C" fn nlua_api_nvim_del_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11569,8 +10752,8 @@ unsafe extern "C" fn nlua_api_nvim_del_var(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -11603,9 +10786,7 @@ unsafe extern "C" fn nlua_api_nvim_del_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_vvar(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_vvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -11620,9 +10801,7 @@ unsafe extern "C" fn nlua_api_nvim_get_vvar(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11639,8 +10818,8 @@ unsafe extern "C" fn nlua_api_nvim_get_vvar(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -11648,8 +10827,7 @@ unsafe extern "C" fn nlua_api_nvim_get_vvar(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -11679,9 +10857,7 @@ unsafe extern "C" fn nlua_api_nvim_get_vvar(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_vvar(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_set_vvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg2: Object = Object {
         type_0: kObjectTypeNil,
@@ -11696,9 +10872,7 @@ unsafe extern "C" fn nlua_api_nvim_set_vvar(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11715,13 +10889,13 @@ unsafe extern "C" fn nlua_api_nvim_set_vvar(
         }
         arg2 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -11756,9 +10930,7 @@ unsafe extern "C" fn nlua_api_nvim_set_vvar(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_echo(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_echo(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Array = Array {
         size: 0,
@@ -11807,9 +10979,7 @@ unsafe extern "C" fn nlua_api_nvim_echo(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11861,10 +11031,7 @@ unsafe extern "C" fn nlua_api_nvim_echo(
             &raw mut arg3 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_echo_opts_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -11873,13 +11040,11 @@ unsafe extern "C" fn nlua_api_nvim_echo(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"history\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"history\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"chunks\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
@@ -11926,9 +11091,7 @@ unsafe extern "C" fn nlua_api_nvim_echo(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_bufs(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_list_bufs(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -11940,9 +11103,7 @@ unsafe extern "C" fn nlua_api_nvim_list_bufs(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -11963,8 +11124,7 @@ unsafe extern "C" fn nlua_api_nvim_list_bufs(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -12003,9 +11163,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_buf(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12026,8 +11184,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_buf(
         nlua_push_handle(
             lstate,
             ret as handle_T,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -12066,9 +11223,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_buf(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12093,8 +11248,8 @@ unsafe extern "C" fn nlua_api_nvim_set_current_buf(
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -12128,9 +11283,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_buf(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_wins(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_list_wins(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -12142,9 +11295,7 @@ unsafe extern "C" fn nlua_api_nvim_list_wins(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12165,8 +11316,7 @@ unsafe extern "C" fn nlua_api_nvim_list_wins(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -12205,9 +11355,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_win(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12228,8 +11376,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_win(
         nlua_push_handle(
             lstate,
             ret as handle_T,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -12268,9 +11415,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_win(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12295,8 +11440,8 @@ unsafe extern "C" fn nlua_api_nvim_set_current_win(
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -12330,9 +11475,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_win(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_create_buf(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_create_buf(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Boolean = false;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -12342,9 +11485,7 @@ unsafe extern "C" fn nlua_api_nvim_create_buf(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12361,13 +11502,13 @@ unsafe extern "C" fn nlua_api_nvim_create_buf(
         }
         arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"scratch\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"scratch\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"listed\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"listed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -12407,9 +11548,7 @@ unsafe extern "C" fn nlua_api_nvim_create_buf(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_open_term(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_open_term(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Integer = 0;
@@ -12423,9 +11562,7 @@ unsafe extern "C" fn nlua_api_nvim_open_term(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12440,9 +11577,7 @@ unsafe extern "C" fn nlua_api_nvim_open_term(
                 b"nvim_open_term\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -12471,11 +11606,9 @@ unsafe extern "C" fn nlua_api_nvim_open_term(
             );
             if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -12520,9 +11653,7 @@ unsafe extern "C" fn nlua_api_nvim_open_term(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_chan_send(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_chan_send(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -12534,9 +11665,7 @@ unsafe extern "C" fn nlua_api_nvim_chan_send(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12553,13 +11682,13 @@ unsafe extern "C" fn nlua_api_nvim_chan_send(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"data\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"data\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"chan\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"chan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -12593,9 +11722,7 @@ unsafe extern "C" fn nlua_api_nvim_chan_send(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_tabpages(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_list_tabpages(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -12607,9 +11734,7 @@ unsafe extern "C" fn nlua_api_nvim_list_tabpages(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12630,8 +11755,7 @@ unsafe extern "C" fn nlua_api_nvim_list_tabpages(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -12670,9 +11794,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_tabpage(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12693,8 +11815,7 @@ unsafe extern "C" fn nlua_api_nvim_get_current_tabpage(
         nlua_push_handle(
             lstate,
             ret as handle_T,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -12733,9 +11854,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_tabpage(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12760,8 +11879,8 @@ unsafe extern "C" fn nlua_api_nvim_set_current_tabpage(
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -12795,9 +11914,7 @@ unsafe extern "C" fn nlua_api_nvim_set_current_tabpage(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_paste(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_paste(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: Integer = 0;
     let mut arg2: Boolean = false;
     let mut arg1: String_0 = String_0 {
@@ -12811,9 +11928,7 @@ unsafe extern "C" fn nlua_api_nvim_paste(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12828,9 +11943,7 @@ unsafe extern "C" fn nlua_api_nvim_paste(
                 b"nvim_paste\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -12840,20 +11953,16 @@ unsafe extern "C" fn nlua_api_nvim_paste(
         } else {
             arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"phase\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"phase\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"crlf\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"data\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -12904,9 +12013,7 @@ unsafe extern "C" fn nlua_api_nvim_paste(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_put(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_put(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg4: Boolean = false;
     let mut arg3: Boolean = false;
     let mut arg2: String_0 = String_0 {
@@ -12924,9 +12031,7 @@ unsafe extern "C" fn nlua_api_nvim_put(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -12941,9 +12046,7 @@ unsafe extern "C" fn nlua_api_nvim_put(
                 b"nvim_put\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -12953,40 +12056,28 @@ unsafe extern "C" fn nlua_api_nvim_put(
         } else {
             arg4 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"follow\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"follow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg3 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"after\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"type\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         arg1 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             err_param = b"lines\0".as_ptr() as *const ::core::ffi::c_char
                                 as *mut ::core::ffi::c_char;
                         } else {
                             save_active_lstate = active_lstate;
                             active_lstate = lstate;
-                            nvim_put(
-                                arg1,
-                                arg2,
-                                arg3,
-                                arg4,
-                                &raw mut arena,
-                                &raw mut err,
-                            );
+                            nvim_put(arg1, arg2, arg3, arg4, &raw mut arena, &raw mut err);
                             active_lstate = save_active_lstate;
                         }
                     }
@@ -13033,9 +12124,7 @@ unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13052,8 +12141,8 @@ unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -13061,8 +12150,7 @@ unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -13092,9 +12180,7 @@ unsafe extern "C" fn nlua_api_nvim_get_color_by_name(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_color_map(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_color_map(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -13106,9 +12192,7 @@ unsafe extern "C" fn nlua_api_nvim_get_color_map(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13129,8 +12213,7 @@ unsafe extern "C" fn nlua_api_nvim_get_color_map(
         nlua_push_Dict(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -13159,9 +12242,7 @@ unsafe extern "C" fn nlua_api_nvim_get_color_map(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_context(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_context(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -13181,9 +12262,7 @@ unsafe extern "C" fn nlua_api_nvim_get_context(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13211,10 +12290,7 @@ unsafe extern "C" fn nlua_api_nvim_get_context(
             &raw mut arg1 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_context_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -13227,8 +12303,7 @@ unsafe extern "C" fn nlua_api_nvim_get_context(
             nlua_push_Dict(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -13262,9 +12337,7 @@ unsafe extern "C" fn nlua_api_nvim_get_context(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_load_context(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_load_context(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -13280,9 +12353,7 @@ unsafe extern "C" fn nlua_api_nvim_load_context(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13299,8 +12370,8 @@ unsafe extern "C" fn nlua_api_nvim_load_context(
         }
         arg1 = nlua_pop_Dict(lstate, false_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"dict\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"dict\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -13308,8 +12379,7 @@ unsafe extern "C" fn nlua_api_nvim_load_context(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -13339,9 +12409,7 @@ unsafe extern "C" fn nlua_api_nvim_load_context(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_mode(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_mode(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -13353,9 +12421,7 @@ unsafe extern "C" fn nlua_api_nvim_get_mode(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13369,8 +12435,7 @@ unsafe extern "C" fn nlua_api_nvim_get_mode(
         nlua_push_Dict(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -13399,9 +12464,7 @@ unsafe extern "C" fn nlua_api_nvim_get_mode(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_keymap(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_keymap(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -13417,9 +12480,7 @@ unsafe extern "C" fn nlua_api_nvim_get_keymap(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13436,8 +12497,8 @@ unsafe extern "C" fn nlua_api_nvim_get_keymap(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -13445,8 +12506,7 @@ unsafe extern "C" fn nlua_api_nvim_get_keymap(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -13476,9 +12536,7 @@ unsafe extern "C" fn nlua_api_nvim_get_keymap(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_set_keymap(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_set_keymap(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -13512,9 +12570,7 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13549,10 +12605,7 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(
             &raw mut arg4 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_keymap_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -13561,20 +12614,16 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg3 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"rhs\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"rhs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"lhs\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"lhs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -13623,9 +12672,7 @@ unsafe extern "C" fn nlua_api_nvim_set_keymap(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_keymap(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_del_keymap(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -13640,9 +12687,7 @@ unsafe extern "C" fn nlua_api_nvim_del_keymap(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13659,13 +12704,12 @@ unsafe extern "C" fn nlua_api_nvim_del_keymap(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"lhs\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"lhs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -13699,9 +12743,7 @@ unsafe extern "C" fn nlua_api_nvim_del_keymap(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_chan_info(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_chan_info(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -13714,9 +12756,7 @@ unsafe extern "C" fn nlua_api_nvim_get_chan_info(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13733,22 +12773,16 @@ unsafe extern "C" fn nlua_api_nvim_get_chan_info(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"chan\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"chan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
-            ret = nvim_get_chan_info(
-                LUA_INTERNAL_CALL,
-                arg1,
-                &raw mut arena,
-                &raw mut err,
-            );
+            ret = nvim_get_chan_info(LUA_INTERNAL_CALL, arg1, &raw mut arena, &raw mut err);
             nlua_push_Dict(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -13778,9 +12812,7 @@ unsafe extern "C" fn nlua_api_nvim_get_chan_info(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_chans(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_list_chans(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -13792,9 +12824,7 @@ unsafe extern "C" fn nlua_api_nvim_list_chans(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13815,8 +12845,7 @@ unsafe extern "C" fn nlua_api_nvim_list_chans(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -13845,9 +12874,7 @@ unsafe extern "C" fn nlua_api_nvim_list_chans(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__id(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Object = Object {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
@@ -13862,9 +12889,7 @@ unsafe extern "C" fn nlua_api_nvim__id(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13881,8 +12906,7 @@ unsafe extern "C" fn nlua_api_nvim__id(
         }
         arg1 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"obj\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"obj\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -13890,8 +12914,7 @@ unsafe extern "C" fn nlua_api_nvim__id(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
             api_luarefs_free_object(arg1);
@@ -13922,9 +12945,7 @@ unsafe extern "C" fn nlua_api_nvim__id(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id_array(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__id_array(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Array = Array {
         size: 0,
         capacity: 0,
@@ -13941,9 +12962,7 @@ unsafe extern "C" fn nlua_api_nvim__id_array(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -13960,8 +12979,7 @@ unsafe extern "C" fn nlua_api_nvim__id_array(
         }
         arg1 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"arr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"arr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -13969,8 +12987,7 @@ unsafe extern "C" fn nlua_api_nvim__id_array(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14000,9 +13017,7 @@ unsafe extern "C" fn nlua_api_nvim__id_array(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id_dict(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__id_dict(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Dict = Dict {
         size: 0,
         capacity: 0,
@@ -14019,9 +13034,7 @@ unsafe extern "C" fn nlua_api_nvim__id_dict(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14038,8 +13051,7 @@ unsafe extern "C" fn nlua_api_nvim__id_dict(
         }
         arg1 = nlua_pop_Dict(lstate, false_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"dct\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"dct\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14047,8 +13059,7 @@ unsafe extern "C" fn nlua_api_nvim__id_dict(
             nlua_push_Dict(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14078,9 +13089,7 @@ unsafe extern "C" fn nlua_api_nvim__id_dict(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__id_float(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__id_float(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Float = 0.;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Float = 0.;
@@ -14089,9 +13098,7 @@ unsafe extern "C" fn nlua_api_nvim__id_float(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14108,8 +13115,7 @@ unsafe extern "C" fn nlua_api_nvim__id_float(
         }
         arg1 = nlua_pop_Float(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"flt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"flt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14117,8 +13123,7 @@ unsafe extern "C" fn nlua_api_nvim__id_float(
             nlua_push_Float(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14148,9 +13153,7 @@ unsafe extern "C" fn nlua_api_nvim__id_float(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__stats(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__stats(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
         size: 0,
@@ -14162,9 +13165,7 @@ unsafe extern "C" fn nlua_api_nvim__stats(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14185,8 +13186,7 @@ unsafe extern "C" fn nlua_api_nvim__stats(
         nlua_push_Dict(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -14215,9 +13215,7 @@ unsafe extern "C" fn nlua_api_nvim__stats(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_list_uis(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_list_uis(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Array = Array {
         size: 0,
@@ -14229,9 +13227,7 @@ unsafe extern "C" fn nlua_api_nvim_list_uis(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14252,8 +13248,7 @@ unsafe extern "C" fn nlua_api_nvim_list_uis(
         nlua_push_Array(
             lstate,
             ret,
-            kNluaPushSpecial as ::core::ffi::c_int
-                | kNluaPushFreeRefs as ::core::ffi::c_int,
+            kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
         );
         active_lstate = save_active_lstate;
     }
@@ -14297,9 +13292,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc_children(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14316,8 +13309,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc_children(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"pid\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"pid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14325,8 +13317,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc_children(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14356,9 +13347,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc_children(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_proc(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_proc(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Object = Object {
@@ -14370,9 +13359,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14389,8 +13376,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc(
         }
         arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"pid\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"pid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14398,8 +13384,7 @@ unsafe extern "C" fn nlua_api_nvim_get_proc(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14442,9 +13427,7 @@ unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 4 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14467,10 +13450,7 @@ unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
             &raw mut arg4 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_empty_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -14479,32 +13459,22 @@ unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg3 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"finish\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"finish\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"insert\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"item\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
                         save_active_lstate = active_lstate;
                         active_lstate = lstate;
-                        nvim_select_popupmenu_item(
-                            arg1,
-                            arg2,
-                            arg3,
-                            &raw mut arg4,
-                            &raw mut err,
-                        );
+                        nvim_select_popupmenu_item(arg1, arg2, arg3, &raw mut arg4, &raw mut err);
                         active_lstate = save_active_lstate;
                     }
                 }
@@ -14540,9 +13510,7 @@ unsafe extern "C" fn nlua_api_nvim_select_popupmenu_item(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__inspect_cell(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__inspect_cell(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg3: Integer = 0;
     let mut arg2: Integer = 0;
     let mut arg1: Integer = 0;
@@ -14557,9 +13525,7 @@ unsafe extern "C" fn nlua_api_nvim__inspect_cell(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14576,30 +13542,21 @@ unsafe extern "C" fn nlua_api_nvim__inspect_cell(
         }
         arg3 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"col\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"row\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"row\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"grid\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    ret = nvim__inspect_cell(
-                        arg1,
-                        arg2,
-                        arg3,
-                        &raw mut arena,
-                        &raw mut err,
-                    );
+                    ret = nvim__inspect_cell(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Array(
                         lstate,
                         ret,
@@ -14636,9 +13593,7 @@ unsafe extern "C" fn nlua_api_nvim__inspect_cell(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__screenshot(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__screenshot(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -14649,9 +13604,7 @@ unsafe extern "C" fn nlua_api_nvim__screenshot(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14661,8 +13614,8 @@ unsafe extern "C" fn nlua_api_nvim__screenshot(
     } else {
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"path\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"path\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14704,9 +13657,7 @@ unsafe extern "C" fn nlua_api_nvim__invalidate_glyph_cache(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 0 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14751,9 +13702,7 @@ unsafe extern "C" fn nlua_api_nvim__invalidate_glyph_cache(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__unpack(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__unpack(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -14768,9 +13717,7 @@ unsafe extern "C" fn nlua_api_nvim__unpack(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14780,8 +13727,7 @@ unsafe extern "C" fn nlua_api_nvim__unpack(
     } else {
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14789,8 +13735,7 @@ unsafe extern "C" fn nlua_api_nvim__unpack(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14820,9 +13765,7 @@ unsafe extern "C" fn nlua_api_nvim__unpack(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_del_mark(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_del_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -14834,9 +13777,7 @@ unsafe extern "C" fn nlua_api_nvim_del_mark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14853,8 +13794,8 @@ unsafe extern "C" fn nlua_api_nvim_del_mark(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -14862,8 +13803,7 @@ unsafe extern "C" fn nlua_api_nvim_del_mark(
             nlua_push_Boolean(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -14893,9 +13833,7 @@ unsafe extern "C" fn nlua_api_nvim_del_mark(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_get_mark(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_get_mark(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -14912,9 +13850,7 @@ unsafe extern "C" fn nlua_api_nvim_get_mark(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -14937,10 +13873,7 @@ unsafe extern "C" fn nlua_api_nvim_get_mark(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_empty_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -14949,8 +13882,8 @@ unsafe extern "C" fn nlua_api_nvim_get_mark(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -15025,9 +13958,7 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15053,10 +13984,7 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_eval_statusline_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -15065,17 +13993,12 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"str\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
-                ret = nvim_eval_statusline(
-                    arg1,
-                    &raw mut arg2,
-                    &raw mut arena,
-                    &raw mut err,
-                );
+                ret = nvim_eval_statusline(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
@@ -15115,9 +14038,7 @@ unsafe extern "C" fn nlua_api_nvim_eval_statusline(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__complete_set(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__complete_set(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Integer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Dict = Dict {
@@ -15137,9 +14058,7 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15166,10 +14085,7 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_complete_set_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -15178,17 +14094,12 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"index\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"index\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
-                ret = nvim__complete_set(
-                    arg1,
-                    &raw mut arg2,
-                    &raw mut arena,
-                    &raw mut err,
-                );
+                ret = nvim__complete_set(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
@@ -15228,9 +14139,7 @@ unsafe extern "C" fn nlua_api_nvim__complete_set(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim__redraw(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim__redraw(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg1: KeyDict_redraw = KeyDict_redraw {
         is_set__redraw_: 0,
@@ -15254,9 +14163,7 @@ unsafe extern "C" fn nlua_api_nvim__redraw(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15293,10 +14200,7 @@ unsafe extern "C" fn nlua_api_nvim__redraw(
             &raw mut arg1 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_redraw_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -15338,9 +14242,7 @@ unsafe extern "C" fn nlua_api_nvim__redraw(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_exec2(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_exec2(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -15357,9 +14259,7 @@ unsafe extern "C" fn nlua_api_nvim_exec2(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15380,10 +14280,7 @@ unsafe extern "C" fn nlua_api_nvim_exec2(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_exec_opts_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -15392,8 +14289,8 @@ unsafe extern "C" fn nlua_api_nvim_exec2(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"src\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"src\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -15437,9 +14334,7 @@ unsafe extern "C" fn nlua_api_nvim_exec2(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_command(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_command(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -15450,9 +14345,7 @@ unsafe extern "C" fn nlua_api_nvim_command(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15469,8 +14362,7 @@ unsafe extern "C" fn nlua_api_nvim_command(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"cmd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -15503,9 +14395,7 @@ unsafe extern "C" fn nlua_api_nvim_command(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_eval(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_eval(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -15520,9 +14410,7 @@ unsafe extern "C" fn nlua_api_nvim_eval(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15539,8 +14427,8 @@ unsafe extern "C" fn nlua_api_nvim_eval(
         }
         arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"expr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"expr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -15548,8 +14436,7 @@ unsafe extern "C" fn nlua_api_nvim_eval(
             nlua_push_Object(
                 lstate,
                 &raw mut ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -15579,9 +14466,7 @@ unsafe extern "C" fn nlua_api_nvim_eval(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_call_function(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_call_function(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Array = Array {
         size: 0,
         capacity: 0,
@@ -15601,9 +14486,7 @@ unsafe extern "C" fn nlua_api_nvim_call_function(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15620,13 +14503,13 @@ unsafe extern "C" fn nlua_api_nvim_call_function(
         }
         arg2 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"args\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"args\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"fn\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"fn\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -15692,9 +14575,7 @@ unsafe extern "C" fn nlua_api_nvim_call_dict_function(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15711,35 +14592,22 @@ unsafe extern "C" fn nlua_api_nvim_call_dict_function(
         }
         arg3 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"args\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"args\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"fn\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"fn\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
-                arg1 = nlua_pop_Object(
-                    lstate,
-                    true_0 != 0,
-                    &raw mut arena,
-                    &raw mut err,
-                );
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                arg1 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"dict\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    ret = nvim_call_dict_function(
-                        arg1,
-                        arg2,
-                        arg3,
-                        &raw mut arena,
-                        &raw mut err,
-                    );
+                    ret = nvim_call_dict_function(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Object(
                         lstate,
                         &raw mut ret,
@@ -15800,9 +14668,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_expression(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15812,30 +14678,21 @@ unsafe extern "C" fn nlua_api_nvim_parse_expression(
     } else {
         arg3 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"hl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"hl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"flags\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"flags\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"expr\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
-                    ret = nvim_parse_expression(
-                        arg1,
-                        arg2,
-                        arg3,
-                        &raw mut arena,
-                        &raw mut err,
-                    );
+                    ret = nvim_parse_expression(arg1, arg2, arg3, &raw mut arena, &raw mut err);
                     nlua_push_Dict(
                         lstate,
                         ret,
@@ -15872,9 +14729,7 @@ unsafe extern "C" fn nlua_api_nvim_parse_expression(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_open_win(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_open_win(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Buffer = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -15942,9 +14797,7 @@ unsafe extern "C" fn nlua_api_nvim_open_win(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -15959,9 +14812,7 @@ unsafe extern "C" fn nlua_api_nvim_open_win(
                 b"nvim_open_win\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -16043,16 +14894,12 @@ unsafe extern "C" fn nlua_api_nvim_open_win(
             );
             if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                 arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     err_param = b"enter\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char;
                 } else {
                     arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
                             as *mut ::core::ffi::c_char;
                     } else {
@@ -16168,9 +15015,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_config(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16248,10 +15093,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_config(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_win_config_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -16260,8 +15102,8 @@ unsafe extern "C" fn nlua_api_nvim_win_set_config(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -16367,9 +15209,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_config(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16386,8 +15226,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_config(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -16425,9 +15264,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_config(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_buf(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_get_buf(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Buffer = 0;
@@ -16436,9 +15273,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_buf(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16455,8 +15290,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_buf(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -16464,8 +15298,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_buf(
             nlua_push_handle(
                 lstate,
                 ret as handle_T,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -16495,9 +15328,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_buf(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_buf(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_set_buf(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Buffer = 0;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -16506,9 +15337,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_buf(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16523,9 +15352,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_buf(
                 b"nvim_win_set_buf\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -16535,15 +15362,13 @@ unsafe extern "C" fn nlua_api_nvim_win_set_buf(
         } else {
             arg2 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"buf\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"buf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -16593,9 +15418,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_cursor(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16612,8 +15435,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_cursor(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -16621,8 +15443,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_cursor(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -16667,9 +15488,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_cursor(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16686,13 +15505,12 @@ unsafe extern "C" fn nlua_api_nvim_win_set_cursor(
         }
         arg2 = nlua_pop_Array(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"pos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"pos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -16737,9 +15555,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_height(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16756,8 +15572,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_height(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -16765,8 +15580,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_height(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -16807,9 +15621,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_height(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16826,13 +15638,13 @@ unsafe extern "C" fn nlua_api_nvim_win_set_height(
         }
         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"height\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"height\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -16866,9 +15678,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_height(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_width(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_get_width(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Integer = 0;
@@ -16877,9 +15687,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_width(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16896,8 +15704,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_width(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -16905,8 +15712,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_width(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -16936,9 +15742,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_width(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_width(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_set_width(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Integer = 0;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -16947,9 +15751,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_width(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -16966,13 +15768,13 @@ unsafe extern "C" fn nlua_api_nvim_win_set_width(
         }
         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"width\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"width\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -17006,9 +15808,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_width(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_get_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_get_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -17024,9 +15824,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17043,13 +15841,13 @@ unsafe extern "C" fn nlua_api_nvim_win_get_var(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -17089,9 +15887,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_var(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_set_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut arg3: Object = Object {
@@ -17107,9 +15903,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 3 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17126,20 +15920,18 @@ unsafe extern "C" fn nlua_api_nvim_win_set_var(
         }
         arg3 = nlua_pop_Object(lstate, true_0 != 0, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"value\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -17175,9 +15967,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_var(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_del_var(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_del_var(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
@@ -17189,9 +15979,7 @@ unsafe extern "C" fn nlua_api_nvim_win_del_var(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17208,13 +15996,13 @@ unsafe extern "C" fn nlua_api_nvim_win_del_var(
         }
         arg2 = nlua_pop_String(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"name\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -17263,9 +16051,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_position(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17282,8 +16068,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_position(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -17291,8 +16076,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_position(
             nlua_push_Array(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -17333,9 +16117,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_tabpage(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17352,8 +16134,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_tabpage(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -17361,8 +16142,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_tabpage(
             nlua_push_handle(
                 lstate,
                 ret as handle_T,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -17403,9 +16183,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_number(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17422,8 +16200,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_number(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -17431,8 +16208,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_number(
             nlua_push_Integer(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -17462,9 +16238,7 @@ unsafe extern "C" fn nlua_api_nvim_win_get_number(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_is_valid(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_is_valid(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Boolean = false;
@@ -17473,9 +16247,7 @@ unsafe extern "C" fn nlua_api_nvim_win_is_valid(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17492,8 +16264,7 @@ unsafe extern "C" fn nlua_api_nvim_win_is_valid(
         }
         arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             save_active_lstate = active_lstate;
             active_lstate = lstate;
@@ -17501,8 +16272,7 @@ unsafe extern "C" fn nlua_api_nvim_win_is_valid(
             nlua_push_Boolean(
                 lstate,
                 ret,
-                kNluaPushSpecial as ::core::ffi::c_int
-                    | kNluaPushFreeRefs as ::core::ffi::c_int,
+                kNluaPushSpecial as ::core::ffi::c_int | kNluaPushFreeRefs as ::core::ffi::c_int,
             );
             active_lstate = save_active_lstate;
         }
@@ -17532,9 +16302,7 @@ unsafe extern "C" fn nlua_api_nvim_win_is_valid(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_hide(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_hide(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut err: Error = Error {
@@ -17542,9 +16310,7 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 1 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17559,9 +16325,7 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(
                 b"nvim_win_hide\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -17571,8 +16335,8 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -17606,9 +16370,7 @@ unsafe extern "C" fn nlua_api_nvim_win_hide(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_close(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_close(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Boolean = false;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -17617,9 +16379,7 @@ unsafe extern "C" fn nlua_api_nvim_win_close(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17634,9 +16394,7 @@ unsafe extern "C" fn nlua_api_nvim_win_close(
                 b"nvim_win_close\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
-        if textlock != 0 as ::core::ffi::c_int
-            || expr_map_locked() as ::core::ffi::c_int != 0
-        {
+        if textlock != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0 {
             api_set_error(
                 &raw mut err,
                 kErrorTypeException,
@@ -17646,15 +16404,13 @@ unsafe extern "C" fn nlua_api_nvim_win_close(
         } else {
             arg2 = nlua_pop_Boolean(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"force\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"force\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
-                if err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
-                    err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    err_param =
+                        b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                 } else {
                     save_active_lstate = active_lstate;
                     active_lstate = lstate;
@@ -17689,9 +16445,7 @@ unsafe extern "C" fn nlua_api_nvim_win_close(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_call(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_call(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
     let mut ret: Object = Object {
         type_0: kObjectTypeNil,
@@ -17704,9 +16458,7 @@ unsafe extern "C" fn nlua_api_nvim_win_call(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17723,13 +16475,12 @@ unsafe extern "C" fn nlua_api_nvim_win_call(
         }
         arg2 = nlua_pop_LuaRef(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"fun\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param = b"fun\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -17770,9 +16521,7 @@ unsafe extern "C" fn nlua_api_nvim_win_call(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut arg2: Integer = 0;
     let mut arg1: Window = 0;
     let mut save_active_lstate: *mut lua_State = ::core::ptr::null_mut::<lua_State>();
@@ -17781,9 +16530,7 @@ unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17800,13 +16547,13 @@ unsafe extern "C" fn nlua_api_nvim_win_set_hl_ns(
         }
         arg2 = nlua_pop_Integer(lstate, &raw mut arena, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            err_param = b"ns_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            err_param =
+                b"ns_id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
@@ -17863,9 +16610,7 @@ unsafe extern "C" fn nlua_api_nvim_win_text_height(
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if lua_gettop(lstate) != 2 as ::core::ffi::c_int {
         api_set_error(
             &raw mut err,
@@ -17893,10 +16638,7 @@ unsafe extern "C" fn nlua_api_nvim_win_text_height(
             &raw mut arg2 as *mut ::core::ffi::c_void,
             Some(
                 KeyDict_win_text_height_get_field
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_char,
-                        size_t,
-                    ) -> *mut KeySetLink,
+                    as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
             ),
             &raw mut err_param,
             &raw mut arena,
@@ -17905,17 +16647,12 @@ unsafe extern "C" fn nlua_api_nvim_win_text_height(
         if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             arg1 = nlua_pop_handle(lstate, &raw mut arena, &raw mut err);
             if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                err_param = b"win\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                err_param =
+                    b"win\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 save_active_lstate = active_lstate;
                 active_lstate = lstate;
-                ret = nvim_win_text_height(
-                    arg1,
-                    &raw mut arg2,
-                    &raw mut arena,
-                    &raw mut err,
-                );
+                ret = nvim_win_text_height(arg1, &raw mut arg2, &raw mut arena, &raw mut err);
                 nlua_push_Dict(
                     lstate,
                     ret,
@@ -17986,8 +16723,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_del_autocmd
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_del_autocmd as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18077,8 +16813,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_attach
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_attach as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18155,8 +16890,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_get_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_get_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18220,8 +16954,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_set_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_set_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18233,8 +16966,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_del_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_del_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18285,8 +17017,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_buf_delete
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_buf_delete as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18349,10 +17080,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_buf_call
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_buf_call as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18363,8 +17091,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim__buf_stats
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim__buf_stats as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18375,10 +17102,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_parse_cmd
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_parse_cmd as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18388,10 +17112,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_cmd
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_cmd as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18479,10 +17200,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_exec
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_exec as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18597,8 +17315,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_set_option
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_set_option as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18610,8 +17327,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_get_option
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_get_option as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18674,10 +17390,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_out_write
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_out_write as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18687,10 +17400,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_err_write
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_err_write as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18701,8 +17411,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_err_writeln
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_err_writeln as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -18713,10 +17422,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_notify
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_notify as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18843,10 +17549,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__ns_set
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__ns_set as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -18856,10 +17559,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__ns_get
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__ns_get as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19038,10 +17738,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_ui_send
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_ui_send as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19064,10 +17761,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_hl
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_hl as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19077,10 +17771,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_set_hl
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_set_hl as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19090,10 +17781,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_hl_ns
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_hl_ns as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19103,10 +17791,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_set_hl_ns
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_set_hl_ns as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19129,10 +17814,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_feedkeys
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_feedkeys as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19142,10 +17824,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_input
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_input as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19156,8 +17835,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_input_mouse
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_input_mouse as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19181,10 +17859,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_strwidth
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_strwidth as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19311,10 +17986,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19324,10 +17996,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_set_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_set_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19337,10 +18006,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_del_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_del_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19350,10 +18016,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_vvar
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_vvar as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19363,10 +18026,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_set_vvar
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_set_vvar as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19376,10 +18036,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_echo
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_echo as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19389,10 +18046,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_list_bufs
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_list_bufs as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19428,10 +18082,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_list_wins
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_list_wins as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19468,8 +18119,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_create_buf
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_create_buf as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19480,10 +18130,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_open_term
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_open_term as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19493,10 +18140,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_chan_send
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_chan_send as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19545,10 +18189,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_paste
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_paste as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19558,10 +18199,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_put
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_put as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19598,8 +18236,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_get_context
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_get_context as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19623,10 +18260,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_mode
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_mode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19637,8 +18271,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_get_keymap
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_get_keymap as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19650,8 +18283,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_set_keymap
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_set_keymap as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19663,8 +18295,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_del_keymap
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_del_keymap as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19689,8 +18320,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_list_chans
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_list_chans as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19701,10 +18331,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__id
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__id as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19714,10 +18341,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__id_array
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__id_array as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19727,10 +18351,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__id_dict
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__id_dict as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19740,10 +18361,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__id_float
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__id_float as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19753,10 +18371,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__stats
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__stats as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19766,10 +18381,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_list_uis
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_list_uis as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19792,10 +18404,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_proc
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_proc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19832,8 +18441,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim__screenshot
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim__screenshot as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -19857,10 +18465,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__unpack
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__unpack as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19870,10 +18475,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_del_mark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_del_mark as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19883,10 +18485,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_get_mark
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_get_mark as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19922,10 +18521,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim__redraw
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim__redraw as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19935,10 +18531,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_exec2
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_exec2 as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19948,10 +18541,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_command
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_command as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -19961,10 +18551,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_eval
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_eval as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -20013,10 +18600,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_open_win
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_open_win as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -20053,8 +18637,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_get_buf
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_get_buf as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -20066,8 +18649,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_set_buf
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_set_buf as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -20157,8 +18739,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_get_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_get_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -20170,8 +18751,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_set_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_set_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -20183,8 +18763,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     lua_pushcclosure(
         lstate,
         Some(
-            nlua_api_nvim_win_del_var
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_api_nvim_win_del_var as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
         0 as ::core::ffi::c_int,
     );
@@ -20247,10 +18826,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_win_hide
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_win_hide as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -20260,10 +18836,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_win_close
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_win_close as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -20273,10 +18846,7 @@ pub unsafe extern "C" fn nlua_add_api_functions(mut lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_api_nvim_win_call
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_api_nvim_win_call as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(

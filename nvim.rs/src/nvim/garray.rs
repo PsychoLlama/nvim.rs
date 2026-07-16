@@ -50,9 +50,7 @@ pub struct garray_T {
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub unsafe extern "C" fn ga_clear(mut gap: *mut garray_T) {
     xfree((*gap).ga_data);
@@ -66,9 +64,8 @@ pub unsafe extern "C" fn ga_clear_strings(mut gap: *mut garray_T) {
     if !(*_gap).ga_data.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*_gap).ga_len {
-            let mut _item: *mut *mut ::core::ffi::c_void = ((*_gap).ga_data
-                as *mut *mut ::core::ffi::c_void)
-                .offset(i as isize);
+            let mut _item: *mut *mut ::core::ffi::c_void =
+                ((*_gap).ga_data as *mut *mut ::core::ffi::c_void).offset(i as isize);
             xfree(*_item);
             i += 1;
         }
@@ -88,10 +85,7 @@ pub unsafe extern "C" fn ga_init(
     ga_set_growsize(gap, growsize);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ga_set_growsize(
-    mut gap: *mut garray_T,
-    mut growsize: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn ga_set_growsize(mut gap: *mut garray_T, mut growsize: ::core::ffi::c_int) {
     if growsize < 1 as ::core::ffi::c_int {
         logmsg(
             LOGLVL_WRN,
@@ -99,8 +93,7 @@ pub unsafe extern "C" fn ga_set_growsize(
             b"ga_set_growsize\0".as_ptr() as *const ::core::ffi::c_char,
             57 as ::core::ffi::c_int,
             true_0 != 0,
-            b"trying to set an invalid ga_growsize: %d\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"trying to set an invalid ga_growsize: %d\0".as_ptr() as *const ::core::ffi::c_char,
             growsize,
         );
         (*gap).ga_growsize = 1 as ::core::ffi::c_int;
@@ -124,19 +117,22 @@ pub unsafe extern "C" fn ga_grow(mut gap: *mut garray_T, mut n: ::core::ffi::c_i
             (*gap).ga_growsize,
         );
     }
-    n = if n > (*gap).ga_growsize { n } else { (*gap).ga_growsize };
+    n = if n > (*gap).ga_growsize {
+        n
+    } else {
+        (*gap).ga_growsize
+    };
     n = if n > (*gap).ga_len / 2 as ::core::ffi::c_int {
         n
     } else {
         (*gap).ga_len / 2 as ::core::ffi::c_int
     };
     let mut new_maxlen: ::core::ffi::c_int = (*gap).ga_len + n;
-    let mut new_size: size_t = ((*gap).ga_itemsize as size_t)
-        .wrapping_mul(new_maxlen as size_t);
-    let mut old_size: size_t = ((*gap).ga_itemsize as size_t)
-        .wrapping_mul((*gap).ga_maxlen as size_t);
-    let mut pp: *mut ::core::ffi::c_char = xrealloc((*gap).ga_data, new_size)
-        as *mut ::core::ffi::c_char;
+    let mut new_size: size_t = ((*gap).ga_itemsize as size_t).wrapping_mul(new_maxlen as size_t);
+    let mut old_size: size_t =
+        ((*gap).ga_itemsize as size_t).wrapping_mul((*gap).ga_maxlen as size_t);
+    let mut pp: *mut ::core::ffi::c_char =
+        xrealloc((*gap).ga_data, new_size) as *mut ::core::ffi::c_char;
     memset(
         pp.offset(old_size as isize) as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -147,8 +143,7 @@ pub unsafe extern "C" fn ga_grow(mut gap: *mut garray_T, mut n: ::core::ffi::c_i
 }
 #[no_mangle]
 pub unsafe extern "C" fn ga_remove_duplicate_strings(mut gap: *mut garray_T) {
-    let mut fnames: *mut *mut ::core::ffi::c_char = (*gap).ga_data
-        as *mut *mut ::core::ffi::c_char;
+    let mut fnames: *mut *mut ::core::ffi::c_char = (*gap).ga_data as *mut *mut ::core::ffi::c_char;
     sort_strings(fnames, (*gap).ga_len);
     let mut i: ::core::ffi::c_int = (*gap).ga_len - 1 as ::core::ffi::c_int;
     while i > 0 as ::core::ffi::c_int {
@@ -160,8 +155,7 @@ pub unsafe extern "C" fn ga_remove_duplicate_strings(mut gap: *mut garray_T) {
             xfree(*fnames.offset(i as isize) as *mut ::core::ffi::c_void);
             let mut j: ::core::ffi::c_int = i + 1 as ::core::ffi::c_int;
             while j < (*gap).ga_len {
-                *fnames.offset((j - 1 as ::core::ffi::c_int) as isize) = *fnames
-                    .offset(j as isize);
+                *fnames.offset((j - 1 as ::core::ffi::c_int) as isize) = *fnames.offset(j as isize);
                 j += 1;
             }
             (*gap).ga_len -= 1;
@@ -175,8 +169,8 @@ pub unsafe extern "C" fn ga_concat_strings(
     mut sep: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let nelem: size_t = (*gap).ga_len as size_t;
-    let mut strings: *mut *const ::core::ffi::c_char = (*gap).ga_data
-        as *mut *const ::core::ffi::c_char;
+    let mut strings: *mut *const ::core::ffi::c_char =
+        (*gap).ga_data as *mut *const ::core::ffi::c_char;
     if nelem == 0 as size_t {
         return xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
     }
@@ -199,10 +193,7 @@ pub unsafe extern "C" fn ga_concat_strings(
     return ret;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ga_concat(
-    mut gap: *mut garray_T,
-    mut s: *const ::core::ffi::c_char,
-) {
+pub unsafe extern "C" fn ga_concat(mut gap: *mut garray_T, mut s: *const ::core::ffi::c_char) {
     if s.is_null() {
         return;
     }
@@ -244,8 +235,7 @@ pub unsafe extern "C" fn ga_append_via_ptr(
             b"ga_append_via_ptr\0".as_ptr() as *const ::core::ffi::c_char,
             209 as ::core::ffi::c_int,
             true_0 != 0,
-            b"wrong item size (%zu), should be %d\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"wrong item size (%zu), should be %d\0".as_ptr() as *const ::core::ffi::c_char,
             item_size,
             (*gap).ga_itemsize,
         );

@@ -52,10 +52,9 @@ pub struct Set_glyph {
     pub keys: *mut ::core::ffi::c_char,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 58] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 58],
-        [::core::ffi::c_char; 58],
-    >(*b"uint32_t mh_put_glyph(Set_glyph *, String, MHPutStatus *)\0")
+    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
+        *b"uint32_t mh_put_glyph(Set_glyph *, String, MHPutStatus *)\0",
+    )
 };
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 #[no_mangle]
@@ -84,14 +83,11 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
             cstr_as_string(
                 (*set)
                     .keys
-                    .offset(
-                        (*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t)
-                            as isize,
-                    ),
+                    .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize),
             ),
             key,
         ) {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -105,10 +101,7 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
     return site;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_get_glyph(
-    mut set: *mut Set_glyph,
-    mut key: String_0,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_get_glyph(mut set: *mut Set_glyph, mut key: String_0) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
@@ -132,11 +125,9 @@ pub unsafe extern "C" fn mh_rehash_glyph(mut set: *mut Set_glyph) {
             abort();
         }
         *(*set).h.hash.offset(idx as isize) = k.wrapping_add(1 as uint32_t);
-        k = k
-            .wrapping_add(
-                (strlen((*set).keys.offset(k as isize)) as uint32_t)
-                    .wrapping_add(1 as uint32_t),
-            );
+        k = k.wrapping_add(
+            (strlen((*set).keys.offset(k as isize)) as uint32_t).wrapping_add(1 as uint32_t),
+        );
     }
     (*set).h.size = (*set).h.n_keys;
     (*set).h.n_occupied = (*set).h.size;
@@ -160,8 +151,7 @@ pub unsafe extern "C" fn mh_put_glyph(
         let mut pos: uint32_t = (*h).n_keys;
         (*h).n_keys = (*h).n_keys.wrapping_add(size);
         if (*h).n_keys > (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 64 as uint32_t
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 64 as uint32_t
             {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
@@ -181,24 +171,22 @@ pub unsafe extern "C" fn mh_put_glyph(
             key.data as *const ::core::ffi::c_void,
             key.size,
         );
-        *(*set).keys.offset((pos as size_t).wrapping_add(key.size) as isize) = NUL
-            as ::core::ffi::c_char;
+        *(*set)
+            .keys
+            .offset((pos as size_t).wrapping_add(key.size) as isize) = NUL as ::core::ffi::c_char;
         *(*h).hash.offset(idx as isize) = pos.wrapping_add(1 as uint32_t);
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         '_c2rust_label: {
-            if equal_String(
-                cstr_as_string((*set).keys.offset(pos_0 as isize)),
-                key,
-            ) {} else {
+            if equal_String(cstr_as_string((*set).keys.offset(pos_0 as isize)), key) {
+            } else {
                 __assert_fail(
                     b"equal_String(cstr_as_string(&set->keys[pos]), key)\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/map_glyph_cache.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/map_glyph_cache.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     106 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );

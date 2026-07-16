@@ -58,10 +58,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     fn bt_prompt(buf: *mut buf_T) -> bool;
     static mut jop_flags: ::core::ffi::c_uint;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -2890,9 +2887,7 @@ pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Dict = Dict {
@@ -2902,21 +2897,21 @@ pub const KV_INITIAL_VALUE: Dict = Dict {
 };
 pub const BUF_HAS_QF_ENTRY: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const BUF_HAS_LL_ENTRY: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const EXTRA_MARKS: ::core::ffi::c_int = '9' as ::core::ffi::c_int
-    - '0' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const NMARKS: ::core::ffi::c_int = 'z' as ::core::ffi::c_int
-    - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const EXTRA_MARKS: ::core::ffi::c_int =
+    '9' as ::core::ffi::c_int - '0' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const NMARKS: ::core::ffi::c_int =
+    'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const NGLOBALMARKS: ::core::ffi::c_int = NMARKS + EXTRA_MARKS;
 pub const NMARK_LOCAL_MAX: ::core::ffi::c_int = 126 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -2932,8 +2927,7 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn setmark(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut view: fmarkv_T = mark_view_make(curwin, (*curwin).w_cursor);
@@ -2988,9 +2982,7 @@ unsafe extern "C" fn do_markset_autocmd(
         },
         value: Object {
             type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_13 {
-                boolean: false,
-            },
+            data: C2Rust_Unnamed_13 { boolean: false },
         },
     }; 3];
     data.capacity = 3 as size_t;
@@ -3127,8 +3119,8 @@ pub unsafe extern "C" fn setmark_pos(
         && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
     {
         i = c - 'a' as ::core::ffi::c_int;
-        let fmarkp____1: *mut fmark_T = (&raw mut (*buf).b_namedm as *mut fmark_T)
-            .offset(i as isize);
+        let fmarkp____1: *mut fmark_T =
+            (&raw mut (*buf).b_namedm as *mut fmark_T).offset(i as isize);
         free_fmark(*fmarkp____1);
         let fmarkp___1: *mut fmark_T = fmarkp____1;
         (*fmarkp___1).mark = *pos;
@@ -3148,8 +3140,7 @@ pub unsafe extern "C" fn setmark_pos(
         } else {
             i = c - 'A' as ::core::ffi::c_int;
         }
-        let xfmarkp__: *mut xfmark_T = (&raw mut namedfm as *mut xfmark_T)
-            .offset(i as isize);
+        let xfmarkp__: *mut xfmark_T = (&raw mut namedfm as *mut xfmark_T).offset(i as isize);
         free_xfmark(*xfmarkp__);
         (*xfmarkp__).fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let fmarkp___2: *mut fmark_T = &raw mut (*xfmarkp__).fmark;
@@ -3190,17 +3181,12 @@ pub unsafe extern "C" fn mark_jumplist_forget_file(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn mark_forget_file(
-    mut wp: *mut win_T,
-    mut fnum: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: ::core::ffi::c_int) {
     mark_jumplist_forget_file(wp, fnum);
     let mut i: ::core::ffi::c_int = (*wp).w_tagstacklen - 1 as ::core::ffi::c_int;
     while i >= 0 as ::core::ffi::c_int {
         if (*wp).w_tagstack[i as usize].fmark.fnum == fnum {
-            tagstack_clear_entry(
-                (&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize),
-            );
+            tagstack_clear_entry((&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize));
             if (*wp).w_tagstackidx > i {
                 (*wp).w_tagstackidx -= 1;
             }
@@ -3221,7 +3207,8 @@ pub unsafe extern "C" fn mark_forget_file(
 #[no_mangle]
 pub unsafe extern "C" fn setpcmark() {
     let mut fm: *mut xfmark_T = ::core::ptr::null_mut::<xfmark_T>();
-    if global_busy != 0 || listcmd_busy as ::core::ffi::c_int != 0
+    if global_busy != 0
+        || listcmd_busy as ::core::ffi::c_int != 0
         || cmdmod.cmod_flags & CMOD_KEEPJUMPS as ::core::ffi::c_int != 0
     {
         return;
@@ -3296,8 +3283,7 @@ pub unsafe extern "C" fn get_jumplist(
             }
         }
         (*win).w_jumplistidx += count;
-        jmp = (&raw mut (*win).w_jumplist as *mut xfmark_T)
-            .offset((*win).w_jumplistidx as isize);
+        jmp = (&raw mut (*win).w_jumplist as *mut xfmark_T).offset((*win).w_jumplistidx as isize);
         if (*jmp).fmark.fnum == 0 as ::core::ffi::c_int {
             fname2fnum(jmp);
         }
@@ -3307,12 +3293,11 @@ pub unsafe extern "C" fn get_jumplist(
         if !buflist_findnr((*jmp).fmark.fnum).is_null() {
             break;
         }
-        count
-            += if count < 0 as ::core::ffi::c_int {
-                -1 as ::core::ffi::c_int
-            } else {
-                1 as ::core::ffi::c_int
-            };
+        count += if count < 0 as ::core::ffi::c_int {
+            -1 as ::core::ffi::c_int
+        } else {
+            1 as ::core::ffi::c_int
+        };
     }
     return &raw mut (*jmp).fmark;
 }
@@ -3365,8 +3350,7 @@ pub unsafe extern "C" fn mark_get(
             name,
         );
         fm = &raw mut (*xfm).fmark;
-        if flag as ::core::ffi::c_uint
-            == kMarkBufLocal as ::core::ffi::c_int as ::core::ffi::c_uint
+        if flag as ::core::ffi::c_uint == kMarkBufLocal as ::core::ffi::c_int as ::core::ffi::c_uint
             && (*xfm).fmark.fnum != (*buf).handle
         {
             return pos_to_mark(
@@ -3407,15 +3391,12 @@ pub unsafe extern "C" fn mark_get_global(
                 b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 453 as ::core::ffi::c_uint,
-                b"xfmark_T *mark_get_global(_Bool, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"xfmark_T *mark_get_global(_Bool, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         };
     }
     mark = (&raw mut namedfm as *mut xfmark_T).offset(name as isize);
-    if resolve as ::core::ffi::c_int != 0
-        && (*mark).fmark.fnum == 0 as ::core::ffi::c_int
-    {
+    if resolve as ::core::ffi::c_int != 0 && (*mark).fmark.fnum == 0 as ::core::ffi::c_int {
         fname2fnum(mark);
     }
     return mark;
@@ -3446,9 +3427,7 @@ pub unsafe extern "C" fn mark_get_local(
         mark = &raw mut (*buf).b_last_insert;
     } else if name == '.' as ::core::ffi::c_int {
         mark = &raw mut (*buf).b_last_change;
-    } else if name == ':' as ::core::ffi::c_int
-        && bt_prompt(buf) as ::core::ffi::c_int != 0
-    {
+    } else if name == ':' as ::core::ffi::c_int && bt_prompt(buf) as ::core::ffi::c_int != 0 {
         mark = &raw mut (*buf).b_prompt_start;
     } else {
         mark = mark_get_motion(buf, win, name);
@@ -3541,7 +3520,8 @@ pub unsafe extern "C" fn mark_get_visual(
         let mut startp: pos_T = (*buf).b_visual.vi_start;
         let mut endp: pos_T = (*buf).b_visual.vi_end;
         if ((name == '<' as ::core::ffi::c_int) as ::core::ffi::c_int
-            == lt(startp, endp) as ::core::ffi::c_int || endp.lnum == 0 as linenr_T)
+            == lt(startp, endp) as ::core::ffi::c_int
+            || endp.lnum == 0 as linenr_T)
             && startp.lnum != 0 as linenr_T
         {
             mark = pos_to_mark(buf, ::core::ptr::null_mut::<fmark_T>(), startp);
@@ -3589,19 +3569,13 @@ unsafe extern "C" fn switch_to_mark_buf(
     mut pcmark_on_switch: bool,
 ) -> MarkMoveRes {
     if (*fm).fnum != (*curbuf).handle {
-        let mut getfile_flag: ::core::ffi::c_int = if pcmark_on_switch
-            as ::core::ffi::c_int != 0
-        {
+        let mut getfile_flag: ::core::ffi::c_int = if pcmark_on_switch as ::core::ffi::c_int != 0 {
             GETF_SETMARK as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
         };
-        let mut res: bool = buflist_getfile(
-            (*fm).fnum,
-            (*fm).mark.lnum,
-            getfile_flag,
-            false_0,
-        ) == OK;
+        let mut res: bool =
+            buflist_getfile((*fm).fnum, (*fm).mark.lnum, getfile_flag, false_0) == OK;
         return (if res as ::core::ffi::c_int == true_0 {
             kMarkSwitchedBuf as ::core::ffi::c_int
         } else {
@@ -3611,10 +3585,7 @@ unsafe extern "C" fn switch_to_mark_buf(
     return 0 as MarkMoveRes;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mark_move_to(
-    mut fm: *mut fmark_T,
-    mut flags: MarkMove,
-) -> MarkMoveRes {
+pub unsafe extern "C" fn mark_move_to(mut fm: *mut fmark_T, mut flags: MarkMove) -> MarkMoveRes {
     let mut prev_pos: pos_T = pos_T {
         lnum: 0,
         col: 0,
@@ -3640,9 +3611,7 @@ pub unsafe extern "C" fn mark_move_to(
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     };
     let mut res: MarkMoveRes = kMarkMoveSuccess;
-    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     '_end: {
         if !mark_check(fm, &raw mut errormsg) {
             if !errormsg.is_null() {
@@ -3661,7 +3630,8 @@ pub unsafe extern "C" fn mark_move_to(
                             == 0,
                     ) as ::core::ffi::c_uint) as MarkMoveRes;
                 if res as ::core::ffi::c_uint
-                    & kMarkMoveFailed as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                    & kMarkMoveFailed as ::core::ffi::c_int as ::core::ffi::c_uint
+                    != 0
                 {
                     break '_end;
                 } else if !mark_check_line_bounds(curbuf, fm, &raw mut errormsg) {
@@ -3674,7 +3644,8 @@ pub unsafe extern "C" fn mark_move_to(
                     break '_end;
                 }
             } else if flags as ::core::ffi::c_uint
-                & kMarkContext as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                & kMarkContext as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0
             {
                 setpcmark();
             }
@@ -3682,7 +3653,8 @@ pub unsafe extern "C" fn mark_move_to(
             pos = (*fm).mark;
             (*curwin).w_cursor = (*fm).mark;
             if flags as ::core::ffi::c_uint
-                & kMarkBeginLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                & kMarkBeginLine as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0
             {
                 beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
             }
@@ -3701,12 +3673,14 @@ pub unsafe extern "C" fn mark_move_to(
                 res as ::core::ffi::c_uint
             }) as MarkMoveRes;
             if flags as ::core::ffi::c_uint
-                & kMarkSetView as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                & kMarkSetView as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0
             {
                 mark_view_restore(fm);
             }
             if res as ::core::ffi::c_uint
-                & kMarkSwitchedBuf as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                & kMarkSwitchedBuf as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0
                 || res as ::core::ffi::c_uint
                     & kMarkChangedCursor as ::core::ffi::c_int as ::core::ffi::c_uint
                     != 0
@@ -3729,7 +3703,8 @@ pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
                     topline,
                     ::core::ptr::null_mut::<linenr_T>(),
                     ::core::ptr::null_mut::<linenr_T>(),
-                ) && (*fm).view.skipcol < linetabsize_eol(curwin, topline)
+                )
+                && (*fm).view.skipcol < linetabsize_eol(curwin, topline)
             {
                 (*fm).view.skipcol as ::core::ffi::c_int
             } else {
@@ -3739,10 +3714,7 @@ pub unsafe extern "C" fn mark_view_restore(mut fm: *mut fmark_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn mark_view_make(
-    mut wp: *const win_T,
-    mut pos: pos_T,
-) -> fmarkv_T {
+pub unsafe extern "C" fn mark_view_make(mut wp: *const win_T, mut pos: pos_T) -> fmarkv_T {
     return fmarkv_T {
         topline_offset: pos.lnum - (*wp).w_topline,
         skipcol: (*wp).w_skipcol,
@@ -3767,21 +3739,18 @@ pub unsafe extern "C" fn getnextmark(
             if dir == FORWARD as ::core::ffi::c_int {
                 if (result.is_null()
                     || lt((*curbuf).b_namedm[i as usize].mark, (*result).mark)
-                        as ::core::ffi::c_int != 0)
-                    && lt(pos, (*curbuf).b_namedm[i as usize].mark) as ::core::ffi::c_int
-                        != 0
+                        as ::core::ffi::c_int
+                        != 0)
+                    && lt(pos, (*curbuf).b_namedm[i as usize].mark) as ::core::ffi::c_int != 0
                 {
-                    result = (&raw mut (*curbuf).b_namedm as *mut fmark_T)
-                        .offset(i as isize);
+                    result = (&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize);
                 }
             } else if (result.is_null()
-                || lt((*result).mark, (*curbuf).b_namedm[i as usize].mark)
-                    as ::core::ffi::c_int != 0)
-                && lt((*curbuf).b_namedm[i as usize].mark, pos) as ::core::ffi::c_int
-                    != 0
+                || lt((*result).mark, (*curbuf).b_namedm[i as usize].mark) as ::core::ffi::c_int
+                    != 0)
+                && lt((*curbuf).b_namedm[i as usize].mark, pos) as ::core::ffi::c_int != 0
             {
-                result = (&raw mut (*curbuf).b_namedm as *mut fmark_T)
-                    .offset(i as isize);
+                result = (&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize);
             }
         }
         i += 1;
@@ -3795,8 +3764,9 @@ unsafe extern "C" fn fname2fnum(mut fm: *mut xfmark_T) {
     if *(*fm).fname.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '~' as ::core::ffi::c_int
         && vim_ispathsep_nocolon(
-            *(*fm).fname.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+            *(*fm).fname.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        ) as ::core::ffi::c_int
+            != 0
     {
         let mut len: size_t = expand_env(
             b"~/\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3815,7 +3785,10 @@ unsafe extern "C" fn fname2fnum(mut fm: *mut xfmark_T) {
             MAXPATHL as size_t,
         );
     }
-    os_dirname(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE as size_t);
+    os_dirname(
+        &raw mut IObuff as *mut ::core::ffi::c_char,
+        IOSIZE as size_t,
+    );
     let mut p: *mut ::core::ffi::c_char = path_shorten_fname(
         &raw mut NameBuff as *mut ::core::ffi::c_char,
         &raw mut IObuff as *mut ::core::ffi::c_char,
@@ -3865,12 +3838,13 @@ unsafe extern "C" fn fmarks_check_one(
     mut name: *mut ::core::ffi::c_char,
     mut buf: *mut buf_T,
 ) {
-    if (*fm).fmark.fnum == 0 as ::core::ffi::c_int && !(*fm).fname.is_null()
+    if (*fm).fmark.fnum == 0 as ::core::ffi::c_int
+        && !(*fm).fname.is_null()
         && path_fnamecmp(name, (*fm).fname) == 0 as ::core::ffi::c_int
     {
         (*fm).fmark.fnum = (*buf).handle as ::core::ffi::c_int;
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*fm).fname
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*fm).fname as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -3952,7 +3926,8 @@ unsafe extern "C" fn mark_line(
         return xstrdup(b"-invalid-\0".as_ptr() as *const ::core::ffi::c_char);
     }
     '_c2rust_label: {
-        if Columns >= 0 as ::core::ffi::c_int {} else {
+        if Columns >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"Columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
@@ -3981,9 +3956,7 @@ unsafe extern "C" fn mark_line(
 #[no_mangle]
 pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut posp: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     if !arg.is_null() && *arg as ::core::ffi::c_int == NUL {
         arg = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -4001,8 +3974,7 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
         show_one_mark(
             i + 'a' as ::core::ffi::c_int,
             arg,
-            &raw mut (*(&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize))
-                .mark,
+            &raw mut (*(&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize)).mark,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             true_0,
         );
@@ -4012,8 +3984,7 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
     while i_0 < NGLOBALMARKS {
         if namedfm[i_0 as usize].fmark.fnum != 0 as ::core::ffi::c_int {
             name = fm_getname(
-                &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i_0 as isize))
-                    .fmark,
+                &raw mut (*(&raw mut namedfm as *mut xfmark_T).offset(i_0 as isize)).fmark,
                 15 as ::core::ffi::c_int,
             );
         } else {
@@ -4031,8 +4002,7 @@ pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
                     .fmark
                     .mark,
                 name,
-                (namedfm[i_0 as usize].fmark.fnum == (*curbuf).handle)
-                    as ::core::ffi::c_int,
+                (namedfm[i_0 as usize].fmark.fnum == (*curbuf).handle) as ::core::ffi::c_int,
             );
             if namedfm[i_0 as usize].fmark.fnum != 0 as ::core::ffi::c_int {
                 xfree(name as *mut ::core::ffi::c_void);
@@ -4135,14 +4105,12 @@ unsafe extern "C" fn show_one_mark(
             );
         } else {
             semsg(
-                gettext(
-                    b"E283: No marks matching \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E283: No marks matching \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
                 arg,
             );
         }
-    } else if !got_int && (arg.is_null() || !vim_strchr(arg, c).is_null())
+    } else if !got_int
+        && (arg.is_null() || !vim_strchr(arg, c).is_null())
         && (*p).lnum != 0 as linenr_T
     {
         if name.is_null() && current != 0 {
@@ -4151,12 +4119,9 @@ unsafe extern "C" fn show_one_mark(
         }
         if !message_filtered(name) {
             if !did_title {
-                msg_puts_title(
-                    gettext(
-                        b"\nmark line  col file/text\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                msg_puts_title(gettext(
+                    b"\nmark line  col file/text\0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 did_title = true_0 != 0;
             }
             msg_putchar('\n' as ::core::ffi::c_int);
@@ -4241,7 +4206,8 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
             let mut lower: bool = *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                 && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint;
             let mut digit: bool = ascii_isdigit(*p as ::core::ffi::c_int);
-            if lower as ::core::ffi::c_int != 0 || digit as ::core::ffi::c_int != 0
+            if lower as ::core::ffi::c_int != 0
+                || digit as ::core::ffi::c_int != 0
                 || *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
                     && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             {
@@ -4252,25 +4218,26 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                     to = *p.offset(2 as ::core::ffi::c_int as isize) as uint8_t
                         as ::core::ffi::c_int;
                     if (if lower as ::core::ffi::c_int != 0 {
-                        (*p.offset(2 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                            && *p.offset(2 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
+                        (*p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                            >= 'a' as ::core::ffi::c_uint
+                            && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                                <= 'z' as ::core::ffi::c_uint)
                             as ::core::ffi::c_int
                     } else {
                         (if digit as ::core::ffi::c_int != 0 {
                             ascii_isdigit(
-                                *p.offset(2 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
+                                *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             ) as ::core::ffi::c_int
                         } else {
-                            (*p.offset(2 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+                            (*p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                                >= 'A' as ::core::ffi::c_uint
                                 && *p.offset(2 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint)
+                                    as ::core::ffi::c_uint
+                                    <= 'Z' as ::core::ffi::c_uint)
                                 as ::core::ffi::c_int
                         })
-                    }) == 0 || to < from
+                    }) == 0
+                        || to < from
                     {
                         semsg(
                             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
@@ -4286,24 +4253,18 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                 let mut i_0: ::core::ffi::c_int = from;
                 while i_0 <= to {
                     if lower {
-                        if (*curbuf)
-                            .b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
+                        if (*curbuf).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
                             .mark
-                            .lnum != 0 as linenr_T
+                            .lnum
+                            != 0 as linenr_T
                         {
-                            do_markset_autocmd(
-                                i_0 as ::core::ffi::c_char,
-                                &raw mut pos,
-                                curbuf,
-                            );
+                            do_markset_autocmd(i_0 as ::core::ffi::c_char, &raw mut pos, curbuf);
                         }
-                        (*curbuf)
-                            .b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
+                        (*curbuf).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
                             .mark
                             .lnum = 0 as ::core::ffi::c_int as linenr_T;
-                        (*curbuf)
-                            .b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize]
-                            .timestamp = timestamp;
+                        (*curbuf).b_namedm[(i_0 - 'a' as ::core::ffi::c_int) as usize].timestamp =
+                            timestamp;
                     } else {
                         if digit {
                             n = i_0 - '0' as ::core::ffi::c_int + NMARKS;
@@ -4311,26 +4272,21 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                             n = i_0 - 'A' as ::core::ffi::c_int;
                         }
                         if namedfm[n as usize].fmark.mark.lnum != 0 as linenr_T {
-                            let mut buf: *mut buf_T = buflist_findnr(
-                                namedfm[n as usize].fmark.fnum,
-                            );
+                            let mut buf: *mut buf_T =
+                                buflist_findnr(namedfm[n as usize].fmark.fnum);
                             if buf.is_null() {
                                 buf = curbuf;
                             }
-                            do_markset_autocmd(
-                                i_0 as ::core::ffi::c_char,
-                                &raw mut pos,
-                                buf,
-                            );
+                            do_markset_autocmd(i_0 as ::core::ffi::c_char, &raw mut pos, buf);
                         }
-                        namedfm[n as usize].fmark.mark.lnum = 0 as ::core::ffi::c_int
-                            as linenr_T;
+                        namedfm[n as usize].fmark.mark.lnum = 0 as ::core::ffi::c_int as linenr_T;
                         namedfm[n as usize].fmark.fnum = 0 as ::core::ffi::c_int;
                         namedfm[n as usize].fmark.timestamp = timestamp;
                         let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut namedfm
                             as *mut xfmark_T)
                             .offset(n as isize))
-                            .fname as *mut *mut ::core::ffi::c_void;
+                        .fname
+                            as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL;
                         *ptr_;
@@ -4373,15 +4329,13 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                         if (*curbuf).b_visual.vi_start.lnum != 0 as linenr_T {
                             do_markset_autocmd(*p, &raw mut pos, curbuf);
                         }
-                        (*curbuf).b_visual.vi_start.lnum = 0 as ::core::ffi::c_int
-                            as linenr_T;
+                        (*curbuf).b_visual.vi_start.lnum = 0 as ::core::ffi::c_int as linenr_T;
                     }
                     62 => {
                         if (*curbuf).b_visual.vi_end.lnum != 0 as linenr_T {
                             do_markset_autocmd(*p, &raw mut pos, curbuf);
                         }
-                        (*curbuf).b_visual.vi_end.lnum = 0 as ::core::ffi::c_int
-                            as linenr_T;
+                        (*curbuf).b_visual.vi_end.lnum = 0 as ::core::ffi::c_int as linenr_T;
                     }
                     58 | 32 => {}
                     _ => {
@@ -4401,15 +4355,14 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn ex_jumps(mut eap: *mut exarg_T) {
     cleanup_jumplist(curwin, true_0 != 0);
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-    msg_puts_title(
-        gettext(b"\n jump line  col file/text\0".as_ptr() as *const ::core::ffi::c_char),
-    );
+    msg_puts_title(gettext(
+        b"\n jump line  col file/text\0".as_ptr() as *const ::core::ffi::c_char
+    ));
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*curwin).w_jumplistlen && !got_int {
         if (*curwin).w_jumplist[i as usize].fmark.mark.lnum != 0 as linenr_T {
             let mut name: *mut ::core::ffi::c_char = fm_getname(
-                &raw mut (*(&raw mut (*curwin).w_jumplist as *mut xfmark_T)
-                    .offset(i as isize))
+                &raw mut (*(&raw mut (*curwin).w_jumplist as *mut xfmark_T).offset(i as isize))
                     .fmark,
                 16 as ::core::ffi::c_int,
             );
@@ -4448,9 +4401,7 @@ pub unsafe extern "C" fn ex_jumps(mut eap: *mut exarg_T) {
                     );
                     msg_outtrans(
                         name,
-                        if (*curwin).w_jumplist[i as usize].fmark.fnum
-                            == (*curbuf).handle
-                        {
+                        if (*curwin).w_jumplist[i as usize].fmark.fnum == (*curbuf).handle {
                             HLF_D as ::core::ffi::c_int
                         } else {
                             0 as ::core::ffi::c_int
@@ -4477,9 +4428,9 @@ pub unsafe extern "C" fn ex_clearjumps(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn ex_changes(mut eap: *mut exarg_T) {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-    msg_puts_title(
-        gettext(b"\nchange line  col text\0".as_ptr() as *const ::core::ffi::c_char),
-    );
+    msg_puts_title(gettext(
+        b"\nchange line  col text\0".as_ptr() as *const ::core::ffi::c_char
+    ));
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*curbuf).b_changelistlen && !got_int {
         if (*curbuf).b_changelist[i as usize].mark.lnum != 0 as linenr_T {
@@ -4510,8 +4461,7 @@ pub unsafe extern "C" fn ex_changes(mut eap: *mut exarg_T) {
                 false_0 != 0,
             );
             let mut name: *mut ::core::ffi::c_char = mark_line(
-                &raw mut (*(&raw mut (*curbuf).b_changelist as *mut fmark_T)
-                    .offset(i as isize))
+                &raw mut (*(&raw mut (*curbuf).b_changelist as *mut fmark_T).offset(i as isize))
                     .mark,
                 17 as ::core::ffi::c_int,
             );
@@ -4584,17 +4534,14 @@ pub unsafe extern "C" fn mark_adjust_buf(
     if line2 < line1 && amount_after == 0 as linenr_T {
         return;
     }
-    let mut by_api: bool = mode as ::core::ffi::c_uint
-        == kMarkAdjustApi as ::core::ffi::c_int as ::core::ffi::c_uint;
-    let mut by_term: bool = mode as ::core::ffi::c_uint
-        == kMarkAdjustTerm as ::core::ffi::c_int as ::core::ffi::c_uint;
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-        == 0 as ::core::ffi::c_int
-    {
+    let mut by_api: bool =
+        mode as ::core::ffi::c_uint == kMarkAdjustApi as ::core::ffi::c_int as ::core::ffi::c_uint;
+    let mut by_term: bool =
+        mode as ::core::ffi::c_uint == kMarkAdjustTerm as ::core::ffi::c_int as ::core::ffi::c_uint;
+    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < NMARKS {
-            lp = &raw mut (*(&raw mut (*buf).b_namedm as *mut fmark_T)
-                .offset(i as isize))
+            lp = &raw mut (*(&raw mut (*buf).b_namedm as *mut fmark_T).offset(i as isize))
                 .mark
                 .lnum;
             if *lp >= line1 && *lp <= line2 {
@@ -4690,8 +4637,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
         }
         let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_1 < (*buf).b_changelistlen {
-            lp = &raw mut (*(&raw mut (*buf).b_changelist as *mut fmark_T)
-                .offset(i_1 as isize))
+            lp = &raw mut (*(&raw mut (*buf).b_changelist as *mut fmark_T).offset(i_1 as isize))
                 .mark
                 .lnum;
             if *lp >= line1 && *lp <= line2 {
@@ -4746,7 +4692,8 @@ pub unsafe extern "C" fn mark_adjust_buf(
             while !win.is_null() {
                 found_one = found_one as ::core::ffi::c_int
                     | qf_mark_adjust(buf, win, line1, line2, amount, amount_after)
-                        as ::core::ffi::c_int != 0;
+                        as ::core::ffi::c_int
+                    != 0;
                 win = (*win).w_next;
             }
             tab = (*tab).tp_next as *mut tabpage_T;
@@ -4755,9 +4702,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
             (*buf).b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
         }
     }
-    if op as ::core::ffi::c_uint
-        != kExtmarkNOOP as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if op as ::core::ffi::c_uint != kExtmarkNOOP as ::core::ffi::c_int as ::core::ffi::c_uint {
         extmark_adjust(buf, line1, line2, amount, amount_after, op);
     }
     if (*curwin).w_buffer == buf {
@@ -4802,17 +4747,15 @@ pub unsafe extern "C" fn mark_adjust_buf(
             (*tab_0).tp_firstwin
         };
         while !win_0.is_null() {
-            if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-                == 0 as ::core::ffi::c_int
-            {
+            if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                 let mut i_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i_2 < (*win_0).w_jumplistlen {
                     if (*win_0).w_jumplist[i_2 as usize].fmark.fnum == fnum {
                         lp = &raw mut (*(&raw mut (*win_0).w_jumplist as *mut xfmark_T)
                             .offset(i_2 as isize))
-                            .fmark
-                            .mark
-                            .lnum;
+                        .fmark
+                        .mark
+                        .lnum;
                         if *lp >= line1 && *lp <= line2 {
                             if amount == MAXLNUM as ::core::ffi::c_int as linenr_T {
                                 *lp = line1;
@@ -4833,12 +4776,11 @@ pub unsafe extern "C" fn mark_adjust_buf(
                     let mut i_3: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while i_3 < (*win_0).w_tagstacklen {
                         if (*win_0).w_tagstack[i_3 as usize].fmark.fnum == fnum {
-                            lp = &raw mut (*(&raw mut (*win_0).w_tagstack
-                                as *mut taggy_T)
+                            lp = &raw mut (*(&raw mut (*win_0).w_tagstack as *mut taggy_T)
                                 .offset(i_3 as isize))
-                                .fmark
-                                .mark
-                                .lnum;
+                            .fmark
+                            .mark
+                            .lnum;
                             if *lp >= line1 && *lp <= line2 {
                                 if amount == MAXLNUM as ::core::ffi::c_int as linenr_T {
                                     *lp = line1;
@@ -4876,8 +4818,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
                 }
                 if by_api as ::core::ffi::c_int != 0
                     || (if by_term as ::core::ffi::c_int != 0 {
-                        ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count)
-                            as ::core::ffi::c_int
+                        ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count) as ::core::ffi::c_int
                     } else {
                         (win_0 != curwin) as ::core::ffi::c_int
                     }) != 0
@@ -4887,9 +4828,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
                             if !(by_api as ::core::ffi::c_int != 0
                                 && amount_after > line1 - line2 - 1 as linenr_T)
                             {
-                                (*win_0).w_topline = if line1 - 1 as linenr_T
-                                    > 1 as linenr_T
-                                {
+                                (*win_0).w_topline = if line1 - 1 as linenr_T > 1 as linenr_T {
                                     line1 - 1 as linenr_T
                                 } else {
                                     1 as linenr_T
@@ -4914,8 +4853,7 @@ pub unsafe extern "C" fn mark_adjust_buf(
                 }
                 if !by_api
                     && (if by_term as ::core::ffi::c_int != 0 {
-                        ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count)
-                            as ::core::ffi::c_int
+                        ((*win_0).w_cursor.lnum < (*buf).b_ml.ml_line_count) as ::core::ffi::c_int
                     } else {
                         (win_0 != curwin) as ::core::ffi::c_int
                     }) != 0
@@ -4985,21 +4923,19 @@ pub unsafe extern "C" fn mark_col_adjust(
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NMARKS {
-        posp = &raw mut (*(&raw mut (*curbuf).b_namedm as *mut fmark_T)
-            .offset(i as isize))
-            .mark;
+        posp = &raw mut (*(&raw mut (*curbuf).b_namedm as *mut fmark_T).offset(i as isize)).mark;
         if (*posp).lnum == lnum && (*posp).col >= mincol {
             (*posp).lnum += lnum_amount;
             '_c2rust_label: {
-                if col_amount
-                    > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                     && col_amount <= 2147483647 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1499 as ::core::ffi::c_uint,
                         b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -5009,8 +4945,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                 (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
             } else if (*posp).col < spaces_removed {
-                (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                    as colnr_T;
+                (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
             } else {
                 (*posp).col += col_amount;
             }
@@ -5022,15 +4957,15 @@ pub unsafe extern "C" fn mark_col_adjust(
             if (*posp).lnum == lnum && (*posp).col >= mincol {
                 (*posp).lnum += lnum_amount;
                 '_c2rust_label_0: {
-                    if col_amount
-                        > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                    if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                         && col_amount <= 2147483647 as ::core::ffi::c_int
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             1501 as ::core::ffi::c_uint,
                             b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -5040,8 +4975,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                     (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
                 } else if (*posp).col < spaces_removed {
-                    (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                        as colnr_T;
+                    (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
                 } else {
                     (*posp).col += col_amount;
                 }
@@ -5058,15 +4992,15 @@ pub unsafe extern "C" fn mark_col_adjust(
             if (*posp).lnum == lnum && (*posp).col >= mincol {
                 (*posp).lnum += lnum_amount;
                 '_c2rust_label_1: {
-                    if col_amount
-                        > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                    if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                         && col_amount <= 2147483647 as ::core::ffi::c_int
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             1506 as ::core::ffi::c_uint,
                             b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -5076,8 +5010,7 @@ pub unsafe extern "C" fn mark_col_adjust(
                 if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                     (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
                 } else if (*posp).col < spaces_removed {
-                    (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                        as colnr_T;
+                    (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
                 } else {
                     (*posp).col += col_amount;
                 }
@@ -5091,15 +5024,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_2: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1511 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5117,15 +5051,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_3: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1514 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5142,15 +5077,15 @@ pub unsafe extern "C" fn mark_col_adjust(
         if (*posp).lnum == lnum && (*posp).col >= mincol {
             (*posp).lnum += lnum_amount;
             '_c2rust_label_4: {
-                if col_amount
-                    > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                     && col_amount <= 2147483647 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1517 as ::core::ffi::c_uint,
                         b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -5160,8 +5095,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                 (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
             } else if (*posp).col < spaces_removed {
-                (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                    as colnr_T;
+                (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
             } else {
                 (*posp).col += col_amount;
             }
@@ -5169,21 +5103,20 @@ pub unsafe extern "C" fn mark_col_adjust(
     }
     let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_1 < (*curbuf).b_changelistlen {
-        posp = &raw mut (*(&raw mut (*curbuf).b_changelist as *mut fmark_T)
-            .offset(i_1 as isize))
-            .mark;
+        posp =
+            &raw mut (*(&raw mut (*curbuf).b_changelist as *mut fmark_T).offset(i_1 as isize)).mark;
         if (*posp).lnum == lnum && (*posp).col >= mincol {
             (*posp).lnum += lnum_amount;
             '_c2rust_label_5: {
-                if col_amount
-                    > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                     && col_amount <= 2147483647 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1522 as ::core::ffi::c_uint,
                         b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -5193,8 +5126,7 @@ pub unsafe extern "C" fn mark_col_adjust(
             if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                 (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
             } else if (*posp).col < spaces_removed {
-                (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                    as colnr_T;
+                (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
             } else {
                 (*posp).col += col_amount;
             }
@@ -5207,15 +5139,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_6: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1526 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5233,15 +5166,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_7: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1527 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5259,15 +5193,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_8: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1530 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5285,15 +5220,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_9: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1533 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5311,15 +5247,16 @@ pub unsafe extern "C" fn mark_col_adjust(
         '_c2rust_label_10: {
             if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                 && col_amount <= 2147483647 as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1536 as ::core::ffi::c_uint,
-                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -5342,32 +5279,32 @@ pub unsafe extern "C" fn mark_col_adjust(
             if (*win).w_jumplist[i_2 as usize].fmark.fnum == fnum {
                 posp = &raw mut (*(&raw mut (*win).w_jumplist as *mut xfmark_T)
                     .offset(i_2 as isize))
-                    .fmark
-                    .mark;
+                .fmark
+                .mark;
                 if (*posp).lnum == lnum && (*posp).col >= mincol {
                     (*posp).lnum += lnum_amount;
                     '_c2rust_label_11: {
-                        if col_amount
-                            > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                        if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                             && col_amount <= 2147483647 as ::core::ffi::c_int
-                        {} else {
+                        {
+                        } else {
                             __assert_fail(
                                 b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 1543 as ::core::ffi::c_uint,
                                 b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                         }
                     };
-                    if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount
-                    {
+                    if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                         (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
                     } else if (*posp).col < spaces_removed {
-                        (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                            as colnr_T;
+                        (*posp).col =
+                            (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
                     } else {
                         (*posp).col += col_amount;
                     }
@@ -5381,16 +5318,16 @@ pub unsafe extern "C" fn mark_col_adjust(
                 if (*win).w_tagstack[i_3 as usize].fmark.fnum == fnum {
                     posp = &raw mut (*(&raw mut (*win).w_tagstack as *mut taggy_T)
                         .offset(i_3 as isize))
-                        .fmark
-                        .mark;
+                    .fmark
+                    .mark;
                     if (*posp).lnum == lnum && (*posp).col >= mincol {
                         (*posp).lnum += lnum_amount;
                         '_c2rust_label_12: {
                             if col_amount
-                                > -2147483647 as ::core::ffi::c_int
-                                    - 1 as ::core::ffi::c_int
+                                > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                                 && col_amount <= 2147483647 as ::core::ffi::c_int
-                            {} else {
+                            {
+                            } else {
                                 __assert_fail(
                                     b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -5402,13 +5339,11 @@ pub unsafe extern "C" fn mark_col_adjust(
                                 );
                             }
                         };
-                        if col_amount < 0 as ::core::ffi::c_int
-                            && (*posp).col <= -col_amount
-                        {
+                        if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                             (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
                         } else if (*posp).col < spaces_removed {
-                            (*posp).col = (col_amount as ::core::ffi::c_int
-                                + spaces_removed) as colnr_T;
+                            (*posp).col =
+                                (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
                         } else {
                             (*posp).col += col_amount;
                         }
@@ -5421,27 +5356,27 @@ pub unsafe extern "C" fn mark_col_adjust(
                 if (*posp).lnum == lnum && (*posp).col >= mincol {
                     (*posp).lnum += lnum_amount;
                     '_c2rust_label_13: {
-                        if col_amount
-                            > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                        if col_amount > -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                             && col_amount <= 2147483647 as ::core::ffi::c_int
-                        {} else {
+                        {
+                        } else {
                             __assert_fail(
                                 b"col_amount > INT_MIN && col_amount <= INT_MAX\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"/home/overlord/projects/neovim/neovim/src/nvim/mark.c\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 1557 as ::core::ffi::c_uint,
                                 b"void mark_col_adjust(linenr_T, colnr_T, linenr_T, colnr_T, int)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                         }
                     };
-                    if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount
-                    {
+                    if col_amount < 0 as ::core::ffi::c_int && (*posp).col <= -col_amount {
                         (*posp).col = 0 as ::core::ffi::c_int as colnr_T;
                     } else if (*posp).col < spaces_removed {
-                        (*posp).col = (col_amount as ::core::ffi::c_int + spaces_removed)
-                            as colnr_T;
+                        (*posp).col =
+                            (col_amount as ::core::ffi::c_int + spaces_removed) as colnr_T;
                     } else {
                         (*posp).col += col_amount;
                     }
@@ -5460,9 +5395,7 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
             if (*wp).w_jumplist[i as usize].fmark.fnum == 0 as ::core::ffi::c_int
                 && (*wp).w_jumplist[i as usize].fmark.mark.lnum != 0 as linenr_T
             {
-                fname2fnum(
-                    (&raw mut (*wp).w_jumplist as *mut xfmark_T).offset(i as isize),
-                );
+                fname2fnum((&raw mut (*wp).w_jumplist as *mut xfmark_T).offset(i as isize));
             }
             i += 1;
         }
@@ -5475,8 +5408,7 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
         }
         i = from + 1 as ::core::ffi::c_int;
         while i < (*wp).w_jumplistlen {
-            if (*wp).w_jumplist[i as usize].fmark.fnum
-                == (*wp).w_jumplist[from as usize].fmark.fnum
+            if (*wp).w_jumplist[i as usize].fmark.fnum == (*wp).w_jumplist[from as usize].fmark.fnum
                 && (*wp).w_jumplist[from as usize].fmark.fnum != 0 as ::core::ffi::c_int
                 && (*wp).w_jumplist[i as usize].fmark.mark.lnum
                     == (*wp).w_jumplist[from as usize].fmark.mark.lnum
@@ -5489,8 +5421,8 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
         if i >= (*wp).w_jumplistlen {
             mustfree = false_0 != 0;
         } else if i > from + 1 as ::core::ffi::c_int {
-            mustfree = jop_flags
-                & kOptJopFlagStack as ::core::ffi::c_int as ::core::ffi::c_uint == 0;
+            mustfree =
+                jop_flags & kOptJopFlagStack as ::core::ffi::c_int as ::core::ffi::c_uint == 0;
         } else {
             mustfree = true_0 != 0;
         }
@@ -5508,7 +5440,8 @@ pub unsafe extern "C" fn cleanup_jumplist(mut wp: *mut win_T, mut loadfiles: boo
         (*wp).w_jumplistidx = to;
     }
     (*wp).w_jumplistlen = to;
-    if loadfiles as ::core::ffi::c_int != 0 && (*wp).w_jumplistlen != 0
+    if loadfiles as ::core::ffi::c_int != 0
+        && (*wp).w_jumplistlen != 0
         && (*wp).w_jumplistidx == (*wp).w_jumplistlen
     {
         let mut fm_last: *const xfmark_T = (&raw mut (*wp).w_jumplist as *mut xfmark_T)
@@ -5528,9 +5461,7 @@ pub unsafe extern "C" fn copy_jumplist(mut from: *mut win_T, mut to: *mut win_T)
     while i < (*from).w_jumplistlen {
         (*to).w_jumplist[i as usize] = (*from).w_jumplist[i as usize];
         if !(*from).w_jumplist[i as usize].fname.is_null() {
-            (*to).w_jumplist[i as usize].fname = xstrdup(
-                (*from).w_jumplist[i as usize].fname,
-            );
+            (*to).w_jumplist[i as usize].fname = xstrdup((*from).w_jumplist[i as usize].fname);
         }
         i += 1;
     }
@@ -5564,8 +5495,7 @@ pub unsafe extern "C" fn mark_jumplist_iter(
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
     let iter_mark: *const xfmark_T = if iter.is_null() {
-        (&raw const (*win).w_jumplist as *const xfmark_T)
-            .offset(0 as ::core::ffi::c_int as isize)
+        (&raw const (*win).w_jumplist as *const xfmark_T).offset(0 as ::core::ffi::c_int as isize)
     } else {
         iter as *const xfmark_T
     };
@@ -5576,8 +5506,7 @@ pub unsafe extern "C" fn mark_jumplist_iter(
     {
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
-    return iter_mark.offset(1 as ::core::ffi::c_int as isize)
-        as *const ::core::ffi::c_void;
+    return iter_mark.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void;
 }
 #[no_mangle]
 pub unsafe extern "C" fn mark_global_iter(
@@ -5593,58 +5522,54 @@ pub unsafe extern "C" fn mark_global_iter(
         iter as *const xfmark_T
     };
     while (iter_mark
-        .offset_from(
-            (&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize),
-        ) as size_t)
+        .offset_from((&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+        as size_t)
         < ::core::mem::size_of::<[xfmark_T; 36]>()
             .wrapping_div(::core::mem::size_of::<xfmark_T>())
             .wrapping_div(
                 (::core::mem::size_of::<[xfmark_T; 36]>()
-                    .wrapping_rem(::core::mem::size_of::<xfmark_T>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) && (*iter_mark).fmark.mark.lnum == 0
+                    .wrapping_rem(::core::mem::size_of::<xfmark_T>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
+        && (*iter_mark).fmark.mark.lnum == 0
     {
         iter_mark = iter_mark.offset(1);
     }
     if iter_mark
-        .offset_from(
-            (&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize),
-        ) as size_t
+        .offset_from((&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+        as size_t
         == ::core::mem::size_of::<[xfmark_T; 36]>()
             .wrapping_div(::core::mem::size_of::<xfmark_T>())
             .wrapping_div(
                 (::core::mem::size_of::<[xfmark_T; 36]>()
-                    .wrapping_rem(::core::mem::size_of::<xfmark_T>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) || (*iter_mark).fmark.mark.lnum == 0
+                    .wrapping_rem(::core::mem::size_of::<xfmark_T>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
+        || (*iter_mark).fmark.mark.lnum == 0
     {
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
     let mut iter_off: size_t = iter_mark
-        .offset_from(
-            (&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize),
-        ) as size_t;
+        .offset_from((&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize))
+        as size_t;
     *name = (if iter_off < NMARKS as size_t {
         'A' as ::core::ffi::c_int + iter_off as ::core::ffi::c_char as ::core::ffi::c_int
     } else {
         '0' as ::core::ffi::c_int
-            + iter_off.wrapping_sub(NMARKS as size_t) as ::core::ffi::c_char
-                as ::core::ffi::c_int
+            + iter_off.wrapping_sub(NMARKS as size_t) as ::core::ffi::c_char as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
     *fm = *iter_mark;
     loop {
         iter_mark = iter_mark.offset(1);
-        if (iter_mark
-            .offset_from(
-                (&raw mut namedfm as *mut xfmark_T)
-                    .offset(0 as ::core::ffi::c_int as isize),
-            ) as size_t)
+        if (iter_mark.offset_from(
+            (&raw mut namedfm as *mut xfmark_T).offset(0 as ::core::ffi::c_int as isize),
+        ) as size_t)
             >= ::core::mem::size_of::<[xfmark_T; 36]>()
                 .wrapping_div(::core::mem::size_of::<xfmark_T>())
                 .wrapping_div(
                     (::core::mem::size_of::<[xfmark_T; 36]>()
-                        .wrapping_rem(::core::mem::size_of::<xfmark_T>()) == 0)
-                        as ::core::ffi::c_int as usize,
+                        .wrapping_rem(::core::mem::size_of::<xfmark_T>())
+                        == 0) as ::core::ffi::c_int as usize,
                 )
         {
             break;
@@ -5682,10 +5607,7 @@ unsafe extern "C" fn next_buffer_mark(
         _ => {
             *mark_name += 1;
             return (&raw const (*buf).b_namedm as *const fmark_T)
-                .offset(
-                    (*mark_name as ::core::ffi::c_int - 'a' as ::core::ffi::c_int)
-                        as isize,
-                );
+                .offset((*mark_name as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as isize);
         }
     };
 }
@@ -5720,16 +5642,13 @@ pub unsafe extern "C" fn mark_buffer_iter(
     if iter_mark.is_null() {
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
-    let mut iter_off: size_t = iter_mark
-        .offset_from(
-            (&raw const (*buf).b_namedm as *const fmark_T)
-                .offset(0 as ::core::ffi::c_int as isize),
-        ) as size_t;
+    let mut iter_off: size_t = iter_mark.offset_from(
+        (&raw const (*buf).b_namedm as *const fmark_T).offset(0 as ::core::ffi::c_int as isize),
+    ) as size_t;
     if mark_name != 0 {
         *name = mark_name;
     } else {
-        *name = ('a' as ::core::ffi::c_int
-            + iter_off as ::core::ffi::c_char as ::core::ffi::c_int)
+        *name = ('a' as ::core::ffi::c_int + iter_off as ::core::ffi::c_char as ::core::ffi::c_int)
             as ::core::ffi::c_char;
     }
     *fm = *iter_mark;
@@ -5746,9 +5665,7 @@ pub unsafe extern "C" fn mark_set_global(
         return false_0 != 0;
     }
     let fm_tgt: *mut xfmark_T = (&raw mut namedfm as *mut xfmark_T).offset(idx as isize);
-    if update as ::core::ffi::c_int != 0
-        && fm.fmark.timestamp <= (*fm_tgt).fmark.timestamp
-    {
+    if update as ::core::ffi::c_int != 0 && fm.fmark.timestamp <= (*fm_tgt).fmark.timestamp {
         return false_0 != 0;
     }
     if (*fm_tgt).fmark.mark.lnum != 0 as linenr_T {
@@ -5779,7 +5696,7 @@ pub unsafe extern "C" fn mark_set_local(
     } else if name as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
         fm_tgt = &raw mut (*buf).b_last_change;
     } else {
-        return false_0 != 0
+        return false_0 != 0;
     }
     if update as ::core::ffi::c_int != 0 && fm.timestamp <= (*fm_tgt).timestamp {
         return false_0 != 0;
@@ -5819,16 +5736,14 @@ pub unsafe extern "C" fn set_last_cursor(mut win: *mut win_T) {
 pub unsafe extern "C" fn mark_mb_adjustpos(mut buf: *mut buf_T, mut lp: *mut pos_T) {
     if (*lp).col > 0 as ::core::ffi::c_int || (*lp).coladd > 1 as ::core::ffi::c_int {
         let p: *const ::core::ffi::c_char = ml_get_buf(buf, (*lp).lnum);
-        if *p as ::core::ffi::c_int == NUL || ml_get_buf_len(buf, (*lp).lnum) < (*lp).col
-        {
+        if *p as ::core::ffi::c_int == NUL || ml_get_buf_len(buf, (*lp).lnum) < (*lp).col {
             (*lp).col = 0 as ::core::ffi::c_int as colnr_T;
         } else {
             (*lp).col -= utf_head_off(p, p.offset((*lp).col as isize));
         }
         if (*lp).coladd == 1 as ::core::ffi::c_int
             && *p.offset((*lp).col as isize) as ::core::ffi::c_int != TAB
-            && vim_isprintc(utf_ptr2char(p.offset((*lp).col as isize)))
-                as ::core::ffi::c_int != 0
+            && vim_isprintc(utf_ptr2char(p.offset((*lp).col as isize))) as ::core::ffi::c_int != 0
             && ptr2cells(p.offset((*lp).col as isize)) > 1 as ::core::ffi::c_int
         {
             (*lp).coladd = 0 as ::core::ffi::c_int as colnr_T;
@@ -5847,9 +5762,7 @@ unsafe extern "C" fn add_mark(
     }
     let mut d: *mut dict_T = tv_dict_alloc();
     tv_list_append_dict(l, d);
-    let mut lpos: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
+    let mut lpos: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     tv_list_append_number(lpos, bufnr as varnumber_T);
     tv_list_append_number(lpos, (*pos).lnum as varnumber_T);
     tv_list_append_number(
@@ -5877,8 +5790,7 @@ unsafe extern "C" fn add_mark(
             && tv_dict_add_str(
                 d,
                 b"file\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
                 fname,
             ) == FAIL
     {
@@ -5888,20 +5800,16 @@ unsafe extern "C" fn add_mark(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_buf_local_marks(mut buf: *const buf_T, mut l: *mut list_T) {
-    let mut mname: [::core::ffi::c_char; 3] = ::core::mem::transmute::<
-        [u8; 3],
-        [::core::ffi::c_char; 3],
-    >(*b"' \0");
+    let mut mname: [::core::ffi::c_char; 3] =
+        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"' \0");
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NMARKS {
-        mname[1 as ::core::ffi::c_int as usize] = ('a' as ::core::ffi::c_int + i)
-            as ::core::ffi::c_char;
+        mname[1 as ::core::ffi::c_int as usize] =
+            ('a' as ::core::ffi::c_int + i) as ::core::ffi::c_char;
         add_mark(
             l,
             &raw mut mname as *mut ::core::ffi::c_char,
-            &raw const (*(&raw const (*buf).b_namedm as *const fmark_T)
-                .offset(i as isize))
-                .mark,
+            &raw const (*(&raw const (*buf).b_namedm as *const fmark_T).offset(i as isize)).mark,
             (*buf).handle as ::core::ffi::c_int,
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
@@ -5970,13 +5878,9 @@ pub unsafe extern "C" fn get_raw_global_mark(mut name: ::core::ffi::c_char) -> x
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
-    let mut mname: [::core::ffi::c_char; 3] = ::core::mem::transmute::<
-        [u8; 3],
-        [::core::ffi::c_char; 3],
-    >(*b"' \0");
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut mname: [::core::ffi::c_char; 3] =
+        ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"' \0");
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NMARKS + EXTRA_MARKS {
         if namedfm[i as usize].fmark.fnum != 0 as ::core::ffi::c_int {
@@ -5989,8 +5893,7 @@ pub unsafe extern "C" fn get_global_marks(mut l: *mut list_T) {
                 (i - NMARKS + '0' as ::core::ffi::c_int) as ::core::ffi::c_char
                     as ::core::ffi::c_int
             } else {
-                (i + 'A' as ::core::ffi::c_int) as ::core::ffi::c_char
-                    as ::core::ffi::c_int
+                (i + 'A' as ::core::ffi::c_int) as ::core::ffi::c_char as ::core::ffi::c_int
             }) as ::core::ffi::c_char;
             add_mark(
                 l,

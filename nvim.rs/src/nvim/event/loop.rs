@@ -5,11 +5,7 @@ extern "C" {
     fn uv_loop_close(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
     fn uv_run(_: *mut uv_loop_t, mode: uv_run_mode) -> ::core::ffi::c_int;
     fn uv_stop(_: *mut uv_loop_t);
-    fn uv_walk(
-        loop_0: *mut uv_loop_t,
-        walk_cb: uv_walk_cb,
-        arg: *mut ::core::ffi::c_void,
-    );
+    fn uv_walk(loop_0: *mut uv_loop_t, walk_cb: uv_walk_cb, arg: *mut ::core::ffi::c_void);
     fn uv_close(handle: *mut uv_handle_t, close_cb: uv_close_cb);
     fn uv_is_closing(handle: *const uv_handle_t) -> ::core::ffi::c_int;
     fn uv_async_init(
@@ -26,10 +22,7 @@ extern "C" {
         repeat: uint64_t,
     ) -> ::core::ffi::c_int;
     fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
-    fn uv_signal_init(
-        loop_0: *mut uv_loop_t,
-        handle: *mut uv_signal_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_signal_init(loop_0: *mut uv_loop_t, handle: *mut uv_signal_t) -> ::core::ffi::c_int;
     fn uv_mutex_init(handle: *mut uv_mutex_t) -> ::core::ffi::c_int;
     fn uv_mutex_destroy(handle: *mut uv_mutex_t);
     fn uv_mutex_lock(handle: *mut uv_mutex_t);
@@ -37,10 +30,7 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn os_hrtime() -> uint64_t;
-    fn multiqueue_new(
-        on_put: PutCallback,
-        data: *mut ::core::ffi::c_void,
-    ) -> *mut MultiQueue;
+    fn multiqueue_new(on_put: PutCallback, data: *mut ::core::ffi::c_void) -> *mut MultiQueue;
     fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
     fn multiqueue_free(self_0: *mut MultiQueue);
     fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
@@ -170,9 +160,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -199,9 +188,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -417,9 +404,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -431,9 +417,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -445,15 +430,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_6 {
@@ -581,9 +561,8 @@ pub type uv_run_mode = ::core::ffi::c_uint;
 pub const UV_RUN_NOWAIT: uv_run_mode = 2;
 pub const UV_RUN_ONCE: uv_run_mode = 1;
 pub const UV_RUN_DEFAULT: uv_run_mode = 0;
-pub type uv_walk_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, *mut ::core::ffi::c_void) -> (),
->;
+pub type uv_walk_cb =
+    Option<unsafe extern "C" fn(*mut uv_handle_t, *mut ::core::ffi::c_void) -> ()>;
 pub type hash_T = size_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -666,12 +645,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -718,12 +695,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_13 {
@@ -758,26 +733,18 @@ pub type Loop = loop_0;
 pub type ProcType = ::core::ffi::c_uint;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
     pub handler: argv_callback,
     pub argv: [*mut ::core::ffi::c_void; 10],
 }
-pub type PutCallback = Option<
-    unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> (),
->;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub type PutCallback =
+    Option<unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()>;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
-pub unsafe extern "C" fn loop_init(
-    mut loop_0: *mut Loop,
-    mut data: *mut ::core::ffi::c_void,
-) {
+pub unsafe extern "C" fn loop_init(mut loop_0: *mut Loop, mut data: *mut ::core::ffi::c_void) {
     uv_loop_init(&raw mut (*loop_0).uv);
     (*loop_0).recursive = 0 as ::core::ffi::c_int;
     (*loop_0).closing = false_0 != 0;
@@ -786,10 +753,7 @@ pub unsafe extern "C" fn loop_init(
     (*loop_0).children.size = (*loop_0).children.capacity;
     (*loop_0).children.items = ::core::ptr::null_mut::<*mut Proc>();
     (*loop_0).events = multiqueue_new(
-        Some(
-            loop_on_put
-                as unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> (),
-        ),
+        Some(loop_on_put as unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()),
         loop_0 as *mut ::core::ffi::c_void,
     );
     (*loop_0).fast_events = multiqueue_new_child((*loop_0).events);
@@ -801,7 +765,10 @@ pub unsafe extern "C" fn loop_init(
         Some(async_cb as unsafe extern "C" fn(*mut uv_async_t) -> ()),
     );
     uv_signal_init(&raw mut (*loop_0).uv, &raw mut (*loop_0).children_watcher);
-    uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*loop_0).children_kill_timer);
+    uv_timer_init(
+        &raw mut (*loop_0).uv,
+        &raw mut (*loop_0).children_kill_timer,
+    );
     uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*loop_0).poll_timer);
     uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*loop_0).exit_delay_timer);
     (*loop_0).poll_timer.data = xmalloc(::core::mem::size_of::<bool>());
@@ -833,10 +800,7 @@ unsafe extern "C" fn loop_uv_run(mut loop_0: *mut Loop, mut ms: int64_t) -> bool
     return *timeout_expired;
 }
 #[no_mangle]
-pub unsafe extern "C" fn loop_poll_events(
-    mut loop_0: *mut Loop,
-    mut ms: int64_t,
-) -> bool {
+pub unsafe extern "C" fn loop_poll_events(mut loop_0: *mut Loop, mut ms: int64_t) -> bool {
     let mut timeout_expired: bool = loop_uv_run(loop_0, ms);
     multiqueue_process_events((*loop_0).fast_events);
     return timeout_expired;
@@ -849,18 +813,14 @@ pub unsafe extern "C" fn loop_schedule_fast(mut loop_0: *mut Loop, mut event: Ev
     uv_mutex_unlock(&raw mut (*loop_0).mutex);
 }
 #[no_mangle]
-pub unsafe extern "C" fn loop_schedule_deferred(
-    mut loop_0: *mut Loop,
-    mut event: Event,
-) {
+pub unsafe extern "C" fn loop_schedule_deferred(mut loop_0: *mut Loop, mut event: Event) {
     let mut eventp: *mut Event = xmalloc(::core::mem::size_of::<Event>()) as *mut Event;
     *eventp = event;
     loop_schedule_fast(
         loop_0,
         Event {
             handler: Some(
-                loop_deferred_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                loop_deferred_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 loop_0 as *mut ::core::ffi::c_void,
@@ -878,10 +838,8 @@ pub unsafe extern "C" fn loop_schedule_deferred(
     );
 }
 unsafe extern "C" fn loop_deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut loop_0: *mut Loop = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Loop;
-    let mut eventp: *mut Event = *argv.offset(1 as ::core::ffi::c_int as isize)
-        as *mut Event;
+    let mut loop_0: *mut Loop = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Loop;
+    let mut eventp: *mut Event = *argv.offset(1 as ::core::ffi::c_int as isize) as *mut Event;
     multiqueue_put_event((*loop_0).events, *eventp);
     xfree(eventp as *mut ::core::ffi::c_void);
 }
@@ -895,10 +853,7 @@ pub unsafe extern "C" fn loop_on_put(
         uv_stop(&raw mut (*loop_0).uv);
     }
 }
-unsafe extern "C" fn loop_walk_cb(
-    mut handle: *mut uv_handle_t,
-    mut arg: *mut ::core::ffi::c_void,
-) {
+unsafe extern "C" fn loop_walk_cb(mut handle: *mut uv_handle_t, mut arg: *mut ::core::ffi::c_void) {
     if uv_is_closing(handle) == 0 {
         uv_close(handle, None);
     }
@@ -908,13 +863,22 @@ pub unsafe extern "C" fn loop_close(mut loop_0: *mut Loop, mut wait: bool) -> bo
     let mut rv: bool = true_0 != 0;
     (*loop_0).closing = true_0 != 0;
     uv_mutex_destroy(&raw mut (*loop_0).mutex);
-    uv_close(&raw mut (*loop_0).children_watcher as *mut uv_handle_t, None);
-    uv_close(&raw mut (*loop_0).children_kill_timer as *mut uv_handle_t, None);
+    uv_close(
+        &raw mut (*loop_0).children_watcher as *mut uv_handle_t,
+        None,
+    );
+    uv_close(
+        &raw mut (*loop_0).children_kill_timer as *mut uv_handle_t,
+        None,
+    );
     uv_close(
         &raw mut (*loop_0).poll_timer as *mut uv_handle_t,
         Some(timer_close_cb as unsafe extern "C" fn(*mut uv_handle_t) -> ()),
     );
-    uv_close(&raw mut (*loop_0).exit_delay_timer as *mut uv_handle_t, None);
+    uv_close(
+        &raw mut (*loop_0).exit_delay_timer as *mut uv_handle_t,
+        None,
+    );
     uv_close(&raw mut (*loop_0).async_0 as *mut uv_handle_t, None);
     let mut start: uint64_t = if wait as ::core::ffi::c_int != 0 {
         os_hrtime()
@@ -931,9 +895,7 @@ pub unsafe extern "C" fn loop_close(mut loop_0: *mut Loop, mut wait: bool) -> bo
                 UV_RUN_NOWAIT as ::core::ffi::c_int
             }) as uv_run_mode,
         );
-        if uv_loop_close(&raw mut (*loop_0).uv) != UV_EBUSY as ::core::ffi::c_int
-            || !wait
-        {
+        if uv_loop_close(&raw mut (*loop_0).uv) != UV_EBUSY as ::core::ffi::c_int || !wait {
             break;
         }
         let mut elapsed_s: uint64_t = os_hrtime()
@@ -957,10 +919,7 @@ pub unsafe extern "C" fn loop_close(mut loop_0: *mut Loop, mut wait: bool) -> bo
                 &raw mut (*loop_0).uv,
                 Some(
                     loop_walk_cb
-                        as unsafe extern "C" fn(
-                            *mut uv_handle_t,
-                            *mut ::core::ffi::c_void,
-                        ) -> (),
+                        as unsafe extern "C" fn(*mut uv_handle_t, *mut ::core::ffi::c_void) -> (),
                 ),
                 NULL,
             );

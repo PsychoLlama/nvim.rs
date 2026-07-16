@@ -59,17 +59,9 @@ extern "C" {
     fn func_tbl_get() -> *mut hashtab_T;
     fn get_current_funccal() -> *mut funccall_T;
     fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn vim_fgets(
-        buf: *mut ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-        fp: *mut FILE,
-    ) -> bool;
+    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     static mut do_profiling: ::core::ffi::c_int;
     static mut current_sctx: sctx_T;
@@ -79,21 +71,12 @@ extern "C" {
     fn ex_breakadd(eap: *mut exarg_T);
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
-    fn expand_env_save_opt(
-        src: *mut ::core::ffi::c_char,
-        one: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
+    fn expand_env_save_opt(src: *mut ::core::ffi::c_char, one: bool) -> *mut ::core::ffi::c_char;
     fn os_hrtime() -> uint64_t;
     static mut exestack: garray_T;
     static mut script_items: garray_T;
-    fn get_scriptname(
-        script_ctx: sctx_T,
-        should_free: *mut bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_scriptname(script_ctx: sctx_T, should_free: *mut bool) -> *mut ::core::ffi::c_char;
 }
 pub type __off_t = ::core::ffi::c_long;
 pub type __off64_t = ::core::ffi::c_long;
@@ -1573,24 +1556,19 @@ pub const PEXP_SUBCMD: C2Rust_Unnamed_4 = 0;
 pub type C2Rust_Unnamed_4 = ::core::ffi::c_uint;
 pub const PEXP_FUNC: C2Rust_Unnamed_4 = 1;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615
-    as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const _IOFBF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const PROF_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const PROF_PAUSED: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 static mut prof_wait_time: proftime_T = 0;
-static mut startuptime_buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut startuptime_buf: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub unsafe extern "C" fn profile_start() -> proftime_T {
     return os_hrtime();
@@ -1617,22 +1595,22 @@ pub unsafe extern "C" fn profile_setlimit(mut msec: int64_t) -> proftime_T {
     }
     '_c2rust_label: {
         if msec as ::core::ffi::c_longlong
-            <= 9223372036854775807 as ::core::ffi::c_longlong
-                / 1000000 as ::core::ffi::c_longlong - 1 as ::core::ffi::c_longlong
-        {} else {
+            <= 9223372036854775807 as ::core::ffi::c_longlong / 1000000 as ::core::ffi::c_longlong
+                - 1 as ::core::ffi::c_longlong
+        {
+        } else {
             __assert_fail(
-                b"msec <= (INT64_MAX / 1000000LL) - 1\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"msec <= (INT64_MAX / 1000000LL) - 1\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/profile.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 92 as ::core::ffi::c_uint,
-                b"proftime_T profile_setlimit(int64_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"proftime_T profile_setlimit(int64_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     let mut nsec: proftime_T = (msec as proftime_T as ::core::ffi::c_ulonglong)
-        .wrapping_mul(1000000 as ::core::ffi::c_ulonglong) as proftime_T;
+        .wrapping_mul(1000000 as ::core::ffi::c_ulonglong)
+        as proftime_T;
     return os_hrtime().wrapping_add(nsec);
 }
 #[no_mangle]
@@ -1654,21 +1632,14 @@ pub unsafe extern "C" fn profile_divide(
     if count <= 0 as ::core::ffi::c_int {
         return profile_zero();
     }
-    return round(tm as ::core::ffi::c_double / count as ::core::ffi::c_double)
-        as proftime_T;
+    return round(tm as ::core::ffi::c_double / count as ::core::ffi::c_double) as proftime_T;
 }
 #[no_mangle]
-pub unsafe extern "C" fn profile_add(
-    mut tm1: proftime_T,
-    mut tm2: proftime_T,
-) -> proftime_T {
+pub unsafe extern "C" fn profile_add(mut tm1: proftime_T, mut tm2: proftime_T) -> proftime_T {
     return tm1.wrapping_add(tm2);
 }
 #[no_mangle]
-pub unsafe extern "C" fn profile_sub(
-    mut tm1: proftime_T,
-    mut tm2: proftime_T,
-) -> proftime_T {
+pub unsafe extern "C" fn profile_sub(mut tm1: proftime_T, mut tm2: proftime_T) -> proftime_T {
     return tm1.wrapping_sub(tm2);
 }
 #[no_mangle]
@@ -1690,10 +1661,7 @@ pub unsafe extern "C" fn profile_set_wait(mut wait: proftime_T) {
     prof_wait_time = wait;
 }
 #[no_mangle]
-pub unsafe extern "C" fn profile_sub_wait(
-    mut tm: proftime_T,
-    mut tma: proftime_T,
-) -> proftime_T {
+pub unsafe extern "C" fn profile_sub_wait(mut tm: proftime_T, mut tma: proftime_T) -> proftime_T {
     let mut tm3: proftime_T = profile_sub(profile_get_wait(), tm);
     return profile_sub(tma, tm3);
 }
@@ -1722,9 +1690,7 @@ pub unsafe extern "C" fn profile_cmp(
         1 as ::core::ffi::c_int
     };
 }
-static mut profile_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut profile_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub unsafe extern "C" fn profile_reset() {
     let mut id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -1756,9 +1722,8 @@ pub unsafe extern "C" fn profile_reset() {
     while todo > 0 as size_t {
         if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
             todo = todo.wrapping_sub(1);
-            let mut uf: *mut ufunc_T = (*hi)
-                .hi_key
-                .offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
+            let mut uf: *mut ufunc_T =
+                (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
             if (*uf).uf_prof_initialized != 0 {
                 (*uf).uf_profiling = 0 as ::core::ffi::c_int;
                 (*uf).uf_tm_count = 0 as ::core::ffi::c_int;
@@ -1769,9 +1734,7 @@ pub unsafe extern "C" fn profile_reset() {
                 while i < (*uf).uf_lines.ga_len {
                     *(*uf).uf_tml_count.offset(i as isize) = 0 as ::core::ffi::c_int;
                     *(*uf).uf_tml_self.offset(i as isize) = 0 as proftime_T;
-                    *(*uf).uf_tml_total.offset(i as isize) = *(*uf)
-                        .uf_tml_self
-                        .offset(i as isize);
+                    *(*uf).uf_tml_total.offset(i as isize) = *(*uf).uf_tml_self.offset(i as isize);
                     i += 1;
                 }
                 (*uf).uf_tml_start = profile_zero();
@@ -1783,8 +1746,8 @@ pub unsafe extern "C" fn profile_reset() {
         }
         hi = hi.offset(1);
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut profile_fname
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut profile_fname as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -1800,7 +1763,8 @@ pub unsafe extern "C" fn ex_profile(mut eap: *mut exarg_T) {
             (*eap).arg,
             b"start\0".as_ptr() as *const ::core::ffi::c_char,
             5 as size_t,
-        ) == 0 as ::core::ffi::c_int && *e as ::core::ffi::c_int != NUL
+        ) == 0 as ::core::ffi::c_int
+        && *e as ::core::ffi::c_int != NUL
     {
         xfree(profile_fname as *mut ::core::ffi::c_void);
         profile_fname = expand_env_save_opt(e, true_0 != 0);
@@ -1808,12 +1772,9 @@ pub unsafe extern "C" fn ex_profile(mut eap: *mut exarg_T) {
         profile_set_wait(profile_zero());
         set_vim_var_nr(VV_PROFILING, 1 as varnumber_T);
     } else if do_profiling == PROF_NONE {
-        emsg(
-            gettext(
-                b"E750: First use \":profile start {fname}\"\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E750: First use \":profile start {fname}\"\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
     } else if strcmp((*eap).arg, b"stop\0".as_ptr() as *const ::core::ffi::c_char)
         == 0 as ::core::ffi::c_int
     {
@@ -1821,15 +1782,19 @@ pub unsafe extern "C" fn ex_profile(mut eap: *mut exarg_T) {
         do_profiling = PROF_NONE;
         set_vim_var_nr(VV_PROFILING, 0 as varnumber_T);
         profile_reset();
-    } else if strcmp((*eap).arg, b"pause\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
+    } else if strcmp(
+        (*eap).arg,
+        b"pause\0".as_ptr() as *const ::core::ffi::c_char,
+    ) == 0 as ::core::ffi::c_int
     {
         if do_profiling == PROF_YES {
             pause_time = profile_start();
         }
         do_profiling = PROF_PAUSED;
-    } else if strcmp((*eap).arg, b"continue\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
+    } else if strcmp(
+        (*eap).arg,
+        b"continue\0".as_ptr() as *const ::core::ffi::c_char,
+    ) == 0 as ::core::ffi::c_int
     {
         if do_profiling == PROF_PAUSED {
             pause_time = profile_end(pause_time);
@@ -1878,8 +1843,11 @@ pub unsafe extern "C" fn set_context_in_profile_cmd(
         return;
     }
     if end_subcmd.offset_from(arg) == 5 as isize
-        && strncmp(arg, b"start\0".as_ptr() as *const ::core::ffi::c_char, 5 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            arg,
+            b"start\0".as_ptr() as *const ::core::ffi::c_char,
+            5 as size_t,
+        ) == 0 as ::core::ffi::c_int
         || end_subcmd.offset_from(arg) == 4 as isize
             && strncmp(
                 arg,
@@ -1891,8 +1859,11 @@ pub unsafe extern "C" fn set_context_in_profile_cmd(
         (*xp).xp_pattern = skipwhite(end_subcmd);
         return;
     } else if end_subcmd.offset_from(arg) == 4 as isize
-        && strncmp(arg, b"func\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            arg,
+            b"func\0".as_ptr() as *const ::core::ffi::c_char,
+            4 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         (*xp).xp_context = EXPAND_USER_FUNC as ::core::ffi::c_int;
         (*xp).xp_pattern = skipwhite(end_subcmd);
@@ -1913,12 +1884,10 @@ pub unsafe extern "C" fn prof_input_end() {
 #[no_mangle]
 pub unsafe extern "C" fn prof_def_func() -> bool {
     if current_sctx.sc_sid > 0 as ::core::ffi::c_int {
-        return (**(script_items.ga_data as *mut *mut scriptitem_T)
-            .offset(
-                (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                    as isize,
-            ))
-            .sn_pr_force;
+        return (**(script_items.ga_data as *mut *mut scriptitem_T).offset(
+            (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
+        ))
+        .sn_pr_force;
     }
     return false_0 != 0;
 }
@@ -1972,8 +1941,7 @@ unsafe extern "C" fn prof_sort_list(
     );
     fprintf(
         fd,
-        b"count  total (s)   self (s)  function\n\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"count  total (s)   self (s)  function\n\0".as_ptr() as *const ::core::ffi::c_char,
     );
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 20 as ::core::ffi::c_int && i < st_len {
@@ -2033,22 +2001,17 @@ pub unsafe extern "C" fn func_do_profile(mut fp: *mut ufunc_T) {
         (*fp).uf_tm_self = profile_zero();
         (*fp).uf_tm_total = profile_zero();
         if (*fp).uf_tml_count.is_null() {
-            (*fp).uf_tml_count = xcalloc(
-                len as size_t,
-                ::core::mem::size_of::<::core::ffi::c_int>(),
-            ) as *mut ::core::ffi::c_int;
+            (*fp).uf_tml_count =
+                xcalloc(len as size_t, ::core::mem::size_of::<::core::ffi::c_int>())
+                    as *mut ::core::ffi::c_int;
         }
         if (*fp).uf_tml_total.is_null() {
-            (*fp).uf_tml_total = xcalloc(
-                len as size_t,
-                ::core::mem::size_of::<proftime_T>(),
-            ) as *mut proftime_T;
+            (*fp).uf_tml_total =
+                xcalloc(len as size_t, ::core::mem::size_of::<proftime_T>()) as *mut proftime_T;
         }
         if (*fp).uf_tml_self.is_null() {
-            (*fp).uf_tml_self = xcalloc(
-                len as size_t,
-                ::core::mem::size_of::<proftime_T>(),
-            ) as *mut proftime_T;
+            (*fp).uf_tml_self =
+                xcalloc(len as size_t, ::core::mem::size_of::<proftime_T>()) as *mut proftime_T;
         }
         (*fp).uf_tml_idx = -1 as ::core::ffi::c_int;
         (*fp).uf_prof_initialized = true_0;
@@ -2069,14 +2032,10 @@ pub unsafe extern "C" fn prof_child_exit(mut tm: *mut proftime_T) {
     if !fc.is_null() && (*(*fc).fc_func).uf_profiling != 0 {
         (*fc).fc_prof_child = profile_end((*fc).fc_prof_child);
         (*fc).fc_prof_child = profile_sub_wait(*tm, (*fc).fc_prof_child);
-        (*(*fc).fc_func).uf_tm_children = profile_add(
-            (*(*fc).fc_func).uf_tm_children,
-            (*fc).fc_prof_child,
-        );
-        (*(*fc).fc_func).uf_tml_children = profile_add(
-            (*(*fc).fc_func).uf_tml_children,
-            (*fc).fc_prof_child,
-        );
+        (*(*fc).fc_func).uf_tm_children =
+            profile_add((*(*fc).fc_func).uf_tm_children, (*fc).fc_prof_child);
+        (*(*fc).fc_func).uf_tml_children =
+            profile_add((*(*fc).fc_func).uf_tml_children, (*fc).fc_prof_child);
     }
     script_prof_restore(tm);
 }
@@ -2087,18 +2046,21 @@ pub unsafe extern "C" fn func_line_start(mut cookie: *mut ::core::ffi::c_void) {
     if (*fp).uf_profiling != 0
         && (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum >= 1 as linenr_T
+        .es_lnum
+            >= 1 as linenr_T
         && (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum <= (*fp).uf_lines.ga_len as linenr_T
+        .es_lnum
+            <= (*fp).uf_lines.ga_len as linenr_T
     {
         (*fp).uf_tml_idx = ((*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum - 1 as linenr_T) as ::core::ffi::c_int;
+        .es_lnum
+            - 1 as linenr_T) as ::core::ffi::c_int;
         while (*fp).uf_tml_idx > 0 as ::core::ffi::c_int
             && (*((*fp).uf_lines.ga_data as *mut *mut ::core::ffi::c_char)
                 .offset((*fp).uf_tml_idx as isize))
-                .is_null()
+            .is_null()
         {
             (*fp).uf_tml_idx -= 1;
         }
@@ -2145,16 +2107,15 @@ unsafe extern "C" fn func_dump_profile(mut fd: *mut FILE) {
     if todo == 0 as ::core::ffi::c_int {
         return;
     }
-    let mut sorttab: *mut *mut ufunc_T = xmalloc(
-        ::core::mem::size_of::<*mut ufunc_T>().wrapping_mul(todo as size_t),
-    ) as *mut *mut ufunc_T;
+    let mut sorttab: *mut *mut ufunc_T =
+        xmalloc(::core::mem::size_of::<*mut ufunc_T>().wrapping_mul(todo as size_t))
+            as *mut *mut ufunc_T;
     let mut hi: *mut hashitem_T = (*functbl).ht_array;
     while todo > 0 as ::core::ffi::c_int {
         if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed) {
             todo -= 1;
-            let mut fp: *mut ufunc_T = (*hi)
-                .hi_key
-                .offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
+            let mut fp: *mut ufunc_T =
+                (*hi).hi_key.offset(-(240 as ::core::ffi::c_ulong as isize)) as *mut ufunc_T;
             if (*fp).uf_prof_initialized != 0 {
                 let c2rust_fresh0 = st_len;
                 st_len = st_len + 1;
@@ -2162,12 +2123,12 @@ unsafe extern "C" fn func_dump_profile(mut fd: *mut FILE) {
                 *c2rust_lvalue_ptr = fp;
                 if *(&raw mut (*fp).uf_name as *mut ::core::ffi::c_char)
                     .offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int == K_SPECIAL
+                    as ::core::ffi::c_int
+                    == K_SPECIAL
                 {
                     fprintf(
                         fd,
-                        b"FUNCTION  <SNR>%s()\n\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"FUNCTION  <SNR>%s()\n\0".as_ptr() as *const ::core::ffi::c_char,
                         (&raw mut (*fp).uf_name as *mut ::core::ffi::c_char)
                             .offset(3 as ::core::ffi::c_int as isize),
                     );
@@ -2180,10 +2141,8 @@ unsafe extern "C" fn func_dump_profile(mut fd: *mut FILE) {
                 }
                 if (*fp).uf_script_ctx.sc_sid != 0 as ::core::ffi::c_int {
                     let mut should_free: bool = false;
-                    let mut p: *mut ::core::ffi::c_char = get_scriptname(
-                        (*fp).uf_script_ctx,
-                        &raw mut should_free,
-                    );
+                    let mut p: *mut ::core::ffi::c_char =
+                        get_scriptname((*fp).uf_script_ctx, &raw mut should_free);
                     fprintf(
                         fd,
                         b"    Defined: %s:%d\n\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2219,14 +2178,13 @@ unsafe extern "C" fn func_dump_profile(mut fd: *mut FILE) {
                 fprintf(fd, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
                 fprintf(
                     fd,
-                    b"count  total (s)   self (s)\n\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"count  total (s)   self (s)\n\0".as_ptr() as *const ::core::ffi::c_char,
                 );
                 let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while i < (*fp).uf_lines.ga_len {
                     if !(*((*fp).uf_lines.ga_data as *mut *mut ::core::ffi::c_char)
                         .offset(i as isize))
-                        .is_null()
+                    .is_null()
                     {
                         prof_func_line(
                             fd,
@@ -2266,8 +2224,7 @@ unsafe extern "C" fn func_dump_profile(mut fd: *mut FILE) {
             fd,
             sorttab,
             st_len,
-            b"TOTAL\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"TOTAL\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             false_0 != 0,
         );
         qsort(
@@ -2308,21 +2265,14 @@ pub unsafe extern "C" fn profile_init(mut si: *mut scriptitem_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn script_prof_save(mut tm: *mut proftime_T) {
-    if current_sctx.sc_sid > 0 as ::core::ffi::c_int
-        && current_sctx.sc_sid <= script_items.ga_len
-    {
+    if current_sctx.sc_sid > 0 as ::core::ffi::c_int && current_sctx.sc_sid <= script_items.ga_len {
         let mut si: *mut scriptitem_T = *(script_items.ga_data as *mut *mut scriptitem_T)
-            .offset(
-                (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                    as isize,
-            );
-        if (*si).sn_prof_on as ::core::ffi::c_int != 0
-            && {
-                let c2rust_fresh1 = (*si).sn_pr_nest;
-                (*si).sn_pr_nest = (*si).sn_pr_nest + 1;
-                c2rust_fresh1 == 0 as ::core::ffi::c_int
-            }
-        {
+            .offset((current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
+        if (*si).sn_prof_on as ::core::ffi::c_int != 0 && {
+            let c2rust_fresh1 = (*si).sn_pr_nest;
+            (*si).sn_pr_nest = (*si).sn_pr_nest + 1;
+            c2rust_fresh1 == 0 as ::core::ffi::c_int
+        } {
             (*si).sn_pr_child = profile_start();
         }
     }
@@ -2336,16 +2286,11 @@ pub unsafe extern "C" fn script_prof_restore(mut tm: *const proftime_T) {
         return;
     }
     let mut si: *mut scriptitem_T = *(script_items.ga_data as *mut *mut scriptitem_T)
-        .offset(
-            (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as isize,
-        );
-    if (*si).sn_prof_on as ::core::ffi::c_int != 0
-        && {
-            (*si).sn_pr_nest -= 1;
-            (*si).sn_pr_nest == 0 as ::core::ffi::c_int
-        }
-    {
+        .offset((current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
+    if (*si).sn_prof_on as ::core::ffi::c_int != 0 && {
+        (*si).sn_pr_nest -= 1;
+        (*si).sn_pr_nest == 0 as ::core::ffi::c_int
+    } {
         (*si).sn_pr_child = profile_end((*si).sn_pr_child);
         (*si).sn_pr_child = profile_sub_wait(*tm, (*si).sn_pr_child);
         (*si).sn_pr_children = profile_add((*si).sn_pr_children, (*si).sn_pr_child);
@@ -2391,10 +2336,8 @@ unsafe extern "C" fn script_dump_profile(mut fd: *mut FILE) {
                 fd,
                 b"count  total (s)   self (s)\n\0".as_ptr() as *const ::core::ffi::c_char,
             );
-            let mut sfd: *mut FILE = os_fopen(
-                (*si).sn_name,
-                b"r\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            let mut sfd: *mut FILE =
+                os_fopen((*si).sn_name, b"r\0".as_ptr() as *const ::core::ffi::c_char);
             if sfd.is_null() {
                 fprintf(
                     fd,
@@ -2402,44 +2345,33 @@ unsafe extern "C" fn script_dump_profile(mut fd: *mut FILE) {
                 );
             } else {
                 let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while !vim_fgets(
-                    &raw mut IObuff as *mut ::core::ffi::c_char,
-                    IOSIZE,
-                    sfd,
-                ) {
-                    if IObuff[(IOSIZE - 2 as ::core::ffi::c_int) as usize]
-                        as ::core::ffi::c_int != NUL
-                        && IObuff[(IOSIZE - 2 as ::core::ffi::c_int) as usize]
-                            as ::core::ffi::c_int != NL
+                while !vim_fgets(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE, sfd) {
+                    if IObuff[(IOSIZE - 2 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                        != NUL
+                        && IObuff[(IOSIZE - 2 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                            != NL
                     {
                         let mut n: ::core::ffi::c_int = IOSIZE - 2 as ::core::ffi::c_int;
                         while n > 0 as ::core::ffi::c_int
-                            && IObuff[n as usize] as ::core::ffi::c_int
-                                & 0xc0 as ::core::ffi::c_int == 0x80 as ::core::ffi::c_int
+                            && IObuff[n as usize] as ::core::ffi::c_int & 0xc0 as ::core::ffi::c_int
+                                == 0x80 as ::core::ffi::c_int
                         {
                             n -= 1;
                         }
                         IObuff[n as usize] = NL as ::core::ffi::c_char;
-                        IObuff[(n + 1 as ::core::ffi::c_int) as usize] = NUL
-                            as ::core::ffi::c_char;
+                        IObuff[(n + 1 as ::core::ffi::c_int) as usize] = NUL as ::core::ffi::c_char;
                     }
-                    if i < (*si).sn_prl_ga.ga_len
-                        && {
-                            pp = ((*si).sn_prl_ga.ga_data as *mut sn_prl_T)
-                                .offset(i as isize);
-                            (*pp).snp_count > 0 as ::core::ffi::c_int
-                        }
-                    {
+                    if i < (*si).sn_prl_ga.ga_len && {
+                        pp = ((*si).sn_prl_ga.ga_data as *mut sn_prl_T).offset(i as isize);
+                        (*pp).snp_count > 0 as ::core::ffi::c_int
+                    } {
                         fprintf(
                             fd,
                             b"%5d \0".as_ptr() as *const ::core::ffi::c_char,
                             (*pp).snp_count,
                         );
                         if profile_equal((*pp).sn_prl_total, (*pp).sn_prl_self) {
-                            fprintf(
-                                fd,
-                                b"           \0".as_ptr() as *const ::core::ffi::c_char,
-                            );
+                            fprintf(fd, b"           \0".as_ptr() as *const ::core::ffi::c_char);
                         } else {
                             fprintf(
                                 fd,
@@ -2478,10 +2410,7 @@ pub unsafe extern "C" fn profile_dump() {
     if profile_fname.is_null() {
         return;
     }
-    let mut fd: *mut FILE = os_fopen(
-        profile_fname,
-        b"w\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut fd: *mut FILE = os_fopen(profile_fname, b"w\0".as_ptr() as *const ::core::ffi::c_char);
     if fd.is_null() {
         semsg(
             gettext(&raw const e_notopen as *const ::core::ffi::c_char),
@@ -2495,35 +2424,33 @@ pub unsafe extern "C" fn profile_dump() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn script_line_start() {
-    if current_sctx.sc_sid <= 0 as ::core::ffi::c_int
-        || current_sctx.sc_sid > script_items.ga_len
-    {
+    if current_sctx.sc_sid <= 0 as ::core::ffi::c_int || current_sctx.sc_sid > script_items.ga_len {
         return;
     }
     let mut si: *mut scriptitem_T = *(script_items.ga_data as *mut *mut scriptitem_T)
-        .offset(
-            (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as isize,
-        );
+        .offset((current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
     if (*si).sn_prof_on as ::core::ffi::c_int != 0
         && (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum >= 1 as linenr_T
+        .es_lnum
+            >= 1 as linenr_T
     {
         ga_grow(
             &raw mut (*si).sn_prl_ga,
             (*(exestack.ga_data as *mut estack_T)
                 .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum as ::core::ffi::c_int - (*si).sn_prl_ga.ga_len,
+            .es_lnum as ::core::ffi::c_int
+                - (*si).sn_prl_ga.ga_len,
         );
         (*si).sn_prl_idx = (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum - 1 as linenr_T;
+        .es_lnum
+            - 1 as linenr_T;
         while (*si).sn_prl_ga.ga_len as linenr_T <= (*si).sn_prl_idx
             && (*si).sn_prl_ga.ga_len < (*si).sn_prl_ga.ga_maxlen
         {
-            let mut pp: *mut sn_prl_T = ((*si).sn_prl_ga.ga_data as *mut sn_prl_T)
-                .offset((*si).sn_prl_ga.ga_len as isize);
+            let mut pp: *mut sn_prl_T =
+                ((*si).sn_prl_ga.ga_data as *mut sn_prl_T).offset((*si).sn_prl_ga.ga_len as isize);
             (*pp).snp_count = 0 as ::core::ffi::c_int;
             (*pp).sn_prl_total = profile_zero();
             (*pp).sn_prl_self = profile_zero();
@@ -2537,47 +2464,35 @@ pub unsafe extern "C" fn script_line_start() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn script_line_exec() {
-    if current_sctx.sc_sid <= 0 as ::core::ffi::c_int
-        || current_sctx.sc_sid > script_items.ga_len
-    {
+    if current_sctx.sc_sid <= 0 as ::core::ffi::c_int || current_sctx.sc_sid > script_items.ga_len {
         return;
     }
     let mut si: *mut scriptitem_T = *(script_items.ga_data as *mut *mut scriptitem_T)
-        .offset(
-            (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as isize,
-        );
+        .offset((current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
     if (*si).sn_prof_on as ::core::ffi::c_int != 0 && (*si).sn_prl_idx >= 0 as linenr_T {
         (*si).sn_prl_execed = true_0;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn script_line_end() {
-    if current_sctx.sc_sid <= 0 as ::core::ffi::c_int
-        || current_sctx.sc_sid > script_items.ga_len
-    {
+    if current_sctx.sc_sid <= 0 as ::core::ffi::c_int || current_sctx.sc_sid > script_items.ga_len {
         return;
     }
     let mut si: *mut scriptitem_T = *(script_items.ga_data as *mut *mut scriptitem_T)
-        .offset(
-            (current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as isize,
-        );
-    if (*si).sn_prof_on as ::core::ffi::c_int != 0 && (*si).sn_prl_idx >= 0 as linenr_T
+        .offset((current_sctx.sc_sid as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize);
+    if (*si).sn_prof_on as ::core::ffi::c_int != 0
+        && (*si).sn_prl_idx >= 0 as linenr_T
         && (*si).sn_prl_idx < (*si).sn_prl_ga.ga_len as linenr_T
     {
         if (*si).sn_prl_execed != 0 {
-            let mut pp: *mut sn_prl_T = ((*si).sn_prl_ga.ga_data as *mut sn_prl_T)
-                .offset((*si).sn_prl_idx as isize);
+            let mut pp: *mut sn_prl_T =
+                ((*si).sn_prl_ga.ga_data as *mut sn_prl_T).offset((*si).sn_prl_idx as isize);
             (*pp).snp_count += 1;
             (*si).sn_prl_start = profile_end((*si).sn_prl_start);
             (*si).sn_prl_start = profile_sub_wait((*si).sn_prl_wait, (*si).sn_prl_start);
             (*pp).sn_prl_total = profile_add((*pp).sn_prl_total, (*si).sn_prl_start);
-            (*pp).sn_prl_self = profile_self(
-                (*pp).sn_prl_self,
-                (*si).sn_prl_start,
-                (*si).sn_prl_children,
-            );
+            (*pp).sn_prl_self =
+                profile_self((*pp).sn_prl_self, (*si).sn_prl_start, (*si).sn_prl_children);
         }
         (*si).sn_prl_idx = -1 as ::core::ffi::c_int as linenr_T;
     }
@@ -2585,10 +2500,7 @@ pub unsafe extern "C" fn script_line_end() {
 static mut g_start_time: proftime_T = 0;
 static mut g_prev_time: proftime_T = 0;
 #[no_mangle]
-pub unsafe extern "C" fn time_push(
-    mut rel: *mut proftime_T,
-    mut start: *mut proftime_T,
-) {
+pub unsafe extern "C" fn time_push(mut rel: *mut proftime_T, mut start: *mut proftime_T) {
     let mut now: proftime_T = profile_start();
     *rel = profile_sub(now, g_prev_time);
     *start = now;
@@ -2613,16 +2525,17 @@ pub unsafe extern "C" fn time_start(mut message: *const ::core::ffi::c_char) {
     }
     g_start_time = profile_start();
     g_prev_time = g_start_time;
-    fprintf(time_fd, b"\ntimes in msec\n\0".as_ptr() as *const ::core::ffi::c_char);
     fprintf(
         time_fd,
-        b" clock   self+sourced   self:  sourced script\n\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"\ntimes in msec\n\0".as_ptr() as *const ::core::ffi::c_char,
     );
     fprintf(
         time_fd,
-        b" clock   elapsed:              other lines\n\n\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b" clock   self+sourced   self:  sourced script\n\0".as_ptr() as *const ::core::ffi::c_char,
+    );
+    fprintf(
+        time_fd,
+        b" clock   elapsed:              other lines\n\n\0".as_ptr() as *const ::core::ffi::c_char,
     );
     time_msg(message, ::core::ptr::null::<proftime_T>());
 }
@@ -2643,7 +2556,11 @@ pub unsafe extern "C" fn time_msg(
     fprintf(time_fd, b"  \0".as_ptr() as *const ::core::ffi::c_char);
     time_diff(g_prev_time, now);
     g_prev_time = now;
-    fprintf(time_fd, b": %s\n\0".as_ptr() as *const ::core::ffi::c_char, mesg);
+    fprintf(
+        time_fd,
+        b": %s\n\0".as_ptr() as *const ::core::ffi::c_char,
+        mesg,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn time_init(
@@ -2671,8 +2588,8 @@ pub unsafe extern "C" fn time_init(
         bufsize.wrapping_add(1 as size_t),
     );
     if r != 0 as ::core::ffi::c_int {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut startuptime_buf
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut startuptime_buf as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -2688,8 +2605,7 @@ pub unsafe extern "C" fn time_init(
     }
     fprintf(
         time_fd,
-        b"--- Startup times for process: %s ---\n\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"--- Startup times for process: %s ---\n\0".as_ptr() as *const ::core::ffi::c_char,
         proc_name,
     );
 }
@@ -2699,7 +2615,8 @@ pub unsafe extern "C" fn time_finish() {
         return;
     }
     '_c2rust_label: {
-        if !startuptime_buf.is_null() {} else {
+        if !startuptime_buf.is_null() {
+        } else {
             __assert_fail(
                 b"startuptime_buf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/profile.c\0".as_ptr()
@@ -2717,8 +2634,8 @@ pub unsafe extern "C" fn time_finish() {
     }
     fclose(time_fd);
     time_fd = ::core::ptr::null_mut::<FILE>();
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut startuptime_buf
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut startuptime_buf as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;

@@ -20,11 +20,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn fstat(__fd: ::core::ffi::c_int, __buf: *mut stat) -> ::core::ffi::c_int;
-    fn write(
-        __fd: ::core::ffi::c_int,
-        __buf: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ssize_t;
+    fn write(__fd: ::core::ffi::c_int, __buf: *const ::core::ffi::c_void, __n: size_t) -> ssize_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -233,9 +229,8 @@ pub struct TermKey {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_0 {
-    pub emit_codepoint: Option<
-        unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> (),
-    >,
+    pub emit_codepoint:
+        Option<unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> ()>,
     pub peekkey_simple: Option<
         unsafe extern "C" fn(
             *mut TermKey,
@@ -244,9 +239,8 @@ pub struct C2Rust_Unnamed_0 {
             *mut size_t,
         ) -> TermKeyResult,
     >,
-    pub peekkey_mouse: Option<
-        unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult,
-    >,
+    pub peekkey_mouse:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -361,25 +355,13 @@ pub struct TermKeyDriverNode {
 #[repr(C)]
 pub struct TermKeyDriver {
     pub name: *const ::core::ffi::c_char,
-    pub new_driver: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut TerminfoEntry,
-        ) -> *mut ::core::ffi::c_void,
-    >,
+    pub new_driver:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void>,
     pub free_driver: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>,
-    pub start_driver: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
-    >,
-    pub stop_driver: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
-    >,
+    pub start_driver:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
+    pub stop_driver:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub peekkey: Option<
         unsafe extern "C" fn(
             *mut TermKey,
@@ -447,9 +429,7 @@ pub struct C2Rust_Unnamed_3 {
     pub sym: TermKeySym,
     pub mods: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const kTerminfoFuncKeyMax: ::core::ffi::c_int = 63 as ::core::ffi::c_int;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 92] = unsafe {
     ::core::mem::transmute::<
@@ -586,8 +566,8 @@ unsafe extern "C" fn new_node_key(
     mut modmask: ::core::ffi::c_int,
     mut modset: ::core::ffi::c_int,
 ) -> *mut trie_node {
-    let mut n: *mut trie_node_key = xmalloc(::core::mem::size_of::<trie_node_key>())
-        as *mut trie_node_key;
+    let mut n: *mut trie_node_key =
+        xmalloc(::core::mem::size_of::<trie_node_key>()) as *mut trie_node_key;
     (*n).type_0 = TYPE_KEY;
     (*n).key.type_0 = type_0;
     (*n).key.sym = sym;
@@ -600,12 +580,11 @@ unsafe extern "C" fn new_node_arr(
     mut max: ::core::ffi::c_uchar,
 ) -> *mut trie_node {
     let mut n: *mut trie_node_arr = xmalloc(
-        ::core::mem::size_of::<trie_node_arr>()
-            .wrapping_add(
-                ((max as ::core::ffi::c_int - min as ::core::ffi::c_int
-                    + 1 as ::core::ffi::c_int) as size_t)
-                    .wrapping_mul(::core::mem::size_of::<*mut trie_node>()),
-            ),
+        ::core::mem::size_of::<trie_node_arr>().wrapping_add(
+            ((max as ::core::ffi::c_int - min as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
+                as size_t)
+                .wrapping_mul(::core::mem::size_of::<*mut trie_node>()),
+        ),
     ) as *mut trie_node_arr;
     (*n).type_0 = TYPE_ARR;
     (*n).min = min;
@@ -614,9 +593,8 @@ unsafe extern "C" fn new_node_arr(
     i = min as ::core::ffi::c_int;
     while i <= max as ::core::ffi::c_int {
         *(&raw mut (*n).arr as *mut *mut trie_node)
-            .offset((i - min as ::core::ffi::c_int) as isize) = ::core::ptr::null_mut::<
-            trie_node,
-        >();
+            .offset((i - min as ::core::ffi::c_int) as isize) =
+            ::core::ptr::null_mut::<trie_node>();
         i += 1;
     }
     return n as *mut trie_node;
@@ -642,9 +620,7 @@ unsafe extern "C" fn lookup_next(
                 return ::core::ptr::null_mut::<trie_node>();
             }
             return *(&raw mut (*nar).arr as *mut *mut trie_node)
-                .offset(
-                    (b as ::core::ffi::c_int - (*nar).min as ::core::ffi::c_int) as isize,
-                );
+                .offset((b as ::core::ffi::c_int - (*nar).min as ::core::ffi::c_int) as isize);
         }
         _ => {}
     }
@@ -659,7 +635,7 @@ unsafe extern "C" fn free_trie(mut n: *mut trie_node) {
             while i <= (*nar).max as ::core::ffi::c_int {
                 if !(*(&raw mut (*nar).arr as *mut *mut trie_node)
                     .offset((i - (*nar).min as ::core::ffi::c_int) as isize))
-                    .is_null()
+                .is_null()
                 {
                     free_trie(
                         *(&raw mut (*nar).arr as *mut *mut trie_node)
@@ -684,37 +660,27 @@ unsafe extern "C" fn compress_trie(mut n: *mut trie_node) -> *mut trie_node {
             let mut min: ::core::ffi::c_uchar = 0;
             let mut max: ::core::ffi::c_uchar = 0;
             min = 0 as ::core::ffi::c_uchar;
-            while (*(&raw mut (*nar).arr as *mut *mut trie_node).offset(min as isize))
-                .is_null()
-            {
+            while (*(&raw mut (*nar).arr as *mut *mut trie_node).offset(min as isize)).is_null() {
                 if min as ::core::ffi::c_int == 255 as ::core::ffi::c_int
-                    && (*(&raw mut (*nar).arr as *mut *mut trie_node)
-                        .offset(min as isize))
+                    && (*(&raw mut (*nar).arr as *mut *mut trie_node).offset(min as isize))
                         .is_null()
                 {
                     xfree(nar as *mut ::core::ffi::c_void);
-                    return new_node_arr(
-                        1 as ::core::ffi::c_uchar,
-                        0 as ::core::ffi::c_uchar,
-                    );
+                    return new_node_arr(1 as ::core::ffi::c_uchar, 0 as ::core::ffi::c_uchar);
                 }
                 min = min.wrapping_add(1);
             }
             max = 0xff as ::core::ffi::c_uchar;
-            while (*(&raw mut (*nar).arr as *mut *mut trie_node).offset(max as isize))
-                .is_null()
-            {
+            while (*(&raw mut (*nar).arr as *mut *mut trie_node).offset(max as isize)).is_null() {
                 max = max.wrapping_sub(1);
             }
-            let mut new: *mut trie_node_arr = new_node_arr(min, max)
-                as *mut trie_node_arr;
+            let mut new: *mut trie_node_arr = new_node_arr(min, max) as *mut trie_node_arr;
             let mut i: ::core::ffi::c_int = 0;
             i = min as ::core::ffi::c_int;
             while i <= max as ::core::ffi::c_int {
                 *(&raw mut (*new).arr as *mut *mut trie_node)
-                    .offset((i - min as ::core::ffi::c_int) as isize) = compress_trie(
-                    *(&raw mut (*nar).arr as *mut *mut trie_node).offset(i as isize),
-                );
+                    .offset((i - min as ::core::ffi::c_int) as isize) =
+                    compress_trie(*(&raw mut (*nar).arr as *mut *mut trie_node).offset(i as isize));
                 i += 1;
             }
             xfree(nar as *mut ::core::ffi::c_void);
@@ -732,21 +698,18 @@ unsafe extern "C" fn try_load_terminfo_key(
     mut name: *const ::core::ffi::c_char,
     mut info: *mut keyinfo,
 ) -> bool {
-    let mut value: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut value: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if !(*ti).ti.is_null() {
         if !fn_nr {
-            value = (*(*ti).ti)
-                .keys[key
-                as usize][(if shift as ::core::ffi::c_int != 0 {
+            value = (*(*ti).ti).keys[key as usize][(if shift as ::core::ffi::c_int != 0 {
                 1 as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
             }) as usize];
         } else {
             '_c2rust_label: {
-                if !shift {} else {
+                if !shift {
+                } else {
                     __assert_fail(
                         b"!shift\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/tui/termkey/driver-ti.c\0"
@@ -762,15 +725,15 @@ unsafe extern "C" fn try_load_terminfo_key(
     if (*(*ti).tk).ti_getstr_hook.is_some() {
         value = (*(*ti).tk)
             .ti_getstr_hook
-            .expect(
-                "non-null function pointer",
-            )(name, value, (*(*ti).tk).ti_getstr_hook_data);
+            .expect("non-null function pointer")(
+            name, value, (*(*ti).tk).ti_getstr_hook_data
+        );
     }
     if value.is_null()
         || value
-            == ::core::ptr::from_exposed_addr_mut::<
-                ::core::ffi::c_char,
-            >(-1 as ::core::ffi::c_int as usize) as *const ::core::ffi::c_char
+            == ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_char>(
+                -1 as ::core::ffi::c_int as usize,
+            ) as *const ::core::ffi::c_char
         || *value.offset(0 as ::core::ffi::c_int as isize) == 0
     {
         return false_0 != 0;
@@ -786,8 +749,8 @@ unsafe extern "C" fn try_load_terminfo_key(
 }
 unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0;
-    (*ti).root = new_node_arr(0 as ::core::ffi::c_uchar, 0xff as ::core::ffi::c_uchar)
-        as *mut trie_node;
+    (*ti).root =
+        new_node_arr(0 as ::core::ffi::c_uchar, 0xff as ::core::ffi::c_uchar) as *mut trie_node;
     if (*ti).root.is_null() {
         return 0 as ::core::ffi::c_int;
     }
@@ -821,10 +784,8 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
             let mut c2rust_lvalue_0: keyinfo = keyinfo {
                 type_0: funcs[i as usize].type_0,
                 sym: funcs[i as usize].sym,
-                modifier_mask: funcs[i as usize].mods
-                    | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
-                modifier_set: funcs[i as usize].mods
-                    | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
+                modifier_mask: funcs[i as usize].mods | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
+                modifier_set: funcs[i as usize].mods | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
             };
             try_load_terminfo_key(
                 ti,
@@ -891,8 +852,7 @@ pub unsafe extern "C" fn new_driver_ti(
     mut tk: *mut TermKey,
     mut term: *mut TerminfoEntry,
 ) -> *mut ::core::ffi::c_void {
-    let mut ti: *mut TermKeyTI = xmalloc(::core::mem::size_of::<TermKeyTI>())
-        as *mut TermKeyTI;
+    let mut ti: *mut TermKeyTI = xmalloc(::core::mem::size_of::<TermKeyTI>()) as *mut TermKeyTI;
     (*ti).tk = tk;
     (*ti).root = ::core::ptr::null_mut::<trie_node>();
     (*ti).start_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -918,14 +878,21 @@ pub unsafe extern "C" fn start_driver_ti(
         st_size: 0,
         st_blksize: 0,
         st_blocks: 0,
-        st_atim: timespec { tv_sec: 0, tv_nsec: 0 },
-        st_mtim: timespec { tv_sec: 0, tv_nsec: 0 },
-        st_ctim: timespec { tv_sec: 0, tv_nsec: 0 },
+        st_atim: timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        },
+        st_mtim: timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        },
+        st_ctim: timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        },
         __glibc_reserved: [0; 3],
     };
-    let mut start_string: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut start_string: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: size_t = 0;
     if (*ti).root.is_null() {
         load_terminfo(ti);
@@ -974,9 +941,18 @@ pub unsafe extern "C" fn stop_driver_ti(
         st_size: 0,
         st_blksize: 0,
         st_blocks: 0,
-        st_atim: timespec { tv_sec: 0, tv_nsec: 0 },
-        st_mtim: timespec { tv_sec: 0, tv_nsec: 0 },
-        st_ctim: timespec { tv_sec: 0, tv_nsec: 0 },
+        st_atim: timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        },
+        st_mtim: timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        },
+        st_ctim: timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        },
         __glibc_reserved: [0; 3],
     };
     let mut stop_string: *mut ::core::ffi::c_char = (*ti).stop_string;
@@ -1039,7 +1015,9 @@ pub unsafe extern "C" fn peekkey_ti(
     while (pos as size_t) < (*tk).buffcount {
         p = lookup_next(
             p,
-            *(*tk).buffer.offset((*tk).buffstart.wrapping_add(pos as size_t) as isize),
+            *(*tk)
+                .buffer
+                .offset((*tk).buffstart.wrapping_add(pos as size_t) as isize),
         );
         if p.is_null() {
             break;
@@ -1051,13 +1029,15 @@ pub unsafe extern "C" fn peekkey_ti(
             continue;
         }
         let mut nk: *mut trie_node_key = p as *mut trie_node_key;
-        if (*nk).key.type_0 as ::core::ffi::c_int
-            == TERMKEY_TYPE_MOUSE as ::core::ffi::c_int
-        {
+        if (*nk).key.type_0 as ::core::ffi::c_int == TERMKEY_TYPE_MOUSE as ::core::ffi::c_int {
             (*tk).buffstart = (*tk).buffstart.wrapping_add(pos as size_t);
             (*tk).buffcount = (*tk).buffcount.wrapping_sub(pos as size_t);
-            let mut mouse_result: TermKeyResult = Some(
-                    (*tk).method.peekkey_mouse.expect("non-null function pointer"),
+            let mut mouse_result: TermKeyResult =
+                Some(
+                    (*tk)
+                        .method
+                        .peekkey_mouse
+                        .expect("non-null function pointer"),
                 )
                 .expect("non-null function pointer")(tk, key, nbytep);
             (*tk).buffstart = (*tk).buffstart.wrapping_sub(pos as size_t);
@@ -1107,10 +1087,7 @@ unsafe extern "C" fn insert_seq(
         }
         let mut next_0: *mut trie_node = ::core::ptr::null_mut::<trie_node>();
         if *seq.offset((pos + 1 as ::core::ffi::c_int) as isize) != 0 {
-            next_0 = new_node_arr(
-                0 as ::core::ffi::c_uchar,
-                0xff as ::core::ffi::c_uchar,
-            );
+            next_0 = new_node_arr(0 as ::core::ffi::c_uchar, 0xff as ::core::ffi::c_uchar);
         } else {
             next_0 = node;
         }
@@ -1133,11 +1110,9 @@ unsafe extern "C" fn insert_seq(
                     );
                     abort();
                 }
-                *(&raw mut (*nar).arr as *mut *mut trie_node)
-                    .offset(
-                        (b as ::core::ffi::c_int - (*nar).min as ::core::ffi::c_int)
-                            as isize,
-                    ) = next_0;
+                *(&raw mut (*nar).arr as *mut *mut trie_node).offset(
+                    (b as ::core::ffi::c_int - (*nar).min as ::core::ffi::c_int) as isize,
+                ) = next_0;
                 p = next_0;
             }
             0 => {

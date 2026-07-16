@@ -14,10 +14,7 @@ extern "C" {
         __arg: ::core::ffi::VaList,
     ) -> ::core::ffi::c_int;
     fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
-    fn realloc(
-        __ptr: *mut ::core::ffi::c_void,
-        __size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn realloc(__ptr: *mut ::core::ffi::c_void, __size: size_t) -> *mut ::core::ffi::c_void;
     fn free(__ptr: *mut ::core::ffi::c_void);
     fn abort() -> !;
 }
@@ -80,14 +77,15 @@ pub struct strbuf_t {
     pub reallocs: ::core::ffi::c_int,
     pub debug: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const STRBUF_DEFAULT_SIZE: ::core::ffi::c_int = 1023 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn strbuf_empty_length(mut s: *mut strbuf_t) -> size_t {
-    return (*s).size.wrapping_sub((*s).length).wrapping_sub(1 as size_t);
+    return (*s)
+        .size
+        .wrapping_sub((*s).length)
+        .wrapping_sub(1 as size_t);
 }
 #[inline]
 unsafe extern "C" fn strbuf_ensure_null(mut s: *mut strbuf_t) {
@@ -109,7 +107,10 @@ pub unsafe extern "C" fn strbuf_init(mut s: *mut strbuf_t, mut len: size_t) {
         size = len.wrapping_add(1 as size_t);
     }
     if size < len {
-        die(b"Overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char, len);
+        die(
+            b"Overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
+            len,
+        );
     }
     (*s).buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*s).size = size;
@@ -164,9 +165,7 @@ pub unsafe extern "C" fn strbuf_free_to_string(
     mut s: *mut strbuf_t,
     mut len: *mut size_t,
 ) -> *mut ::core::ffi::c_char {
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     debug_stats(s);
     strbuf_ensure_null(s);
     buf = (*s).buf;
@@ -178,21 +177,18 @@ pub unsafe extern "C" fn strbuf_free_to_string(
     }
     return buf;
 }
-unsafe extern "C" fn calculate_new_size(
-    mut s: *mut strbuf_t,
-    mut len: size_t,
-) -> size_t {
+unsafe extern "C" fn calculate_new_size(mut s: *mut strbuf_t, mut len: size_t) -> size_t {
     let mut reqsize: size_t = 0;
     let mut newsize: size_t = 0;
     if len <= 0 as size_t {
-        die(
-            b"BUG: Invalid strbuf length requested\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+        die(b"BUG: Invalid strbuf length requested\0".as_ptr() as *const ::core::ffi::c_char);
     }
     reqsize = len.wrapping_add(1 as size_t);
     if reqsize < len {
-        die(b"Overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char, len);
+        die(
+            b"Overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
+            len,
+        );
     }
     if (*s).size > reqsize {
         return reqsize;
@@ -207,8 +203,7 @@ unsafe extern "C" fn calculate_new_size(
     }
     if newsize < reqsize {
         die(
-            b"BUG: strbuf length would overflow, len: %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"BUG: strbuf length would overflow, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
             len,
         );
     }
@@ -228,10 +223,12 @@ pub unsafe extern "C" fn strbuf_resize(mut s: *mut strbuf_t, mut len: size_t) {
         );
     }
     (*s).size = newsize;
-    (*s).buf = realloc((*s).buf as *mut ::core::ffi::c_void, (*s).size)
-        as *mut ::core::ffi::c_char;
+    (*s).buf = realloc((*s).buf as *mut ::core::ffi::c_void, (*s).size) as *mut ::core::ffi::c_char;
     if (*s).buf.is_null() {
-        die(b"Out of memory, len: %zu\0".as_ptr() as *const ::core::ffi::c_char, len);
+        die(
+            b"Out of memory, len: %zu\0".as_ptr() as *const ::core::ffi::c_char,
+            len,
+        );
     }
     (*s).reallocs += 1;
 }

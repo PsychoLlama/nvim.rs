@@ -19,19 +19,13 @@ extern "C" {
         __c: ::core::ffi::c_int,
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array;
-    fn parse_virt_text(
-        chunks: Array,
-        err: *mut Error,
-        width: *mut ::core::ffi::c_int,
-    ) -> VirtText;
+    fn parse_virt_text(chunks: Array, err: *mut Error, width: *mut ::core::ffi::c_int) -> VirtText;
     fn try_enter(tstate: *mut TryState);
     fn try_leave(tstate: *const TryState, err: *mut Error);
     fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
@@ -43,12 +37,7 @@ extern "C" {
     fn api_free_object(value: Object);
     fn api_free_array(value: Array);
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn object_to_hl_id(
         obj: Object,
         what: *const ::core::ffi::c_char,
@@ -103,10 +92,7 @@ extern "C" {
     static mut cmdwin_old_curwin: *mut win_T;
     static mut cmdline_win: *mut win_T;
     fn syn_id2name(id: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn syn_check_group(
-        name: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
+    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn mb_string2cells(str: *const ::core::ffi::c_char) -> size_t;
     fn mb_string2cells_len(str: *const ::core::ffi::c_char, size: size_t) -> size_t;
     fn changed_window_setting(wp: *mut win_T);
@@ -152,11 +138,7 @@ extern "C" {
         tp: *mut tabpage_T,
         altfr: *mut *mut frame_T,
     ) -> *mut win_T;
-    fn winframe_restore(
-        wp: *mut win_T,
-        dir: ::core::ffi::c_int,
-        unflat_altfr: *mut frame_T,
-    );
+    fn winframe_restore(wp: *mut win_T, dir: ::core::ffi::c_int, unflat_altfr: *mut frame_T);
     fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
     fn win_goto(wp: *mut win_T);
     fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
@@ -168,12 +150,8 @@ extern "C" {
     fn last_status(morewin: bool);
     fn win_locked(wp: *mut win_T) -> ::core::ffi::c_int;
     fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T;
-    fn win_new_float(
-        wp: *mut win_T,
-        last: bool,
-        fconfig: WinConfig,
-        err: *mut Error,
-    ) -> *mut win_T;
+    fn win_new_float(wp: *mut win_T, last: bool, fconfig: WinConfig, err: *mut Error)
+        -> *mut win_T;
     fn win_set_minimal_style(wp: *mut win_T);
     fn win_config_float(wp: *mut win_T, fconfig: WinConfig);
     fn win_float_find_altwin(win: *const win_T, tp: *const tabpage_T) -> *mut win_T;
@@ -2694,9 +2672,7 @@ pub const WSP_QUICKFIX: C2Rust_Unnamed_17 = 1024;
 pub const WSP_NEWLOC: C2Rust_Unnamed_17 = 256;
 pub const WSP_HELP: C2Rust_Unnamed_17 = 32;
 pub const WSP_ROOM: C2Rust_Unnamed_17 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -2714,34 +2690,20 @@ pub const KEYSET_OPTIDX_win_config__title: ::core::ffi::c_int = 7 as ::core::ffi
 pub const KEYSET_OPTIDX_win_config__mouse: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_win_config__fixed: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_win_config__style: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__anchor: ::core::ffi::c_int = 11
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__bufpos: ::core::ffi::c_int = 12
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__height: ::core::ffi::c_int = 13
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__zindex: ::core::ffi::c_int = 14
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__footer: ::core::ffi::c_int = 15
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__border: ::core::ffi::c_int = 16
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__external: ::core::ffi::c_int = 17
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__relative: ::core::ffi::c_int = 18
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__vertical: ::core::ffi::c_int = 19
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__focusable: ::core::ffi::c_int = 20
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__noautocmd: ::core::ffi::c_int = 21
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__title_pos: ::core::ffi::c_int = 22
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__footer_pos: ::core::ffi::c_int = 23
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config___cmdline_offset: ::core::ffi::c_int = 24
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__anchor: ::core::ffi::c_int = 11 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__bufpos: ::core::ffi::c_int = 12 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__height: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__zindex: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__footer: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__border: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__external: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__relative: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__vertical: ::core::ffi::c_int = 19 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__focusable: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__noautocmd: ::core::ffi::c_int = 21 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__title_pos: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config__footer_pos: ::core::ffi::c_int = 23 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_config___cmdline_offset: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
 pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     is_set__win_config_: 0 as OptionalKeys,
     external: false,
@@ -2816,8 +2778,7 @@ pub unsafe extern "C" fn nvim_open_win(
     if b.is_null() {
         return 0 as Window;
     }
-    if cmdwin_type != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0
-        || b == cmdwin_buf
+    if cmdwin_type != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0 || b == cmdwin_buf
     {
         api_set_error(
             err,
@@ -2893,14 +2854,15 @@ pub unsafe extern "C" fn nvim_open_win(
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut tp: *mut tabpage_T = curtab;
     '_c2rust_label: {
-        if !curwin.is_null() {} else {
+        if !curwin.is_null() {
+        } else {
             __assert_fail(
                 b"curwin != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 229 as ::core::ffi::c_uint,
-                b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"Window nvim_open_win(Buffer, Boolean, KeyDict_win_config *, Error *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2920,8 +2882,7 @@ pub unsafe extern "C" fn nvim_open_win(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Cannot split a floating window\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Cannot split a floating window\0".as_ptr() as *const ::core::ffi::c_char,
                 );
                 break '_cleanup;
             } else {
@@ -2929,19 +2890,14 @@ pub unsafe extern "C" fn nvim_open_win(
             }
         }
         if is_split {
-            if !check_split_disallowed_err(
-                if !parent.is_null() { parent } else { curwin },
-                err,
-            ) {
+            if !check_split_disallowed_err(if !parent.is_null() { parent } else { curwin }, err) {
                 break '_cleanup;
             } else {
                 if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_win_config__vertical
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
                     != 0 as ::core::ffi::c_ulonglong
                     && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_win_config__split
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
                         != 0 as ::core::ffi::c_ulonglong)
                 {
                     if (*config).vertical {
@@ -2958,13 +2914,10 @@ pub unsafe extern "C" fn nvim_open_win(
                         }) as WinSplit;
                     }
                 }
-                let mut flags: ::core::ffi::c_int = win_split_flags(
-                    fconfig.split,
-                    parent.is_null(),
-                ) | WSP_NOENTER as ::core::ffi::c_int;
-                let mut size: ::core::ffi::c_int = if flags
-                    & WSP_VERT as ::core::ffi::c_int != 0
-                {
+                let mut flags: ::core::ffi::c_int =
+                    win_split_flags(fconfig.split, parent.is_null())
+                        | WSP_NOENTER as ::core::ffi::c_int;
+                let mut size: ::core::ffi::c_int = if flags & WSP_VERT as ::core::ffi::c_int != 0 {
                     fconfig.width
                 } else {
                     fconfig.height
@@ -2994,14 +2947,11 @@ pub unsafe extern "C" fn nvim_open_win(
                         sw_same_win: false,
                         sw_visual_active: false,
                     };
-                    let result: ::core::ffi::c_int = switch_win(
-                        &raw mut switchwin,
-                        parent,
-                        tp,
-                        true,
-                    );
+                    let result: ::core::ffi::c_int =
+                        switch_win(&raw mut switchwin, parent, tp, true);
                     '_c2rust_label_0: {
-                        if result == 1 as ::core::ffi::c_int {} else {
+                        if result == 1 as ::core::ffi::c_int {
+                        } else {
                             __assert_fail(
                                 b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
@@ -3025,9 +2975,7 @@ pub unsafe extern "C" fn nvim_open_win(
                 if !wp.is_null() {
                     (*wp).w_config = fconfig;
                     if size > 0 as ::core::ffi::c_int {
-                        if flags & WSP_VERT as ::core::ffi::c_int != 0
-                            && (*wp).w_width != size
-                        {
+                        if flags & WSP_VERT as ::core::ffi::c_int != 0 && (*wp).w_width != size {
                             win_setwidth_win(size, wp);
                         } else if flags & WSP_VERT as ::core::ffi::c_int == 0
                             && (*wp).w_height != size
@@ -3046,17 +2994,10 @@ pub unsafe extern "C" fn nvim_open_win(
             );
             break '_cleanup;
         } else {
-            wp = win_new_float(
-                ::core::ptr::null_mut::<win_T>(),
-                false_0 != 0,
-                fconfig,
-                err,
-            );
+            wp = win_new_float(::core::ptr::null_mut::<win_T>(), false_0 != 0, fconfig, err);
         }
         if wp.is_null() {
-            if !((*err).type_0 as ::core::ffi::c_int
-                != kErrorTypeNone as ::core::ffi::c_int)
-            {
+            if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
                 api_set_error(
                     err,
                     kErrorTypeException,
@@ -3080,14 +3021,11 @@ pub unsafe extern "C" fn nvim_open_win(
                     sw_same_win: false,
                     sw_visual_active: false,
                 };
-                let result_0: ::core::ffi::c_int = switch_win_noblock(
-                    &raw mut switchwin_0,
-                    wp,
-                    tp,
-                    true_0 != 0,
-                );
+                let result_0: ::core::ffi::c_int =
+                    switch_win_noblock(&raw mut switchwin_0, wp, tp, true_0 != 0);
                 '_c2rust_label_1: {
-                    if result_0 == 1 as ::core::ffi::c_int {} else {
+                    if result_0 == 1 as ::core::ffi::c_int {
+                    } else {
                         __assert_fail(
                             b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
@@ -3113,7 +3051,8 @@ pub unsafe extern "C" fn nvim_open_win(
                 goto_tabpage_win(tp, wp);
                 tp = win_find_tabpage(wp);
             }
-            if !tp.is_null() && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
+            if !tp.is_null()
+                && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
                 && b != (*wp).w_buffer
             {
                 let au_no_enter_leave: bool = curwin != wp && !fconfig.noautocmd;
@@ -3135,8 +3074,7 @@ pub unsafe extern "C" fn nvim_open_win(
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Window was closed immediately\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Window was closed immediately\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             } else {
                 if fconfig.style as ::core::ffi::c_uint
@@ -3165,13 +3103,13 @@ unsafe extern "C" fn win_split_dir(mut win: *mut win_T) -> WinSplit {
             kWinSplitAbove as ::core::ffi::c_int
         } else {
             kWinSplitBelow as ::core::ffi::c_int
-        }) as WinSplit
+        }) as WinSplit;
     } else {
         return (if !(*(*win).w_frame).fr_next.is_null() {
             kWinSplitLeft as ::core::ffi::c_int
         } else {
             kWinSplitRight as ::core::ffi::c_int
-        }) as WinSplit
+        }) as WinSplit;
     };
 }
 unsafe extern "C" fn win_split_flags(
@@ -3179,8 +3117,7 @@ unsafe extern "C" fn win_split_flags(
     mut toplevel: bool,
 ) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if split as ::core::ffi::c_uint
-        == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
+    if split as ::core::ffi::c_uint == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
         || split as ::core::ffi::c_uint
             == kWinSplitBelow as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -3188,24 +3125,21 @@ unsafe extern "C" fn win_split_flags(
     } else {
         flags |= WSP_VERT as ::core::ffi::c_int;
     }
-    if split as ::core::ffi::c_uint
-        == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
+    if split as ::core::ffi::c_uint == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
         || split as ::core::ffi::c_uint
             == kWinSplitLeft as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        flags
-            |= if toplevel as ::core::ffi::c_int != 0 {
-                WSP_TOP as ::core::ffi::c_int
-            } else {
-                WSP_ABOVE as ::core::ffi::c_int
-            };
+        flags |= if toplevel as ::core::ffi::c_int != 0 {
+            WSP_TOP as ::core::ffi::c_int
+        } else {
+            WSP_ABOVE as ::core::ffi::c_int
+        };
     } else {
-        flags
-            |= if toplevel as ::core::ffi::c_int != 0 {
-                WSP_BOT as ::core::ffi::c_int
-            } else {
-                WSP_BELOW as ::core::ffi::c_int
-            };
+        flags |= if toplevel as ::core::ffi::c_int != 0 {
+            WSP_BOT as ::core::ffi::c_int
+        } else {
+            WSP_BELOW as ::core::ffi::c_int
+        };
     }
     return flags;
 }
@@ -3216,13 +3150,16 @@ unsafe extern "C" fn win_can_move_tp(
 ) -> bool {
     if one_window(
         wp,
-        if tp == curtab { ::core::ptr::null_mut::<tabpage_T>() } else { tp },
+        if tp == curtab {
+            ::core::ptr::null_mut::<tabpage_T>()
+        } else {
+            tp
+        },
     ) {
         api_set_error(
             err,
             kErrorTypeException,
-            b"Cannot move last non-floating window\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Cannot move last non-floating window\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return false_0 != 0;
     }
@@ -3267,21 +3204,26 @@ unsafe extern "C" fn win_can_move_tp(
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn win_find_altwin(
-    mut win: *mut win_T,
-    mut tp: *mut tabpage_T,
-) -> *mut win_T {
+unsafe extern "C" fn win_find_altwin(mut win: *mut win_T, mut tp: *mut tabpage_T) -> *mut win_T {
     if (*win).w_floating {
         return win_float_find_altwin(
             win,
-            if tp == curtab { ::core::ptr::null_mut::<tabpage_T>() } else { tp },
-        )
+            if tp == curtab {
+                ::core::ptr::null_mut::<tabpage_T>()
+            } else {
+                tp
+            },
+        );
     } else {
         let mut dir: ::core::ffi::c_int = 0;
         return winframe_find_altwin(
             win,
             &raw mut dir,
-            if tp == curtab { ::core::ptr::null_mut::<tabpage_T>() } else { tp },
+            if tp == curtab {
+                ::core::ptr::null_mut::<tabpage_T>()
+            } else {
+                tp
+            },
             ::core::ptr::null_mut::<*mut frame_T>(),
         );
     };
@@ -3305,8 +3247,7 @@ unsafe extern "C" fn win_config_split(
     let mut has_split: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
         != 0 as ::core::ffi::c_ulonglong;
-    let mut has_vertical: bool = (*config).is_set__win_config_
-        as ::core::ffi::c_ulonglong
+    let mut has_vertical: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
         != 0 as ::core::ffi::c_ulonglong;
     let mut old_split: WinSplit = win_split_dir(win);
@@ -3337,8 +3278,7 @@ unsafe extern "C" fn win_config_split(
                 && !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
                     & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
                     != 0 as ::core::ffi::c_ulonglong)
-                && old_split as ::core::ffi::c_uint
-                    == (*fconfig).split as ::core::ffi::c_uint)
+                && old_split as ::core::ffi::c_uint == (*fconfig).split as ::core::ffi::c_uint)
         {
             parent = ::core::ptr::null_mut::<win_T>();
             parent_tp = ::core::ptr::null_mut::<tabpage_T>();
@@ -3358,8 +3298,7 @@ unsafe extern "C" fn win_config_split(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Cannot split a floating window\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"Cannot split a floating window\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     return false_0 != 0;
                 }
@@ -3376,7 +3315,8 @@ unsafe extern "C" fn win_config_split(
                 if curwin_moving_tp {
                     let mut altwin: *mut win_T = win_find_altwin(win, win_tp);
                     '_c2rust_label: {
-                        if !altwin.is_null() {} else {
+                        if !altwin.is_null() {
+                        } else {
                             __assert_fail(
                                 b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
@@ -3434,8 +3374,7 @@ unsafe extern "C" fn win_config_split(
                         break '_restore_curwin;
                     } else if !parent.is_null() && (*parent).handle == (*win).handle {
                         let mut n_frames: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        let mut fr: *mut frame_T = (*(*(*win).w_frame).fr_parent)
-                            .fr_child;
+                        let mut fr: *mut frame_T = (*(*(*win).w_frame).fr_parent).fr_child;
                         while !fr.is_null() {
                             n_frames += 1;
                             fr = (*fr).fr_next;
@@ -3445,8 +3384,7 @@ unsafe extern "C" fn win_config_split(
                             let mut frame: *mut frame_T = (*(*win).w_frame).fr_parent;
                             if !(*frame).fr_parent.is_null() {
                                 if (*fconfig).split as ::core::ffi::c_uint
-                                    == kWinSplitAbove as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
+                                    == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
                                     || (*fconfig).split as ::core::ffi::c_uint
                                         == kWinSplitLeft as ::core::ffi::c_int
                                             as ::core::ffi::c_uint
@@ -3547,14 +3485,11 @@ unsafe extern "C" fn win_config_split(
                     sw_visual_active: false,
                 };
                 if need_switch {
-                    let result: ::core::ffi::c_int = switch_win(
-                        &raw mut switchwin,
-                        parent,
-                        parent_tp,
-                        true,
-                    );
+                    let result: ::core::ffi::c_int =
+                        switch_win(&raw mut switchwin, parent, parent_tp, true);
                     '_c2rust_label_0: {
-                        if result == 1 as ::core::ffi::c_int {} else {
+                        if result == 1 as ::core::ffi::c_int {
+                        } else {
                             __assert_fail(
                                 b"result == OK\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
@@ -3567,13 +3502,13 @@ unsafe extern "C" fn win_config_split(
                     };
                 }
                 to_split_ok = !win_split_ins(
-                        0 as ::core::ffi::c_int,
-                        flags,
-                        win,
-                        0 as ::core::ffi::c_int,
-                        unflat_altfr,
-                    )
-                    .is_null();
+                    0 as ::core::ffi::c_int,
+                    flags,
+                    win,
+                    0 as ::core::ffi::c_int,
+                    unflat_altfr,
+                )
+                .is_null();
                 if !to_split_ok {
                     win_append(
                         (*win).w_prev,
@@ -3665,7 +3600,8 @@ unsafe extern "C" fn win_config_float_tp(
             }
             altwin = win_find_altwin(win, win_tp);
             '_c2rust_label: {
-                if !altwin.is_null() {} else {
+                if !altwin.is_null() {
+                } else {
                     __assert_fail(
                         b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
@@ -3695,8 +3631,7 @@ unsafe extern "C" fn win_config_float_tp(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Target windows were closed\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"Target windows were closed\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_restore_curwin;
                 } else if win_tp != parent_tp && !win_can_move_tp(win, win_tp, err) {
@@ -3704,7 +3639,8 @@ unsafe extern "C" fn win_config_float_tp(
                 } else {
                     altwin = win_find_altwin(win, win_tp);
                     '_c2rust_label_0: {
-                        if !altwin.is_null() {} else {
+                        if !altwin.is_null() {
+                        } else {
                             __assert_fail(
                                 b"altwin\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/api/win_config.c\0"
@@ -3750,9 +3686,7 @@ unsafe extern "C" fn win_config_float_tp(
         win_config_float(win, *fconfig);
         return true_0 != 0;
     }
-    if curwin_moving_tp as ::core::ffi::c_int != 0
-        && win_valid(win) as ::core::ffi::c_int != 0
-    {
+    if curwin_moving_tp as ::core::ffi::c_int != 0 && win_valid(win) as ::core::ffi::c_int != 0 {
         win_goto(win);
     }
     return false_0 != 0;
@@ -3771,8 +3705,7 @@ pub unsafe extern "C" fn nvim_win_set_config(
     let mut has_split: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__split
         != 0 as ::core::ffi::c_ulonglong;
-    let mut has_vertical: bool = (*config).is_set__win_config_
-        as ::core::ffi::c_ulonglong
+    let mut has_vertical: bool = (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__vertical
         != 0 as ::core::ffi::c_ulonglong;
     let mut old_style: WinStyle = (*w).w_config.style;
@@ -3799,7 +3732,7 @@ pub unsafe extern "C" fn nvim_win_set_config(
             return;
         }
     } else if !win_config_float_tp(w, config, &raw mut fconfig, err) {
-        return
+        return;
     }
     if fconfig.style as ::core::ffi::c_uint
         == kWinStyleMinimal as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3839,21 +3772,16 @@ unsafe extern "C" fn config_put_bordertext(
         _ => {}
     }
     let mut bordertext: Array = virt_text_to_array(vt, true_0 != 0, arena);
-    let mut pos: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pos: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match align as ::core::ffi::c_uint {
         0 => {
-            pos = b"left\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            pos = b"left\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         1 => {
-            pos = b"center\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            pos = b"center\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         2 => {
-            pos = b"right\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            pos = b"right\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         _ => {}
     }
@@ -3865,9 +3793,7 @@ unsafe extern "C" fn config_put_bordertext(
                 as OptionalKeys;
             (*config).title = object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed {
-                    array: bordertext,
-                },
+                data: C2Rust_Unnamed { array: bordertext },
             };
             (*config).is_set__win_config_ = ((*config).is_set__win_config_
                 as ::core::ffi::c_ulonglong
@@ -3882,14 +3808,12 @@ unsafe extern "C" fn config_put_bordertext(
                 as OptionalKeys;
             (*config).footer = object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed {
-                    array: bordertext,
-                },
+                data: C2Rust_Unnamed { array: bordertext },
             };
             (*config).is_set__win_config_ = ((*config).is_set__win_config_
                 as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong)
-                    << KEYSET_OPTIDX_win_config__footer_pos) as OptionalKeys;
+                | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__footer_pos)
+                as OptionalKeys;
             (*config).footer_pos = cstr_as_string(pos);
         }
         _ => {}
@@ -3958,8 +3882,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
             if (*config).relative as ::core::ffi::c_uint
                 == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                rv.is_set__win_config_ = (rv.is_set__win_config_
-                    as ::core::ffi::c_ulonglong
+                rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
                     | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win)
                     as OptionalKeys;
                 rv.win = (*config).window;
@@ -3981,10 +3904,9 @@ pub unsafe extern "C" fn nvim_win_get_config(
                             integer: (*config).bufpos.col as Integer,
                         },
                     };
-                    rv.is_set__win_config_ = (rv.is_set__win_config_
-                        as ::core::ffi::c_ulonglong
-                        | (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_win_config__bufpos) as OptionalKeys;
+                    rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
+                        | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__bufpos)
+                        as OptionalKeys;
                     rv.bufpos = pos;
                 }
             }
@@ -4013,8 +3935,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
             let mut i: size_t = 0 as size_t;
             while i < 8 as size_t {
                 let mut s: String_0 = cstrn_as_string(
-                    &raw mut *(&raw mut (*config).border_chars
-                        as *mut [::core::ffi::c_char; 32])
+                    &raw mut *(&raw mut (*config).border_chars as *mut [::core::ffi::c_char; 32])
                         .offset(i as isize) as *mut ::core::ffi::c_char,
                     MAX_SCHAR_SIZE as size_t,
                 );
@@ -4072,9 +3993,7 @@ pub unsafe extern "C" fn nvim_win_get_config(
             rv.border = object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed {
-                    string: cstr_as_string(
-                        b"none\0".as_ptr() as *const ::core::ffi::c_char,
-                    ),
+                    string: cstr_as_string(b"none\0".as_ptr() as *const ::core::ffi::c_char),
                 },
             };
         }
@@ -4093,29 +4012,25 @@ pub unsafe extern "C" fn nvim_win_get_config(
             as OptionalKeys;
         rv.split = cstr_as_string(win_split_str[split as usize]);
     }
-    let mut rel: *const ::core::ffi::c_char = if (*wp).w_floating as ::core::ffi::c_int
-        != 0 && !(*config).external
-    {
-        float_relative_str[(*config).relative as usize]
-    } else {
-        b"\0".as_ptr() as *const ::core::ffi::c_char
-    };
+    let mut rel: *const ::core::ffi::c_char =
+        if (*wp).w_floating as ::core::ffi::c_int != 0 && !(*config).external {
+            float_relative_str[(*config).relative as usize]
+        } else {
+            b"\0".as_ptr() as *const ::core::ffi::c_char
+        };
     rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
         | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__relative)
         as OptionalKeys;
     rv.relative = cstr_as_string(rel);
     if (*config)._cmdline_offset < INT_MAX {
         rv.is_set__win_config_ = (rv.is_set__win_config_ as ::core::ffi::c_ulonglong
-            | (1 as ::core::ffi::c_ulonglong)
-                << KEYSET_OPTIDX_win_config___cmdline_offset) as OptionalKeys;
+            | (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config___cmdline_offset)
+            as OptionalKeys;
         rv._cmdline_offset = (*config)._cmdline_offset as Integer;
     }
     return rv;
 }
-unsafe extern "C" fn parse_float_anchor(
-    mut anchor: String_0,
-    mut out: *mut FloatAnchor,
-) -> bool {
+unsafe extern "C" fn parse_float_anchor(mut anchor: String_0, mut out: *mut FloatAnchor) -> bool {
     if anchor.size == 0 as size_t {
         *out = 0 as ::core::ffi::c_int;
     }
@@ -4127,10 +4042,10 @@ unsafe extern "C" fn parse_float_anchor(
     } else if striequal(str, b"SW\0".as_ptr() as *const ::core::ffi::c_char) {
         *out = kFloatAnchorSouth as ::core::ffi::c_int as FloatAnchor;
     } else if striequal(str, b"SE\0".as_ptr() as *const ::core::ffi::c_char) {
-        *out = (kFloatAnchorSouth as ::core::ffi::c_int
-            | kFloatAnchorEast as ::core::ffi::c_int) as FloatAnchor;
+        *out = (kFloatAnchorSouth as ::core::ffi::c_int | kFloatAnchorEast as ::core::ffi::c_int)
+            as FloatAnchor;
     } else {
-        return false_0 != 0
+        return false_0 != 0;
     }
     return true_0 != 0;
 }
@@ -4152,14 +4067,11 @@ unsafe extern "C" fn parse_float_relative(
     } else if striequal(str, b"laststatus\0".as_ptr() as *const ::core::ffi::c_char) {
         *out = kFloatRelativeLaststatus;
     } else {
-        return false_0 != 0
+        return false_0 != 0;
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn parse_config_split(
-    mut split: String_0,
-    mut out: *mut WinSplit,
-) -> bool {
+unsafe extern "C" fn parse_config_split(mut split: String_0, mut out: *mut WinSplit) -> bool {
     let mut str: *mut ::core::ffi::c_char = split.data;
     if striequal(str, b"left\0".as_ptr() as *const ::core::ffi::c_char) {
         *out = kWinSplitLeft;
@@ -4170,28 +4082,25 @@ unsafe extern "C" fn parse_config_split(
     } else if striequal(str, b"below\0".as_ptr() as *const ::core::ffi::c_char) {
         *out = kWinSplitBelow;
     } else {
-        return false_0 != 0
+        return false_0 != 0;
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn parse_float_bufpos(
-    mut bufpos: Array,
-    mut out: *mut lpos_T,
-) -> bool {
+unsafe extern "C" fn parse_float_bufpos(mut bufpos: Array, mut out: *mut lpos_T) -> bool {
     if bufpos.size != 2 as size_t
-        || (*bufpos.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*bufpos.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*bufpos.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*bufpos.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return false_0 != 0;
     }
-    (*out).lnum = (*bufpos.items.offset(0 as ::core::ffi::c_int as isize)).data.integer
-        as linenr_T;
-    (*out).col = (*bufpos.items.offset(1 as ::core::ffi::c_int as isize)).data.integer
-        as colnr_T;
+    (*out).lnum = (*bufpos.items.offset(0 as ::core::ffi::c_int as isize))
+        .data
+        .integer as linenr_T;
+    (*out).col = (*bufpos.items.offset(1 as ::core::ffi::c_int as isize))
+        .data
+        .integer as colnr_T;
     return true_0 != 0;
 }
 unsafe extern "C" fn parse_bordertext(
@@ -4227,9 +4136,7 @@ unsafe extern "C" fn parse_bordertext(
     }
     let mut is_present: *mut bool = ::core::ptr::null_mut::<bool>();
     let mut chunks: *mut VirtText = ::core::ptr::null_mut::<VirtText>();
-    let mut width: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-        ::core::ffi::c_int,
-    >();
+    let mut width: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     match bordertext_type as ::core::ffi::c_uint {
         0 => {
             is_present = &raw mut (*fconfig).title;
@@ -4263,7 +4170,8 @@ unsafe extern "C" fn parse_bordertext(
                 (*chunks).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<VirtTextChunk>().wrapping_mul((*chunks).capacity),
             ) as *mut VirtTextChunk;
-        } else {};
+        } else {
+        };
         let c2rust_fresh1 = (*chunks).size;
         (*chunks).size = (*chunks).size.wrapping_add(1);
         *(*chunks).items.offset(c2rust_fresh1 as isize) = VirtTextChunk {
@@ -4337,52 +4245,28 @@ pub unsafe extern "C" fn parse_border_style(
             name: opt_winborder_values[1 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x94\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x90\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x97\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x91\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x9D\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x90\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x9A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\x91\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
@@ -4392,52 +4276,28 @@ pub unsafe extern "C" fn parse_border_style(
             name: opt_winborder_values[2 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x8C\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x90\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x82\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x98\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x94\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x82\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
@@ -4447,38 +4307,30 @@ pub unsafe extern "C" fn parse_border_style(
             name: opt_winborder_values[3 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
             ],
             shadow_color: true_0 != 0,
         },
@@ -4486,52 +4338,28 @@ pub unsafe extern "C" fn parse_border_style(
             name: opt_winborder_values[4 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\xAD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\xAE\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x82\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\xAF\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x95\xB0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x82\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
@@ -4541,38 +4369,30 @@ pub unsafe extern "C" fn parse_border_style(
             name: opt_winborder_values[5 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(*b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+                    *b" \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                ),
             ],
             shadow_color: false_0 != 0,
         },
@@ -4580,52 +4400,28 @@ pub unsafe extern "C" fn parse_border_style(
             name: opt_winborder_values[6 as ::core::ffi::c_int as usize]
                 as *const ::core::ffi::c_char,
             chars: [
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x8F\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x81\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x93\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x83\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x9B\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x81\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x97\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
-                ::core::mem::transmute::<
-                    [u8; 32],
-                    [::core::ffi::c_char; 32],
-                >(
+                ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
                     *b"\xE2\x94\x83\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 ),
             ],
@@ -4679,18 +4475,17 @@ pub unsafe extern "C" fn parse_border_style(
             shadow_color: false_0 != 0,
         },
     ];
-    let mut chars: *mut [::core::ffi::c_char; 32] = &raw mut (*fconfig).border_chars
-        as *mut [::core::ffi::c_char; 32];
-    let mut hl_ids: *mut ::core::ffi::c_int = &raw mut (*fconfig).border_hl_ids
-        as *mut ::core::ffi::c_int;
+    let mut chars: *mut [::core::ffi::c_char; 32] =
+        &raw mut (*fconfig).border_chars as *mut [::core::ffi::c_char; 32];
+    let mut hl_ids: *mut ::core::ffi::c_int =
+        &raw mut (*fconfig).border_hl_ids as *mut ::core::ffi::c_int;
     (*fconfig).border = true_0 != 0;
     if style.type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut arr: Array = style.data.array;
         let mut size: size_t = arr.size;
-        if size == 0 || size > 8 as size_t || size & size.wrapping_sub(1 as size_t) != 0
-        {
+        if size == 0 || size > 8 as size_t || size & size.wrapping_sub(1 as size_t) != 0 {
             api_err_exp(
                 err,
                 b"border\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4738,13 +4533,10 @@ pub unsafe extern "C" fn parse_border_style(
                 if iarr.size == 2 as size_t {
                     hl_id = object_to_hl_id(
                         *iarr.items.offset(1 as ::core::ffi::c_int as isize),
-                        b"border char highlight\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"border char highlight\0".as_ptr() as *const ::core::ffi::c_char,
                         err,
                     );
-                    if (*err).type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         return;
                     }
                 }
@@ -4761,9 +4553,7 @@ pub unsafe extern "C" fn parse_border_style(
                 );
                 return;
             }
-            if string.size != 0
-                && mb_string2cells_len(string.data, string.size) > 1 as size_t
-            {
+            if string.size != 0 && mb_string2cells_len(string.data, string.size) > 1 as size_t {
                 api_err_exp(
                     err,
                     b"border\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4773,13 +4563,11 @@ pub unsafe extern "C" fn parse_border_style(
                 return;
             }
             let mut len: size_t = if string.size
-                < ::core::mem::size_of::<[::core::ffi::c_char; 32]>()
-                    .wrapping_sub(1 as usize)
+                < ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(1 as usize)
             {
                 string.size
             } else {
-                ::core::mem::size_of::<[::core::ffi::c_char; 32]>()
-                    .wrapping_sub(1 as size_t)
+                ::core::mem::size_of::<[::core::ffi::c_char; 32]>().wrapping_sub(1 as size_t)
             };
             if len != 0 {
                 memcpy(
@@ -4806,59 +4594,46 @@ pub unsafe extern "C" fn parse_border_style(
             );
             size <<= 1 as ::core::ffi::c_int;
         }
-        if (*chars
-            .offset(7 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int != 0
-            && (*chars
-                .offset(
-                    1 as ::core::ffi::c_int as isize,
-                ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-            && (*chars
-                .offset(
-                    0 as ::core::ffi::c_int as isize,
-                ))[0 as ::core::ffi::c_int as usize] == 0
-            || (*chars
-                .offset(
-                    1 as ::core::ffi::c_int as isize,
-                ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-                && (*chars
-                    .offset(
-                        3 as ::core::ffi::c_int as isize,
-                    ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-                && (*chars
-                    .offset(
-                        2 as ::core::ffi::c_int as isize,
-                    ))[0 as ::core::ffi::c_int as usize] == 0
-            || (*chars
-                .offset(
-                    3 as ::core::ffi::c_int as isize,
-                ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-                && (*chars
-                    .offset(
-                        5 as ::core::ffi::c_int as isize,
-                    ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-                && (*chars
-                    .offset(
-                        4 as ::core::ffi::c_int as isize,
-                    ))[0 as ::core::ffi::c_int as usize] == 0
-            || (*chars
-                .offset(
-                    5 as ::core::ffi::c_int as isize,
-                ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-                && (*chars
-                    .offset(
-                        7 as ::core::ffi::c_int as isize,
-                    ))[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-                && (*chars
-                    .offset(
-                        6 as ::core::ffi::c_int as isize,
-                    ))[0 as ::core::ffi::c_int as usize] == 0
+        if (*chars.offset(7 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
+            as ::core::ffi::c_int
+            != 0
+            && (*chars.offset(1 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
+                as ::core::ffi::c_int
+                != 0
+            && (*chars.offset(0 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
+                == 0
+            || (*chars.offset(1 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
+                as ::core::ffi::c_int
+                != 0
+                && (*chars.offset(3 as ::core::ffi::c_int as isize))
+                    [0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                    != 0
+                && (*chars.offset(2 as ::core::ffi::c_int as isize))
+                    [0 as ::core::ffi::c_int as usize]
+                    == 0
+            || (*chars.offset(3 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
+                as ::core::ffi::c_int
+                != 0
+                && (*chars.offset(5 as ::core::ffi::c_int as isize))
+                    [0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                    != 0
+                && (*chars.offset(4 as ::core::ffi::c_int as isize))
+                    [0 as ::core::ffi::c_int as usize]
+                    == 0
+            || (*chars.offset(5 as ::core::ffi::c_int as isize))[0 as ::core::ffi::c_int as usize]
+                as ::core::ffi::c_int
+                != 0
+                && (*chars.offset(7 as ::core::ffi::c_int as isize))
+                    [0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                    != 0
+                && (*chars.offset(6 as ::core::ffi::c_int as isize))
+                    [0 as ::core::ffi::c_int as usize]
+                    == 0
         {
             api_err_exp(
                 err,
                 b"border\0".as_ptr() as *const ::core::ffi::c_char,
-                b"corner char between edge chars\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"corner char between edge chars\0".as_ptr() as *const ::core::ffi::c_char,
                 ::core::ptr::null::<::core::ffi::c_char>(),
             );
             return;
@@ -4869,7 +4644,8 @@ pub unsafe extern "C" fn parse_border_style(
         let mut str: String_0 = style.data.string;
         if str.size == 0 as size_t
             || strequal(str.data, b"none\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
         {
             (*fconfig).border = false_0 != 0;
             (*fconfig).title = false_0 != 0;
@@ -4881,8 +4657,7 @@ pub unsafe extern "C" fn parse_border_style(
             if strequal(str.data, defaults[i_0 as usize].name) {
                 memcpy(
                     chars as *mut ::core::ffi::c_void,
-                    &raw mut (*(&raw mut defaults as *mut C2Rust_Unnamed_15)
-                        .offset(i_0 as isize))
+                    &raw mut (*(&raw mut defaults as *mut C2Rust_Unnamed_15).offset(i_0 as isize))
                         .chars as *mut [::core::ffi::c_char; 32]
                         as *const ::core::ffi::c_void,
                     ::core::mem::size_of::<[[::core::ffi::c_char; 32]; 8]>(),
@@ -4890,8 +4665,7 @@ pub unsafe extern "C" fn parse_border_style(
                 memset(
                     hl_ids as *mut ::core::ffi::c_void,
                     0 as ::core::ffi::c_int,
-                    (8 as size_t)
-                        .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
+                    (8 as size_t).wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
                 );
                 if defaults[i_0 as usize].shadow_color {
                     let mut hl_blend: ::core::ffi::c_int = syn_check_group(
@@ -5015,9 +4789,7 @@ pub unsafe extern "C" fn parse_winborder(
                 api_free_array(border_chars);
                 return false_0 != 0;
             }
-            let mut str: String_0 = cstr_to_string(
-                &raw mut part as *mut ::core::ffi::c_char,
-            );
+            let mut str: String_0 = cstr_to_string(&raw mut part as *mut ::core::ffi::c_char);
             if border_chars.size == border_chars.capacity {
                 border_chars.capacity = (if border_chars.capacity != 0 {
                     border_chars.capacity << 1 as ::core::ffi::c_int
@@ -5028,7 +4800,8 @@ pub unsafe extern "C" fn parse_winborder(
                     border_chars.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<Object>().wrapping_mul(border_chars.capacity),
                 ) as *mut Object;
-            } else {};
+            } else {
+            };
             let c2rust_fresh0 = border_chars.size;
             border_chars.size = border_chars.size.wrapping_add(1);
             *border_chars.items.offset(c2rust_fresh0 as isize) = object {
@@ -5057,8 +4830,7 @@ pub unsafe extern "C" fn parse_winborder(
     }
     parse_border_style(style, fconfig, err);
     api_free_object(style);
-    return !((*err).type_0 as ::core::ffi::c_int
-        != kErrorTypeNone as ::core::ffi::c_int);
+    return !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int);
 }
 unsafe extern "C" fn parse_win_config(
     mut wp: *mut win_T,
@@ -5135,7 +4907,8 @@ unsafe extern "C" fn parse_win_config(
         }
         if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << 19 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong && !is_split
+            != 0 as ::core::ffi::c_ulonglong
+            && !is_split
         {
             api_err_conflict(
                 err,
@@ -5144,7 +4917,8 @@ unsafe extern "C" fn parse_win_config(
             );
         } else if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << 6 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong && !is_split
+            != 0 as ::core::ffi::c_ulonglong
+            && !is_split
         {
             api_err_conflict(
                 err,
@@ -5163,10 +4937,7 @@ unsafe extern "C" fn parse_win_config(
                         b"floating windows\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_fail;
-                } else if !parse_config_split(
-                    (*config).split,
-                    &raw mut (*fconfig).split,
-                ) {
+                } else if !parse_config_split((*config).split, &raw mut (*fconfig).split) {
                     api_err_invalid(
                         err,
                         b"split\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5197,11 +4968,7 @@ unsafe extern "C" fn parse_win_config(
                 != 0 as ::core::ffi::c_ulonglong
             {
                 if !has_relative || is_split as ::core::ffi::c_int != 0 {
-                    generate_api_error(
-                        wp,
-                        b"row\0".as_ptr() as *const ::core::ffi::c_char,
-                        err,
-                    );
+                    generate_api_error(wp, b"row\0".as_ptr() as *const ::core::ffi::c_char, err);
                     break '_fail;
                 } else {
                     (*fconfig).row = (*config).row as ::core::ffi::c_double;
@@ -5212,11 +4979,7 @@ unsafe extern "C" fn parse_win_config(
                 != 0 as ::core::ffi::c_ulonglong
             {
                 if !has_relative || is_split as ::core::ffi::c_int != 0 {
-                    generate_api_error(
-                        wp,
-                        b"col\0".as_ptr() as *const ::core::ffi::c_char,
-                        err,
-                    );
+                    generate_api_error(wp, b"col\0".as_ptr() as *const ::core::ffi::c_char, err);
                     break '_fail;
                 } else {
                     (*fconfig).col = (*config).col as ::core::ffi::c_double;
@@ -5227,16 +4990,9 @@ unsafe extern "C" fn parse_win_config(
                 != 0 as ::core::ffi::c_ulonglong
             {
                 if !has_relative || is_split as ::core::ffi::c_int != 0 {
-                    generate_api_error(
-                        wp,
-                        b"bufpos\0".as_ptr() as *const ::core::ffi::c_char,
-                        err,
-                    );
+                    generate_api_error(wp, b"bufpos\0".as_ptr() as *const ::core::ffi::c_char, err);
                     break '_fail;
-                } else if !parse_float_bufpos(
-                    (*config).bufpos,
-                    &raw mut (*fconfig).bufpos,
-                ) {
+                } else if !parse_float_bufpos((*config).bufpos, &raw mut (*fconfig).bufpos) {
                     api_err_exp(
                         err,
                         b"bufpos\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5246,12 +5002,12 @@ unsafe extern "C" fn parse_win_config(
                     break '_fail;
                 } else {
                     if !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_win_config__row
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__row
                         != 0 as ::core::ffi::c_ulonglong)
                     {
                         (*fconfig).row = (if (*fconfig).anchor as ::core::ffi::c_int
-                            & kFloatAnchorSouth as ::core::ffi::c_int != 0
+                            & kFloatAnchorSouth as ::core::ffi::c_int
+                            != 0
                         {
                             0 as ::core::ffi::c_int
                         } else {
@@ -5259,12 +5015,10 @@ unsafe extern "C" fn parse_win_config(
                         }) as ::core::ffi::c_double;
                     }
                     if !((*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_win_config__col
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__col
                         != 0 as ::core::ffi::c_ulonglong)
                     {
-                        (*fconfig).col = 0 as ::core::ffi::c_int
-                            as ::core::ffi::c_double;
+                        (*fconfig).col = 0 as ::core::ffi::c_int as ::core::ffi::c_double;
                     }
                 }
             }
@@ -5285,10 +5039,7 @@ unsafe extern "C" fn parse_win_config(
                 }
             } else if !reconf && !is_split {
                 if true {
-                    api_err_required(
-                        err,
-                        b"width\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    api_err_required(err, b"width\0".as_ptr() as *const ::core::ffi::c_char);
                     break '_fail;
                 }
             }
@@ -5309,10 +5060,7 @@ unsafe extern "C" fn parse_win_config(
                 }
             } else if !reconf && !is_split {
                 if true {
-                    api_err_required(
-                        err,
-                        b"height\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    api_err_required(err, b"height\0".as_ptr() as *const ::core::ffi::c_char);
                     break '_fail;
                 }
             }
@@ -5330,9 +5078,7 @@ unsafe extern "C" fn parse_win_config(
                         b"external\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_fail;
-                } else if (*fconfig).external as ::core::ffi::c_int != 0
-                    && !ui_has(kUIMultigrid)
-                {
+                } else if (*fconfig).external as ::core::ffi::c_int != 0 && !ui_has(kUIMultigrid) {
                     api_set_error(
                         err,
                         kErrorTypeValidation,
@@ -5355,18 +5101,15 @@ unsafe extern "C" fn parse_win_config(
             } else {
                 if relative_is_win as ::core::ffi::c_int != 0
                     || (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_win_config__win
-                        != 0 as ::core::ffi::c_ulonglong && !is_split && !wp.is_null()
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
+                        != 0 as ::core::ffi::c_ulonglong
+                        && !is_split
+                        && !wp.is_null()
                         && (*wp).w_floating as ::core::ffi::c_int != 0
                         && (*fconfig).relative as ::core::ffi::c_uint
-                            == kFloatRelativeWindow as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    let mut target_win: *mut win_T = find_window_by_handle(
-                        (*config).win,
-                        err,
-                    );
+                    let mut target_win: *mut win_T = find_window_by_handle((*config).win, err);
                     if target_win.is_null() {
                         break '_fail;
                     } else if target_win == wp {
@@ -5382,17 +5125,14 @@ unsafe extern "C" fn parse_win_config(
                     }
                 } else {
                     if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_win_config__win
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__win
                         != 0 as ::core::ffi::c_ulonglong
                     {
-                        if !is_split && !has_relative
-                            && (wp.is_null() || !(*wp).w_floating)
-                        {
+                        if !is_split && !has_relative && (wp.is_null() || !(*wp).w_floating) {
                             api_err_required(
                                 err,
-                                b"non-float with 'win' requires 'split' or 'vertical'\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"non-float with 'win' requires 'split' or 'vertical'\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                             break '_fail;
                         } else {
@@ -5404,8 +5144,7 @@ unsafe extern "C" fn parse_win_config(
                     }
                 }
                 if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_win_config__focusable
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__focusable
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     (*fconfig).focusable = (*config).focusable as bool;
@@ -5452,12 +5191,7 @@ unsafe extern "C" fn parse_win_config(
                         );
                         break '_fail;
                     } else {
-                        parse_bordertext(
-                            (*config).title,
-                            kBorderTextTitle,
-                            fconfig,
-                            err,
-                        );
+                        parse_bordertext((*config).title, kBorderTextTitle, fconfig, err);
                         if (*err).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
@@ -5478,8 +5212,7 @@ unsafe extern "C" fn parse_win_config(
                 {
                     api_err_required(
                         err,
-                        b"'title' requires 'title_pos'\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"'title' requires 'title_pos'\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_fail;
                 }
@@ -5495,12 +5228,7 @@ unsafe extern "C" fn parse_win_config(
                         );
                         break '_fail;
                     } else {
-                        parse_bordertext(
-                            (*config).footer,
-                            kBorderTextFooter,
-                            fconfig,
-                            err,
-                        );
+                        parse_bordertext((*config).footer, kBorderTextFooter, fconfig, err);
                         if (*err).type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
@@ -5521,8 +5249,7 @@ unsafe extern "C" fn parse_win_config(
                 {
                     api_err_required(
                         err,
-                        b"'footer' requires 'footer_pos'\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"'footer' requires 'footer_pos'\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_fail;
                 }
@@ -5544,8 +5271,7 @@ unsafe extern "C" fn parse_win_config(
                     } else {
                         border_style = (*config).border;
                         if border_style.type_0 as ::core::ffi::c_uint
-                            != kObjectTypeNil as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            != kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             parse_border_style(border_style, fconfig, err);
                             if (*err).type_0 as ::core::ffi::c_int
@@ -5565,8 +5291,12 @@ unsafe extern "C" fn parse_win_config(
                     & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__style
                     != 0 as ::core::ffi::c_ulonglong
                 {
-                    if *(*config).style.data.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == NUL
+                    if *(*config)
+                        .style
+                        .data
+                        .offset(0 as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
+                        == NUL
                     {
                         (*fconfig).style = kWinStyleUnused;
                     } else if striequal(
@@ -5586,8 +5316,7 @@ unsafe extern "C" fn parse_win_config(
                     }
                 }
                 if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_win_config__noautocmd
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config__noautocmd
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     if !wp.is_null()
@@ -5597,8 +5326,8 @@ unsafe extern "C" fn parse_win_config(
                         api_set_error(
                             err,
                             kErrorTypeValidation,
-                            b"'noautocmd' cannot be changed on existing window\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"'noautocmd' cannot be changed on existing window\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         );
                         break '_fail;
                     } else {
@@ -5618,12 +5347,10 @@ unsafe extern "C" fn parse_win_config(
                     (*fconfig).hide = (*config).hide as bool;
                 }
                 if (*config).is_set__win_config_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_win_config___cmdline_offset
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_config___cmdline_offset
                     != 0 as ::core::ffi::c_ulonglong
                 {
-                    (*fconfig)._cmdline_offset = (*config)._cmdline_offset
-                        as ::core::ffi::c_int;
+                    (*fconfig)._cmdline_offset = (*config)._cmdline_offset as ::core::ffi::c_int;
                 }
                 return true_0 != 0;
             }

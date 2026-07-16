@@ -72,7 +72,8 @@ pub struct ScreenPen {
     #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
     #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -124,7 +125,8 @@ pub struct VTermScreenCellAttrs {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -151,15 +153,10 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
-    pub damage: Option<
-        unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub damage:
+        Option<unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub movecursor: Option<
         unsafe extern "C" fn(
@@ -176,9 +173,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -186,9 +181,8 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub sb_pushline: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -203,9 +197,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -332,10 +324,7 @@ pub struct VTermSelectionCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub query: Option<
-        unsafe extern "C" fn(
-            VTermSelectionMask,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermSelectionMask, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
@@ -403,7 +392,8 @@ pub struct VTermPen {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -416,9 +406,7 @@ pub struct VTermEncodingInstance {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
-    pub init: Option<
-        unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
         unsafe extern "C" fn(
             *mut VTermEncoding,
@@ -455,7 +443,8 @@ pub struct C2Rust_Unnamed_7 {
         ty = "::core::ffi::c_uint",
         bits = "16..=16"
     )]
-    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output: [u8; 3],
+    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -479,9 +468,8 @@ pub struct VTermLineInfo {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub csi: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -508,22 +496,13 @@ pub struct VTermStateFallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 #[derive(Copy, Clone)]
@@ -553,11 +532,7 @@ pub struct VTermStateCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub erase: Option<
         unsafe extern "C" fn(
@@ -566,9 +541,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub initpen: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub initpen: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setpenattr: Option<
         unsafe extern "C" fn(
             VTermAttr,
@@ -583,9 +556,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -594,9 +565,8 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setlineinfo: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -605,9 +575,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -644,11 +612,8 @@ pub struct VTermGlyphInfo {
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-pub type VTermOutputCallback = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    size_t,
-    *mut ::core::ffi::c_void,
-) -> ();
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_9 {
@@ -675,9 +640,8 @@ pub struct VTermParserCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub escape: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -711,22 +675,13 @@ pub struct VTermParserCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub resize: Option<
         unsafe extern "C" fn(
@@ -786,15 +741,10 @@ pub struct C2Rust_Unnamed_14 {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermAllocatorFunctions {
-    pub malloc: Option<
-        unsafe extern "C" fn(
-            size_t,
-            *mut ::core::ffi::c_void,
-        ) -> *mut ::core::ffi::c_void,
-    >,
-    pub free: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub malloc:
+        Option<unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>,
+    pub free:
+        Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>,
 }
 pub type VTermValueType = ::core::ffi::c_uint;
 pub const VTERM_N_VALUETYPES: VTermValueType = 5;
@@ -973,15 +923,14 @@ unsafe extern "C" fn lookup_colour_palette(
     mut col: *mut VTermColor,
 ) -> bool {
     if index >= 0 as ::core::ffi::c_long && index < 16 as ::core::ffi::c_long {
-        return lookup_colour_ansi(state, index, col)
+        return lookup_colour_ansi(state, index, col);
     } else if index >= 16 as ::core::ffi::c_long && index < 232 as ::core::ffi::c_long {
         index -= 16 as ::core::ffi::c_long;
         vterm_color_rgb(
             col,
             ramp6[(index / 6 as ::core::ffi::c_long / 6 as ::core::ffi::c_long
                 % 6 as ::core::ffi::c_long) as usize],
-            ramp6[(index / 6 as ::core::ffi::c_long % 6 as ::core::ffi::c_long)
-                as usize],
+            ramp6[(index / 6 as ::core::ffi::c_long % 6 as ::core::ffi::c_long) as usize],
             ramp6[(index % 6 as ::core::ffi::c_long) as usize],
         );
         return true_0 != 0;
@@ -1023,7 +972,8 @@ unsafe extern "C" fn lookup_colour(
         5 => {
             if argcount == 0
                 || (*args.offset(0 as ::core::ffi::c_int as isize)
-                    & CSI_ARG_MASK as ::core::ffi::c_long) as ::core::ffi::c_ulong
+                    & CSI_ARG_MASK as ::core::ffi::c_long)
+                    as ::core::ffi::c_ulong
                     == CSI_ARG_MISSING as ::core::ffi::c_ulong
             {
                 return if argcount != 0 {
@@ -1052,8 +1002,12 @@ unsafe extern "C" fn setpenattr(
     mut val: *mut VTermValue,
 ) {
     if !(*state).callbacks.is_null() && (*(*state).callbacks).setpenattr.is_some() {
-        Some((*(*state).callbacks).setpenattr.expect("non-null function pointer"))
-            .expect("non-null function pointer")(attr, val, (*state).cbdata);
+        Some(
+            (*(*state).callbacks)
+                .setpenattr
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(attr, val, (*state).cbdata);
     }
 }
 unsafe extern "C" fn setpenattr_bool(
@@ -1125,29 +1079,53 @@ pub unsafe extern "C" fn vterm_state_newpen(mut state: *mut VTermState) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn vterm_state_resetpen(mut state: *mut VTermState) {
-    (*state).pen.set_bold(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_bold(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_BOLD, 0 as ::core::ffi::c_int);
-    (*state).pen.set_underline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_underline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_int(state, VTERM_ATTR_UNDERLINE, 0 as ::core::ffi::c_int);
-    (*state).pen.set_italic(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_italic(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_ITALIC, 0 as ::core::ffi::c_int);
-    (*state).pen.set_blink(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_blink(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_BLINK, 0 as ::core::ffi::c_int);
-    (*state).pen.set_reverse(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_reverse(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_REVERSE, 0 as ::core::ffi::c_int);
-    (*state).pen.set_conceal(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_conceal(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_CONCEAL, 0 as ::core::ffi::c_int);
-    (*state).pen.set_strike(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_strike(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_STRIKE, 0 as ::core::ffi::c_int);
-    (*state).pen.set_font(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_font(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_int(state, VTERM_ATTR_FONT, 0 as ::core::ffi::c_int);
-    (*state).pen.set_small(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_small(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_SMALL, 0 as ::core::ffi::c_int);
-    (*state).pen.set_baseline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_baseline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_int(state, VTERM_ATTR_BASELINE, 0 as ::core::ffi::c_int);
-    (*state).pen.set_dim(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_dim(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_DIM, 0 as ::core::ffi::c_int);
-    (*state).pen.set_overline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
+    (*state)
+        .pen
+        .set_overline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
     setpenattr_bool(state, VTERM_ATTR_OVERLINE, 0 as ::core::ffi::c_int);
     (*state).pen.fg = (*state).default_fg;
     setpenattr_col(state, VTERM_ATTR_FOREGROUND, (*state).default_fg);
@@ -1215,7 +1193,11 @@ pub unsafe extern "C" fn vterm_state_savepen(
             VTERM_ATTR_BASELINE,
             (*state).pen.baseline() as ::core::ffi::c_int,
         );
-        setpenattr_bool(state, VTERM_ATTR_DIM, (*state).pen.dim() as ::core::ffi::c_int);
+        setpenattr_bool(
+            state,
+            VTERM_ATTR_DIM,
+            (*state).pen.dim() as ::core::ffi::c_int,
+        );
         setpenattr_bool(
             state,
             VTERM_ATTR_OVERLINE,
@@ -1236,13 +1218,15 @@ pub unsafe extern "C" fn vterm_state_set_default_colors(
         (*state).default_fg = *default_fg;
         (*state).default_fg.type_0 = ((*state).default_fg.type_0 as ::core::ffi::c_int
             & !(VTERM_COLOR_DEFAULT_MASK as ::core::ffi::c_int)
-            | VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int) as uint8_t;
+            | VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int)
+            as uint8_t;
     }
     if !default_bg.is_null() {
         (*state).default_bg = *default_bg;
         (*state).default_bg.type_0 = ((*state).default_bg.type_0 as ::core::ffi::c_int
             & !(VTERM_COLOR_DEFAULT_MASK as ::core::ffi::c_int)
-            | VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int) as uint8_t;
+            | VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int)
+            as uint8_t;
     }
 }
 #[no_mangle]
@@ -1293,12 +1277,13 @@ pub unsafe extern "C" fn vterm_state_setpen(
                         .set_bold(1 as ::core::ffi::c_uint as ::core::ffi::c_uint);
                     setpenattr_bool(state, VTERM_ATTR_BOLD, 1 as ::core::ffi::c_int);
                     if (*fg).type_0 as ::core::ffi::c_int
-                        & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int == 0
+                        & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int
+                        == 0
                         && (*fg).type_0 as ::core::ffi::c_int
                             & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int
                             == VTERM_COLOR_INDEXED as ::core::ffi::c_int
-                        && ((*fg).indexed.idx as ::core::ffi::c_int)
-                            < 8 as ::core::ffi::c_int && (*state).bold_is_highbright != 0
+                        && ((*fg).indexed.idx as ::core::ffi::c_int) < 8 as ::core::ffi::c_int
+                        && (*state).bold_is_highbright != 0
                     {
                         set_pen_col_ansi(
                             state,
@@ -1328,49 +1313,38 @@ pub unsafe extern "C" fn vterm_state_setpen(
                     break 's_495;
                 }
                 4 => {
-                    (*state)
-                        .pen
-                        .set_underline(
-                            VTERM_UNDERLINE_SINGLE as ::core::ffi::c_int
-                                as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                        );
-                    if *args.offset(argi as isize)
-                        & CSI_ARG_FLAG_MORE as ::core::ffi::c_long != 0
-                    {
+                    (*state).pen.set_underline(
+                        VTERM_UNDERLINE_SINGLE as ::core::ffi::c_int as ::core::ffi::c_uint
+                            as ::core::ffi::c_uint,
+                    );
+                    if *args.offset(argi as isize) & CSI_ARG_FLAG_MORE as ::core::ffi::c_long != 0 {
                         argi += 1;
-                        match *args.offset(argi as isize)
-                            & CSI_ARG_MASK as ::core::ffi::c_long
-                        {
+                        match *args.offset(argi as isize) & CSI_ARG_MASK as ::core::ffi::c_long {
                             0 => {
                                 (*state)
                                     .pen
-                                    .set_underline(
-                                        0 as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                                    );
+                                    .set_underline(0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
                             }
                             1 => {
-                                (*state)
-                                    .pen
-                                    .set_underline(
-                                        VTERM_UNDERLINE_SINGLE as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                                    );
+                                (*state).pen.set_underline(
+                                    VTERM_UNDERLINE_SINGLE as ::core::ffi::c_int
+                                        as ::core::ffi::c_uint
+                                        as ::core::ffi::c_uint,
+                                );
                             }
                             2 => {
-                                (*state)
-                                    .pen
-                                    .set_underline(
-                                        VTERM_UNDERLINE_DOUBLE as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                                    );
+                                (*state).pen.set_underline(
+                                    VTERM_UNDERLINE_DOUBLE as ::core::ffi::c_int
+                                        as ::core::ffi::c_uint
+                                        as ::core::ffi::c_uint,
+                                );
                             }
                             3 => {
-                                (*state)
-                                    .pen
-                                    .set_underline(
-                                        VTERM_UNDERLINE_CURLY as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                                    );
+                                (*state).pen.set_underline(
+                                    VTERM_UNDERLINE_CURLY as ::core::ffi::c_int
+                                        as ::core::ffi::c_uint
+                                        as ::core::ffi::c_uint,
+                                );
                             }
                             _ => {}
                         }
@@ -1411,14 +1385,11 @@ pub unsafe extern "C" fn vterm_state_setpen(
                     break 's_495;
                 }
                 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 => {
-                    (*state)
-                        .pen
-                        .set_font(
-                            ((*args.offset(argi as isize)
-                                & CSI_ARG_MASK as ::core::ffi::c_long)
-                                - 10 as ::core::ffi::c_long) as ::core::ffi::c_uint
-                                as ::core::ffi::c_uint,
-                        );
+                    (*state).pen.set_font(
+                        ((*args.offset(argi as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
+                            - 10 as ::core::ffi::c_long)
+                            as ::core::ffi::c_uint as ::core::ffi::c_uint,
+                    );
                     setpenattr_int(
                         state,
                         VTERM_ATTR_FONT,
@@ -1427,12 +1398,10 @@ pub unsafe extern "C" fn vterm_state_setpen(
                     break 's_495;
                 }
                 21 => {
-                    (*state)
-                        .pen
-                        .set_underline(
-                            VTERM_UNDERLINE_DOUBLE as ::core::ffi::c_int
-                                as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                        );
+                    (*state).pen.set_underline(
+                        VTERM_UNDERLINE_DOUBLE as ::core::ffi::c_int as ::core::ffi::c_uint
+                            as ::core::ffi::c_uint,
+                    );
                     setpenattr_int(
                         state,
                         VTERM_ATTR_UNDERLINE,
@@ -1494,38 +1463,32 @@ pub unsafe extern "C" fn vterm_state_setpen(
                     break 's_495;
                 }
                 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 => {
-                    value = ((*args.offset(argi as isize)
-                        & CSI_ARG_MASK as ::core::ffi::c_long)
-                        - 30 as ::core::ffi::c_long) as ::core::ffi::c_int;
+                    value = ((*args.offset(argi as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
+                        - 30 as ::core::ffi::c_long)
+                        as ::core::ffi::c_int;
                     if (*state).pen.bold() as ::core::ffi::c_int != 0
                         && (*state).bold_is_highbright != 0
                     {
                         value += 8 as ::core::ffi::c_int;
                     }
-                    set_pen_col_ansi(
-                        state,
-                        VTERM_ATTR_FOREGROUND,
-                        value as ::core::ffi::c_long,
-                    );
+                    set_pen_col_ansi(state, VTERM_ATTR_FOREGROUND, value as ::core::ffi::c_long);
                     break 's_495;
                 }
                 38 => {
                     if argcount - argi < 1 as ::core::ffi::c_int {
                         return;
                     }
-                    argi
-                        += 1 as ::core::ffi::c_int
-                            + lookup_colour(
-                                state,
-                                (*args.offset((argi + 1 as ::core::ffi::c_int) as isize)
-                                    & CSI_ARG_MASK as ::core::ffi::c_long)
-                                    as ::core::ffi::c_int,
-                                args
-                                    .offset(argi as isize)
-                                    .offset(2 as ::core::ffi::c_int as isize),
-                                argcount - argi - 2 as ::core::ffi::c_int,
-                                &raw mut (*state).pen.fg,
-                            );
+                    argi += 1 as ::core::ffi::c_int
+                        + lookup_colour(
+                            state,
+                            (*args.offset((argi + 1 as ::core::ffi::c_int) as isize)
+                                & CSI_ARG_MASK as ::core::ffi::c_long)
+                                as ::core::ffi::c_int,
+                            args.offset(argi as isize)
+                                .offset(2 as ::core::ffi::c_int as isize),
+                            argcount - argi - 2 as ::core::ffi::c_int,
+                            &raw mut (*state).pen.fg,
+                        );
                     setpenattr_col(state, VTERM_ATTR_FOREGROUND, (*state).pen.fg);
                     break 's_495;
                 }
@@ -1535,33 +1498,27 @@ pub unsafe extern "C" fn vterm_state_setpen(
                     break 's_495;
                 }
                 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 => {
-                    value = ((*args.offset(argi as isize)
-                        & CSI_ARG_MASK as ::core::ffi::c_long)
-                        - 40 as ::core::ffi::c_long) as ::core::ffi::c_int;
-                    set_pen_col_ansi(
-                        state,
-                        VTERM_ATTR_BACKGROUND,
-                        value as ::core::ffi::c_long,
-                    );
+                    value = ((*args.offset(argi as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
+                        - 40 as ::core::ffi::c_long)
+                        as ::core::ffi::c_int;
+                    set_pen_col_ansi(state, VTERM_ATTR_BACKGROUND, value as ::core::ffi::c_long);
                     break 's_495;
                 }
                 48 => {
                     if argcount - argi < 1 as ::core::ffi::c_int {
                         return;
                     }
-                    argi
-                        += 1 as ::core::ffi::c_int
-                            + lookup_colour(
-                                state,
-                                (*args.offset((argi + 1 as ::core::ffi::c_int) as isize)
-                                    & CSI_ARG_MASK as ::core::ffi::c_long)
-                                    as ::core::ffi::c_int,
-                                args
-                                    .offset(argi as isize)
-                                    .offset(2 as ::core::ffi::c_int as isize),
-                                argcount - argi - 2 as ::core::ffi::c_int,
-                                &raw mut (*state).pen.bg,
-                            );
+                    argi += 1 as ::core::ffi::c_int
+                        + lookup_colour(
+                            state,
+                            (*args.offset((argi + 1 as ::core::ffi::c_int) as isize)
+                                & CSI_ARG_MASK as ::core::ffi::c_long)
+                                as ::core::ffi::c_int,
+                            args.offset(argi as isize)
+                                .offset(2 as ::core::ffi::c_int as isize),
+                            argcount - argi - 2 as ::core::ffi::c_int,
+                            &raw mut (*state).pen.bg,
+                        );
                     setpenattr_col(state, VTERM_ATTR_BACKGROUND, (*state).pen.bg);
                     break 's_495;
                 }
@@ -1587,27 +1544,19 @@ pub unsafe extern "C" fn vterm_state_setpen(
                 73 => {}
                 74 | 75 => {}
                 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 => {
-                    value = ((*args.offset(argi as isize)
-                        & CSI_ARG_MASK as ::core::ffi::c_long)
-                        - 90 as ::core::ffi::c_long + 8 as ::core::ffi::c_long)
+                    value = ((*args.offset(argi as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
+                        - 90 as ::core::ffi::c_long
+                        + 8 as ::core::ffi::c_long)
                         as ::core::ffi::c_int;
-                    set_pen_col_ansi(
-                        state,
-                        VTERM_ATTR_FOREGROUND,
-                        value as ::core::ffi::c_long,
-                    );
+                    set_pen_col_ansi(state, VTERM_ATTR_FOREGROUND, value as ::core::ffi::c_long);
                     break 's_495;
                 }
                 100 | 101 | 102 | 103 | 104 | 105 | 106 | 107 => {
-                    value = ((*args.offset(argi as isize)
-                        & CSI_ARG_MASK as ::core::ffi::c_long)
-                        - 100 as ::core::ffi::c_long + 8 as ::core::ffi::c_long)
+                    value = ((*args.offset(argi as isize) & CSI_ARG_MASK as ::core::ffi::c_long)
+                        - 100 as ::core::ffi::c_long
+                        + 8 as ::core::ffi::c_long)
                         as ::core::ffi::c_int;
-                    set_pen_col_ansi(
-                        state,
-                        VTERM_ATTR_BACKGROUND,
-                        value as ::core::ffi::c_long,
-                    );
+                    set_pen_col_ansi(state, VTERM_ATTR_BACKGROUND, value as ::core::ffi::c_long);
                     break 's_495;
                 }
                 _ => {
@@ -1615,23 +1564,19 @@ pub unsafe extern "C" fn vterm_state_setpen(
                     break 's_495;
                 }
             }
-            (*state)
-                .pen
-                .set_small(
-                    (arg != 75 as ::core::ffi::c_long) as ::core::ffi::c_int
-                        as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
-            (*state)
-                .pen
-                .set_baseline(
-                    (if arg == 73 as ::core::ffi::c_long {
-                        VTERM_BASELINE_RAISE as ::core::ffi::c_int
-                    } else if arg == 74 as ::core::ffi::c_long {
-                        VTERM_BASELINE_LOWER as ::core::ffi::c_int
-                    } else {
-                        VTERM_BASELINE_NORMAL as ::core::ffi::c_int
-                    }) as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+            (*state).pen.set_small(
+                (arg != 75 as ::core::ffi::c_long) as ::core::ffi::c_int as ::core::ffi::c_uint
+                    as ::core::ffi::c_uint,
+            );
+            (*state).pen.set_baseline(
+                (if arg == 73 as ::core::ffi::c_long {
+                    VTERM_BASELINE_RAISE as ::core::ffi::c_int
+                } else if arg == 74 as ::core::ffi::c_long {
+                    VTERM_BASELINE_LOWER as ::core::ffi::c_int
+                } else {
+                    VTERM_BASELINE_NORMAL as ::core::ffi::c_int
+                }) as ::core::ffi::c_uint as ::core::ffi::c_uint,
+            );
             setpenattr_bool(
                 state,
                 VTERM_ATTR_SMALL,
@@ -1647,8 +1592,7 @@ pub unsafe extern "C" fn vterm_state_setpen(
         loop {
             let c2rust_fresh0 = argi;
             argi = argi + 1;
-            if *args.offset(c2rust_fresh0 as isize)
-                & CSI_ARG_FLAG_MORE as ::core::ffi::c_long == 0
+            if *args.offset(c2rust_fresh0 as isize) & CSI_ARG_FLAG_MORE as ::core::ffi::c_long == 0
             {
                 break;
             }
@@ -1662,11 +1606,10 @@ unsafe extern "C" fn vterm_state_getpen_color(
     mut fg: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     if fg != 0
-        && (*col).type_0 as ::core::ffi::c_int
-            & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int != 0
+        && (*col).type_0 as ::core::ffi::c_int & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int != 0
         || fg == 0
-            && (*col).type_0 as ::core::ffi::c_int
-                & VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int != 0
+            && (*col).type_0 as ::core::ffi::c_int & VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int
+                != 0
     {
         return argi;
     }
@@ -1701,36 +1644,40 @@ unsafe extern "C" fn vterm_state_getpen_color(
                     38 as ::core::ffi::c_int
                 } else {
                     48 as ::core::ffi::c_int
-                }) as ::core::ffi::c_uint) as ::core::ffi::c_long;
+                }) as ::core::ffi::c_uint)
+                as ::core::ffi::c_long;
             let c2rust_fresh19 = argi;
             argi = argi + 1;
-            *args.offset(c2rust_fresh19 as isize) = (CSI_ARG_FLAG_MORE
-                | 5 as ::core::ffi::c_uint) as ::core::ffi::c_long;
+            *args.offset(c2rust_fresh19 as isize) =
+                (CSI_ARG_FLAG_MORE | 5 as ::core::ffi::c_uint) as ::core::ffi::c_long;
             let c2rust_fresh20 = argi;
             argi = argi + 1;
             *args.offset(c2rust_fresh20 as isize) = idx as ::core::ffi::c_long;
         }
-    } else if (*col).type_0 as ::core::ffi::c_int
-        & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int
+    } else if (*col).type_0 as ::core::ffi::c_int & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int
         == VTERM_COLOR_RGB as ::core::ffi::c_int
     {
         let c2rust_fresh21 = argi;
         argi = argi + 1;
         *args.offset(c2rust_fresh21 as isize) = (CSI_ARG_FLAG_MORE
-            | (if fg != 0 { 38 as ::core::ffi::c_int } else { 48 as ::core::ffi::c_int })
-                as ::core::ffi::c_uint) as ::core::ffi::c_long;
+            | (if fg != 0 {
+                38 as ::core::ffi::c_int
+            } else {
+                48 as ::core::ffi::c_int
+            }) as ::core::ffi::c_uint)
+            as ::core::ffi::c_long;
         let c2rust_fresh22 = argi;
         argi = argi + 1;
-        *args.offset(c2rust_fresh22 as isize) = (CSI_ARG_FLAG_MORE
-            | 2 as ::core::ffi::c_uint) as ::core::ffi::c_long;
+        *args.offset(c2rust_fresh22 as isize) =
+            (CSI_ARG_FLAG_MORE | 2 as ::core::ffi::c_uint) as ::core::ffi::c_long;
         let c2rust_fresh23 = argi;
         argi = argi + 1;
-        *args.offset(c2rust_fresh23 as isize) = (CSI_ARG_FLAG_MORE
-            | (*col).rgb.red as ::core::ffi::c_uint) as ::core::ffi::c_long;
+        *args.offset(c2rust_fresh23 as isize) =
+            (CSI_ARG_FLAG_MORE | (*col).rgb.red as ::core::ffi::c_uint) as ::core::ffi::c_long;
         let c2rust_fresh24 = argi;
         argi = argi + 1;
-        *args.offset(c2rust_fresh24 as isize) = (CSI_ARG_FLAG_MORE
-            | (*col).rgb.green as ::core::ffi::c_uint) as ::core::ffi::c_long;
+        *args.offset(c2rust_fresh24 as isize) =
+            (CSI_ARG_FLAG_MORE | (*col).rgb.green as ::core::ffi::c_uint) as ::core::ffi::c_long;
         let c2rust_fresh25 = argi;
         argi = argi + 1;
         *args.offset(c2rust_fresh25 as isize) = (*col).rgb.blue as ::core::ffi::c_long;
@@ -1766,13 +1713,12 @@ pub unsafe extern "C" fn vterm_state_getpen(
         argi = argi + 1;
         *args.offset(c2rust_fresh4 as isize) = 4 as ::core::ffi::c_long;
     }
-    if (*state).pen.underline() as ::core::ffi::c_int
-        == VTERM_UNDERLINE_CURLY as ::core::ffi::c_int
+    if (*state).pen.underline() as ::core::ffi::c_int == VTERM_UNDERLINE_CURLY as ::core::ffi::c_int
     {
         let c2rust_fresh5 = argi;
         argi = argi + 1;
-        *args.offset(c2rust_fresh5 as isize) = (4 as ::core::ffi::c_uint
-            | CSI_ARG_FLAG_MORE) as ::core::ffi::c_long;
+        *args.offset(c2rust_fresh5 as isize) =
+            (4 as ::core::ffi::c_uint | CSI_ARG_FLAG_MORE) as ::core::ffi::c_long;
         let c2rust_fresh6 = argi;
         argi = argi + 1;
         *args.offset(c2rust_fresh6 as isize) = 3 as ::core::ffi::c_long;
@@ -1801,7 +1747,8 @@ pub unsafe extern "C" fn vterm_state_getpen(
         let c2rust_fresh11 = argi;
         argi = argi + 1;
         *args.offset(c2rust_fresh11 as isize) = (10 as ::core::ffi::c_int
-            + (*state).pen.font() as ::core::ffi::c_int) as ::core::ffi::c_long;
+            + (*state).pen.font() as ::core::ffi::c_int)
+            as ::core::ffi::c_long;
     }
     if (*state).pen.underline() as ::core::ffi::c_int
         == VTERM_UNDERLINE_DOUBLE as ::core::ffi::c_int
@@ -1844,8 +1791,7 @@ pub unsafe extern "C" fn vterm_state_set_penattr(
     if val.is_null() {
         return 0 as ::core::ffi::c_int;
     }
-    if type_0 as ::core::ffi::c_uint != vterm_get_attr_type(attr) as ::core::ffi::c_uint
-    {
+    if type_0 as ::core::ffi::c_uint != vterm_get_attr_type(attr) as ::core::ffi::c_uint {
         return 0 as ::core::ffi::c_int;
     }
     match attr as ::core::ffi::c_uint {
@@ -1857,16 +1803,12 @@ pub unsafe extern "C" fn vterm_state_set_penattr(
         2 => {
             (*state)
                 .pen
-                .set_underline(
-                    (*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_underline((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         3 => {
             (*state)
                 .pen
-                .set_italic(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_italic((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         4 => {
             (*state)
@@ -1876,23 +1818,17 @@ pub unsafe extern "C" fn vterm_state_set_penattr(
         5 => {
             (*state)
                 .pen
-                .set_reverse(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_reverse((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         6 => {
             (*state)
                 .pen
-                .set_conceal(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_conceal((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         7 => {
             (*state)
                 .pen
-                .set_strike(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_strike((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         8 => {
             (*state)
@@ -1913,9 +1849,7 @@ pub unsafe extern "C" fn vterm_state_set_penattr(
         12 => {
             (*state)
                 .pen
-                .set_baseline(
-                    (*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_baseline((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         13 => {
             (*state).pen.uri = (*val).number;
@@ -1928,15 +1862,17 @@ pub unsafe extern "C" fn vterm_state_set_penattr(
         15 => {
             (*state)
                 .pen
-                .set_overline(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_overline((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
         }
         _ => return 0 as ::core::ffi::c_int,
     }
     if !(*state).callbacks.is_null() && (*(*state).callbacks).setpenattr.is_some() {
-        Some((*(*state).callbacks).setpenattr.expect("non-null function pointer"))
-            .expect("non-null function pointer")(attr, val, (*state).cbdata);
+        Some(
+            (*(*state).callbacks)
+                .setpenattr
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(attr, val, (*state).cbdata);
     }
     return 1 as ::core::ffi::c_int;
 }
@@ -1957,8 +1893,8 @@ unsafe extern "C" fn vterm_color_indexed(mut col: *mut VTermColor, mut idx: uint
     (*col).type_0 = VTERM_COLOR_INDEXED as ::core::ffi::c_int as uint8_t;
     (*col).indexed.idx = idx;
 }
-pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint = (1 as ::core::ffi::c_uint)
-    << 31 as ::core::ffi::c_int;
-pub const CSI_ARG_MASK: ::core::ffi::c_uint = !((1 as ::core::ffi::c_uint)
-    << 31 as ::core::ffi::c_int);
+pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint =
+    (1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int;
+pub const CSI_ARG_MASK: ::core::ffi::c_uint =
+    !((1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int);
 pub const CSI_ARG_MISSING: ::core::ffi::c_long = 2147483647 as ::core::ffi::c_long;

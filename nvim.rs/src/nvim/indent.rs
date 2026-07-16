@@ -52,10 +52,7 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn ngettext(
@@ -86,10 +83,7 @@ extern "C" {
     static mut p_lispwords: *mut ::core::ffi::c_char;
     static mut p_paste: ::core::ffi::c_int;
     static mut p_report: OptInt;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -99,11 +93,7 @@ extern "C" {
     fn vim_strsize(s: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn getwhitecols_curline() -> intptr_t;
-    fn getdigits(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: intmax_t,
-    ) -> intmax_t;
+    fn getdigits(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: intmax_t) -> intmax_t;
     fn getdigits_int(
         pp: *mut *mut ::core::ffi::c_char,
         strict: bool,
@@ -125,10 +115,7 @@ extern "C" {
     static e_modifiable: [::core::ffi::c_char; 0];
     static e_positive: [::core::ffi::c_char; 0];
     static e_resulting_text_too_long: [::core::ffi::c_char; 0];
-    fn eval_to_number(
-        expr: *mut ::core::ffi::c_char,
-        use_simple_function: bool,
-    ) -> varnumber_T;
+    fn eval_to_number(expr: *mut ::core::ffi::c_char, use_simple_function: bool) -> varnumber_T;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn msg_progress(
@@ -184,11 +171,8 @@ extern "C" {
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_pos(pos: *const pos_T) -> *mut ::core::ffi::c_char;
     fn ml_get_len(lnum: linenr_T) -> colnr_T;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn changed_cline_bef_curs(wp: *mut win_T);
     fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
     fn win_col_off2(wp: *mut win_T) -> ::core::ffi::c_int;
@@ -224,11 +208,7 @@ extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn has_format_option(x: ::core::ffi::c_int) -> bool;
     fn findmatch(oap: *mut oparg_T, initc: ::core::ffi::c_int) -> *mut pos_T;
     fn linewhite(lnum: linenr_T) -> bool;
@@ -341,9 +321,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -3405,9 +3384,7 @@ pub const OPT_MODELINE: C2Rust_Unnamed_25 = 4;
 pub const OPT_GLOBAL: C2Rust_Unnamed_25 = 1;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const kCharsizeRegular: C2Rust_Unnamed_26 = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 #[inline(always)]
@@ -3428,11 +3405,11 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -3441,8 +3418,7 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
 }
 pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
 pub const TABSTOP_MAX: ::core::ffi::c_int = 9999 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn tabstop_set(
     mut var: *mut ::core::ffi::c_char,
@@ -3463,12 +3439,8 @@ pub unsafe extern "C" fn tabstop_set(
             || *cp.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == ',' as ::core::ffi::c_int
         {
-            let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
-            if strtol(cp, &raw mut end, 10 as ::core::ffi::c_int)
-                <= 0 as ::core::ffi::c_long
-            {
+            let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            if strtol(cp, &raw mut end, 10 as ::core::ffi::c_int) <= 0 as ::core::ffi::c_long {
                 if cp != end {
                     emsg(gettext(&raw const e_positive as *const ::core::ffi::c_char));
                 } else {
@@ -3482,15 +3454,18 @@ pub unsafe extern "C" fn tabstop_set(
         }
         if !ascii_isdigit(*cp as ::core::ffi::c_int) {
             if *cp.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int && cp > var
+                == ',' as ::core::ffi::c_int
+                && cp > var
                 && *cp.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     != ',' as ::core::ffi::c_int
-                && *cp.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                && *cp.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 valcount += 1;
             } else {
-                semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), var);
+                semsg(
+                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+                    var,
+                );
                 return false_0 != 0;
             }
         }
@@ -3506,9 +3481,11 @@ pub unsafe extern "C" fn tabstop_set(
     while *cp_0 as ::core::ffi::c_int != NUL {
         let mut n: ::core::ffi::c_int = atoi(cp_0);
         if n <= 0 as ::core::ffi::c_int || n > TABSTOP_MAX {
-            semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), cp_0);
-            let mut ptr_: *mut *mut ::core::ffi::c_void = array
-                as *mut *mut ::core::ffi::c_void;
+            semsg(
+                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+                cp_0,
+            );
+            let mut ptr_: *mut *mut ::core::ffi::c_void = array as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
@@ -3534,17 +3511,19 @@ pub unsafe extern "C" fn tabstop_padding(
     mut ts_arg: OptInt,
     mut vts: *const colnr_T,
 ) -> ::core::ffi::c_int {
-    let mut ts: OptInt = if ts_arg == 0 as OptInt { 8 as OptInt } else { ts_arg };
+    let mut ts: OptInt = if ts_arg == 0 as OptInt {
+        8 as OptInt
+    } else {
+        ts_arg
+    };
     let mut tabcol: colnr_T = 0 as colnr_T;
     let mut t: ::core::ffi::c_int = 0;
     let mut padding: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if vts.is_null()
-        || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int
-    {
+    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
         return (ts - col as OptInt % ts) as ::core::ffi::c_int;
     }
-    let tabcount: ::core::ffi::c_int = *vts.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int;
+    let tabcount: ::core::ffi::c_int =
+        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
     t = 1 as ::core::ffi::c_int;
     while t <= tabcount {
         tabcol += *vts.offset(t as isize);
@@ -3556,8 +3535,8 @@ pub unsafe extern "C" fn tabstop_padding(
         }
     }
     if t > tabcount {
-        padding = (*vts.offset(tabcount as isize)
-            - (col - tabcol) % *vts.offset(tabcount as isize)) as ::core::ffi::c_int;
+        padding = (*vts.offset(tabcount as isize) - (col - tabcol) % *vts.offset(tabcount as isize))
+            as ::core::ffi::c_int;
     }
     return padding;
 }
@@ -3568,16 +3547,14 @@ pub unsafe extern "C" fn tabstop_at(
     mut vts: *const colnr_T,
     mut left: bool,
 ) -> ::core::ffi::c_int {
-    if vts.is_null()
-        || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int
-    {
+    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
         return ts as ::core::ffi::c_int;
     }
     let mut tabcol: colnr_T = 0 as colnr_T;
     let mut t: ::core::ffi::c_int = 0;
     let mut tab_size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let tabcount: ::core::ffi::c_int = *vts.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int;
+    let tabcount: ::core::ffi::c_int =
+        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
     t = 1 as ::core::ffi::c_int;
     while t <= tabcount {
         tabcol += *vts.offset(t as isize);
@@ -3585,15 +3562,13 @@ pub unsafe extern "C" fn tabstop_at(
             if left as ::core::ffi::c_int != 0 && t == 1 as ::core::ffi::c_int {
                 tab_size = col as ::core::ffi::c_int;
             } else {
-                tab_size = *vts
-                    .offset(
-                        (t
-                            - (if left as ::core::ffi::c_int != 0 {
-                                1 as ::core::ffi::c_int
-                            } else {
-                                0 as ::core::ffi::c_int
-                            })) as isize,
-                    ) as ::core::ffi::c_int;
+                tab_size = *vts.offset(
+                    (t - (if left as ::core::ffi::c_int != 0 {
+                        1 as ::core::ffi::c_int
+                    } else {
+                        0 as ::core::ffi::c_int
+                    })) as isize,
+                ) as ::core::ffi::c_int;
             }
             break;
         } else {
@@ -3612,13 +3587,11 @@ pub unsafe extern "C" fn tabstop_start(
     mut vts: *mut colnr_T,
 ) -> colnr_T {
     let mut tabcol: colnr_T = 0 as colnr_T;
-    if vts.is_null()
-        || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int
-    {
+    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
         return col - col % ts as colnr_T;
     }
-    let tabcount: ::core::ffi::c_int = *vts.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int;
+    let tabcount: ::core::ffi::c_int =
+        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
     let mut t: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while t <= tabcount {
         tabcol += *vts.offset(t as isize);
@@ -3627,8 +3600,8 @@ pub unsafe extern "C" fn tabstop_start(
         }
         t += 1;
     }
-    let excess: ::core::ffi::c_int = tabcol as ::core::ffi::c_int
-        % *vts.offset(tabcount as isize) as ::core::ffi::c_int;
+    let excess: ::core::ffi::c_int =
+        tabcol as ::core::ffi::c_int % *vts.offset(tabcount as isize) as ::core::ffi::c_int;
     return col - (col - excess as colnr_T) % *vts.offset(tabcount as isize);
 }
 #[no_mangle]
@@ -3640,8 +3613,8 @@ pub unsafe extern "C" fn tabstop_fromto(
     mut ntabs: *mut ::core::ffi::c_int,
     mut nspcs: *mut ::core::ffi::c_int,
 ) {
-    let mut spaces: ::core::ffi::c_int = end_col as ::core::ffi::c_int
-        - start_col as ::core::ffi::c_int;
+    let mut spaces: ::core::ffi::c_int =
+        end_col as ::core::ffi::c_int - start_col as ::core::ffi::c_int;
     let mut tabcol: colnr_T = 0 as colnr_T;
     let mut padding: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut t: ::core::ffi::c_int = 0;
@@ -3651,7 +3624,8 @@ pub unsafe extern "C" fn tabstop_fromto(
         ts_arg
     };
     '_c2rust_label: {
-        if ts != 0 as ::core::ffi::c_int {} else {
+        if ts != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"ts != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
@@ -3662,9 +3636,7 @@ pub unsafe extern "C" fn tabstop_fromto(
             );
         }
     };
-    if vts.is_null()
-        || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int
-    {
+    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
         let mut tabs: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let initspc: ::core::ffi::c_int = ts - start_col as ::core::ffi::c_int % ts;
         if spaces >= initspc {
@@ -3677,8 +3649,8 @@ pub unsafe extern "C" fn tabstop_fromto(
         *nspcs = spaces;
         return;
     }
-    let tabcount: ::core::ffi::c_int = *vts.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int;
+    let tabcount: ::core::ffi::c_int =
+        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
     t = 1 as ::core::ffi::c_int;
     while t <= tabcount {
         tabcol += *vts.offset(t as isize);
@@ -3701,12 +3673,10 @@ pub unsafe extern "C" fn tabstop_fromto(
     }
     *ntabs = 1 as ::core::ffi::c_int;
     spaces -= padding;
-    while spaces != 0 as ::core::ffi::c_int
-        && {
-            t += 1;
-            t <= tabcount
-        }
-    {
+    while spaces != 0 as ::core::ffi::c_int && {
+        t += 1;
+        t <= tabcount
+    } {
         padding = *vts.offset(t as isize) as ::core::ffi::c_int;
         if spaces < padding {
             *nspcs = spaces;
@@ -3718,10 +3688,7 @@ pub unsafe extern "C" fn tabstop_fromto(
     *ntabs += spaces / *vts.offset(tabcount as isize);
     *nspcs = spaces % *vts.offset(tabcount as isize);
 }
-unsafe extern "C" fn tabstop_eq(
-    mut ts1: *const colnr_T,
-    mut ts2: *const colnr_T,
-) -> bool {
+unsafe extern "C" fn tabstop_eq(mut ts1: *const colnr_T, mut ts2: *const colnr_T) -> bool {
     if ts1.is_null() && !ts2.is_null() || !ts1.is_null() && ts2.is_null() {
         return false_0 != 0;
     }
@@ -3779,11 +3746,7 @@ pub unsafe extern "C" fn tabstop_first(mut ts: *mut colnr_T) -> ::core::ffi::c_i
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_sw_value(mut buf: *mut buf_T) -> ::core::ffi::c_int {
-    let mut result: ::core::ffi::c_int = get_sw_value_col(
-        buf,
-        0 as colnr_T,
-        false_0 != 0,
-    );
+    let mut result: ::core::ffi::c_int = get_sw_value_col(buf, 0 as colnr_T, false_0 != 0);
     return result;
 }
 unsafe extern "C" fn get_sw_value_pos(
@@ -3793,11 +3756,7 @@ unsafe extern "C" fn get_sw_value_pos(
 ) -> ::core::ffi::c_int {
     let mut save_cursor: pos_T = (*curwin).w_cursor;
     (*curwin).w_cursor = *pos;
-    let mut sw_value: ::core::ffi::c_int = get_sw_value_col(
-        buf,
-        get_nolist_virtcol(),
-        left,
-    );
+    let mut sw_value: ::core::ffi::c_int = get_sw_value_col(buf, get_nolist_virtcol(), left);
     (*curwin).w_cursor = save_cursor;
     return sw_value;
 }
@@ -3865,9 +3824,9 @@ pub unsafe extern "C" fn indent_size_no_ts(
         } else if c as ::core::ffi::c_int == TAB {
             vcol += tab_size;
         } else {
-            return vcol
+            return vcol;
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn indent_size_ts(
@@ -3876,7 +3835,8 @@ pub unsafe extern "C" fn indent_size_ts(
     mut vts: *mut colnr_T,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if char2cells(' ' as ::core::ffi::c_int) == 1 as ::core::ffi::c_int {} else {
+        if char2cells(' ' as ::core::ffi::c_int) == 1 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"char2cells(' ') == 1\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
@@ -3890,27 +3850,25 @@ pub unsafe extern "C" fn indent_size_ts(
     let mut vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tabstop_width: ::core::ffi::c_int = 0;
     let mut next_tab_vcol: ::core::ffi::c_int = 0;
-    if vts.is_null()
-        || *vts.offset(0 as ::core::ffi::c_int as isize) < 1 as ::core::ffi::c_int
-    {
-        tabstop_width = (if ts == 0 as OptInt { 8 as OptInt } else { ts })
-            as ::core::ffi::c_int;
+    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) < 1 as ::core::ffi::c_int {
+        tabstop_width = (if ts == 0 as OptInt { 8 as OptInt } else { ts }) as ::core::ffi::c_int;
         next_tab_vcol = tabstop_width;
     } else {
         let mut cur_tabstop: *mut colnr_T = vts.offset(1 as ::core::ffi::c_int as isize);
-        let last_tabstop: *mut colnr_T = vts
-            .offset(*vts.offset(0 as ::core::ffi::c_int as isize) as isize);
+        let last_tabstop: *mut colnr_T =
+            vts.offset(*vts.offset(0 as ::core::ffi::c_int as isize) as isize);
         while cur_tabstop != last_tabstop {
             let mut cur_vcol: ::core::ffi::c_int = vcol;
             let c2rust_fresh1 = cur_tabstop;
             cur_tabstop = cur_tabstop.offset(1);
             vcol += *c2rust_fresh1 as ::core::ffi::c_int;
             '_c2rust_label_0: {
-                if cur_vcol < vcol {} else {
+                if cur_vcol < vcol {
+                } else {
                     __assert_fail(
                         b"cur_vcol < vcol\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         430 as ::core::ffi::c_uint,
                         b"int indent_size_ts(const char *, OptInt, colnr_T *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -3938,7 +3896,8 @@ pub unsafe extern "C" fn indent_size_ts(
         next_tab_vcol = vcol + tabstop_width;
     }
     '_c2rust_label_1: {
-        if tabstop_width != 0 as ::core::ffi::c_int {} else {
+        if tabstop_width != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"tabstop_width != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
@@ -3955,31 +3914,26 @@ pub unsafe extern "C" fn indent_size_ts(
         let c_0: ::core::ffi::c_char = *c2rust_fresh3;
         if c_0 as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
             vcol += 1;
-            next_tab_vcol
-                += if vcol == next_tab_vcol {
-                    tabstop_width
-                } else {
-                    0 as ::core::ffi::c_int
-                };
+            next_tab_vcol += if vcol == next_tab_vcol {
+                tabstop_width
+            } else {
+                0 as ::core::ffi::c_int
+            };
         } else if c_0 as ::core::ffi::c_int == TAB {
             vcol = next_tab_vcol;
             next_tab_vcol += tabstop_width;
         } else {
-            return vcol
+            return vcol;
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_indent(
     mut size: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
 ) -> bool {
-    let mut newline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut oldline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut newline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut oldline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut doit: ::core::ffi::c_int = false_0;
     let mut ind_done: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3990,8 +3944,7 @@ pub unsafe extern "C" fn set_indent(
     let mut ind_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     oldline = get_cursor_line_ptr();
     let mut p: *mut ::core::ffi::c_char = oldline;
-    let mut line_len: ::core::ffi::c_int = get_cursor_line_len()
-        + 1 as ::core::ffi::c_int;
+    let mut line_len: ::core::ffi::c_int = get_cursor_line_len() + 1 as ::core::ffi::c_int;
     if (*curbuf).b_p_et == 0
         || flags & SIN_INSERT as ::core::ffi::c_int == 0 && (*curbuf).b_p_pi != 0
     {
@@ -4064,7 +4017,8 @@ pub unsafe extern "C" fn set_indent(
         todo -= 1;
         ind_len += 1;
     }
-    if doit == 0 && !ascii_iswhite(*p as ::core::ffi::c_int)
+    if doit == 0
+        && !ascii_iswhite(*p as ::core::ffi::c_int)
         && flags & SIN_INSERT as ::core::ffi::c_int == 0
     {
         return false_0 != 0;
@@ -4091,8 +4045,7 @@ pub unsafe extern "C" fn set_indent(
             );
             abort();
         }
-        let (c2rust_result_0, c2rust_overflowed_0) = newline_size
-            .overflowing_sub(ind_done);
+        let (c2rust_result_0, c2rust_overflowed_0) = newline_size.overflowing_sub(ind_done);
         *&raw mut newline_size = c2rust_result_0;
         if c2rust_overflowed_0 {
             logmsg(
@@ -4105,8 +4058,7 @@ pub unsafe extern "C" fn set_indent(
             );
             abort();
         }
-        let (c2rust_result_1, c2rust_overflowed_1) = newline_size
-            .overflowing_add(line_len);
+        let (c2rust_result_1, c2rust_overflowed_1) = newline_size.overflowing_add(line_len);
         *&raw mut newline_size = c2rust_result_1;
         if c2rust_overflowed_1 {
             logmsg(
@@ -4120,14 +4072,14 @@ pub unsafe extern "C" fn set_indent(
             abort();
         }
         '_c2rust_label: {
-            if newline_size >= 0 as ::core::ffi::c_int {} else {
+            if newline_size >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"newline_size >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     601 as ::core::ffi::c_uint,
-                    b"_Bool set_indent(int, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"_Bool set_indent(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -4151,20 +4103,20 @@ pub unsafe extern "C" fn set_indent(
     } else {
         todo = size;
         '_c2rust_label_0: {
-            if ind_len + line_len >= 0 as ::core::ffi::c_int {} else {
+            if ind_len + line_len >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"ind_len + line_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     624 as ::core::ffi::c_uint,
-                    b"_Bool set_indent(int, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"_Bool set_indent(int, int)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
         let mut newline_size_0: size_t = 0;
-        let (c2rust_result_2, c2rust_overflowed_2) = (ind_len as i128)
-            .overflowing_add(line_len as i128);
+        let (c2rust_result_2, c2rust_overflowed_2) =
+            (ind_len as i128).overflowing_add(line_len as i128);
         let c2rust_result_narrow = c2rust_result_2 as size_t;
         *&raw mut newline_size_0 = c2rust_result_narrow;
         if c2rust_overflowed_2 || c2rust_result_narrow as i128 != c2rust_result_2 {
@@ -4251,9 +4203,7 @@ pub unsafe extern "C" fn set_indent(
         p as *const ::core::ffi::c_void,
         line_len as size_t,
     );
-    if flags & SIN_UNDO as ::core::ffi::c_int == 0
-        || u_savesub((*curwin).w_cursor.lnum) == OK
-    {
+    if flags & SIN_UNDO as ::core::ffi::c_int == 0 || u_savesub((*curwin).w_cursor.lnum) == OK {
         let old_offset: colnr_T = p.offset_from(oldline) as colnr_T;
         let new_offset: colnr_T = s.offset_from(newline) as colnr_T;
         ml_replace((*curwin).w_cursor.lnum, newline, false_0 != 0);
@@ -4272,8 +4222,7 @@ pub unsafe extern "C" fn set_indent(
         }
         if saved_cursor.lnum == (*curwin).w_cursor.lnum {
             if saved_cursor.col >= old_offset {
-                saved_cursor.col
-                    += (ind_len as colnr_T - old_offset) as ::core::ffi::c_int;
+                saved_cursor.col += (ind_len as colnr_T - old_offset) as ::core::ffi::c_int;
             } else if saved_cursor.col >= new_offset {
                 saved_cursor.col = new_offset;
             }
@@ -4330,9 +4279,7 @@ pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c
         }
         vim_regfree(regmatch.regprog);
     }
-    if pos.lnum == 0 as linenr_T
-        || *ml_get_pos(&raw mut pos) as ::core::ffi::c_int == NUL
-    {
+    if pos.lnum == 0 as linenr_T || *ml_get_pos(&raw mut pos) as ::core::ffi::c_int == NUL {
         return -1 as ::core::ffi::c_int;
     }
     getvcol(
@@ -4354,24 +4301,26 @@ pub unsafe extern "C" fn briopt_check(
     let mut bri_sbr: bool = false_0 != 0;
     let mut bri_list: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut bri_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = &raw mut empty_string_option
-        as *mut ::core::ffi::c_char;
+    let mut p: *mut ::core::ffi::c_char = &raw mut empty_string_option as *mut ::core::ffi::c_char;
     if !briopt.is_null() {
         p = briopt;
     } else if !wp.is_null() {
         p = (*wp).w_onebuf_opt.wo_briopt;
     }
     while *p as ::core::ffi::c_int != NUL {
-        if strncmp(p, b"shift:\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-            == 0 as ::core::ffi::c_int
+        if strncmp(
+            p,
+            b"shift:\0".as_ptr() as *const ::core::ffi::c_char,
+            6 as size_t,
+        ) == 0 as ::core::ffi::c_int
             && (*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '-' as ::core::ffi::c_int
-                && ascii_isdigit(
-                    *p.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
-                || ascii_isdigit(
-                    *p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                && ascii_isdigit(*p.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    != 0
+                || ascii_isdigit(*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    != 0)
         {
             p = p.offset(6 as ::core::ffi::c_int as isize);
             bri_shift = getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int);
@@ -4380,9 +4329,9 @@ pub unsafe extern "C" fn briopt_check(
             b"min:\0".as_ptr() as *const ::core::ffi::c_char,
             4 as size_t,
         ) == 0 as ::core::ffi::c_int
-            && ascii_isdigit(
-                *p.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+            && ascii_isdigit(*p.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                as ::core::ffi::c_int
+                != 0
         {
             p = p.offset(4 as ::core::ffi::c_int as isize);
             bri_min = getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int);
@@ -4401,8 +4350,7 @@ pub unsafe extern "C" fn briopt_check(
         ) == 0 as ::core::ffi::c_int
         {
             p = p.offset(5 as ::core::ffi::c_int as isize);
-            bri_list = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t)
-                as ::core::ffi::c_int;
+            bri_list = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t) as ::core::ffi::c_int;
         } else if strncmp(
             p,
             b"column:\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4410,11 +4358,9 @@ pub unsafe extern "C" fn briopt_check(
         ) == 0 as ::core::ffi::c_int
         {
             p = p.offset(7 as ::core::ffi::c_int as isize);
-            bri_vcol = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t)
-                as ::core::ffi::c_int;
+            bri_vcol = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t) as ::core::ffi::c_int;
         }
-        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-            && *p as ::core::ffi::c_int != NUL
+        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
         {
             return false_0 != 0;
         }
@@ -4441,32 +4387,27 @@ pub unsafe extern "C" fn get_breakindent_win(
     static mut prev_ts: OptInt = 0 as OptInt;
     static mut prev_vts: *mut colnr_T = ::core::ptr::null_mut::<colnr_T>();
     static mut prev_fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut prev_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    static mut prev_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static mut prev_tick: varnumber_T = 0 as varnumber_T;
     static mut prev_list: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static mut prev_listopt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static mut prev_no_ts: bool = false_0 != 0;
     static mut prev_dy_uhex: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    static mut prev_flp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    static mut prev_flp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut bri: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let eff_wwidth: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp)
-        + win_col_off2(wp);
-    let no_ts: bool = (*wp).w_onebuf_opt.wo_list != 0
-        && (*wp).w_p_lcs_chars.tab1 == NUL as schar_T;
-    if prev_fnum != (*(*wp).w_buffer).handle || prev_ts != (*(*wp).w_buffer).b_p_ts
+    let eff_wwidth: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp) + win_col_off2(wp);
+    let no_ts: bool = (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.tab1 == NUL as schar_T;
+    if prev_fnum != (*(*wp).w_buffer).handle
+        || prev_ts != (*(*wp).w_buffer).b_p_ts
         || prev_vts != (*(*wp).w_buffer).b_p_vts_array
         || prev_tick != buf_get_changedtick((*wp).w_buffer)
         || prev_listopt != (*wp).w_briopt_list
         || prev_no_ts as ::core::ffi::c_int != no_ts as ::core::ffi::c_int
-        || prev_dy_uhex
-            != dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
+        || prev_dy_uhex != dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
         || prev_flp.is_null()
         || strcmp(prev_flp, get_flp_value((*wp).w_buffer)) != 0 as ::core::ffi::c_int
-        || prev_line.is_null() || strcmp(prev_line, line) != 0 as ::core::ffi::c_int
+        || prev_line.is_null()
+        || strcmp(prev_line, line) != 0 as ::core::ffi::c_int
     {
         prev_fnum = (*(*wp).w_buffer).handle as ::core::ffi::c_int;
         xfree(prev_line as *mut ::core::ffi::c_void);
@@ -4488,18 +4429,14 @@ pub unsafe extern "C" fn get_breakindent_win(
         prev_listopt = (*wp).w_briopt_list;
         prev_list = 0 as ::core::ffi::c_int;
         prev_no_ts = no_ts;
-        prev_dy_uhex = dy_flags
-            & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint;
+        prev_dy_uhex = dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint;
         xfree(prev_flp as *mut ::core::ffi::c_void);
         prev_flp = xstrdup(get_flp_value((*wp).w_buffer));
         if (*wp).w_briopt_list != 0 as ::core::ffi::c_int
             && (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int
         {
             let mut regmatch: regmatch_T = regmatch_T {
-                regprog: vim_regcomp(
-                    prev_flp,
-                    RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT,
-                ),
+                regprog: vim_regcomp(prev_flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT),
                 startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
                 endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
                 rm_matchcol: 0,
@@ -4511,10 +4448,10 @@ pub unsafe extern "C" fn get_breakindent_win(
                     if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
                         prev_list += (*wp).w_briopt_list;
                     } else {
-                        let mut ptr: *mut ::core::ffi::c_char = *(&raw mut regmatch
-                            .startp as *mut *mut ::core::ffi::c_char);
-                        let mut end_ptr: *mut ::core::ffi::c_char = *(&raw mut regmatch
-                            .endp as *mut *mut ::core::ffi::c_char);
+                        let mut ptr: *mut ::core::ffi::c_char =
+                            *(&raw mut regmatch.startp as *mut *mut ::core::ffi::c_char);
+                        let mut end_ptr: *mut ::core::ffi::c_char =
+                            *(&raw mut regmatch.endp as *mut *mut ::core::ffi::c_char);
                         let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         while ptr < end_ptr {
                             indent += win_chartabsize(wp, ptr, indent as colnr_T);
@@ -4553,9 +4490,7 @@ pub unsafe extern "C" fn get_breakindent_win(
 }
 #[no_mangle]
 pub unsafe extern "C" fn inindent(mut extra: ::core::ffi::c_int) -> bool {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut col: colnr_T = 0;
     col = 0 as ::core::ffi::c_int as colnr_T;
     ptr = get_cursor_line_ptr();
@@ -4575,7 +4510,9 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
     let mut last_changed: linenr_T = 0 as linenr_T;
     let mut start_lnum: linenr_T = (*curwin).w_cursor.lnum;
     if (*curbuf).b_p_ma == 0 {
-        emsg(gettext(&raw const e_modifiable as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_modifiable as *const ::core::ffi::c_char,
+        ));
         return;
     }
     if u_savecommon(
@@ -4597,20 +4534,15 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
                 snprintf(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
-                    gettext(
-                        b"%ld lines to indent... \0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"%ld lines to indent... \0".as_ptr() as *const ::core::ffi::c_char),
                     i as int64_t,
                 );
                 let mut save_lnum: linenr_T = (*curwin).w_cursor.lnum;
                 (*curwin).w_cursor.lnum = start_lnum;
                 msg_progress(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
-                    b"indent\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"running\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                    b"running\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     0 as ::core::ffi::c_int,
                     true_0 != 0,
                     false_0 != 0,
@@ -4619,10 +4551,7 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
             }
             if i as linenr_T != (*oap).line_count - 1 as linenr_T
                 || (*oap).line_count == 1 as linenr_T
-                || how
-                    != Some(
-                        get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
-                    )
+                || how != Some(get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int)
             {
                 let mut l: *mut ::core::ffi::c_char = skipwhite(get_cursor_line_ptr());
                 amount = if *l as ::core::ffi::c_int == NUL {
@@ -4631,8 +4560,7 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
                     how.expect("non-null function pointer")()
                 };
                 if amount >= 0 as ::core::ffi::c_int
-                    && set_indent(amount, 0 as ::core::ffi::c_int) as ::core::ffi::c_int
-                        != 0
+                    && set_indent(amount, 0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                 {
                     if first_changed == 0 as linenr_T {
                         first_changed = (*curwin).w_cursor.lnum;
@@ -4677,18 +4605,14 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
         );
         msg_progress(
             &raw mut IObuff as *mut ::core::ffi::c_char,
-            b"indent\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            b"success\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"success\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             0 as ::core::ffi::c_int,
             true_0 != 0,
             false_0 != 0,
         );
     }
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-        == 0 as ::core::ffi::c_int
-    {
+    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         (*curbuf).b_op_start = (*oap).start;
         (*curbuf).b_op_end = (*oap).end;
     }
@@ -4701,20 +4625,24 @@ pub unsafe extern "C" fn preprocs_left() -> bool {
                 '#' as ::core::ffi::c_int,
                 ' ' as ::core::ffi::c_int,
                 true_0 != 0,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
             && (*curbuf).b_ind_hash_comment == 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_do_si() -> bool {
-    return (*curbuf).b_p_si != 0 && (*curbuf).b_p_cin == 0
-        && *(*curbuf).b_p_inde as ::core::ffi::c_int == NUL && p_paste == 0;
+    return (*curbuf).b_p_si != 0
+        && (*curbuf).b_p_cin == 0
+        && *(*curbuf).b_p_inde as ::core::ffi::c_int == NUL
+        && p_paste == 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
     let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
     if (did_si as ::core::ffi::c_int != 0 || can_si_back as ::core::ffi::c_int != 0)
         && c == '{' as ::core::ffi::c_int
-        || can_si as ::core::ffi::c_int != 0 && c == '}' as ::core::ffi::c_int
+        || can_si as ::core::ffi::c_int != 0
+            && c == '}' as ::core::ffi::c_int
             && inindent(0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
     {
         let mut old_pos: pos_T = pos_T {
@@ -4722,20 +4650,16 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
             col: 0,
             coladd: 0,
         };
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut i: ::core::ffi::c_int = 0;
         let mut temp: bool = false;
-        if c == '}' as ::core::ffi::c_int
-            && {
-                pos = findmatch(
-                    ::core::ptr::null_mut::<oparg_T>(),
-                    '{' as ::core::ffi::c_int,
-                );
-                !pos.is_null()
-            }
-        {
+        if c == '}' as ::core::ffi::c_int && {
+            pos = findmatch(
+                ::core::ptr::null_mut::<oparg_T>(),
+                '{' as ::core::ffi::c_int,
+            );
+            !pos.is_null()
+        } {
             old_pos = (*curwin).w_cursor;
             ptr = ml_get((*pos).lnum);
             i = (*pos).col as ::core::ffi::c_int;
@@ -4744,7 +4668,8 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
                     i -= 1;
                     if !(i > 0 as ::core::ffi::c_int
                         && ascii_iswhite(*ptr.offset(i as isize) as ::core::ffi::c_int)
-                            as ::core::ffi::c_int != 0)
+                            as ::core::ffi::c_int
+                            != 0)
                     {
                         break;
                     }
@@ -4752,15 +4677,13 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
             }
             (*curwin).w_cursor.lnum = (*pos).lnum;
             (*curwin).w_cursor.col = i as colnr_T;
-            if *ptr.offset(i as isize) as ::core::ffi::c_int == ')' as ::core::ffi::c_int
-                && {
-                    pos = findmatch(
-                        ::core::ptr::null_mut::<oparg_T>(),
-                        '(' as ::core::ffi::c_int,
-                    );
-                    !pos.is_null()
-                }
-            {
+            if *ptr.offset(i as isize) as ::core::ffi::c_int == ')' as ::core::ffi::c_int && {
+                pos = findmatch(
+                    ::core::ptr::null_mut::<oparg_T>(),
+                    '(' as ::core::ffi::c_int,
+                );
+                !pos.is_null()
+            } {
                 (*curwin).w_cursor = *pos;
             }
             i = get_indent();
@@ -4772,7 +4695,8 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
             }
         } else if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int {
             temp = true_0 != 0;
-            if c == '{' as ::core::ffi::c_int && can_si_back as ::core::ffi::c_int != 0
+            if c == '{' as ::core::ffi::c_int
+                && can_si_back as ::core::ffi::c_int != 0
                 && (*curwin).w_cursor.lnum > 1 as linenr_T
             {
                 old_pos = (*curwin).w_cursor;
@@ -4797,7 +4721,8 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
         }
     }
     if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
-        && can_si as ::core::ffi::c_int != 0 && c == '#' as ::core::ffi::c_int
+        && can_si as ::core::ffi::c_int != 0
+        && c == '#' as ::core::ffi::c_int
         && inindent(0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
     {
         old_indent = get_indent();
@@ -4818,9 +4743,7 @@ pub unsafe extern "C" fn change_indent(
 ) {
     let mut insstart_less: ::core::ffi::c_int = 0;
     let mut orig_col: colnr_T = 0 as colnr_T;
-    let mut orig_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut orig_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
         orig_line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
         orig_col = (*curwin).w_cursor.col;
@@ -4830,8 +4753,7 @@ pub unsafe extern "C" fn change_indent(
     let mut vc: colnr_T = getvcol_nolist(&raw mut (*curwin).w_cursor);
     let mut vcol: ::core::ffi::c_int = vc as ::core::ffi::c_int;
     let mut start_col: ::core::ffi::c_int = (*curwin).w_cursor.col as ::core::ffi::c_int;
-    let mut new_cursor_col: ::core::ffi::c_int = (*curwin).w_cursor.col
-        as ::core::ffi::c_int;
+    let mut new_cursor_col: ::core::ffi::c_int = (*curwin).w_cursor.col as ::core::ffi::c_int;
     beginline(BL_WHITE as ::core::ffi::c_int);
     new_cursor_col -= (*curwin).w_cursor.col as ::core::ffi::c_int;
     insstart_less = (*curwin).w_cursor.col as ::core::ffi::c_int;
@@ -4897,26 +4819,17 @@ pub unsafe extern "C" fn change_indent(
                     lvl: 0,
                     x: ::core::ptr::null_mut::<MTNode>(),
                     i: 0,
-                    s: [C2Rust_Unnamed_15 {
-                        oldcol: 0,
-                        i: 0,
-                    }; 20],
+                    s: [C2Rust_Unnamed_15 { oldcol: 0, i: 0 }; 20],
                     intersect_idx: 0,
                     intersect_pos: MTPos { row: 0, col: 0 },
                     intersect_pos_x: MTPos { row: 0, col: 0 },
                 }; 1],
             };
-            let mut cstype: CSType = init_charsize_arg(
-                &raw mut csarg,
-                curwin,
-                0 as linenr_T,
-                line,
-            );
+            let mut cstype: CSType = init_charsize_arg(&raw mut csarg, curwin, 0 as linenr_T, line);
             let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
             loop {
-                let mut next_vcol: ::core::ffi::c_int = vcol
-                    + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg)
-                        .width;
+                let mut next_vcol: ::core::ffi::c_int =
+                    vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
                 if next_vcol > end_vcol {
                     break;
                 }
@@ -4930,11 +4843,13 @@ pub unsafe extern "C" fn change_indent(
         }
         if vcol != (*curwin).w_virtcol {
             (*curwin).w_cursor.col = new_cursor_col;
-            let ptrlen: size_t = ((*curwin).w_virtcol as ::core::ffi::c_int - vcol)
-                as size_t;
-            let mut ptr: *mut ::core::ffi::c_char = xmallocz(ptrlen)
-                as *mut ::core::ffi::c_char;
-            memset(ptr as *mut ::core::ffi::c_void, ' ' as ::core::ffi::c_int, ptrlen);
+            let ptrlen: size_t = ((*curwin).w_virtcol as ::core::ffi::c_int - vcol) as size_t;
+            let mut ptr: *mut ::core::ffi::c_char = xmallocz(ptrlen) as *mut ::core::ffi::c_char;
+            memset(
+                ptr as *mut ::core::ffi::c_void,
+                ' ' as ::core::ffi::c_int,
+                ptrlen,
+            );
             new_cursor_col += ptrlen as ::core::ffi::c_int;
             ins_str(ptr, ptrlen);
             xfree(ptr as *mut ::core::ffi::c_void);
@@ -4950,9 +4865,7 @@ pub unsafe extern "C" fn change_indent(
     (*curwin).w_set_curswant = true_0;
     changed_cline_bef_curs(curwin);
     if State & MODE_INSERT as ::core::ffi::c_int != 0 {
-        if (*curwin).w_cursor.lnum == Insstart.lnum
-            && Insstart.col != 0 as ::core::ffi::c_int
-        {
+        if (*curwin).w_cursor.lnum == Insstart.lnum && Insstart.col != 0 as ::core::ffi::c_int {
             if Insstart.col <= insstart_less {
                 Insstart.col = 0 as ::core::ffi::c_int as colnr_T;
             } else {
@@ -4979,13 +4892,10 @@ pub unsafe extern "C" fn change_indent(
         }
     }
     if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-        let mut new_line: *mut ::core::ffi::c_char = xstrnsave(
-            get_cursor_line_ptr(),
-            get_cursor_line_len() as size_t,
-        );
+        let mut new_line: *mut ::core::ffi::c_char =
+            xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
         *new_line.offset((*curwin).w_cursor.col as isize) = NUL as ::core::ffi::c_char;
-        let mut new_col: ::core::ffi::c_int = (*curwin).w_cursor.col
-            as ::core::ffi::c_int;
+        let mut new_col: ::core::ffi::c_int = (*curwin).w_cursor.col as ::core::ffi::c_int;
         ml_replace((*curwin).w_cursor.lnum, orig_line, false_0 != 0);
         (*curwin).w_cursor.col = orig_col;
         curbuf_splice_pending += 1;
@@ -5018,9 +4928,7 @@ pub unsafe extern "C" fn copy_indent(
     mut src: *mut ::core::ffi::c_char,
 ) -> bool {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut ind_len: ::core::ffi::c_int = 0;
     let mut line_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tab_pad: ::core::ffi::c_int = 0;
@@ -5106,21 +5014,20 @@ pub unsafe extern "C" fn copy_indent(
         if p.is_null() {
             line_len = get_cursor_line_len() + 1 as ::core::ffi::c_int;
             '_c2rust_label: {
-                if ind_len + line_len >= 0 as ::core::ffi::c_int {} else {
+                if ind_len + line_len >= 0 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
-                        b"ind_len + line_len >= 0\0".as_ptr()
+                        b"ind_len + line_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/indent.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         1441 as ::core::ffi::c_uint,
-                        b"_Bool copy_indent(int, char *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"_Bool copy_indent(int, char *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
             let mut line_size: size_t = 0;
-            let (c2rust_result, c2rust_overflowed) = (ind_len as i128)
-                .overflowing_add(line_len as i128);
+            let (c2rust_result, c2rust_overflowed) =
+                (ind_len as i128).overflowing_add(line_len as i128);
             let c2rust_result_narrow = c2rust_result as size_t;
             *&raw mut line_size = c2rust_result_narrow;
             if c2rust_overflowed || c2rust_result_narrow as i128 != c2rust_result {
@@ -5149,7 +5056,9 @@ pub unsafe extern "C" fn copy_indent(
     return true_0 != 0;
 }
 unsafe extern "C" fn emsg_text_too_long() {
-    emsg(gettext(&raw const e_resulting_text_too_long as *const ::core::ffi::c_char));
+    emsg(gettext(
+        &raw const e_resulting_text_too_long as *const ::core::ffi::c_char,
+    ));
     if trylevel == 0 as ::core::ffi::c_int {
         got_int = true_0 != 0;
     }
@@ -5160,13 +5069,10 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
     let mut num_spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start_vcol: int64_t = 0 as int64_t;
-    let mut new_line: *mut ::core::ffi::c_char = ::core::ptr::from_exposed_addr_mut::<
-        ::core::ffi::c_char,
-    >(1 as ::core::ffi::c_int as usize);
+    let mut new_line: *mut ::core::ffi::c_char =
+        ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_char>(1 as ::core::ffi::c_int as usize);
     let mut new_vts_array: *mut colnr_T = ::core::ptr::null_mut::<colnr_T>();
-    let mut new_ts_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut new_ts_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut first_line: linenr_T = 0 as linenr_T;
     let mut last_line: linenr_T = 0 as linenr_T;
     let mut is_indent_only: bool = false_0 != 0;
@@ -5178,9 +5084,9 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
         b"-indentonly\0".as_ptr() as *const ::core::ffi::c_char,
         11 as size_t,
     ) == 0 as ::core::ffi::c_int
-        && ascii_iswhite_or_nul(
-            *ptr.offset(11 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+        && ascii_iswhite_or_nul(*ptr.offset(11 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+            as ::core::ffi::c_int
+            != 0
     {
         is_indent_only = true_0 != 0;
         ptr = skipwhite(ptr.offset(11 as ::core::ffi::c_int as isize));
@@ -5216,9 +5122,7 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
                     start_vcol = vcol;
                     start_col = col;
                 }
-                if *ptr.offset(col as isize) as ::core::ffi::c_int
-                    == ' ' as ::core::ffi::c_int
-                {
+                if *ptr.offset(col as isize) as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
                     num_spaces += 1;
                 } else {
                     got_tab = true_0 != 0;
@@ -5244,28 +5148,27 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
                         num_tabs = t;
                         num_spaces = s;
                     }
-                    if (*curbuf).b_p_et != 0 || got_tab as ::core::ffi::c_int != 0
+                    if (*curbuf).b_p_et != 0
+                        || got_tab as ::core::ffi::c_int != 0
                         || num_spaces + num_tabs < len
                     {
                         if did_undo as ::core::ffi::c_int == false_0 {
                             did_undo = true_0 != 0;
-                            if u_save(lnum - 1 as linenr_T, lnum + 1 as linenr_T) == FAIL
-                            {
+                            if u_save(lnum - 1 as linenr_T, lnum + 1 as linenr_T) == FAIL {
                                 new_line = ::core::ptr::null_mut::<::core::ffi::c_char>();
                                 break;
                             }
                         }
                         len = num_spaces + num_tabs;
-                        let new_len: ::core::ffi::c_int = old_len - col + start_col + len
-                            + 1 as ::core::ffi::c_int;
+                        let new_len: ::core::ffi::c_int =
+                            old_len - col + start_col + len + 1 as ::core::ffi::c_int;
                         if new_len <= 0 as ::core::ffi::c_int
                             || new_len >= MAXCOL as ::core::ffi::c_int
                         {
                             emsg_text_too_long();
                             break;
                         } else {
-                            new_line = xmalloc(new_len as size_t)
-                                as *mut ::core::ffi::c_char;
+                            new_line = xmalloc(new_len as size_t) as *mut ::core::ffi::c_char;
                             if start_col > 0 as ::core::ffi::c_int {
                                 memmove(
                                     new_line as *mut ::core::ffi::c_void,
@@ -5288,7 +5191,8 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
                                     '\t' as ::core::ffi::c_int
                                 } else {
                                     ' ' as ::core::ffi::c_int
-                                }) as ::core::ffi::c_char;
+                                })
+                                    as ::core::ffi::c_char;
                                 col += 1;
                             }
                             if ml_replace(lnum, new_line, false_0 != 0) == OK {
@@ -5321,9 +5225,7 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
             if *ptr.offset(col as isize) as ::core::ffi::c_int == NUL {
                 break;
             }
-            vcol
-                += win_chartabsize(curwin, ptr.offset(col as isize), vcol as colnr_T)
-                    as int64_t;
+            vcol += win_chartabsize(curwin, ptr.offset(col as isize), vcol as colnr_T) as int64_t;
             if vcol >= MAXCOL as ::core::ffi::c_int as int64_t {
                 emsg_text_too_long();
                 break;
@@ -5345,8 +5247,7 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
         && (*curbuf).b_p_ts == tabstop_first(new_vts_array) as OptInt)
     {
         if !(tabstop_count((*curbuf).b_p_vts_array) > 0 as ::core::ffi::c_int
-            && tabstop_eq((*curbuf).b_p_vts_array, new_vts_array) as ::core::ffi::c_int
-                != 0)
+            && tabstop_eq((*curbuf).b_p_vts_array, new_vts_array) as ::core::ffi::c_int != 0)
         {
             redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
         }
@@ -5391,11 +5292,8 @@ pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
-    let mut use_sandbox: bool = was_set_insecurely(
-        curwin,
-        kOptIndentexpr,
-        OPT_LOCAL as ::core::ffi::c_int,
-    ) != 0;
+    let mut use_sandbox: bool =
+        was_set_insecurely(curwin, kOptIndentexpr, OPT_LOCAL as ::core::ffi::c_int) != 0;
     let save_sctx: sctx_T = current_sctx;
     let mut save_pos: pos_T = (*curwin).w_cursor;
     let mut save_curswant: colnr_T = (*curwin).w_curswant;
@@ -5405,11 +5303,10 @@ pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
         sandbox += 1;
     }
     textlock += 1;
-    current_sctx = (*curbuf)
-        .b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize];
+    current_sctx = (*curbuf).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize];
     let mut inde_copy: *mut ::core::ffi::c_char = xstrdup((*curbuf).b_p_inde);
-    let mut indent: ::core::ffi::c_int = eval_to_number(inde_copy, true_0 != 0)
-        as ::core::ffi::c_int;
+    let mut indent: ::core::ffi::c_int =
+        eval_to_number(inde_copy, true_0 != 0) as ::core::ffi::c_int;
     xfree(inde_copy as *mut ::core::ffi::c_void);
     if use_sandbox {
         sandbox -= 1;
@@ -5446,12 +5343,21 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
     let mut amount: ::core::ffi::c_int = 0;
     let mut realpos: pos_T = (*curwin).w_cursor;
     (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-    pos = findmatch(::core::ptr::null_mut::<oparg_T>(), '(' as ::core::ffi::c_int);
+    pos = findmatch(
+        ::core::ptr::null_mut::<oparg_T>(),
+        '(' as ::core::ffi::c_int,
+    );
     if pos.is_null() {
-        pos = findmatch(::core::ptr::null_mut::<oparg_T>(), '[' as ::core::ffi::c_int);
+        pos = findmatch(
+            ::core::ptr::null_mut::<oparg_T>(),
+            '[' as ::core::ffi::c_int,
+        );
     } else {
         paren = *pos;
-        pos = findmatch(::core::ptr::null_mut::<oparg_T>(), '[' as ::core::ffi::c_int);
+        pos = findmatch(
+            ::core::ptr::null_mut::<oparg_T>(),
+            '[' as ::core::ffi::c_int,
+        );
         if pos.is_null() || lt(*pos, paren) as ::core::ffi::c_int != 0 {
             pos = &raw mut paren;
         }
@@ -5470,21 +5376,19 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
             let mut that: *mut ::core::ffi::c_char = get_cursor_line_ptr();
             while *that as ::core::ffi::c_int != NUL {
                 if *that as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                    while *that.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != NUL
+                    while *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        != NUL
                     {
                         that = that.offset(1);
                     }
                 } else if *that as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-                    if *that.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != NUL
-                    {
+                    if *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
                         that = that.offset(1);
                     }
                 } else {
                     if *that as ::core::ffi::c_int == '"' as ::core::ffi::c_int
-                        && *that.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int != NUL
+                        && *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            != NUL
                     {
                         loop {
                             that = that.offset(1);
@@ -5493,16 +5397,15 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                             {
                                 break;
                             }
-                            if *that as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
-                            {
+                            if *that as ::core::ffi::c_int != '\\' as ::core::ffi::c_int {
                                 continue;
                             }
                             that = that.offset(1);
                             if *that as ::core::ffi::c_int == NUL {
                                 break;
                             }
-                            if *that.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int != NUL
+                            if *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                != NUL
                             {
                                 continue;
                             }
@@ -5550,34 +5453,18 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                     lvl: 0,
                     x: ::core::ptr::null_mut::<MTNode>(),
                     i: 0,
-                    s: [C2Rust_Unnamed_15 {
-                        oldcol: 0,
-                        i: 0,
-                    }; 20],
+                    s: [C2Rust_Unnamed_15 { oldcol: 0, i: 0 }; 20],
                     intersect_idx: 0,
                     intersect_pos: MTPos { row: 0, col: 0 },
                     intersect_pos_x: MTPos { row: 0, col: 0 },
                 }; 1],
             };
-            let mut cstype: CSType = init_charsize_arg(
-                &raw mut csarg,
-                curwin,
-                (*pos).lnum,
-                line,
-            );
+            let mut cstype: CSType = init_charsize_arg(&raw mut csarg, curwin, (*pos).lnum, line);
             let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
             amount = 0 as ::core::ffi::c_int;
-            while *sci.ptr as ::core::ffi::c_int != NUL && col > 0 as ::core::ffi::c_int
-            {
-                amount
-                    += win_charsize(
-                            cstype,
-                            amount,
-                            sci.ptr,
-                            sci.chr.value,
-                            &raw mut csarg,
-                        )
-                        .width;
+            while *sci.ptr as ::core::ffi::c_int != NUL && col > 0 as ::core::ffi::c_int {
+                amount +=
+                    win_charsize(cstype, amount, sci.ptr, sci.chr.value, &raw mut csarg).width;
                 sci = utfc_next(sci);
                 col -= 1;
             }
@@ -5594,15 +5481,14 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                 }
                 let mut firsttry: colnr_T = amount as colnr_T;
                 while ascii_iswhite(*that_0 as ::core::ffi::c_int) {
-                    amount
-                        += win_charsize(
-                                cstype,
-                                amount,
-                                that_0,
-                                *that_0 as uint8_t as int32_t,
-                                &raw mut csarg,
-                            )
-                            .width;
+                    amount += win_charsize(
+                        cstype,
+                        amount,
+                        that_0,
+                        *that_0 as uint8_t as int32_t,
+                        &raw mut csarg,
+                    )
+                    .width;
                     that_0 = that_0.offset(1);
                 }
                 if *that_0 as ::core::ffi::c_int != 0
@@ -5615,14 +5501,16 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                     }
                     parencount = 0 as ::core::ffi::c_int;
                     let mut ci: CharInfo = utf_ptr2CharInfo(that_0);
-                    if ci.value != '"' as int32_t && ci.value != '\'' as int32_t
+                    if ci.value != '"' as int32_t
+                        && ci.value != '\'' as int32_t
                         && ci.value != '#' as int32_t
                         && (ci.value < '0' as int32_t || ci.value > '9' as int32_t)
                     {
                         let mut quotecount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         while *that_0 as ::core::ffi::c_int != 0
                             && (!ascii_iswhite(ci.value as ::core::ffi::c_int)
-                                || quotecount != 0 || parencount != 0)
+                                || quotecount != 0
+                                || parencount != 0)
                         {
                             if ci.value == '"' as int32_t {
                                 quotecount = (quotecount == 0) as ::core::ffi::c_int;
@@ -5639,16 +5527,11 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                             }
                             if ci.value == '\\' as int32_t
                                 && *that_0.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int != NUL
+                                    as ::core::ffi::c_int
+                                    != NUL
                             {
-                                amount
-                                    += win_charsize(
-                                            cstype,
-                                            amount,
-                                            that_0,
-                                            ci.value,
-                                            &raw mut csarg,
-                                        )
+                                amount +=
+                                    win_charsize(cstype, amount, that_0, ci.value, &raw mut csarg)
                                         .width;
                                 let mut next_sci: StrCharInfo = utfc_next(StrCharInfo {
                                     ptr: that_0,
@@ -5657,14 +5540,8 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                                 that_0 = next_sci.ptr;
                                 ci = next_sci.chr;
                             }
-                            amount
-                                += win_charsize(
-                                        cstype,
-                                        amount,
-                                        that_0,
-                                        ci.value,
-                                        &raw mut csarg,
-                                    )
+                            amount +=
+                                win_charsize(cstype, amount, that_0, ci.value, &raw mut csarg)
                                     .width;
                             let mut next_sci_0: StrCharInfo = utfc_next(StrCharInfo {
                                 ptr: that_0,
@@ -5675,20 +5552,17 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                         }
                     }
                     while ascii_iswhite(*that_0 as ::core::ffi::c_int) {
-                        amount
-                            += win_charsize(
-                                    cstype,
-                                    amount,
-                                    that_0,
-                                    *that_0 as uint8_t as int32_t,
-                                    &raw mut csarg,
-                                )
-                                .width;
+                        amount += win_charsize(
+                            cstype,
+                            amount,
+                            that_0,
+                            *that_0 as uint8_t as int32_t,
+                            &raw mut csarg,
+                        )
+                        .width;
                         that_0 = that_0.offset(1);
                     }
-                    if *that_0 == 0
-                        || *that_0 as ::core::ffi::c_int == ';' as ::core::ffi::c_int
-                    {
+                    if *that_0 == 0 || *that_0 as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                         amount = firsttry as ::core::ffi::c_int;
                     }
                 }
@@ -5702,9 +5576,7 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
 }
 unsafe extern "C" fn lisp_match(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 512] = [0; 512];
-    let mut word: *mut ::core::ffi::c_char = if *(*curbuf).b_p_lw as ::core::ffi::c_int
-        != NUL
-    {
+    let mut word: *mut ::core::ffi::c_char = if *(*curbuf).b_p_lw as ::core::ffi::c_int != NUL {
         (*curbuf).b_p_lw
     } else {
         p_lispwords
@@ -5716,10 +5588,10 @@ unsafe extern "C" fn lisp_match(mut p: *mut ::core::ffi::c_char) -> ::core::ffi:
             ::core::mem::size_of::<[::core::ffi::c_char; 512]>(),
             b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
-        if strncmp(&raw mut buf as *mut ::core::ffi::c_char, p, len)
-            == 0 as ::core::ffi::c_int
+        if strncmp(&raw mut buf as *mut ::core::ffi::c_char, p, len) == 0 as ::core::ffi::c_int
             && ascii_iswhite_or_nul(*p.offset(len as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int != 0
+                as ::core::ffi::c_int
+                != 0
         {
             return true_0;
         }
@@ -5728,21 +5600,28 @@ unsafe extern "C" fn lisp_match(mut p: *mut ::core::ffi::c_char) -> ::core::ffi:
 }
 #[no_mangle]
 pub unsafe extern "C" fn fixthisline(mut get_the_indent: IndentGetter) {
-    let mut amount: ::core::ffi::c_int = get_the_indent
-        .expect("non-null function pointer")();
+    let mut amount: ::core::ffi::c_int = get_the_indent.expect("non-null function pointer")();
     if amount < 0 as ::core::ffi::c_int {
         return;
     }
-    change_indent(INDENT_SET as ::core::ffi::c_int, amount, false_0, true_0 != 0);
+    change_indent(
+        INDENT_SET as ::core::ffi::c_int,
+        amount,
+        false_0,
+        true_0 != 0,
+    );
     if linewhite((*curwin).w_cursor.lnum) {
         did_ai = true_0 != 0;
     }
 }
 #[no_mangle]
 pub unsafe extern "C" fn use_indentexpr_for_lisp() -> bool {
-    return (*curbuf).b_p_lisp != 0 && *(*curbuf).b_p_inde as ::core::ffi::c_int != NUL
-        && strcmp((*curbuf).b_p_lop, b"expr:1\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int;
+    return (*curbuf).b_p_lisp != 0
+        && *(*curbuf).b_p_inde as ::core::ffi::c_int != NUL
+        && strcmp(
+            (*curbuf).b_p_lop,
+            b"expr:1\0".as_ptr() as *const ::core::ffi::c_char,
+        ) == 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn fix_indent() {
@@ -5753,9 +5632,9 @@ pub unsafe extern "C" fn fix_indent() {
         if use_indentexpr_for_lisp() {
             do_c_expr_indent();
         } else {
-            fixthisline(
-                Some(get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int),
-            );
+            fixthisline(Some(
+                get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
+            ));
         }
     } else if cindent_on() {
         do_c_expr_indent();
@@ -5798,10 +5677,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
         return CharInfo {
             value: first as int32_t,
             len: 1 as ::core::ffi::c_int,
-        }
+        };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize]
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;
@@ -5815,8 +5693,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
 #[inline(always)]
 unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint)
-        as ::core::ffi::c_int as ::core::ffi::c_long != 0
+    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
+        as ::core::ffi::c_long
+        != 0
     {
         return StrCharInfo {
             ptr: next as *mut ::core::ffi::c_char,
@@ -5829,9 +5708,7 @@ unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     return utfc_next_impl(cur);
 }
 #[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(
-    mut ptr: *mut ::core::ffi::c_char,
-) -> StrCharInfo {
+unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
     return StrCharInfo {
         ptr: ptr,
         chr: utf_ptr2CharInfo(ptr),
@@ -5846,9 +5723,9 @@ unsafe extern "C" fn win_charsize(
     mut csarg: *mut CharsizeArg,
 ) -> CharSize {
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
     } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
     };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -83,7 +83,8 @@ pub struct ScreenPen {
     #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
     #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -135,7 +136,8 @@ pub struct VTermScreenCellAttrs {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -162,15 +164,10 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
-    pub damage: Option<
-        unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub damage:
+        Option<unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub movecursor: Option<
         unsafe extern "C" fn(
@@ -187,9 +184,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -197,9 +192,8 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub sb_pushline: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -214,9 +208,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -343,10 +335,7 @@ pub struct VTermSelectionCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub query: Option<
-        unsafe extern "C" fn(
-            VTermSelectionMask,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermSelectionMask, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
@@ -414,7 +403,8 @@ pub struct VTermPen {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -427,9 +417,7 @@ pub struct VTermEncodingInstance {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
-    pub init: Option<
-        unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
         unsafe extern "C" fn(
             *mut VTermEncoding,
@@ -466,7 +454,8 @@ pub struct C2Rust_Unnamed_7 {
         ty = "::core::ffi::c_uint",
         bits = "16..=16"
     )]
-    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output: [u8; 3],
+    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -490,9 +479,8 @@ pub struct VTermLineInfo {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub csi: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -519,22 +507,13 @@ pub struct VTermStateFallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 #[derive(Copy, Clone)]
@@ -564,11 +543,7 @@ pub struct VTermStateCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub erase: Option<
         unsafe extern "C" fn(
@@ -577,9 +552,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub initpen: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub initpen: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setpenattr: Option<
         unsafe extern "C" fn(
             VTermAttr,
@@ -594,9 +567,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -605,9 +576,8 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setlineinfo: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -616,9 +586,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -655,11 +623,8 @@ pub struct VTermGlyphInfo {
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-pub type VTermOutputCallback = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    size_t,
-    *mut ::core::ffi::c_void,
-) -> ();
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_9 {
@@ -686,9 +651,8 @@ pub struct VTermParserCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub escape: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -722,22 +686,13 @@ pub struct VTermParserCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub resize: Option<
         unsafe extern "C" fn(
@@ -797,15 +752,10 @@ pub struct C2Rust_Unnamed_14 {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermAllocatorFunctions {
-    pub malloc: Option<
-        unsafe extern "C" fn(
-            size_t,
-            *mut ::core::ffi::c_void,
-        ) -> *mut ::core::ffi::c_void,
-    >,
-    pub free: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub malloc:
+        Option<unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>,
+    pub free:
+        Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>,
 }
 pub type VTermModifier = ::core::ffi::c_uint;
 pub const VTERM_ALL_MODS_MASK: VTermModifier = 7;
@@ -858,27 +808,18 @@ unsafe extern "C" fn output_mouse(
             if pressed == 0 {
                 code = 3 as ::core::ffi::c_int;
             }
-            len = len
-                .wrapping_add(
-                    fill_utf8(
-                        (code | modifiers) + 0x20 as ::core::ffi::c_int,
-                        (&raw mut utf8 as *mut ::core::ffi::c_char).offset(len as isize),
-                    ) as size_t,
-                );
-            len = len
-                .wrapping_add(
-                    fill_utf8(
-                        col + 0x21 as ::core::ffi::c_int,
-                        (&raw mut utf8 as *mut ::core::ffi::c_char).offset(len as isize),
-                    ) as size_t,
-                );
-            len = len
-                .wrapping_add(
-                    fill_utf8(
-                        row + 0x21 as ::core::ffi::c_int,
-                        (&raw mut utf8 as *mut ::core::ffi::c_char).offset(len as isize),
-                    ) as size_t,
-                );
+            len = len.wrapping_add(fill_utf8(
+                (code | modifiers) + 0x20 as ::core::ffi::c_int,
+                (&raw mut utf8 as *mut ::core::ffi::c_char).offset(len as isize),
+            ) as size_t);
+            len = len.wrapping_add(fill_utf8(
+                col + 0x21 as ::core::ffi::c_int,
+                (&raw mut utf8 as *mut ::core::ffi::c_char).offset(len as isize),
+            ) as size_t);
+            len = len.wrapping_add(fill_utf8(
+                row + 0x21 as ::core::ffi::c_int,
+                (&raw mut utf8 as *mut ::core::ffi::c_char).offset(len as isize),
+            ) as size_t);
             utf8[len as usize] = 0 as ::core::ffi::c_char;
             vterm_push_output_sprintf_ctrl(
                 (*state).vt,
@@ -935,8 +876,8 @@ pub unsafe extern "C" fn vterm_mouse_move(
         || (*state).mouse_flags & MOUSE_WANT_MOVE != 0
     {
         if (*state).mouse_buttons != 0 {
-            let mut button: ::core::ffi::c_int = xctz((*state).mouse_buttons as uint64_t)
-                + 1 as ::core::ffi::c_int;
+            let mut button: ::core::ffi::c_int =
+                xctz((*state).mouse_buttons as uint64_t) + 1 as ::core::ffi::c_int;
             if button < 4 as ::core::ffi::c_int {
                 output_mouse(
                     state,
@@ -946,12 +887,11 @@ pub unsafe extern "C" fn vterm_mouse_move(
                     col,
                     row,
                 );
-            } else if button >= 8 as ::core::ffi::c_int
-                && button < 12 as ::core::ffi::c_int
-            {
+            } else if button >= 8 as ::core::ffi::c_int && button < 12 as ::core::ffi::c_int {
                 output_mouse(
                     state,
-                    button - 8 as ::core::ffi::c_int + 0x80 as ::core::ffi::c_int
+                    button - 8 as ::core::ffi::c_int
+                        + 0x80 as ::core::ffi::c_int
                         + 0x20 as ::core::ffi::c_int,
                     1 as ::core::ffi::c_int,
                     mod_0 as ::core::ffi::c_int,
@@ -984,11 +924,10 @@ pub unsafe extern "C" fn vterm_mouse_button(
         || button >= 8 as ::core::ffi::c_int && button <= 11 as ::core::ffi::c_int
     {
         if pressed {
-            (*state).mouse_buttons
-                |= (1 as ::core::ffi::c_int) << button - 1 as ::core::ffi::c_int;
+            (*state).mouse_buttons |= (1 as ::core::ffi::c_int) << button - 1 as ::core::ffi::c_int;
         } else {
-            (*state).mouse_buttons
-                &= !((1 as ::core::ffi::c_int) << button - 1 as ::core::ffi::c_int);
+            (*state).mouse_buttons &=
+                !((1 as ::core::ffi::c_int) << button - 1 as ::core::ffi::c_int);
         }
     }
     if (*state).mouse_buttons == old_buttons

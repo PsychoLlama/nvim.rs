@@ -26,12 +26,7 @@ extern "C" {
     fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T;
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn nvim_get_current_win() -> Window;
     static mut autocmd_no_enter: ::core::ffi::c_int;
     static mut autocmd_no_leave: ::core::ffi::c_int;
@@ -1757,16 +1752,13 @@ pub struct TryState {
     pub need_rethrow: ::core::ffi::c_int,
     pub did_emsg: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const KEYSET_OPTIDX_tabpage_config__after: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_tabpage_config__after: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 #[no_mangle]
 pub unsafe extern "C" fn nvim_tabpage_list_wins(
@@ -1780,13 +1772,21 @@ pub unsafe extern "C" fn nvim_tabpage_list_wins(
         return rv;
     }
     let mut n: size_t = 0 as size_t;
-    let mut wp: *mut win_T = if tab == curtab { firstwin } else { (*tab).tp_firstwin };
+    let mut wp: *mut win_T = if tab == curtab {
+        firstwin
+    } else {
+        (*tab).tp_firstwin
+    };
     while !wp.is_null() {
         n = n.wrapping_add(1);
         wp = (*wp).w_next;
     }
     rv = arena_array(arena, n);
-    let mut wp_0: *mut win_T = if tab == curtab { firstwin } else { (*tab).tp_firstwin };
+    let mut wp_0: *mut win_T = if tab == curtab {
+        firstwin
+    } else {
+        (*tab).tp_firstwin
+    };
     while !wp_0.is_null() {
         let c2rust_fresh0 = rv.size;
         rv.size = rv.size.wrapping_add(1);
@@ -1861,10 +1861,7 @@ pub unsafe extern "C" fn nvim_tabpage_del_var(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_tabpage_get_win(
-    mut tabpage: Tabpage,
-    mut err: *mut Error,
-) -> Window {
+pub unsafe extern "C" fn nvim_tabpage_get_win(mut tabpage: Tabpage, mut err: *mut Error) -> Window {
     let mut tab: *mut tabpage_T = find_tab_by_handle(tabpage, err);
     if tab.is_null() || !valid_tabpage(tab) {
         return 0 as Window;
@@ -1872,7 +1869,11 @@ pub unsafe extern "C" fn nvim_tabpage_get_win(
     if tab == curtab {
         return nvim_get_current_win();
     }
-    let mut wp: *mut win_T = if tab == curtab { firstwin } else { (*tab).tp_firstwin };
+    let mut wp: *mut win_T = if tab == curtab {
+        firstwin
+    } else {
+        (*tab).tp_firstwin
+    };
     while !wp.is_null() {
         if wp == (*tab).tp_curwin {
             return (*wp).handle as Window;
@@ -1899,8 +1900,7 @@ pub unsafe extern "C" fn nvim_tabpage_set_win(
         api_set_error(
             err,
             kErrorTypeException,
-            b"Window does not belong to tabpage %d\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Window does not belong to tabpage %d\0".as_ptr() as *const ::core::ffi::c_char,
             (*tp).handle,
         );
         return;
@@ -1955,8 +1955,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
     if b.is_null() {
         return 0 as Tabpage;
     }
-    if cmdwin_type != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0
-        || b == cmdwin_buf
+    if cmdwin_type != 0 as ::core::ffi::c_int && enter as ::core::ffi::c_int != 0 || b == cmdwin_buf
     {
         api_set_error(
             err,
@@ -1993,8 +1992,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
     );
     try_leave(&raw mut tstate, err);
     if tp.is_null() {
-        if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
-        {
+        if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
             api_set_error(
                 err,
                 kErrorTypeException,
@@ -2028,8 +2026,7 @@ pub unsafe extern "C" fn nvim_open_tabpage(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Tabpage was closed immediately\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Tabpage was closed immediately\0".as_ptr() as *const ::core::ffi::c_char,
             );
             return 0 as Tabpage;
         }

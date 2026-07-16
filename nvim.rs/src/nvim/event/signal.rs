@@ -1,10 +1,7 @@
 extern "C" {
     pub type multiqueue;
     fn uv_close(handle: *mut uv_handle_t, close_cb_0: uv_close_cb);
-    fn uv_signal_init(
-        loop_0: *mut uv_loop_t,
-        handle: *mut uv_signal_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_signal_init(loop_0: *mut uv_loop_t, handle: *mut uv_signal_t) -> ::core::ffi::c_int;
     fn uv_signal_start(
         handle: *mut uv_signal_t,
         signal_cb: uv_signal_cb,
@@ -124,9 +121,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -153,9 +149,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -284,9 +278,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -298,9 +291,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -312,15 +304,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_5 {
@@ -526,12 +513,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -578,12 +563,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_12 {
@@ -618,9 +601,7 @@ pub type Loop = loop_0;
 pub type ProcType = ::core::ffi::c_uint;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -636,20 +617,13 @@ pub struct signal_watcher {
     pub close_cb: signal_close_cb,
     pub events: *mut MultiQueue,
 }
-pub type signal_close_cb = Option<
-    unsafe extern "C" fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> (),
->;
+pub type signal_close_cb =
+    Option<unsafe extern "C" fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
 pub type SignalWatcher = signal_watcher;
 pub type signal_cb = Option<
-    unsafe extern "C" fn(
-        *mut SignalWatcher,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> (),
+    unsafe extern "C" fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
 >;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub unsafe extern "C" fn signal_watcher_init(
     mut loop_0: *mut Loop,
@@ -671,10 +645,7 @@ pub unsafe extern "C" fn signal_watcher_start(
     (*watcher).cb = cb;
     uv_signal_start(
         &raw mut (*watcher).uv,
-        Some(
-            signal_watcher_cb
-                as unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
-        ),
+        Some(signal_watcher_cb as unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()),
         signum,
     );
 }
@@ -694,13 +665,13 @@ pub unsafe extern "C" fn signal_watcher_close(
     );
 }
 unsafe extern "C" fn signal_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut watcher: *mut SignalWatcher = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut SignalWatcher;
-    (*watcher)
-        .cb
-        .expect(
-            "non-null function pointer",
-        )(watcher, (*watcher).uv.signum, (*watcher).data);
+    let mut watcher: *mut SignalWatcher =
+        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut SignalWatcher;
+    (*watcher).cb.expect("non-null function pointer")(
+        watcher,
+        (*watcher).uv.signum,
+        (*watcher).data,
+    );
 }
 unsafe extern "C" fn signal_watcher_cb(
     mut handle: *mut uv_signal_t,
@@ -712,8 +683,7 @@ unsafe extern "C" fn signal_watcher_cb(
             (*watcher).events,
             Event {
                 handler: Some(
-                    signal_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    signal_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     watcher as *mut ::core::ffi::c_void,
@@ -730,17 +700,13 @@ unsafe extern "C" fn signal_watcher_cb(
             },
         );
     } else {
-        let mut argv: [*mut ::core::ffi::c_void; 1] = [
-            watcher as *mut ::core::ffi::c_void,
-        ];
+        let mut argv: [*mut ::core::ffi::c_void; 1] = [watcher as *mut ::core::ffi::c_void];
         signal_event(&raw mut argv as *mut *mut ::core::ffi::c_void);
     };
 }
 unsafe extern "C" fn close_cb(mut handle: *mut uv_handle_t) {
     let mut watcher: *mut SignalWatcher = (*handle).data as *mut SignalWatcher;
     if (*watcher).close_cb.is_some() {
-        (*watcher)
-            .close_cb
-            .expect("non-null function pointer")(watcher, (*watcher).data);
+        (*watcher).close_cb.expect("non-null function pointer")(watcher, (*watcher).data);
     }
 }

@@ -17,11 +17,7 @@ extern "C" {
     );
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     fn do_termresponse_autocmd(sequence: String_0);
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
 }
 pub type int64_t = i64;
 pub type uint64_t = u64;
@@ -205,9 +201,7 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 #[no_mangle]
@@ -238,7 +232,10 @@ pub unsafe extern "C" fn nvim_ui_term_event(
     mut value: Object,
     mut err: *mut Error,
 ) {
-    if strequal(b"termresponse\0".as_ptr() as *const ::core::ffi::c_char, event.data) {
+    if strequal(
+        b"termresponse\0".as_ptr() as *const ::core::ffi::c_char,
+        event.data,
+    ) {
         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {

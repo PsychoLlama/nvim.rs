@@ -10,16 +10,8 @@ extern "C" {
     ) -> *const ::core::ffi::c_char;
     fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
     fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_getfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
+    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
     fn lua_settable(L: *mut lua_State, idx: ::core::ffi::c_int);
     fn memcpy(
         __dest: *mut ::core::ffi::c_void,
@@ -32,10 +24,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn skiptowhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
@@ -48,11 +37,7 @@ extern "C" {
         nargs: ::core::ffi::c_int,
         nresults: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
 }
 pub type size_t = usize;
@@ -709,9 +694,7 @@ pub type LineGetter = Option<
     ) -> *mut ::core::ffi::c_char,
 >;
 pub type exarg_T = exarg;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[no_mangle]
@@ -745,14 +728,9 @@ pub unsafe extern "C" fn nlua_read_secure(
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut len: size_t = 0 as size_t;
-    let mut contents: *const ::core::ffi::c_char = lua_tolstring(
-        lstate,
-        -1 as ::core::ffi::c_int,
-        &raw mut len,
-    );
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut contents: *const ::core::ffi::c_char =
+        lua_tolstring(lstate, -1 as ::core::ffi::c_int, &raw mut len);
+    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !contents.is_null() {
         buf = xcalloc(
             len.wrapping_add(1 as size_t),
@@ -822,8 +800,7 @@ unsafe extern "C" fn nlua_trust(
             {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    b"Allowed in trust database: \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Allowed in trust database: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
                     msg,
                 );
             } else if strcmp(action, b"deny\0".as_ptr() as *const ::core::ffi::c_char)
@@ -831,8 +808,7 @@ unsafe extern "C" fn nlua_trust(
             {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    b"Denied in trust database: \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Denied in trust database: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
                     msg,
                 );
             } else if strcmp(action, b"remove\0".as_ptr() as *const ::core::ffi::c_char)
@@ -840,8 +816,7 @@ unsafe extern "C" fn nlua_trust(
             {
                 smsg(
                     0 as ::core::ffi::c_int,
-                    b"Removed from trust database: \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Removed from trust database: \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
                     msg,
                 );
             }
@@ -859,8 +834,7 @@ pub unsafe extern "C" fn ex_trust(mut eap: *mut exarg_T) {
         (*eap).arg as *const ::core::ffi::c_void,
         p.offset_from((*eap).arg) as size_t,
     ) as *mut ::core::ffi::c_char;
-    let mut action: *const ::core::ffi::c_char = b"allow\0".as_ptr()
-        as *const ::core::ffi::c_char;
+    let mut action: *const ::core::ffi::c_char = b"allow\0".as_ptr() as *const ::core::ffi::c_char;
     let mut path: *const ::core::ffi::c_char = skipwhite(p);
     '_theend: {
         if strcmp(arg1, b"++deny\0".as_ptr() as *const ::core::ffi::c_char)

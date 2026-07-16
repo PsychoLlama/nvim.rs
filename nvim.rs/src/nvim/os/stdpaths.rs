@@ -27,10 +27,7 @@ extern "C" {
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xmemcpyz(
         dst: *mut ::core::ffi::c_void,
         src: *const ::core::ffi::c_void,
@@ -42,11 +39,7 @@ extern "C" {
         x: ::core::ffi::c_char,
         len: size_t,
     );
-    fn memcnt(
-        data: *const ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        len: size_t,
-    ) -> size_t;
+    fn memcnt(data: *const ::core::ffi::c_void, c: ::core::ffi::c_char, len: size_t) -> size_t;
     fn xstrlcpy(
         dst: *mut ::core::ffi::c_char,
         src: *const ::core::ffi::c_char,
@@ -102,14 +95,11 @@ pub struct C2Rust_Unnamed {
     pub items: *mut *mut ::core::ffi::c_char,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"char *get_xdg_home(const XDGVarType)\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"char *get_xdg_home(const XDGVarType)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 static mut xdg_env_vars: [*const ::core::ffi::c_char; 7] = [
@@ -132,9 +122,8 @@ static mut xdg_defaults: [*const ::core::ffi::c_char; 7] = [
 ];
 #[no_mangle]
 pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::c_char {
-    let mut env_val: *const ::core::ffi::c_char = os_getenv_noalloc(
-        b"NVIM_APPNAME\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut env_val: *const ::core::ffi::c_char =
+        os_getenv_noalloc(b"NVIM_APPNAME\0".as_ptr() as *const ::core::ffi::c_char);
     if env_val.is_null() {
         xstrlcpy(
             &raw mut NameBuff as *mut ::core::ffi::c_char,
@@ -162,14 +151,14 @@ pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::
 pub unsafe extern "C" fn appname_is_valid() -> bool {
     let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
     if path_is_absolute(appname) as ::core::ffi::c_int != 0
-        || strequal(appname, b"/\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
-        || strequal(appname, b"\\\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
-        || strequal(appname, b".\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
-        || strequal(appname, b"..\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
+        || strequal(appname, b"/\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+            != 0
+        || strequal(appname, b"\\\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+            != 0
+        || strequal(appname, b".\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+            != 0
+        || strequal(appname, b"..\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+            != 0
         || !strstr(appname, b"/..\0".as_ptr() as *const ::core::ffi::c_char).is_null()
         || !strstr(appname, b"../\0".as_ptr() as *const ::core::ffi::c_char).is_null()
     {
@@ -186,17 +175,13 @@ unsafe extern "C" fn xdg_remove_duplicate(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     };
-    let mut saveptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut saveptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut token: *mut ::core::ffi::c_char = strtok_r(ret, sep, &raw mut saveptr);
     while !token.is_null() {
         let mut is_duplicate: bool = false_0 != 0;
         let mut i: size_t = 0 as size_t;
         while i < data.size {
-            if path_fnamecmp(*data.items.offset(i as isize), token)
-                == 0 as ::core::ffi::c_int
-            {
+            if path_fnamecmp(*data.items.offset(i as isize), token) == 0 as ::core::ffi::c_int {
                 is_duplicate = true_0 != 0;
                 break;
             } else {
@@ -212,10 +197,10 @@ unsafe extern "C" fn xdg_remove_duplicate(
                 });
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                        .wrapping_mul(data.capacity),
+                    ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(data.capacity),
                 ) as *mut *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh0 = data.size;
             data.size = data.size.wrapping_add(1);
             let c2rust_lvalue_ptr = &raw mut *data.items.offset(c2rust_fresh0 as isize);
@@ -258,18 +243,14 @@ unsafe extern "C" fn xdg_remove_duplicate(
     return result.items;
 }
 #[no_mangle]
-pub unsafe extern "C" fn stdpaths_get_xdg_var(
-    idx: XDGVarType,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char {
     let env: *const ::core::ffi::c_char = xdg_env_vars[idx as usize];
     let fallback: *const ::core::ffi::c_char = xdg_defaults[idx as usize];
     let mut env_val: *mut ::core::ffi::c_char = os_getenv(env);
     if env_val.is_null() && os_env_exists(env, false_0 != 0) as ::core::ffi::c_int != 0 {
         env_val = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    let mut ret: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ret: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !env_val.is_null() {
         ret = env_val;
     } else if !fallback.is_null() {
@@ -277,13 +258,16 @@ pub unsafe extern "C" fn stdpaths_get_xdg_var(
     } else if idx as ::core::ffi::c_int == kXDGRuntimeDir as ::core::ffi::c_int {
         ret = vim_gettempdir();
         if ret.is_null() {
-            ret = b"/tmp/\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            ret = b"/tmp/\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         let mut len: size_t = strlen(ret);
         ret = xmemdupz(
             ret as *const ::core::ffi::c_void,
-            if len >= 2 as size_t { len.wrapping_sub(1 as size_t) } else { 0 as size_t },
+            if len >= 2 as size_t {
+                len.wrapping_sub(1 as size_t)
+            } else {
+                0 as size_t
+            },
         ) as *mut ::core::ffi::c_char;
     }
     if (idx as ::core::ffi::c_int == kXDGDataDirs as ::core::ffi::c_int
@@ -303,12 +287,13 @@ pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_ch
         if appname_len
             < ((1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as usize)
                 .wrapping_sub(::core::mem::size_of::<[::core::ffi::c_char; 6]>())
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"appname_len < (IOSIZE - sizeof(\"-data\"))\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/stdpaths.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/os/stdpaths.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 206 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -352,31 +337,31 @@ pub unsafe extern "C" fn stdpaths_user_state_subpath(
     trailing_pathseps: size_t,
     escape_commas: bool,
 ) -> *mut ::core::ffi::c_char {
-    let mut ret: *mut ::core::ffi::c_char = concat_fnames_realloc(
-        get_xdg_home(kXDGStateHome),
-        fname,
-        true_0 != 0,
-    );
+    let mut ret: *mut ::core::ffi::c_char =
+        concat_fnames_realloc(get_xdg_home(kXDGStateHome), fname, true_0 != 0);
     let len: size_t = strlen(ret);
     let numcommas: size_t = if escape_commas as ::core::ffi::c_int != 0 {
-        memcnt(ret as *const ::core::ffi::c_void, ',' as ::core::ffi::c_char, len)
+        memcnt(
+            ret as *const ::core::ffi::c_void,
+            ',' as ::core::ffi::c_char,
+            len,
+        )
     } else {
         0 as size_t
     };
     if numcommas != 0 || trailing_pathseps != 0 {
         ret = xrealloc(
             ret as *mut ::core::ffi::c_void,
-            len
-                .wrapping_add(trailing_pathseps)
+            len.wrapping_add(trailing_pathseps)
                 .wrapping_add(numcommas)
                 .wrapping_add(1 as size_t),
         ) as *mut ::core::ffi::c_char;
         let mut i: size_t = 0 as size_t;
         while i < len.wrapping_add(numcommas) {
-            if *ret.offset(i as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-            {
+            if *ret.offset(i as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
                 memmove(
-                    ret.offset(i as isize).offset(1 as ::core::ffi::c_int as isize)
+                    ret.offset(i as isize)
+                        .offset(1 as ::core::ffi::c_int as isize)
                         as *mut ::core::ffi::c_void,
                     ret.offset(i as isize) as *const ::core::ffi::c_void,
                     len.wrapping_sub(i).wrapping_add(numcommas),
@@ -388,21 +373,17 @@ pub unsafe extern "C" fn stdpaths_user_state_subpath(
         }
         if trailing_pathseps != 0 {
             memset(
-                ret.offset(len as isize).offset(numcommas as isize)
-                    as *mut ::core::ffi::c_void,
+                ret.offset(len as isize).offset(numcommas as isize) as *mut ::core::ffi::c_void,
                 PATHSEP,
                 trailing_pathseps,
             );
         }
-        *ret
-            .offset(
-                len.wrapping_add(trailing_pathseps).wrapping_add(numcommas) as isize,
-            ) = NUL as ::core::ffi::c_char;
+        *ret.offset(len.wrapping_add(trailing_pathseps).wrapping_add(numcommas) as isize) =
+            NUL as ::core::ffi::c_char;
     }
     return ret;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const ENV_SEPSTR: [::core::ffi::c_char; 2] = unsafe {
-    ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b":\0")
-};
+pub const ENV_SEPSTR: [::core::ffi::c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b":\0") };

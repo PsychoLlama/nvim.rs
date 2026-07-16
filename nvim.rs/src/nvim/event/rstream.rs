@@ -179,9 +179,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -208,9 +207,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -428,9 +425,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -442,9 +438,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -456,15 +451,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_6 {
@@ -652,9 +642,7 @@ pub const UV_FS_OPEN: uv_fs_type = 1;
 pub const UV_FS_CUSTOM: uv_fs_type = 0;
 pub const UV_FS_UNKNOWN: uv_fs_type = -1;
 pub type Loop = loop_0;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -682,13 +670,11 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
 pub type Stream = stream;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_10 {
@@ -721,9 +707,7 @@ pub type stream_read_cb = Option<
     ) -> size_t,
 >;
 pub type RStream = rstream;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn rstream_init_fd(
@@ -759,10 +743,9 @@ pub unsafe extern "C" fn rstream_init(mut stream: *mut RStream) {
     (*stream).buffer = alloc_block() as *mut ::core::ffi::c_char;
     (*stream).write_pos = (*stream).buffer;
     (*stream).read_pos = (*stream).write_pos;
-    (*stream).s.close_cb = Some(
-        rstream_close_cb
-            as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-    ) as stream_close_cb;
+    (*stream).s.close_cb =
+        Some(rstream_close_cb as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ())
+            as stream_close_cb;
     (*stream).s.close_cb_data = stream as *mut ::core::ffi::c_void;
 }
 #[no_mangle]
@@ -770,22 +753,8 @@ pub unsafe extern "C" fn rstream_start_inner(mut stream: *mut RStream) {
     if !(*stream).s.uvstream.is_null() {
         uv_read_start(
             (*stream).s.uvstream,
-            Some(
-                alloc_cb
-                    as unsafe extern "C" fn(
-                        *mut uv_handle_t,
-                        size_t,
-                        *mut uv_buf_t,
-                    ) -> (),
-            ),
-            Some(
-                read_cb
-                    as unsafe extern "C" fn(
-                        *mut uv_stream_t,
-                        ssize_t,
-                        *const uv_buf_t,
-                    ) -> (),
-            ),
+            Some(alloc_cb as unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()),
+            Some(read_cb as unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()),
         );
     } else {
         uv_idle_start(
@@ -837,7 +806,7 @@ unsafe extern "C" fn read_cb(
     let mut stream: *mut RStream = (*uvstream).data as *mut RStream;
     if cnt <= 0 as ssize_t {
         if cnt == UV_ENOBUFS as ::core::ffi::c_int as ssize_t || cnt == 0 as ssize_t {
-            return
+            return;
         } else if cnt == UV_EOF as ::core::ffi::c_int as ssize_t
             && (*uvstream).type_0 as ::core::ffi::c_uint
                 == UV_TTY as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -956,21 +925,16 @@ unsafe extern "C" fn fread_idle_cb(mut handle: *mut uv_idle_t) {
         return;
     }
     (*stream).write_pos = (*stream).write_pos.offset(req.result as isize);
-    (*stream).s.fpos = ((*stream).s.fpos as ::core::ffi::c_long
-        + req.result as ::core::ffi::c_long) as int64_t;
+    (*stream).s.fpos =
+        ((*stream).s.fpos as ::core::ffi::c_long + req.result as ::core::ffi::c_long) as int64_t;
     invoke_read_cb(stream, false_0 != 0);
 }
 unsafe extern "C" fn read_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut stream: *mut RStream = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut RStream;
+    let mut stream: *mut RStream = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut RStream;
     (*stream).pending_read = false_0 != 0;
     if (*stream).read_cb.is_some() {
         let mut available: size_t = rstream_available(stream);
-        let mut consumed: size_t = (*stream)
-            .read_cb
-            .expect(
-                "non-null function pointer",
-            )(
+        let mut consumed: size_t = (*stream).read_cb.expect("non-null function pointer")(
             stream,
             (*stream).read_pos,
             available,
@@ -978,11 +942,12 @@ unsafe extern "C" fn read_event(mut argv: *mut *mut ::core::ffi::c_void) {
             (*stream).did_eof,
         );
         '_c2rust_label: {
-            if consumed <= available {} else {
+            if consumed <= available {
+            } else {
                 __assert_fail(
                     b"consumed <= available\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     182 as ::core::ffi::c_uint,
                     b"void read_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -1000,13 +965,9 @@ pub unsafe extern "C" fn rstream_available(mut stream: *mut RStream) -> size_t {
     return (*stream).write_pos.offset_from((*stream).read_pos) as size_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn rstream_consume(
-    mut stream: *mut RStream,
-    mut consumed: size_t,
-) {
+pub unsafe extern "C" fn rstream_consume(mut stream: *mut RStream, mut consumed: size_t) {
     (*stream).read_pos = (*stream).read_pos.offset(consumed as isize);
-    let mut remaining: size_t = (*stream).write_pos.offset_from((*stream).read_pos)
-        as size_t;
+    let mut remaining: size_t = (*stream).write_pos.offset_from((*stream).read_pos) as size_t;
     if remaining > 0 as size_t && (*stream).read_pos > (*stream).buffer {
         memmove(
             (*stream).buffer as *mut ::core::ffi::c_void,
@@ -1020,14 +981,16 @@ pub unsafe extern "C" fn rstream_consume(
         (*stream).read_pos = (*stream).write_pos;
     }
     if (*stream).want_read as ::core::ffi::c_int != 0
-        && (*stream).paused_full as ::core::ffi::c_int != 0 && rstream_space(stream) != 0
+        && (*stream).paused_full as ::core::ffi::c_int != 0
+        && rstream_space(stream) != 0
     {
         '_c2rust_label: {
-            if (*stream).read_cb.is_some() {} else {
+            if (*stream).read_cb.is_some() {
+            } else {
                 __assert_fail(
                     b"stream->read_cb\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     210 as ::core::ffi::c_uint,
                     b"void rstream_consume(RStream *, size_t)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1039,8 +1002,7 @@ pub unsafe extern "C" fn rstream_consume(
     }
 }
 unsafe extern "C" fn invoke_read_cb(mut stream: *mut RStream, mut eof: bool) {
-    (*stream).did_eof = (*stream).did_eof as ::core::ffi::c_int
-        | eof as ::core::ffi::c_int != 0;
+    (*stream).did_eof = (*stream).did_eof as ::core::ffi::c_int | eof as ::core::ffi::c_int != 0;
     if rstream_space(stream) == 0 {
         rstream_stop_inner(stream);
         (*stream).paused_full = true_0 != 0;
@@ -1055,8 +1017,7 @@ unsafe extern "C" fn invoke_read_cb(mut stream: *mut RStream, mut eof: bool) {
             (*stream).s.events,
             Event {
                 handler: Some(
-                    read_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    read_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     stream as *mut ::core::ffi::c_void,
@@ -1073,26 +1034,21 @@ unsafe extern "C" fn invoke_read_cb(mut stream: *mut RStream, mut eof: bool) {
             },
         );
     } else {
-        let mut argv: [*mut ::core::ffi::c_void; 1] = [
-            stream as *mut ::core::ffi::c_void,
-        ];
+        let mut argv: [*mut ::core::ffi::c_void; 1] = [stream as *mut ::core::ffi::c_void];
         read_event(&raw mut argv as *mut *mut ::core::ffi::c_void);
     };
 }
-unsafe extern "C" fn rstream_close_cb(
-    mut s: *mut Stream,
-    mut data: *mut ::core::ffi::c_void,
-) {
+unsafe extern "C" fn rstream_close_cb(mut s: *mut Stream, mut data: *mut ::core::ffi::c_void) {
     let mut stream: *mut RStream = data as *mut RStream;
     '_c2rust_label: {
-        if !stream.is_null() && s == &raw mut (*stream).s {} else {
+        if !stream.is_null() && s == &raw mut (*stream).s {
+        } else {
             __assert_fail(
                 b"stream && s == &stream->s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                239 as ::core::ffi::c_uint,
-                b"void rstream_close_cb(Stream *, void *)\0".as_ptr()
+                b"/home/overlord/projects/neovim/neovim/src/nvim/event/rstream.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
+                239 as ::core::ffi::c_uint,
+                b"void rstream_close_cb(Stream *, void *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };

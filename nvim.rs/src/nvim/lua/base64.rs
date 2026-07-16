@@ -15,30 +15,15 @@ extern "C" {
     ) -> *const ::core::ffi::c_char;
     fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
     fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
-    fn luaL_register(
-        L: *mut lua_State,
-        libname: *const ::core::ffi::c_char,
-        l: *const luaL_Reg,
-    );
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
+    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
     fn luaL_argerror(
         L: *mut lua_State,
         numarg: ::core::ffi::c_int,
         extramsg: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn base64_encode(
-        src: *const ::core::ffi::c_char,
-        src_len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
+    fn base64_encode(src: *const ::core::ffi::c_char, src_len: size_t) -> *mut ::core::ffi::c_char;
     fn base64_decode(
         src: *const ::core::ffi::c_char,
         src_len: size_t,
@@ -47,9 +32,7 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
 }
 pub type size_t = usize;
-pub type lua_CFunction = Option<
-    unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
->;
+pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct luaL_Reg {
@@ -57,14 +40,11 @@ pub struct luaL_Reg {
     pub func: lua_CFunction,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"int nlua_base64_encode(lua_State *)\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"int nlua_base64_encode(lua_State *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 unsafe extern "C" fn nlua_base64_encode(mut L: *mut lua_State) -> ::core::ffi::c_int {
     if lua_gettop(L) < 1 as ::core::ffi::c_int {
@@ -81,14 +61,12 @@ unsafe extern "C" fn nlua_base64_encode(mut L: *mut lua_State) -> ::core::ffi::c
         );
     }
     let mut src_len: size_t = 0 as size_t;
-    let mut src: *const ::core::ffi::c_char = lua_tolstring(
-        L,
-        1 as ::core::ffi::c_int,
-        &raw mut src_len,
-    );
+    let mut src: *const ::core::ffi::c_char =
+        lua_tolstring(L, 1 as ::core::ffi::c_int, &raw mut src_len);
     let mut ret: *const ::core::ffi::c_char = base64_encode(src, src_len);
     '_c2rust_label: {
-        if !ret.is_null() {} else {
+        if !ret.is_null() {
+        } else {
             __assert_fail(
                 b"ret != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/lua/base64.c\0".as_ptr()
@@ -117,17 +95,10 @@ unsafe extern "C" fn nlua_base64_decode(mut L: *mut lua_State) -> ::core::ffi::c
         );
     }
     let mut src_len: size_t = 0 as size_t;
-    let mut src: *const ::core::ffi::c_char = lua_tolstring(
-        L,
-        1 as ::core::ffi::c_int,
-        &raw mut src_len,
-    );
+    let mut src: *const ::core::ffi::c_char =
+        lua_tolstring(L, 1 as ::core::ffi::c_int, &raw mut src_len);
     let mut out_len: size_t = 0 as size_t;
-    let mut ret: *const ::core::ffi::c_char = base64_decode(
-        src,
-        src_len,
-        &raw mut out_len,
-    );
+    let mut ret: *const ::core::ffi::c_char = base64_decode(src, src_len, &raw mut out_len);
     if ret.is_null() {
         return luaL_error(L, b"Invalid input\0".as_ptr() as *const ::core::ffi::c_char);
     }
@@ -139,15 +110,13 @@ static mut base64_functions: [luaL_Reg; 3] = [
     luaL_Reg {
         name: b"encode\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            nlua_base64_encode
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_base64_encode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {
         name: b"decode\0".as_ptr() as *const ::core::ffi::c_char,
         func: Some(
-            nlua_base64_decode
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
+            nlua_base64_decode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
         ),
     },
     luaL_Reg {

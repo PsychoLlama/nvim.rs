@@ -82,7 +82,8 @@ pub struct ScreenPen {
     #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
     #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -134,7 +135,8 @@ pub struct VTermScreenCellAttrs {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -161,15 +163,10 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
-    pub damage: Option<
-        unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub damage:
+        Option<unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub movecursor: Option<
         unsafe extern "C" fn(
@@ -186,9 +183,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -196,9 +191,8 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub sb_pushline: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -213,9 +207,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -342,10 +334,7 @@ pub struct VTermSelectionCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub query: Option<
-        unsafe extern "C" fn(
-            VTermSelectionMask,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermSelectionMask, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
@@ -413,7 +402,8 @@ pub struct VTermPen {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -426,9 +416,7 @@ pub struct VTermEncodingInstance {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
-    pub init: Option<
-        unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
         unsafe extern "C" fn(
             *mut VTermEncoding,
@@ -465,7 +453,8 @@ pub struct C2Rust_Unnamed_7 {
         ty = "::core::ffi::c_uint",
         bits = "16..=16"
     )]
-    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output: [u8; 3],
+    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -489,9 +478,8 @@ pub struct VTermLineInfo {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub csi: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -518,22 +506,13 @@ pub struct VTermStateFallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 #[derive(Copy, Clone)]
@@ -563,11 +542,7 @@ pub struct VTermStateCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub erase: Option<
         unsafe extern "C" fn(
@@ -576,9 +551,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub initpen: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub initpen: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setpenattr: Option<
         unsafe extern "C" fn(
             VTermAttr,
@@ -593,9 +566,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -604,9 +575,8 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setlineinfo: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -615,9 +585,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -654,11 +622,8 @@ pub struct VTermGlyphInfo {
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-pub type VTermOutputCallback = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    size_t,
-    *mut ::core::ffi::c_void,
-) -> ();
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_9 {
@@ -685,9 +650,8 @@ pub struct VTermParserCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub escape: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -721,22 +685,13 @@ pub struct VTermParserCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub resize: Option<
         unsafe extern "C" fn(
@@ -796,25 +751,17 @@ pub struct C2Rust_Unnamed_14 {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermAllocatorFunctions {
-    pub malloc: Option<
-        unsafe extern "C" fn(
-            size_t,
-            *mut ::core::ffi::c_void,
-        ) -> *mut ::core::ffi::c_void,
-    >,
-    pub free: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub malloc:
+        Option<unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>,
+    pub free:
+        Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 56],
-        [::core::ffi::c_char; 56],
-    >(*b"size_t vterm_input_write(VTerm *, const char *, size_t)\0")
+    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+        *b"size_t vterm_input_write(VTerm *, const char *, size_t)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INTERMED_MAX: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
@@ -825,8 +772,13 @@ unsafe extern "C" fn is_intermed(mut c: uint8_t) -> bool {
 }
 unsafe extern "C" fn do_control(mut vt: *mut VTerm, mut control: uint8_t) {
     if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).control.is_some() {
-        if Some((*(*vt).parser.callbacks).control.expect("non-null function pointer"))
-            .expect("non-null function pointer")(control, (*vt).parser.cbdata) != 0
+        if Some(
+            (*(*vt).parser.callbacks)
+                .control
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(control, (*vt).parser.cbdata)
+            != 0
         {
             return;
         }
@@ -834,10 +786,12 @@ unsafe extern "C" fn do_control(mut vt: *mut VTerm, mut control: uint8_t) {
 }
 unsafe extern "C" fn do_csi(mut vt: *mut VTerm, mut command: ::core::ffi::c_char) {
     if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).csi.is_some() {
-        if Some((*(*vt).parser.callbacks).csi.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(
+        if Some(
+            (*(*vt).parser.callbacks)
+                .csi
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(
             if (*vt).parser.v.csi.leaderlen != 0 {
                 &raw mut (*vt).parser.v.csi.leader as *mut ::core::ffi::c_char
             } else {
@@ -872,10 +826,16 @@ unsafe extern "C" fn do_escape(mut vt: *mut VTerm, mut command: ::core::ffi::c_c
     seq[c2rust_fresh4 as usize] = command;
     seq[len as usize] = 0 as ::core::ffi::c_char;
     if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).escape.is_some() {
-        if Some((*(*vt).parser.callbacks).escape.expect("non-null function pointer"))
-            .expect(
-                "non-null function pointer",
-            )(&raw mut seq as *mut ::core::ffi::c_char, len, (*vt).parser.cbdata) != 0
+        if Some(
+            (*(*vt).parser.callbacks)
+                .escape
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(
+            &raw mut seq as *mut ::core::ffi::c_char,
+            len,
+            (*vt).parser.cbdata,
+        ) != 0
         {
             return;
         }
@@ -901,23 +861,27 @@ unsafe extern "C" fn string_fragment(
     };
     match (*vt).parser.state as ::core::ffi::c_uint {
         6 => {
-            if !(*vt).parser.callbacks.is_null()
-                && (*(*vt).parser.callbacks).osc.is_some()
-            {
-                Some((*(*vt).parser.callbacks).osc.expect("non-null function pointer"))
-                    .expect(
-                        "non-null function pointer",
-                    )((*vt).parser.v.osc.command, frag, (*vt).parser.cbdata);
+            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).osc.is_some() {
+                Some(
+                    (*(*vt).parser.callbacks)
+                        .osc
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(
+                    (*vt).parser.v.osc.command,
+                    frag,
+                    (*vt).parser.cbdata,
+                );
             }
         }
         7 => {
-            if !(*vt).parser.callbacks.is_null()
-                && (*(*vt).parser.callbacks).dcs.is_some()
-            {
-                Some((*(*vt).parser.callbacks).dcs.expect("non-null function pointer"))
-                    .expect(
-                        "non-null function pointer",
-                    )(
+            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).dcs.is_some() {
+                Some(
+                    (*(*vt).parser.callbacks)
+                        .dcs
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(
                     &raw mut (*vt).parser.v.dcs.command as *mut ::core::ffi::c_char,
                     (*vt).parser.v.dcs.commandlen as size_t,
                     frag,
@@ -926,27 +890,33 @@ unsafe extern "C" fn string_fragment(
             }
         }
         8 => {
-            if !(*vt).parser.callbacks.is_null()
-                && (*(*vt).parser.callbacks).apc.is_some()
-            {
-                Some((*(*vt).parser.callbacks).apc.expect("non-null function pointer"))
-                    .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
+            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).apc.is_some() {
+                Some(
+                    (*(*vt).parser.callbacks)
+                        .apc
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
             }
         }
         9 => {
-            if !(*vt).parser.callbacks.is_null()
-                && (*(*vt).parser.callbacks).pm.is_some()
-            {
-                Some((*(*vt).parser.callbacks).pm.expect("non-null function pointer"))
-                    .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
+            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).pm.is_some() {
+                Some(
+                    (*(*vt).parser.callbacks)
+                        .pm
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
             }
         }
         10 => {
-            if !(*vt).parser.callbacks.is_null()
-                && (*(*vt).parser.callbacks).sos.is_some()
-            {
-                Some((*(*vt).parser.callbacks).sos.expect("non-null function pointer"))
-                    .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
+            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).sos.is_some() {
+                Some(
+                    (*(*vt).parser.callbacks)
+                        .sos
+                        .expect("non-null function pointer"),
+                )
+                .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
             }
         }
         0 | 1 | 2 | 3 | 5 | 4 => return,
@@ -961,9 +931,7 @@ pub unsafe extern "C" fn vterm_input_write(
     mut len: size_t,
 ) -> size_t {
     let mut pos: size_t = 0 as size_t;
-    let mut string_start: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut string_start: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     match (*vt).parser.state as ::core::ffi::c_uint {
         0 | 1 | 2 | 3 | 5 | 4 => {
             string_start = ::core::ptr::null::<::core::ffi::c_char>();
@@ -1031,8 +999,7 @@ pub unsafe extern "C" fn vterm_input_write(
                                 string_fragment(
                                     vt,
                                     string_start,
-                                    bytes.offset(pos as isize).offset_from(string_start)
-                                        as size_t,
+                                    bytes.offset(pos as isize).offset_from(string_start) as size_t,
                                     false_0 != 0,
                                     VTERM_TERMINATOR_ST,
                                 );
@@ -1049,9 +1016,8 @@ pub unsafe extern "C" fn vterm_input_write(
                         }
                     }
                 }
-                let mut string_len: size_t = bytes
-                    .offset(pos as isize)
-                    .offset_from(string_start) as size_t;
+                let mut string_len: size_t =
+                    bytes.offset(pos as isize).offset_from(string_start) as size_t;
                 if (*vt).parser.in_esc() {
                     if (*vt).parser.intermedlen == 0
                         && c as ::core::ffi::c_int >= 0x40 as ::core::ffi::c_int
@@ -1060,12 +1026,12 @@ pub unsafe extern "C" fn vterm_input_write(
                             >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint)
                             || c as ::core::ffi::c_int == 0x5c as ::core::ffi::c_int)
                     {
-                        c = (c as ::core::ffi::c_int + 0x40 as ::core::ffi::c_int)
-                            as uint8_t;
+                        c = (c as ::core::ffi::c_int + 0x40 as ::core::ffi::c_int) as uint8_t;
                         c1_allowed = true_0 != 0;
                         if string_len != 0 {
                             '_c2rust_label: {
-                                if string_len > 0 as size_t {} else {
+                                if string_len > 0 as size_t {
+                                } else {
                                     __assert_fail(
                                         b"string_len > 0\0".as_ptr() as *const ::core::ffi::c_char,
                                         b"/home/overlord/projects/neovim/neovim/src/nvim/vterm/parser.c\0"
@@ -1095,22 +1061,19 @@ pub unsafe extern "C" fn vterm_input_write(
                                             < CSI_LEADER_MAX - 1 as ::core::ffi::c_int
                                         {
                                             let c2rust_fresh0 = (*vt).parser.v.csi.leaderlen;
-                                            (*vt).parser.v.csi.leaderlen = (*vt).parser.v.csi.leaderlen
-                                                + 1;
-                                            (*vt).parser.v.csi.leader[c2rust_fresh0 as usize] = c
-                                                as ::core::ffi::c_char;
+                                            (*vt).parser.v.csi.leaderlen =
+                                                (*vt).parser.v.csi.leaderlen + 1;
+                                            (*vt).parser.v.csi.leader[c2rust_fresh0 as usize] =
+                                                c as ::core::ffi::c_char;
                                         }
                                         break 's_849;
                                     } else {
-                                        (*vt)
-                                            .parser
-                                            .v
-                                            .csi
-                                            .leader[(*vt).parser.v.csi.leaderlen as usize] = 0
-                                            as ::core::ffi::c_char;
+                                        (*vt).parser.v.csi.leader
+                                            [(*vt).parser.v.csi.leaderlen as usize] =
+                                            0 as ::core::ffi::c_char;
                                         (*vt).parser.v.csi.argi = 0 as ::core::ffi::c_int;
-                                        (*vt).parser.v.csi.args[0 as ::core::ffi::c_int as usize] = CSI_ARG_MISSING
-                                            as ::core::ffi::c_long;
+                                        (*vt).parser.v.csi.args[0 as ::core::ffi::c_int as usize] =
+                                            CSI_ARG_MISSING as ::core::ffi::c_long;
                                         (*vt).parser.state = CSI_ARGS;
                                     }
                                 }
@@ -1127,12 +1090,10 @@ pub unsafe extern "C" fn vterm_input_write(
                                         } else {
                                             (*vt).parser.v.osc.command *= 10 as ::core::ffi::c_int;
                                         }
-                                        (*vt).parser.v.osc.command
-                                            += c as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
+                                        (*vt).parser.v.osc.command +=
+                                            c as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
                                         break 's_849;
-                                    } else if c as ::core::ffi::c_int
-                                        == ';' as ::core::ffi::c_int
-                                    {
+                                    } else if c as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                                         (*vt).parser.state = OSC;
                                         string_start = bytes
                                             .offset(pos as isize)
@@ -1148,13 +1109,10 @@ pub unsafe extern "C" fn vterm_input_write(
                                 4 => {
                                     if (*vt).parser.v.dcs.commandlen < CSI_LEADER_MAX {
                                         let c2rust_fresh2 = (*vt).parser.v.dcs.commandlen;
-                                        (*vt).parser.v.dcs.commandlen = (*vt)
-                                            .parser
-                                            .v
-                                            .dcs
-                                            .commandlen + 1;
-                                        (*vt).parser.v.dcs.command[c2rust_fresh2 as usize] = c
-                                            as ::core::ffi::c_char;
+                                        (*vt).parser.v.dcs.commandlen =
+                                            (*vt).parser.v.dcs.commandlen + 1;
+                                        (*vt).parser.v.dcs.command[c2rust_fresh2 as usize] =
+                                            c as ::core::ffi::c_char;
                                     }
                                     if c as ::core::ffi::c_int >= 0x40 as ::core::ffi::c_int
                                         && c as ::core::ffi::c_int <= 0x7e as ::core::ffi::c_int
@@ -1176,55 +1134,67 @@ pub unsafe extern "C" fn vterm_input_write(
                                                 < INTERMED_MAX - 1 as ::core::ffi::c_int
                                             {
                                                 let c2rust_fresh3 = (*vt).parser.intermedlen;
-                                                (*vt).parser.intermedlen = (*vt).parser.intermedlen + 1;
-                                                (*vt).parser.intermed[c2rust_fresh3 as usize] = c
-                                                    as ::core::ffi::c_char;
+                                                (*vt).parser.intermedlen =
+                                                    (*vt).parser.intermedlen + 1;
+                                                (*vt).parser.intermed[c2rust_fresh3 as usize] =
+                                                    c as ::core::ffi::c_char;
                                             }
                                         } else if c as ::core::ffi::c_int
                                             >= 0x30 as ::core::ffi::c_int
-                                            && (c as ::core::ffi::c_int) < 0x7f as ::core::ffi::c_int
+                                            && (c as ::core::ffi::c_int)
+                                                < 0x7f as ::core::ffi::c_int
                                         {
                                             do_escape(vt, c as ::core::ffi::c_char);
                                             (*vt).parser.set_in_esc(false as bool);
                                             (*vt).parser.state = NORMAL;
-                                            string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                            string_start =
+                                                ::core::ptr::null::<::core::ffi::c_char>();
                                         }
                                         break 's_849;
                                     } else {
                                         if c1_allowed as ::core::ffi::c_int != 0
                                             && c as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
-                                            && (c as ::core::ffi::c_int) < 0xa0 as ::core::ffi::c_int
+                                            && (c as ::core::ffi::c_int)
+                                                < 0xa0 as ::core::ffi::c_int
                                         {
                                             match c as ::core::ffi::c_int {
                                                 144 => {
                                                     (*vt).parser.string_initial = true_0 != 0;
-                                                    (*vt).parser.v.dcs.commandlen = 0 as ::core::ffi::c_int;
+                                                    (*vt).parser.v.dcs.commandlen =
+                                                        0 as ::core::ffi::c_int;
                                                     (*vt).parser.state = DCS_COMMAND;
-                                                    string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                                    string_start =
+                                                        ::core::ptr::null::<::core::ffi::c_char>();
                                                 }
                                                 152 => {
                                                     (*vt).parser.string_initial = true_0 != 0;
                                                     (*vt).parser.state = SOS;
-                                                    string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                                    string_start =
+                                                        ::core::ptr::null::<::core::ffi::c_char>();
                                                     string_start = bytes
                                                         .offset(pos as isize)
                                                         .offset(1 as ::core::ffi::c_int as isize);
                                                 }
                                                 155 => {
-                                                    (*vt).parser.v.csi.leaderlen = 0 as ::core::ffi::c_int;
+                                                    (*vt).parser.v.csi.leaderlen =
+                                                        0 as ::core::ffi::c_int;
                                                     (*vt).parser.state = CSI_LEADER;
-                                                    string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                                    string_start =
+                                                        ::core::ptr::null::<::core::ffi::c_char>();
                                                 }
                                                 157 => {
-                                                    (*vt).parser.v.osc.command = -1 as ::core::ffi::c_int;
+                                                    (*vt).parser.v.osc.command =
+                                                        -1 as ::core::ffi::c_int;
                                                     (*vt).parser.string_initial = true_0 != 0;
                                                     (*vt).parser.state = OSC_COMMAND;
-                                                    string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                                    string_start =
+                                                        ::core::ptr::null::<::core::ffi::c_char>();
                                                 }
                                                 158 => {
                                                     (*vt).parser.string_initial = true_0 != 0;
                                                     (*vt).parser.state = PM;
-                                                    string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                                    string_start =
+                                                        ::core::ptr::null::<::core::ffi::c_char>();
                                                     string_start = bytes
                                                         .offset(pos as isize)
                                                         .offset(1 as ::core::ffi::c_int as isize);
@@ -1232,7 +1202,8 @@ pub unsafe extern "C" fn vterm_input_write(
                                                 159 => {
                                                     (*vt).parser.string_initial = true_0 != 0;
                                                     (*vt).parser.state = APC;
-                                                    string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                                                    string_start =
+                                                        ::core::ptr::null::<::core::ffi::c_char>();
                                                     string_start = bytes
                                                         .offset(pos as isize)
                                                         .offset(1 as ::core::ffi::c_int as isize);
@@ -1247,17 +1218,16 @@ pub unsafe extern "C" fn vterm_input_write(
                                                 && (*(*vt).parser.callbacks).text.is_some()
                                             {
                                                 eaten = Some(
-                                                        (*(*vt).parser.callbacks)
-                                                            .text
-                                                            .expect("non-null function pointer"),
-                                                    )
-                                                    .expect(
-                                                        "non-null function pointer",
-                                                    )(
+                                                    (*(*vt).parser.callbacks)
+                                                        .text
+                                                        .expect("non-null function pointer"),
+                                                )
+                                                .expect("non-null function pointer")(
                                                     bytes.offset(pos as isize),
                                                     len.wrapping_sub(pos),
                                                     (*vt).parser.cbdata,
-                                                ) as size_t;
+                                                )
+                                                    as size_t;
                                             }
                                             if eaten == 0 {
                                                 eaten = 1 as size_t;
@@ -1275,27 +1245,28 @@ pub unsafe extern "C" fn vterm_input_write(
                                 && c as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
                             {
                                 if (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize]
-                                    as ::core::ffi::c_ulong == CSI_ARG_MISSING
+                                    as ::core::ffi::c_ulong
+                                    == CSI_ARG_MISSING
                                 {
-                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] = 0
-                                        as ::core::ffi::c_long;
+                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] =
+                                        0 as ::core::ffi::c_long;
                                 }
-                                (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize]
-                                    *= 10 as ::core::ffi::c_long;
-                                (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize]
-                                    += (c as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
+                                (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] *=
+                                    10 as ::core::ffi::c_long;
+                                (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] +=
+                                    (c as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
                                         as ::core::ffi::c_long;
                                 break 's_849;
                             } else {
                                 if c as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
-                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize]
-                                        |= CSI_ARG_FLAG_MORE as ::core::ffi::c_long;
+                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] |=
+                                        CSI_ARG_FLAG_MORE as ::core::ffi::c_long;
                                     c = ';' as uint8_t;
                                 }
                                 if c as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                                     (*vt).parser.v.csi.argi += 1;
-                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] = CSI_ARG_MISSING
-                                        as ::core::ffi::c_long;
+                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] =
+                                        CSI_ARG_MISSING as ::core::ffi::c_long;
                                     break 's_849;
                                 } else {
                                     (*vt).parser.v.csi.argi += 1;
@@ -1326,21 +1297,19 @@ pub unsafe extern "C" fn vterm_input_write(
                         break 's_849;
                     }
                     if is_intermed(c) {
-                        if (*vt).parser.intermedlen
-                            < INTERMED_MAX - 1 as ::core::ffi::c_int
-                        {
+                        if (*vt).parser.intermedlen < INTERMED_MAX - 1 as ::core::ffi::c_int {
                             let c2rust_fresh1 = (*vt).parser.intermedlen;
                             (*vt).parser.intermedlen = (*vt).parser.intermedlen + 1;
-                            (*vt).parser.intermed[c2rust_fresh1 as usize] = c
-                                as ::core::ffi::c_char;
+                            (*vt).parser.intermed[c2rust_fresh1 as usize] =
+                                c as ::core::ffi::c_char;
                         }
                     } else {
                         if c as ::core::ffi::c_int != 0x1b as ::core::ffi::c_int {
                             if c as ::core::ffi::c_int >= 0x40 as ::core::ffi::c_int
                                 && c as ::core::ffi::c_int <= 0x7e as ::core::ffi::c_int
                             {
-                                (*vt).parser.intermed[(*vt).parser.intermedlen as usize] = 0
-                                    as ::core::ffi::c_char;
+                                (*vt).parser.intermed[(*vt).parser.intermedlen as usize] =
+                                    0 as ::core::ffi::c_char;
                                 do_csi(vt, c as ::core::ffi::c_char);
                             }
                         }
@@ -1353,9 +1322,8 @@ pub unsafe extern "C" fn vterm_input_write(
         pos = pos.wrapping_add(1);
     }
     if !string_start.is_null() {
-        let mut string_len_0: size_t = bytes
-            .offset(pos as isize)
-            .offset_from(string_start) as size_t;
+        let mut string_len_0: size_t =
+            bytes.offset(pos as isize).offset_from(string_start) as size_t;
         if string_len_0 > 0 as size_t {
             if (*vt).parser.in_esc() {
                 string_len_0 = string_len_0.wrapping_sub(1 as size_t);
@@ -1380,8 +1348,8 @@ pub unsafe extern "C" fn vterm_parser_set_callbacks(
     (*vt).parser.callbacks = callbacks;
     (*vt).parser.cbdata = user;
 }
-pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint = (1 as ::core::ffi::c_uint)
-    << 31 as ::core::ffi::c_int;
+pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint =
+    (1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int;
 pub const CSI_ARG_MISSING: ::core::ffi::c_ulong = ((1 as ::core::ffi::c_ulong)
     << 31 as ::core::ffi::c_int)
     .wrapping_sub(1 as ::core::ffi::c_ulong);

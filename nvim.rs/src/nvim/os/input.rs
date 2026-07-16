@@ -50,11 +50,7 @@ extern "C" {
     fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
     fn os_hrtime() -> uint64_t;
     fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
-    fn rstream_start(
-        stream: *mut RStream,
-        cb: stream_read_cb,
-        data: *mut ::core::ffi::c_void,
-    );
+    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
     fn rstream_stop(stream: *mut RStream);
     fn rstream_may_close(stream: *mut RStream);
     fn typebuf_changed(tb_change_cnt: ::core::ffi::c_int) -> bool;
@@ -210,9 +206,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -239,9 +234,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -370,9 +363,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -384,9 +376,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -398,15 +389,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_5 {
@@ -2130,12 +2116,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2182,12 +2166,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_25 {
@@ -2347,9 +2329,7 @@ pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
 pub type event_T = auto_event;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -2479,9 +2459,7 @@ pub const FSK_SIMPLIFY: C2Rust_Unnamed_27 = 8;
 pub const FSK_IN_STRING: C2Rust_Unnamed_27 = 4;
 pub const FSK_KEEP_X_KEY: C2Rust_Unnamed_27 = 2;
 pub const FSK_KEYCODE: C2Rust_Unnamed_27 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -2498,8 +2476,8 @@ pub const MOD_MASK_3CLICK: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const MOD_MASK_4CLICK: ::core::ffi::c_int = 0x60 as ::core::ffi::c_int;
 pub const MAX_KEY_CODE_LEN: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const READ_BUFFER_SIZE: ::core::ffi::c_int = 0xfff as ::core::ffi::c_int;
-pub const INPUT_BUFFER_SIZE: ::core::ffi::c_int = READ_BUFFER_SIZE
-    * 4 as ::core::ffi::c_int + MAX_KEY_CODE_LEN;
+pub const INPUT_BUFFER_SIZE: ::core::ffi::c_int =
+    READ_BUFFER_SIZE * 4 as ::core::ffi::c_int + MAX_KEY_CODE_LEN;
 static mut read_stream: RStream = rstream {
     s: stream {
         closed: true_0 != 0,
@@ -2581,12 +2559,10 @@ static mut read_stream: RStream = rstream {
     num_bytes: 0,
 };
 static mut input_buffer: [::core::ffi::c_char; 16386] = [0; 16386];
-static mut input_read_pos: *mut ::core::ffi::c_char = unsafe {
-    &raw const input_buffer as *mut ::core::ffi::c_char
-};
-static mut input_write_pos: *mut ::core::ffi::c_char = unsafe {
-    &raw const input_buffer as *mut ::core::ffi::c_char
-};
+static mut input_read_pos: *mut ::core::ffi::c_char =
+    unsafe { &raw const input_buffer as *mut ::core::ffi::c_char };
+static mut input_write_pos: *mut ::core::ffi::c_char =
+    unsafe { &raw const input_buffer as *mut ::core::ffi::c_char };
 static mut input_eof: bool = false_0 != 0;
 static mut blocking: bool = false_0 != 0;
 static mut cursorhold_time: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2638,17 +2614,15 @@ unsafe extern "C" fn cursorhold_event(mut argv: *mut *mut ::core::ffi::c_void) {
 }
 unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
     '_c2rust_label: {
-        if !events_enabled
-            || multiqueue_empty(main_loop.events) as ::core::ffi::c_int != 0
-        {} else {
+        if !events_enabled || multiqueue_empty(main_loop.events) as ::core::ffi::c_int != 0 {
+        } else {
             __assert_fail(
                 b"!events_enabled || multiqueue_empty(main_loop.events)\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 83 as ::core::ffi::c_uint,
-                b"void create_cursorhold_event(_Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void create_cursorhold_event(_Bool)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2656,8 +2630,7 @@ unsafe extern "C" fn create_cursorhold_event(mut events_enabled: bool) {
         main_loop.events,
         Event {
             handler: Some(
-                cursorhold_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                cursorhold_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2692,11 +2665,12 @@ pub unsafe extern "C" fn input_get(
     if maxlen != 0 && input_available() != 0 {
         reset_cursorhold_wait(tb_change_cnt);
         '_c2rust_label: {
-            if maxlen >= 0 as ::core::ffi::c_int {} else {
+            if maxlen >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"maxlen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     129 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2715,11 +2689,12 @@ pub unsafe extern "C" fn input_get(
         );
         input_read_pos = input_read_pos.offset(to_read as isize);
         '_c2rust_label_0: {
-            if to_read <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if to_read <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"to_read <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     129 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2752,18 +2727,17 @@ pub unsafe extern "C" fn input_get(
                 read_error_exit();
             }
             reset_cursorhold_wait(tb_change_cnt);
-            if trigger_cursorhold() as ::core::ffi::c_int != 0
-                && !typebuf_changed(tb_change_cnt)
-            {
+            if trigger_cursorhold() as ::core::ffi::c_int != 0 && !typebuf_changed(tb_change_cnt) {
                 create_cursorhold_event(events == main_loop.events);
             } else {
                 before_blocking();
                 result = inbuf_poll(-1 as ::core::ffi::c_int, events);
             }
         } else {
-            cursorhold_time
-                += os_hrtime().wrapping_sub(wait_start).wrapping_div(1000000 as uint64_t)
-                    as ::core::ffi::c_int;
+            cursorhold_time += os_hrtime()
+                .wrapping_sub(wait_start)
+                .wrapping_div(1000000 as uint64_t)
+                as ::core::ffi::c_int;
         }
     }
     ctrl_c_interrupts = true_0 != 0;
@@ -2773,11 +2747,12 @@ pub unsafe extern "C" fn input_get(
     if maxlen != 0 && input_available() != 0 {
         reset_cursorhold_wait(tb_change_cnt);
         '_c2rust_label_1: {
-            if maxlen >= 0 as ::core::ffi::c_int {} else {
+            if maxlen >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"maxlen >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     168 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2796,11 +2771,12 @@ pub unsafe extern "C" fn input_get(
         );
         input_read_pos = input_read_pos.offset(to_read_0 as isize);
         '_c2rust_label_2: {
-            if to_read_0 <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if to_read_0 <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"to_read <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     168 as ::core::ffi::c_uint,
                     b"int input_get(uint8_t *, int, int, int, MultiQueue *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2812,8 +2788,7 @@ pub unsafe extern "C" fn input_get(
     if maxlen != 0 && pending_events(events) as ::core::ffi::c_int != 0 {
         return push_event_key(buf, maxlen);
     }
-    if result as ::core::ffi::c_int == kNone as ::core::ffi::c_int
-        && ms != 0 as ::core::ffi::c_int
+    if result as ::core::ffi::c_int == kNone as ::core::ffi::c_int && ms != 0 as ::core::ffi::c_int
     {
         read_error_exit();
     }
@@ -2821,8 +2796,11 @@ pub unsafe extern "C" fn input_get(
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_char_avail() -> bool {
-    return inbuf_poll(0 as ::core::ffi::c_int, ::core::ptr::null_mut::<MultiQueue>())
-        as ::core::ffi::c_int == kTrue as ::core::ffi::c_int;
+    return inbuf_poll(
+        0 as ::core::ffi::c_int,
+        ::core::ptr::null_mut::<MultiQueue>(),
+    ) as ::core::ffi::c_int
+        == kTrue as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_breakcheck() {
@@ -2872,23 +2850,23 @@ unsafe extern "C" fn input_space() -> size_t {
         .offset_from(input_write_pos) as size_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn input_enqueue_raw(
-    mut data: *const ::core::ffi::c_char,
-    mut size: size_t,
-) {
+pub unsafe extern "C" fn input_enqueue_raw(mut data: *const ::core::ffi::c_char, mut size: size_t) {
     if input_read_pos > &raw mut input_buffer as *mut ::core::ffi::c_char {
         let mut available: size_t = input_available();
         memmove(
-            &raw mut input_buffer as *mut ::core::ffi::c_char
-                as *mut ::core::ffi::c_void,
+            &raw mut input_buffer as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             input_read_pos as *const ::core::ffi::c_void,
             available,
         );
         input_read_pos = &raw mut input_buffer as *mut ::core::ffi::c_char;
-        input_write_pos = (&raw mut input_buffer as *mut ::core::ffi::c_char)
-            .offset(available as isize);
+        input_write_pos =
+            (&raw mut input_buffer as *mut ::core::ffi::c_char).offset(available as isize);
     }
-    let mut to_write: size_t = if size < input_space() { size } else { input_space() };
+    let mut to_write: size_t = if size < input_space() {
+        size
+    } else {
+        input_space()
+    };
     memcpy(
         input_write_pos as *mut ::core::ffi::c_void,
         data as *const ::core::ffi::c_void,
@@ -2897,10 +2875,7 @@ pub unsafe extern "C" fn input_enqueue_raw(
     input_write_pos = input_write_pos.offset(to_write as isize);
 }
 #[no_mangle]
-pub unsafe extern "C" fn input_enqueue(
-    mut chan_id: uint64_t,
-    mut keys: String_0,
-) -> size_t {
+pub unsafe extern "C" fn input_enqueue(mut chan_id: uint64_t, mut keys: String_0) -> size_t {
     current_ui = chan_id;
     let mut ptr: *const ::core::ffi::c_char = keys.data;
     let mut end: *const ::core::ffi::c_char = ptr.offset(keys.size as isize);
@@ -2935,11 +2910,7 @@ pub unsafe extern "C" fn input_enqueue(
             ::core::ptr::null_mut::<bool>(),
         );
         if new_size > 0 as ::core::ffi::c_uint {
-            new_size = handle_mouse_event(
-                &raw mut ptr,
-                &raw mut buf as *mut uint8_t,
-                new_size,
-            );
+            new_size = handle_mouse_event(&raw mut ptr, &raw mut buf as *mut uint8_t, new_size);
             if new_size > 0 as ::core::ffi::c_uint {
                 input_enqueue_raw(
                     &raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char,
@@ -2950,9 +2921,7 @@ pub unsafe extern "C" fn input_enqueue(
             let mut old_ptr: *const ::core::ffi::c_char = ptr;
             loop {
                 ptr = ptr.offset(1);
-                if !(ptr < end
-                    && *ptr as ::core::ffi::c_int != '>' as ::core::ffi::c_int)
-                {
+                if !(ptr < end && *ptr as ::core::ffi::c_int != '>' as ::core::ffi::c_int) {
                     break;
                 }
             }
@@ -3002,13 +2971,11 @@ unsafe extern "C" fn check_multiclick(
     static mut orig_mouse_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static mut orig_mouse_row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static mut orig_mouse_time: uint64_t = 0 as uint64_t;
-    if code >= KE_MOUSEDOWN as ::core::ffi::c_int
-        && code <= KE_MOUSERIGHT as ::core::ffi::c_int
-    {
+    if code >= KE_MOUSEDOWN as ::core::ffi::c_int && code <= KE_MOUSERIGHT as ::core::ffi::c_int {
         return 0 as uint8_t;
     }
-    let mut no_move: bool = orig_mouse_grid == grid && orig_mouse_col == col
-        && orig_mouse_row == row;
+    let mut no_move: bool =
+        orig_mouse_grid == grid && orig_mouse_col == col && orig_mouse_row == row;
     if code == KE_MOUSEMOVE as ::core::ffi::c_int {
         if no_move {
             *skip_event = true_0 != 0;
@@ -3022,10 +2989,11 @@ unsafe extern "C" fn check_multiclick(
     {
         let mut mouse_time: uint64_t = os_hrtime();
         let mut timediff: uint64_t = mouse_time.wrapping_sub(orig_mouse_time);
-        let mut mouset: uint64_t = (p_mouset as uint64_t)
-            .wrapping_mul(1000000 as uint64_t);
-        if code == orig_mouse_code && no_move as ::core::ffi::c_int != 0
-            && timediff < mouset && orig_num_clicks != 4 as ::core::ffi::c_int
+        let mut mouset: uint64_t = (p_mouset as uint64_t).wrapping_mul(1000000 as uint64_t);
+        if code == orig_mouse_code
+            && no_move as ::core::ffi::c_int != 0
+            && timediff < mouset
+            && orig_num_clicks != 4 as ::core::ffi::c_int
         {
             orig_num_clicks += 1;
         } else {
@@ -3083,7 +3051,8 @@ unsafe extern "C" fn handle_mouse_event(
         &raw mut col,
         &raw mut row,
         &raw mut advance,
-    ) != EOF && advance != 0
+    ) != EOF
+        && advance != 0
     {
         if col >= 0 as ::core::ffi::c_int && row >= 0 as ::core::ffi::c_int {
             if col >= Columns {
@@ -3110,9 +3079,7 @@ unsafe extern "C" fn handle_mouse_event(
         return 0 as ::core::ffi::c_uint;
     }
     if modifiers != 0 {
-        if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            != KS_MODIFIER
-        {
+        if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != KS_MODIFIER {
             memcpy(
                 buf.offset(3 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
                 buf as *const ::core::ffi::c_void,
@@ -3123,9 +3090,9 @@ unsafe extern "C" fn handle_mouse_event(
             *buf.offset(2 as ::core::ffi::c_int as isize) = modifiers;
             bufsize = bufsize.wrapping_add(3 as ::core::ffi::c_uint);
         } else {
-            *buf.offset(2 as ::core::ffi::c_int as isize) = (*buf
-                .offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                | modifiers as ::core::ffi::c_int) as uint8_t;
+            *buf.offset(2 as ::core::ffi::c_int as isize) =
+                (*buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    | modifiers as ::core::ffi::c_int) as uint8_t;
         }
     }
     return bufsize;
@@ -3140,8 +3107,8 @@ pub unsafe extern "C" fn input_enqueue_mouse(
 ) {
     let mut skip_event: bool = false_0 != 0;
     modifier = (modifier as ::core::ffi::c_int
-        | check_multiclick(code, grid, row, col, &raw mut skip_event)
-            as ::core::ffi::c_int) as uint8_t;
+        | check_multiclick(code, grid, row, col, &raw mut skip_event) as ::core::ffi::c_int)
+        as uint8_t;
     if skip_event {
         return;
     }
@@ -3159,9 +3126,12 @@ pub unsafe extern "C" fn input_enqueue_mouse(
     mouse_grid = grid;
     mouse_row = row;
     mouse_col = col;
-    let mut written: size_t = (3 as size_t)
-        .wrapping_add(p.offset_from(&raw mut buf as *mut uint8_t) as size_t);
-    input_enqueue_raw(&raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char, written);
+    let mut written: size_t =
+        (3 as size_t).wrapping_add(p.offset_from(&raw mut buf as *mut uint8_t) as size_t);
+    input_enqueue_raw(
+        &raw mut buf as *mut uint8_t as *mut ::core::ffi::c_char,
+        written,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn input_blocking() -> bool {
@@ -3178,7 +3148,8 @@ unsafe extern "C" fn inbuf_poll(
         prof_input_start();
     }
     if (ms == -1 as ::core::ffi::c_int || ms > 0 as ::core::ffi::c_int)
-        && events != main_loop.events && !input_eof
+        && events != main_loop.events
+        && !input_eof
     {
         blocking = true_0 != 0;
         multiqueue_process_events(ch_before_blocking_events);
@@ -3219,8 +3190,7 @@ unsafe extern "C" fn inbuf_poll(
             continue;
         }
         let mut now: uint64_t = os_hrtime();
-        remaining
-            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
+        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
         before = now;
         if remaining <= 0 as int64_t {
             break;
@@ -3250,14 +3220,15 @@ unsafe extern "C" fn input_read_cb(
         input_eof = true_0 != 0;
     }
     '_c2rust_label: {
-        if input_space() >= c {} else {
+        if input_space() >= c {
+        } else {
             __assert_fail(
                 b"input_space() >= c\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/input.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 534 as ::core::ffi::c_uint,
-                b"size_t input_read_cb(RStream *, const char *, size_t, void *, _Bool)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"size_t input_read_cb(RStream *, const char *, size_t, void *, _Bool)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -3274,13 +3245,17 @@ unsafe extern "C" fn process_ctrl_c() {
     while i >= 0 as ssize_t {
         let mut c: uint8_t = *input_read_pos.offset(i as isize) as uint8_t;
         if c as ::core::ffi::c_int == Ctrl_C
-            || c as ::core::ffi::c_int == 'C' as ::core::ffi::c_int && i >= 3 as ssize_t
+            || c as ::core::ffi::c_int == 'C' as ::core::ffi::c_int
+                && i >= 3 as ssize_t
                 && *input_read_pos.offset((i - 3 as ssize_t) as isize) as uint8_t
-                    as ::core::ffi::c_int == K_SPECIAL
+                    as ::core::ffi::c_int
+                    == K_SPECIAL
                 && *input_read_pos.offset((i - 2 as ssize_t) as isize) as uint8_t
-                    as ::core::ffi::c_int == KS_MODIFIER
+                    as ::core::ffi::c_int
+                    == KS_MODIFIER
                 && *input_read_pos.offset((i - 1 as ssize_t) as isize) as uint8_t
-                    as ::core::ffi::c_int == MOD_MASK_CTRL
+                    as ::core::ffi::c_int
+                    == MOD_MASK_CTRL
         {
             *input_read_pos.offset(i as isize) = Ctrl_C as ::core::ffi::c_char;
             got_int = true_0 != 0;
@@ -3319,19 +3294,17 @@ unsafe extern "C" fn push_event_key(
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_input_ready(mut events: *mut MultiQueue) -> bool {
-    return typebuf_was_filled as ::core::ffi::c_int != 0 || input_available() != 0
+    return typebuf_was_filled as ::core::ffi::c_int != 0
+        || input_available() != 0
         || pending_events(events) as ::core::ffi::c_int != 0;
 }
 unsafe extern "C" fn read_error_exit() -> ! {
     if silent_mode {
         getout(0 as ::core::ffi::c_int);
     }
-    preserve_exit(
-        gettext(
-            b"Nvim: Error reading input, exiting...\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
+    preserve_exit(gettext(
+        b"Nvim: Error reading input, exiting...\n\0".as_ptr() as *const ::core::ffi::c_char,
+    ));
 }
 unsafe extern "C" fn pending_events(mut events: *mut MultiQueue) -> bool {
     return !events.is_null() && !multiqueue_empty(events);

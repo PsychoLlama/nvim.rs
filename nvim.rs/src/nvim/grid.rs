@@ -47,11 +47,7 @@ extern "C" {
         ...
     ) -> bool;
     fn mh_clear(h: *mut MapHash);
-    fn mh_put_glyph(
-        set: *mut Set_glyph,
-        key: String_0,
-        new: *mut MHPutStatus,
-    ) -> uint32_t;
+    fn mh_put_glyph(set: *mut Set_glyph, key: String_0, new: *mut MHPutStatus) -> uint32_t;
     fn decor_check_invalid_glyphs();
     fn next_virt_text_chunk(
         vt: VirtText,
@@ -72,10 +68,8 @@ extern "C" {
     static mut rdb_flags: ::core::ffi::c_uint;
     static mut p_tbidi: ::core::ffi::c_int;
     static mut hl_attr_active: *mut ::core::ffi::c_int;
-    fn hl_apply_winblend(
-        winbl: ::core::ffi::c_int,
-        attr: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn hl_apply_winblend(winbl: ::core::ffi::c_int, attr: ::core::ffi::c_int)
+        -> ::core::ffi::c_int;
     fn hl_combine_attr(
         char_attr: ::core::ffi::c_int,
         prim_attr: ::core::ffi::c_int,
@@ -99,10 +93,7 @@ extern "C" {
         size: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_cp_bounds(
         base: *const ::core::ffi::c_char,
         p_in: *const ::core::ffi::c_char,
@@ -1845,9 +1836,7 @@ pub const kOptRdbFlagFlush: C2Rust_Unnamed_14 = 32;
 pub const kOptRdbFlagLine: C2Rust_Unnamed_14 = 16;
 pub const kOptRdbFlagNothrottle: C2Rust_Unnamed_14 = 2;
 pub const kOptRdbFlagCompositor: C2Rust_Unnamed_14 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -1890,7 +1879,8 @@ pub unsafe extern "C" fn schar_from_buf(
     mut len: size_t,
 ) -> schar_T {
     '_c2rust_label: {
-        if len < 32 as size_t {} else {
+        if len < 32 as size_t {
+        } else {
             __assert_fail(
                 b"len < MAX_SCHAR_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -1917,7 +1907,8 @@ pub unsafe extern "C" fn schar_from_buf(
         let mut status: MHPutStatus = kMHExisting;
         let mut idx: uint32_t = mh_put_glyph(&raw mut glyph_cache, str, &raw mut status);
         '_c2rust_label_0: {
-            if idx < 0xffffff as uint32_t {} else {
+            if idx < 0xffffff as uint32_t {
+            } else {
                 __assert_fail(
                     b"idx < 0xFFFFFF\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -1928,15 +1919,12 @@ pub unsafe extern "C" fn schar_from_buf(
                 );
             }
         };
-        return (0xff as schar_T)
-            .wrapping_add((idx as schar_T) << 8 as ::core::ffi::c_int);
+        return (0xff as schar_T).wrapping_add((idx as schar_T) << 8 as ::core::ffi::c_int);
     };
 }
 #[no_mangle]
 pub unsafe extern "C" fn schar_cache_clear_if_full() -> bool {
-    if glyph_cache.h.n_keys
-        > ((1 as ::core::ffi::c_int) << 21 as ::core::ffi::c_int) as uint32_t
-    {
+    if glyph_cache.h.n_keys > ((1 as ::core::ffi::c_int) << 21 as ::core::ffi::c_int) as uint32_t {
         schar_cache_clear();
         return true_0 != 0;
     }
@@ -1972,10 +1960,10 @@ pub unsafe extern "C" fn schar_get_adv(
     if schar_high(sc) {
         let mut idx: uint32_t = sc as uint32_t >> 8 as ::core::ffi::c_int;
         '_c2rust_label: {
-            if idx < glyph_cache.h.n_keys {} else {
+            if idx < glyph_cache.h.n_keys {
+            } else {
                 __assert_fail(
-                    b"idx < glyph_cache.h.n_keys\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"idx < glyph_cache.h.n_keys\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     163 as ::core::ffi::c_uint,
@@ -2006,10 +1994,10 @@ pub unsafe extern "C" fn schar_len(mut sc: schar_T) -> size_t {
     if schar_high(sc) {
         let mut idx: uint32_t = sc as uint32_t >> 8 as ::core::ffi::c_int;
         '_c2rust_label: {
-            if idx < glyph_cache.h.n_keys {} else {
+            if idx < glyph_cache.h.n_keys {
+            } else {
                 __assert_fail(
-                    b"idx < glyph_cache.h.n_keys\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"idx < glyph_cache.h.n_keys\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     178 as ::core::ffi::c_uint,
@@ -2019,7 +2007,7 @@ pub unsafe extern "C" fn schar_len(mut sc: schar_T) -> size_t {
         };
         return strlen(glyph_cache.keys.offset(idx as isize));
     } else {
-        return strnlen(&raw mut sc as *mut ::core::ffi::c_char, 4 as size_t)
+        return strnlen(&raw mut sc as *mut ::core::ffi::c_char, 4 as size_t);
     };
 }
 #[no_mangle]
@@ -2035,29 +2023,28 @@ unsafe extern "C" fn schar_get_first_byte(mut sc: schar_T) -> ::core::ffi::c_cha
     '_c2rust_label: {
         if !(schar_high(sc) as ::core::ffi::c_int != 0
             && sc >> 8 as ::core::ffi::c_int >= glyph_cache.h.n_keys)
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"!(schar_high(sc) && schar_idx(sc) >= glyph_cache.h.n_keys)\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 206 as ::core::ffi::c_uint,
-                b"char schar_get_first_byte(schar_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"char schar_get_first_byte(schar_T)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     return (if schar_high(sc) as ::core::ffi::c_int != 0 {
-        *glyph_cache.keys.offset((sc >> 8 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int
+        *glyph_cache
+            .keys
+            .offset((sc >> 8 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
     } else {
         *(&raw mut sc as *mut ::core::ffi::c_char) as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
 }
 #[no_mangle]
-pub unsafe extern "C" fn schar_get_first_codepoint(
-    mut sc: schar_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn schar_get_first_codepoint(mut sc: schar_T) -> ::core::ffi::c_int {
     let mut sc_buf: [::core::ffi::c_char; 32] = [0; 32];
     schar_get(&raw mut sc_buf as *mut ::core::ffi::c_char, sc);
     return utf_ptr2char(&raw mut sc_buf as *mut ::core::ffi::c_char);
@@ -2083,22 +2070,15 @@ unsafe extern "C" fn schar_get_first_two_codepoints(
     let mut sc_buf: [::core::ffi::c_char; 32] = [0; 32];
     schar_get(&raw mut sc_buf as *mut ::core::ffi::c_char, sc);
     *c0 = utf_ptr2char(&raw mut sc_buf as *mut ::core::ffi::c_char);
-    let mut len: ::core::ffi::c_int = utf_ptr2len(
-        &raw mut sc_buf as *mut ::core::ffi::c_char,
-    );
+    let mut len: ::core::ffi::c_int = utf_ptr2len(&raw mut sc_buf as *mut ::core::ffi::c_char);
     if *c0 == NUL {
         *c1 = NUL;
     } else {
-        *c1 = utf_ptr2char(
-            (&raw mut sc_buf as *mut ::core::ffi::c_char).offset(len as isize),
-        );
+        *c1 = utf_ptr2char((&raw mut sc_buf as *mut ::core::ffi::c_char).offset(len as isize));
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn line_do_arabic_shape(
-    mut buf: *mut schar_T,
-    mut cols: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn line_do_arabic_shape(mut buf: *mut schar_T, mut cols: ::core::ffi::c_int) {
     let mut c1new: ::core::ffi::c_int = 0;
     let mut c0new: ::core::ffi::c_int = 0;
     let mut scbuf: [::core::ffi::c_char; 32] = [0; 32];
@@ -2143,41 +2123,33 @@ pub unsafe extern "C" fn line_do_arabic_shape(
                     *buf.offset(i as isize),
                 );
                 scbuf_new = [0; 32];
-                len = utf_char2bytes(
-                    c0new,
-                    &raw mut scbuf_new as *mut ::core::ffi::c_char,
-                ) as size_t;
+                len =
+                    utf_char2bytes(c0new, &raw mut scbuf_new as *mut ::core::ffi::c_char) as size_t;
                 if c1new != 0 {
-                    len = len
-                        .wrapping_add(
-                            utf_char2bytes(
-                                c1new,
-                                (&raw mut scbuf_new as *mut ::core::ffi::c_char)
-                                    .offset(len as isize),
-                            ) as size_t,
-                        );
+                    len = len.wrapping_add(utf_char2bytes(
+                        c1new,
+                        (&raw mut scbuf_new as *mut ::core::ffi::c_char).offset(len as isize),
+                    ) as size_t);
                 }
                 off = utf_char2len(c0)
-                    + (if c1 != 0 { utf_char2len(c1) } else { 0 as ::core::ffi::c_int });
-                rest = strlen(
-                    (&raw mut scbuf as *mut ::core::ffi::c_char).offset(off as isize),
-                );
-                if rest.wrapping_add(len).wrapping_add(1 as size_t)
-                    > MAX_SCHAR_SIZE as size_t
-                {
-                    rest = rest
-                        .wrapping_sub(
-                            (utf_cp_bounds(
-                                    (&raw mut scbuf as *mut ::core::ffi::c_char)
-                                        .offset(off as isize),
-                                    (&raw mut scbuf as *mut ::core::ffi::c_char)
-                                        .offset(off as isize)
-                                        .offset(rest as isize)
-                                        .offset(-(1 as ::core::ffi::c_int as isize)),
-                                )
-                                .begin_off as size_t)
-                                .wrapping_add(1 as size_t),
-                        );
+                    + (if c1 != 0 {
+                        utf_char2len(c1)
+                    } else {
+                        0 as ::core::ffi::c_int
+                    });
+                rest = strlen((&raw mut scbuf as *mut ::core::ffi::c_char).offset(off as isize));
+                if rest.wrapping_add(len).wrapping_add(1 as size_t) > MAX_SCHAR_SIZE as size_t {
+                    rest = rest.wrapping_sub(
+                        (utf_cp_bounds(
+                            (&raw mut scbuf as *mut ::core::ffi::c_char).offset(off as isize),
+                            (&raw mut scbuf as *mut ::core::ffi::c_char)
+                                .offset(off as isize)
+                                .offset(rest as isize)
+                                .offset(-(1 as ::core::ffi::c_int as isize)),
+                        )
+                        .begin_off as size_t)
+                            .wrapping_add(1 as size_t),
+                    );
                 }
                 memcpy(
                     (&raw mut scbuf_new as *mut ::core::ffi::c_char).offset(len as isize)
@@ -2207,8 +2179,10 @@ pub unsafe extern "C" fn grid_clear_line(
 ) {
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while col < width {
-        *(*grid).chars.offset(off.wrapping_add(col as size_t) as isize) = ' '
-            as ::core::ffi::c_int as schar_T;
+        *(*grid)
+            .chars
+            .offset(off.wrapping_add(col as size_t) as isize) =
+            ' ' as ::core::ffi::c_int as schar_T;
         col += 1;
     }
     let mut fill: ::core::ffi::c_int = if valid as ::core::ffi::c_int != 0 {
@@ -2241,7 +2215,9 @@ unsafe extern "C" fn grid_invalid_row(
     mut grid: *mut ScreenGrid,
     mut row: ::core::ffi::c_int,
 ) -> bool {
-    return *(*grid).attrs.offset(*(*grid).line_offset.offset(row as isize) as isize)
+    return *(*grid)
+        .attrs
+        .offset(*(*grid).line_offset.offset(row as isize) as isize)
         < 0 as sattr_T;
 }
 #[no_mangle]
@@ -2254,8 +2230,7 @@ pub unsafe extern "C" fn grid_getchar(
     if (*grid).chars.is_null() || row >= (*grid).rows || col >= (*grid).cols {
         return NUL as schar_T;
     }
-    let mut off: size_t = (*(*grid).line_offset.offset(row as isize))
-        .wrapping_add(col as size_t);
+    let mut off: size_t = (*(*grid).line_offset.offset(row as isize)).wrapping_add(col as size_t);
     if !attrp.is_null() {
         *attrp = *(*grid).attrs.offset(off as isize) as ::core::ffi::c_int;
     }
@@ -2272,10 +2247,7 @@ static mut grid_line_bg_attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut grid_line_clear_attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut grid_line_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn grid_line_start(
-    mut view: *mut GridView,
-    mut row: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn grid_line_start(mut view: *mut GridView, mut row: ::core::ffi::c_int) {
     let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut grid: *mut ScreenGrid = grid_adjust(view, &raw mut row, &raw mut col);
     screengrid_line_start(grid, row, col);
@@ -2288,7 +2260,8 @@ pub unsafe extern "C" fn screengrid_line_start(
 ) {
     grid_line_maxcol = (*grid).cols;
     '_c2rust_label: {
-        if grid_line_grid.is_null() {} else {
+        if grid_line_grid.is_null() {
+        } else {
             __assert_fail(
                 b"grid_line_grid == NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -2314,7 +2287,8 @@ pub unsafe extern "C" fn screengrid_line_start(
     grid_line_clear_attr = 0 as ::core::ffi::c_int;
     grid_line_flags = 0 as ::core::ffi::c_int;
     '_c2rust_label_0: {
-        if grid_line_maxcol as size_t <= linebuf_size {} else {
+        if grid_line_maxcol as size_t <= linebuf_size {
+        } else {
             __assert_fail(
                 b"(size_t)grid_line_maxcol <= linebuf_size\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2327,11 +2301,11 @@ pub unsafe extern "C" fn screengrid_line_start(
         }
     };
     if full_screen as ::core::ffi::c_int != 0
-        && rdb_flags & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
+        && rdb_flags & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         '_c2rust_label_1: {
-            if !linebuf_char.is_null() {} else {
+            if !linebuf_char.is_null() {
+            } else {
                 __assert_fail(
                     b"linebuf_char\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -2361,16 +2335,14 @@ pub unsafe extern "C" fn grid_line_getchar(
 ) -> schar_T {
     if col < grid_line_maxcol {
         col += grid_line_coloff;
-        let mut off: size_t = (*(*grid_line_grid)
-            .line_offset
-            .offset(grid_line_row as isize))
+        let mut off: size_t = (*(*grid_line_grid).line_offset.offset(grid_line_row as isize))
             .wrapping_add(col as size_t);
         if !attr.is_null() {
             *attr = *(*grid_line_grid).attrs.offset(off as isize) as ::core::ffi::c_int;
         }
         return *(*grid_line_grid).chars.offset(off as isize);
     } else {
-        return ' ' as ::core::ffi::c_int as schar_T
+        return ' ' as ::core::ffi::c_int as schar_T;
     };
 }
 #[no_mangle]
@@ -2380,7 +2352,8 @@ pub unsafe extern "C" fn grid_line_put_schar(
     mut attr: ::core::ffi::c_int,
 ) {
     '_c2rust_label: {
-        if !grid_line_grid.is_null() {} else {
+        if !grid_line_grid.is_null() {
+        } else {
             __assert_fail(
                 b"grid_line_grid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -2396,7 +2369,11 @@ pub unsafe extern "C" fn grid_line_put_schar(
     }
     *linebuf_char.offset(col as isize) = schar;
     *linebuf_attr.offset(col as isize) = attr as sattr_T;
-    grid_line_first = if grid_line_first < col { grid_line_first } else { col };
+    grid_line_first = if grid_line_first < col {
+        grid_line_first
+    } else {
+        col
+    };
     grid_line_last = if grid_line_last > col + 1 as ::core::ffi::c_int {
         grid_line_last
     } else {
@@ -2414,7 +2391,8 @@ pub unsafe extern "C" fn grid_line_puts(
     let mut ptr: *const ::core::ffi::c_char = text;
     let mut len: ::core::ffi::c_int = textlen;
     '_c2rust_label: {
-        if !grid_line_grid.is_null() {} else {
+        if !grid_line_grid.is_null() {
+        } else {
             __assert_fail(
                 b"grid_line_grid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -2428,15 +2406,13 @@ pub unsafe extern "C" fn grid_line_puts(
     let mut start_col: ::core::ffi::c_int = col;
     let max_col: ::core::ffi::c_int = grid_line_maxcol;
     while col < max_col
-        && (len < 0 as ::core::ffi::c_int
-            || (ptr.offset_from(text) as ::core::ffi::c_int) < len)
+        && (len < 0 as ::core::ffi::c_int || (ptr.offset_from(text) as ::core::ffi::c_int) < len)
         && *ptr as ::core::ffi::c_int != NUL
     {
         let mut mbyte_blen: ::core::ffi::c_int = 0;
         if len >= 0 as ::core::ffi::c_int {
-            let mut maxlen: ::core::ffi::c_int = text
-                .offset(len as isize)
-                .offset_from(ptr) as ::core::ffi::c_int;
+            let mut maxlen: ::core::ffi::c_int =
+                text.offset(len as isize).offset_from(ptr) as ::core::ffi::c_int;
             mbyte_blen = utfc_ptr2len_len(ptr, maxlen);
             if mbyte_blen > maxlen {
                 mbyte_blen = 1 as ::core::ffi::c_int;
@@ -2455,22 +2431,22 @@ pub unsafe extern "C" fn grid_line_puts(
             schar = '>' as ::core::ffi::c_int as schar_T;
             mbyte_cells = 1 as ::core::ffi::c_int;
         }
-        if ptr == text && col > grid_line_first && col < grid_line_last
+        if ptr == text
+            && col > grid_line_first
+            && col < grid_line_last
             && *linebuf_char.offset(col as isize) == 0 as schar_T
         {
-            *linebuf_char.offset((col - 1 as ::core::ffi::c_int) as isize) = '>'
-                as ::core::ffi::c_int as schar_T;
+            *linebuf_char.offset((col - 1 as ::core::ffi::c_int) as isize) =
+                '>' as ::core::ffi::c_int as schar_T;
         }
         *linebuf_char.offset(col as isize) = schar;
         *linebuf_attr.offset(col as isize) = attr as sattr_T;
         *linebuf_vcol.offset(col as isize) = -1 as ::core::ffi::c_int as colnr_T;
         if mbyte_cells == 2 as ::core::ffi::c_int {
-            *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize) = 0
-                as schar_T;
-            *linebuf_attr.offset((col + 1 as ::core::ffi::c_int) as isize) = attr
-                as sattr_T;
-            *linebuf_vcol.offset((col + 1 as ::core::ffi::c_int) as isize) = -1
-                as ::core::ffi::c_int as colnr_T;
+            *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize) = 0 as schar_T;
+            *linebuf_attr.offset((col + 1 as ::core::ffi::c_int) as isize) = attr as sattr_T;
+            *linebuf_vcol.offset((col + 1 as ::core::ffi::c_int) as isize) =
+                -1 as ::core::ffi::c_int as colnr_T;
         }
         col += mbyte_cells;
         ptr = ptr.offset(mbyte_blen as isize);
@@ -2481,7 +2457,11 @@ pub unsafe extern "C" fn grid_line_puts(
         } else {
             start_col
         };
-        grid_line_last = if grid_line_last > col { grid_line_last } else { col };
+        grid_line_last = if grid_line_last > col {
+            grid_line_last
+        } else {
+            col
+        };
     }
     return col - start_col;
 }
@@ -2492,7 +2472,11 @@ pub unsafe extern "C" fn grid_line_fill(
     mut sc: schar_T,
     mut attr: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    end_col = if end_col < grid_line_maxcol { end_col } else { grid_line_maxcol };
+    end_col = if end_col < grid_line_maxcol {
+        end_col
+    } else {
+        grid_line_maxcol
+    };
     if start_col >= end_col {
         return end_col;
     }
@@ -2508,7 +2492,11 @@ pub unsafe extern "C" fn grid_line_fill(
     } else {
         start_col
     };
-    grid_line_last = if grid_line_last > end_col { grid_line_last } else { end_col };
+    grid_line_last = if grid_line_last > end_col {
+        grid_line_last
+    } else {
+        end_col
+    };
     return end_col;
 }
 #[no_mangle]
@@ -2569,11 +2557,10 @@ pub unsafe extern "C" fn linebuf_mirror(
     while col < last {
         let mut rev: ::core::ffi::c_int = mirror - col;
         if (col + 1 as ::core::ffi::c_int) < last
-            && *scratch_char.offset((col + 1 as ::core::ffi::c_int) as isize)
-                == 0 as schar_T
+            && *scratch_char.offset((col + 1 as ::core::ffi::c_int) as isize) == 0 as schar_T
         {
-            *linebuf_char.offset((rev - 1 as ::core::ffi::c_int) as isize) = *scratch_char
-                .offset(col as isize);
+            *linebuf_char.offset((rev - 1 as ::core::ffi::c_int) as isize) =
+                *scratch_char.offset(col as isize);
             *linebuf_char.offset(rev as isize) = 0 as schar_T;
             col += 1;
         } else {
@@ -2589,8 +2576,7 @@ pub unsafe extern "C" fn linebuf_mirror(
     );
     let mut col_0: ::core::ffi::c_int = first;
     while col_0 < last {
-        *linebuf_attr.offset((mirror - col_0) as isize) = *scratch_attr
-            .offset(col_0 as isize);
+        *linebuf_attr.offset((mirror - col_0) as isize) = *scratch_attr.offset(col_0 as isize);
         col_0 += 1;
     }
     let mut scratch_vcol: *mut colnr_T = linebuf_scratch as *mut colnr_T;
@@ -2601,8 +2587,7 @@ pub unsafe extern "C" fn linebuf_mirror(
     );
     let mut col_1: ::core::ffi::c_int = first;
     while col_1 < last {
-        *linebuf_vcol.offset((mirror - col_1) as isize) = *scratch_vcol
-            .offset(col_1 as isize);
+        *linebuf_vcol.offset((mirror - col_1) as isize) = *scratch_vcol.offset(col_1 as isize);
         col_1 += 1;
     }
     *firstp = width - *clearp;
@@ -2619,10 +2604,10 @@ pub unsafe extern "C" fn grid_line_flush() {
         grid_line_clear_to
     };
     '_c2rust_label: {
-        if grid_line_clear_to <= grid_line_maxcol {} else {
+        if grid_line_clear_to <= grid_line_maxcol {
+        } else {
             __assert_fail(
-                b"grid_line_clear_to <= grid_line_maxcol\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"grid_line_clear_to <= grid_line_maxcol\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 595 as ::core::ffi::c_uint,
@@ -2648,11 +2633,8 @@ pub unsafe extern "C" fn grid_line_flush() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn grid_line_flush_if_valid_row() {
-    if grid_line_row < 0 as ::core::ffi::c_int || grid_line_row >= (*grid_line_grid).rows
-    {
-        if rdb_flags & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
-        {
+    if grid_line_row < 0 as ::core::ffi::c_int || grid_line_row >= (*grid_line_grid).rows {
+        if rdb_flags & kOptRdbFlagInvalid as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
             abort();
         } else {
             grid_line_grid = ::core::ptr::null_mut::<ScreenGrid>();
@@ -2673,7 +2655,11 @@ pub unsafe extern "C" fn grid_clear(
     let mut row: ::core::ffi::c_int = start_row;
     while row < end_row {
         grid_line_start(grid, row);
-        end_col = if end_col < grid_line_maxcol { end_col } else { grid_line_maxcol };
+        end_col = if end_col < grid_line_maxcol {
+            end_col
+        } else {
+            grid_line_maxcol
+        };
         if grid_line_row >= (*grid_line_grid).rows || start_col >= end_col {
             grid_line_grid = ::core::ptr::null_mut::<ScreenGrid>();
             return;
@@ -2691,16 +2677,15 @@ unsafe extern "C" fn grid_char_needs_redraw(
 ) -> ::core::ffi::c_int {
     return (cols > 0 as ::core::ffi::c_int
         && (*linebuf_char.offset(col as isize) != *(*grid).chars.offset(off_to as isize)
-            || *linebuf_attr.offset(col as isize)
-                != *(*grid).attrs.offset(off_to as isize)
+            || *linebuf_attr.offset(col as isize) != *(*grid).attrs.offset(off_to as isize)
             || cols > 1 as ::core::ffi::c_int
+                && *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize) == 0 as schar_T
                 && *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize)
-                    == 0 as schar_T
-                && *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize)
-                    != *(*grid).chars.offset(off_to.wrapping_add(1 as size_t) as isize)
+                    != *(*grid)
+                        .chars
+                        .offset(off_to.wrapping_add(1 as size_t) as isize)
             || exmode_active as ::core::ffi::c_int != 0
-            || rdb_flags
-                & kOptRdbFlagNodelta as ::core::ffi::c_int as ::core::ffi::c_uint != 0))
+            || rdb_flags & kOptRdbFlagNodelta as ::core::ffi::c_int as ::core::ffi::c_uint != 0))
         as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -2719,7 +2704,8 @@ pub unsafe extern "C" fn grid_put_linebuf(
     let mut redraw_next: bool = false;
     let mut clear_next: bool = false_0 != 0;
     '_c2rust_label: {
-        if 0 as ::core::ffi::c_int <= row && row < (*grid).rows {} else {
+        if 0 as ::core::ffi::c_int <= row && row < (*grid).rows {
+        } else {
             __assert_fail(
                 b"0 <= row && row < grid->rows\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -2747,21 +2733,21 @@ pub unsafe extern "C" fn grid_put_linebuf(
     let mut invalid_row: bool = grid != &raw mut default_grid
         && grid_invalid_row(grid, row) as ::core::ffi::c_int != 0
         && col == 0 as ::core::ffi::c_int;
-    let mut off_to: size_t = (*(*grid).line_offset.offset(row as isize))
-        .wrapping_add(coloff as size_t);
-    let max_off_to: size_t = (*(*grid).line_offset.offset(row as isize))
-        .wrapping_add((*grid).cols as size_t);
+    let mut off_to: size_t =
+        (*(*grid).line_offset.offset(row as isize)).wrapping_add(coloff as size_t);
+    let max_off_to: size_t =
+        (*(*grid).line_offset.offset(row as isize)).wrapping_add((*grid).cols as size_t);
     if col > 0 as ::core::ffi::c_int
-        && *(*grid).chars.offset(off_to.wrapping_add(col as size_t) as isize)
+        && *(*grid)
+            .chars
+            .offset(off_to.wrapping_add(col as size_t) as isize)
             == 0 as schar_T
     {
-        *linebuf_char.offset((col - 1 as ::core::ffi::c_int) as isize) = '>'
-            as ::core::ffi::c_int as schar_T;
+        *linebuf_char.offset((col - 1 as ::core::ffi::c_int) as isize) =
+            '>' as ::core::ffi::c_int as schar_T;
         *linebuf_attr.offset((col - 1 as ::core::ffi::c_int) as isize) = *(*grid)
             .attrs
-            .offset(
-                off_to.wrapping_add(col as size_t).wrapping_sub(1 as size_t) as isize,
-            );
+            .offset(off_to.wrapping_add(col as size_t).wrapping_sub(1 as size_t) as isize);
         col -= 1;
     }
     let mut clear_start: ::core::ffi::c_int = endcol;
@@ -2784,19 +2770,14 @@ pub unsafe extern "C" fn grid_put_linebuf(
             c += 1;
         }
     }
-    redraw_next = grid_char_needs_redraw(
-        grid,
-        col,
-        off_to.wrapping_add(col as size_t),
-        endcol - col,
-    ) != 0;
+    redraw_next =
+        grid_char_needs_redraw(grid, col, off_to.wrapping_add(col as size_t), endcol - col) != 0;
     let mut start_dirty: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut end_dirty: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while col < endcol {
         let mut char_cells: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
         if (col + 1 as ::core::ffi::c_int) < endcol
-            && *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize)
-                == 0 as schar_T
+            && *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize) == 0 as schar_T
         {
             char_cells = 2 as ::core::ffi::c_int;
         }
@@ -2815,36 +2796,42 @@ pub unsafe extern "C" fn grid_put_linebuf(
             end_dirty = col + char_cells;
             if col + char_cells == endcol
                 && off.wrapping_add(char_cells as size_t) < max_off_to
-                && *(*grid).chars.offset(off.wrapping_add(char_cells as size_t) as isize)
+                && *(*grid)
+                    .chars
+                    .offset(off.wrapping_add(char_cells as size_t) as isize)
                     == NUL as schar_T
             {
                 clear_next = true_0 != 0;
             }
             *(*grid).chars.offset(off as isize) = *linebuf_char.offset(col as isize);
             if char_cells == 2 as ::core::ffi::c_int {
-                *(*grid).chars.offset(off.wrapping_add(1 as size_t) as isize) = *linebuf_char
-                    .offset((col + 1 as ::core::ffi::c_int) as isize);
+                *(*grid).chars.offset(off.wrapping_add(1 as size_t) as isize) =
+                    *linebuf_char.offset((col + 1 as ::core::ffi::c_int) as isize);
             }
             *(*grid).attrs.offset(off as isize) = *linebuf_attr.offset(col as isize);
             if char_cells == 2 as ::core::ffi::c_int {
-                *(*grid).attrs.offset(off.wrapping_add(1 as size_t) as isize) = *linebuf_attr
-                    .offset(col as isize);
+                *(*grid).attrs.offset(off.wrapping_add(1 as size_t) as isize) =
+                    *linebuf_attr.offset(col as isize);
             }
         }
         *(*grid).vcols.offset(off as isize) = *linebuf_vcol.offset(col as isize);
         if char_cells == 2 as ::core::ffi::c_int {
-            *(*grid).vcols.offset(off.wrapping_add(1 as size_t) as isize) = *linebuf_vcol
-                .offset((col + 1 as ::core::ffi::c_int) as isize);
+            *(*grid).vcols.offset(off.wrapping_add(1 as size_t) as isize) =
+                *linebuf_vcol.offset((col + 1 as ::core::ffi::c_int) as isize);
         }
         col += char_cells;
     }
     if clear_next {
-        *(*grid).chars.offset(off_to.wrapping_add(col as size_t) as isize) = ' '
-            as ::core::ffi::c_int as schar_T;
+        *(*grid)
+            .chars
+            .offset(off_to.wrapping_add(col as size_t) as isize) =
+            ' ' as ::core::ffi::c_int as schar_T;
         end_dirty += 1;
     }
     if off_to.wrapping_add(clear_width as size_t) < max_off_to
-        && *(*grid).chars.offset(off_to.wrapping_add(clear_width as size_t) as isize)
+        && *(*grid)
+            .chars
+            .offset(off_to.wrapping_add(clear_width as size_t) as isize)
             == 0 as schar_T
     {
         clear_width += 1;
@@ -2855,14 +2842,13 @@ pub unsafe extern "C" fn grid_put_linebuf(
         col = clear_width - 1 as ::core::ffi::c_int;
         while col >= clear_start {
             let mut off_0: size_t = off_to.wrapping_add(col as size_t);
-            *(*grid).vcols.offset(off_0 as isize) = if flags
-                & SLF_INC_VCOL as ::core::ffi::c_int != 0
-            {
-                last_vcol += 1;
-                last_vcol
-            } else {
-                last_vcol
-            };
+            *(*grid).vcols.offset(off_0 as isize) =
+                if flags & SLF_INC_VCOL as ::core::ffi::c_int != 0 {
+                    last_vcol += 1;
+                    last_vcol
+                } else {
+                    last_vcol
+                };
             col -= 1;
         }
     }
@@ -2872,8 +2858,7 @@ pub unsafe extern "C" fn grid_put_linebuf(
         let mut off_1: size_t = off_to.wrapping_add(col as size_t);
         if *(*grid).chars.offset(off_1 as isize) != ' ' as ::core::ffi::c_int as schar_T
             || *(*grid).attrs.offset(off_1 as isize) != clear_attr as sattr_T
-            || rdb_flags
-                & kOptRdbFlagNodelta as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            || rdb_flags & kOptRdbFlagNodelta as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         {
             *(*grid).chars.offset(off_1 as isize) = ' ' as ::core::ffi::c_int as schar_T;
             *(*grid).attrs.offset(off_1 as isize) = clear_attr as sattr_T;
@@ -2883,14 +2868,13 @@ pub unsafe extern "C" fn grid_put_linebuf(
             clear_end = col + 1 as ::core::ffi::c_int;
         }
         if flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0 {
-            *(*grid).vcols.offset(off_1 as isize) = if flags
-                & SLF_INC_VCOL as ::core::ffi::c_int != 0
-            {
-                last_vcol += 1;
-                last_vcol
-            } else {
-                last_vcol
-            };
+            *(*grid).vcols.offset(off_1 as isize) =
+                if flags & SLF_INC_VCOL as ::core::ffi::c_int != 0 {
+                    last_vcol += 1;
+                    last_vcol
+                } else {
+                    last_vcol
+                };
         }
         col += 1;
     }
@@ -2953,8 +2937,8 @@ pub unsafe extern "C" fn grid_alloc(
     let mut new_row: ::core::ffi::c_int = 0;
     let mut ngrid: ScreenGrid = *grid;
     '_c2rust_label: {
-        if rows >= 0 as ::core::ffi::c_int && columns >= 0 as ::core::ffi::c_int
-        {} else {
+        if rows >= 0 as ::core::ffi::c_int && columns >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"rows >= 0 && columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/grid.c\0".as_ptr()
@@ -2966,26 +2950,22 @@ pub unsafe extern "C" fn grid_alloc(
         }
     };
     let mut ncells: size_t = (rows as size_t).wrapping_mul(columns as size_t);
-    ngrid.chars = xmalloc(ncells.wrapping_mul(::core::mem::size_of::<schar_T>()))
-        as *mut schar_T;
-    ngrid.attrs = xmalloc(ncells.wrapping_mul(::core::mem::size_of::<sattr_T>()))
-        as *mut sattr_T;
-    ngrid.vcols = xmalloc(ncells.wrapping_mul(::core::mem::size_of::<colnr_T>()))
-        as *mut colnr_T;
+    ngrid.chars = xmalloc(ncells.wrapping_mul(::core::mem::size_of::<schar_T>())) as *mut schar_T;
+    ngrid.attrs = xmalloc(ncells.wrapping_mul(::core::mem::size_of::<sattr_T>())) as *mut sattr_T;
+    ngrid.vcols = xmalloc(ncells.wrapping_mul(::core::mem::size_of::<colnr_T>())) as *mut colnr_T;
     memset(
         ngrid.vcols as *mut ::core::ffi::c_void,
         -1 as ::core::ffi::c_int,
         ncells.wrapping_mul(::core::mem::size_of::<colnr_T>()),
     );
-    ngrid.line_offset = xmalloc(
-        (rows as size_t).wrapping_mul(::core::mem::size_of::<size_t>()),
-    ) as *mut size_t;
+    ngrid.line_offset =
+        xmalloc((rows as size_t).wrapping_mul(::core::mem::size_of::<size_t>())) as *mut size_t;
     ngrid.rows = rows;
     ngrid.cols = columns;
     new_row = 0 as ::core::ffi::c_int;
     while new_row < ngrid.rows {
-        *ngrid.line_offset.offset(new_row as isize) = (new_row as size_t)
-            .wrapping_mul(ngrid.cols as size_t);
+        *ngrid.line_offset.offset(new_row as isize) =
+            (new_row as size_t).wrapping_mul(ngrid.cols as size_t);
         grid_clear_line(
             &raw mut ngrid,
             *ngrid.line_offset.offset(new_row as isize),
@@ -3043,18 +3023,15 @@ pub unsafe extern "C" fn grid_alloc(
         xfree(linebuf_attr as *mut ::core::ffi::c_void);
         xfree(linebuf_vcol as *mut ::core::ffi::c_void);
         xfree(linebuf_scratch as *mut ::core::ffi::c_void);
-        linebuf_char = xmalloc(
-            (columns as size_t).wrapping_mul(::core::mem::size_of::<schar_T>()),
-        ) as *mut schar_T;
-        linebuf_attr = xmalloc(
-            (columns as size_t).wrapping_mul(::core::mem::size_of::<sattr_T>()),
-        ) as *mut sattr_T;
-        linebuf_vcol = xmalloc(
-            (columns as size_t).wrapping_mul(::core::mem::size_of::<colnr_T>()),
-        ) as *mut colnr_T;
-        linebuf_scratch = xmalloc(
-            (columns as size_t).wrapping_mul(::core::mem::size_of::<sscratch_T>()),
-        ) as *mut ::core::ffi::c_char;
+        linebuf_char = xmalloc((columns as size_t).wrapping_mul(::core::mem::size_of::<schar_T>()))
+            as *mut schar_T;
+        linebuf_attr = xmalloc((columns as size_t).wrapping_mul(::core::mem::size_of::<sattr_T>()))
+            as *mut sattr_T;
+        linebuf_vcol = xmalloc((columns as size_t).wrapping_mul(::core::mem::size_of::<colnr_T>()))
+            as *mut colnr_T;
+        linebuf_scratch =
+            xmalloc((columns as size_t).wrapping_mul(::core::mem::size_of::<sscratch_T>()))
+                as *mut ::core::ffi::c_char;
         linebuf_size = columns as size_t;
     }
 }
@@ -3089,7 +3066,8 @@ pub unsafe extern "C" fn win_grid_alloc(mut wp: *mut win_T) {
     }
     let mut was_resized: bool = false_0 != 0;
     if want_allocation as ::core::ffi::c_int != 0
-        && (!has_allocation || (*grid_allocated).rows != total_rows
+        && (!has_allocation
+            || (*grid_allocated).rows != total_rows
             || (*grid_allocated).cols != total_cols)
     {
         grid_alloc(
@@ -3111,7 +3089,8 @@ pub unsafe extern "C" fn win_grid_alloc(mut wp: *mut win_T) {
         (*grid_allocated).valid = false_0 != 0;
         was_resized = true_0 != 0;
     } else if want_allocation as ::core::ffi::c_int != 0
-        && has_allocation as ::core::ffi::c_int != 0 && !(*wp).w_grid_alloc.valid
+        && has_allocation as ::core::ffi::c_int != 0
+        && !(*wp).w_grid_alloc.valid
     {
         grid_invalidate(grid_allocated);
         (*grid_allocated).valid = true_0 != 0;
@@ -3125,8 +3104,7 @@ pub unsafe extern "C" fn win_grid_alloc(mut wp: *mut win_T) {
         (*grid).row_offset = (*wp).w_winrow + (*wp).w_winrow_off;
         (*grid).col_offset = (*wp).w_wincol + (*wp).w_wincol_off;
     }
-    if (resizing_screen as ::core::ffi::c_int != 0
-        || was_resized as ::core::ffi::c_int != 0)
+    if (resizing_screen as ::core::ffi::c_int != 0 || was_resized as ::core::ffi::c_int != 0)
         && want_allocation as ::core::ffi::c_int != 0
     {
         ui_call_grid_resize(
@@ -3185,9 +3163,8 @@ pub unsafe extern "C" fn grid_ins_lines(
                 if j < row {
                     break;
                 }
-                *(*grid).line_offset.offset((j + line_count) as isize) = *(*grid)
-                    .line_offset
-                    .offset(j as isize);
+                *(*grid).line_offset.offset((j + line_count) as isize) =
+                    *(*grid).line_offset.offset(j as isize);
             }
             *(*grid).line_offset.offset((j + line_count) as isize) = temp as size_t;
             grid_clear_line(grid, temp as size_t, (*grid).cols, false_0 != 0);
@@ -3246,9 +3223,8 @@ pub unsafe extern "C" fn grid_del_lines(
                 if j > end - 1 as ::core::ffi::c_int {
                     break;
                 }
-                *(*grid).line_offset.offset((j - line_count) as isize) = *(*grid)
-                    .line_offset
-                    .offset(j as isize);
+                *(*grid).line_offset.offset((j - line_count) as isize) =
+                    *(*grid).line_offset.offset(j as isize);
             }
             *(*grid).line_offset.offset((j - line_count) as isize) = temp as size_t;
             grid_clear_line(grid, temp as size_t, (*grid).cols, false_0 != 0);
@@ -3275,16 +3251,15 @@ unsafe extern "C" fn grid_draw_bordertext(
     mut bt: BorderTextType,
     mut overflow: ::core::ffi::c_int,
 ) {
-    let mut default_attr: ::core::ffi::c_int = *hl_attr
-        .offset(
-            (if bt as ::core::ffi::c_uint
-                == kBorderTextTitle as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                HLF_BTITLE as ::core::ffi::c_int
-            } else {
-                HLF_BFOOTER as ::core::ffi::c_int
-            }) as isize,
-        );
+    let mut default_attr: ::core::ffi::c_int = *hl_attr.offset(
+        (if bt as ::core::ffi::c_uint
+            == kBorderTextTitle as ::core::ffi::c_int as ::core::ffi::c_uint
+        {
+            HLF_BTITLE as ::core::ffi::c_int
+        } else {
+            HLF_BFOOTER as ::core::ffi::c_int
+        }) as isize,
+    );
     if overflow > 0 as ::core::ffi::c_int {
         grid_line_puts(
             1 as ::core::ffi::c_int,
@@ -3298,11 +3273,8 @@ unsafe extern "C" fn grid_draw_bordertext(
     let mut i: size_t = 0 as size_t;
     while i < vt.size {
         let mut attr: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut text: *mut ::core::ffi::c_char = next_virt_text_chunk(
-            vt,
-            &raw mut i,
-            &raw mut attr,
-        );
+        let mut text: *mut ::core::ffi::c_char =
+            next_virt_text_chunk(vt, &raw mut i, &raw mut attr);
         if text.is_null() {
             break;
         }
@@ -3310,15 +3282,13 @@ unsafe extern "C" fn grid_draw_bordertext(
             attr = default_attr;
         }
         if overflow > 0 as ::core::ffi::c_int {
-            let mut cells: ::core::ffi::c_int = mb_string2cells(text)
-                as ::core::ffi::c_int;
+            let mut cells: ::core::ffi::c_int = mb_string2cells(text) as ::core::ffi::c_int;
             if overflow >= cells {
                 overflow -= cells;
                 continue;
             } else {
                 let mut p: *mut ::core::ffi::c_char = text;
-                while *p as ::core::ffi::c_int != 0 && overflow > 0 as ::core::ffi::c_int
-                {
+                while *p as ::core::ffi::c_int != 0 && overflow > 0 as ::core::ffi::c_int {
                     overflow -= utf_ptr2cells(p);
                     p = p.offset(utfc_ptr2len(p) as isize);
                 }
@@ -3337,19 +3307,16 @@ unsafe extern "C" fn get_bordertext_col(
     match align as ::core::ffi::c_uint {
         0 => return 1 as ::core::ffi::c_int,
         1 => {
-            return if (total_col - text_width) / 2 as ::core::ffi::c_int
-                + 1 as ::core::ffi::c_int > 1 as ::core::ffi::c_int
+            return if (total_col - text_width) / 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+                > 1 as ::core::ffi::c_int
             {
-                (total_col - text_width) / 2 as ::core::ffi::c_int
-                    + 1 as ::core::ffi::c_int
+                (total_col - text_width) / 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int
             } else {
                 1 as ::core::ffi::c_int
             };
         }
         2 => {
-            return if total_col - text_width + 1 as ::core::ffi::c_int
-                > 1 as ::core::ffi::c_int
-            {
+            return if total_col - text_width + 1 as ::core::ffi::c_int > 1 as ::core::ffi::c_int {
                 total_col - text_width + 1 as ::core::ffi::c_int
             } else {
                 1 as ::core::ffi::c_int
@@ -3367,8 +3334,8 @@ pub unsafe extern "C" fn grid_draw_border(
     mut winbl: ::core::ffi::c_int,
     mut hl_attr: *mut ::core::ffi::c_int,
 ) {
-    let mut attrs: *mut ::core::ffi::c_int = &raw mut (*config).border_attr
-        as *mut ::core::ffi::c_int;
+    let mut attrs: *mut ::core::ffi::c_int =
+        &raw mut (*config).border_attr as *mut ::core::ffi::c_int;
     let mut default_adj: [::core::ffi::c_int; 4] = [
         1 as ::core::ffi::c_int,
         1 as ::core::ffi::c_int,
@@ -3415,11 +3382,8 @@ pub unsafe extern "C" fn grid_draw_border(
             i_0 += 1;
         }
         if (*config).title {
-            let mut title_col: ::core::ffi::c_int = get_bordertext_col(
-                icol,
-                (*config).title_width,
-                (*config).title_pos,
-            );
+            let mut title_col: ::core::ffi::c_int =
+                get_bordertext_col(icol, (*config).title_width, (*config).title_pos);
             grid_draw_bordertext(
                 (*config).title_chunks,
                 title_col,
@@ -3507,11 +3471,8 @@ pub unsafe extern "C" fn grid_draw_border(
             i_2 += 1;
         }
         if (*config).footer {
-            let mut footer_col: ::core::ffi::c_int = get_bordertext_col(
-                icol,
-                (*config).footer_width,
-                (*config).footer_pos,
-            );
+            let mut footer_col: ::core::ffi::c_int =
+                get_bordertext_col(icol, (*config).footer_width, (*config).footer_pos);
             grid_draw_bordertext(
                 (*config).footer_chunks,
                 footer_col,
@@ -3539,9 +3500,11 @@ unsafe extern "C" fn linecopy(
     mut width: ::core::ffi::c_int,
 ) {
     let mut off_to: ::core::ffi::c_uint = (*(*grid).line_offset.offset(to as isize))
-        .wrapping_add(col as size_t) as ::core::ffi::c_uint;
+        .wrapping_add(col as size_t)
+        as ::core::ffi::c_uint;
     let mut off_from: ::core::ffi::c_uint = (*(*grid).line_offset.offset(from as isize))
-        .wrapping_add(col as size_t) as ::core::ffi::c_uint;
+        .wrapping_add(col as size_t)
+        as ::core::ffi::c_uint;
     memmove(
         (*grid).chars.offset(off_to as isize) as *mut ::core::ffi::c_void,
         (*grid).chars.offset(off_from as isize) as *const ::core::ffi::c_void,

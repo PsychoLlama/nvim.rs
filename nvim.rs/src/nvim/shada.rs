@@ -49,22 +49,12 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn mh_get_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> uint32_t;
-    fn mh_put_cstr_t(
-        set: *mut Set_cstr_t,
-        key: cstr_t,
-        new: *mut MHPutStatus,
-    ) -> uint32_t;
+    fn mh_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, new: *mut MHPutStatus) -> uint32_t;
     fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
     fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
     fn map_del_cstr_t_ptr_t(
@@ -162,11 +152,7 @@ extern "C" {
         objname: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
     static mut hash_removed: ::core::ffi::c_char;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn siemsg(s: *const ::core::ffi::c_char, ...);
     fn verbose_enter();
@@ -245,27 +231,17 @@ extern "C" {
     fn mpack_integer(ptr: *mut *mut ::core::ffi::c_char, i: Integer);
     fn mpack_str(str: String_0, packer: *mut PackerBuffer);
     fn mpack_bin(str: String_0, packer: *mut PackerBuffer);
-    fn mpack_raw(
-        data: *const ::core::ffi::c_char,
-        len: size_t,
-        packer: *mut PackerBuffer,
-    );
+    fn mpack_raw(data: *const ::core::ffi::c_char, len: size_t, packer: *mut PackerBuffer);
     fn packer_string_buffer() -> PackerBuffer;
     fn packer_take_string(buffer: *mut PackerBuffer) -> String_0;
-    fn unpack_string(
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> String_0;
+    fn unpack_string(data: *mut *const ::core::ffi::c_char, size: *mut size_t) -> String_0;
     fn unpack_array(data: *mut *const ::core::ffi::c_char, size: *mut size_t) -> ssize_t;
     fn unpack_integer(
         data: *mut *const ::core::ffi::c_char,
         size: *mut size_t,
         res: *mut Integer,
     ) -> bool;
-    fn unpack_skip(
-        data: *mut *const ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
+    fn unpack_skip(data: *mut *const ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
     fn push_additional_data(
         ad: *mut AdditionalDataBuilder,
         data: *const ::core::ffi::c_char,
@@ -298,11 +274,7 @@ extern "C" {
         flags: ::core::ffi::c_int,
         mode: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn file_open_buffer(
-        ret_fp: *mut FileDescriptor,
-        data: *mut ::core::ffi::c_char,
-        len: size_t,
-    );
+    fn file_open_buffer(ret_fp: *mut FileDescriptor, data: *mut ::core::ffi::c_char, len: size_t);
     fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> ::core::ffi::c_int;
     fn file_flush(fp: *mut FileDescriptor) -> ::core::ffi::c_int;
     fn file_read(
@@ -310,18 +282,11 @@ extern "C" {
         ret_buf: *mut ::core::ffi::c_char,
         size: size_t,
     ) -> ptrdiff_t;
-    fn file_try_read_buffered(
-        fp: *mut FileDescriptor,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn file_try_read_buffered(fp: *mut FileDescriptor, size: size_t) -> *mut ::core::ffi::c_char;
     fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
     fn os_getperm(name: *const ::core::ffi::c_char) -> int32_t;
-    fn os_fchown(
-        fd: ::core::ffi::c_int,
-        owner: uv_uid_t,
-        group: uv_gid_t,
-    ) -> ::core::ffi::c_int;
+    fn os_fchown(fd: ::core::ffi::c_int, owner: uv_uid_t, group: uv_gid_t) -> ::core::ffi::c_int;
     fn os_mkdir_recurse(
         dir: *const ::core::ffi::c_char,
         mode: int32_t,
@@ -367,9 +332,7 @@ extern "C" {
         fname2: *const ::core::ffi::c_char,
         sep: bool,
     ) -> *mut ::core::ffi::c_char;
-    fn path_try_shorten_fname(
-        full_path: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn path_try_shorten_fname(full_path: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn op_global_reg_iter(
         iter: *const ::core::ffi::c_void,
         name: *mut ::core::ffi::c_char,
@@ -2151,9 +2114,8 @@ pub struct KeySetLink {
     pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
-pub type FieldHashfn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
->;
+pub type FieldHashfn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict__shada_search_pat {
@@ -2703,20 +2665,16 @@ pub type SRNIFlags = ::core::ffi::c_uint;
 pub const kSDReadHeader: SRNIFlags = 2;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[inline]
 unsafe extern "C" fn __bswap_64(mut __bsx: __uint64_t) -> __uint64_t {
-    return ((__bsx as ::core::ffi::c_ulonglong
-        & 0xff00000000000000 as ::core::ffi::c_ulonglong) >> 56 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong
-            & 0xff000000000000 as ::core::ffi::c_ulonglong) >> 40 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong
-            & 0xff0000000000 as ::core::ffi::c_ulonglong) >> 24 as ::core::ffi::c_int
+    return ((__bsx as ::core::ffi::c_ulonglong & 0xff00000000000000 as ::core::ffi::c_ulonglong)
+        >> 56 as ::core::ffi::c_int
+        | (__bsx as ::core::ffi::c_ulonglong & 0xff000000000000 as ::core::ffi::c_ulonglong)
+            >> 40 as ::core::ffi::c_int
+        | (__bsx as ::core::ffi::c_ulonglong & 0xff0000000000 as ::core::ffi::c_ulonglong)
+            >> 24 as ::core::ffi::c_int
         | (__bsx as ::core::ffi::c_ulonglong & 0xff00000000 as ::core::ffi::c_ulonglong)
             >> 8 as ::core::ffi::c_int
         | (__bsx as ::core::ffi::c_ulonglong & 0xff000000 as ::core::ffi::c_ulonglong)
@@ -2790,8 +2748,8 @@ unsafe extern "C" fn set_put_ptr_t(
 unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
     return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
-pub const NMARKS: ::core::ffi::c_int = 'z' as ::core::ffi::c_int
-    - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const NMARKS: ::core::ffi::c_int =
+    'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const NULL_STRING: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -2802,25 +2760,18 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
     return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
 }
-pub const KEYSET_OPTIDX__shada_search_pat__sp: ::core::ffi::c_int = 8
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_search_pat__sp: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__c: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__f: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__l: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__n: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_register__n: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__rt: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__ru: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__rw: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_buflist_item__c: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_buflist_item__f: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_buflist_item__l: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_register__rt: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_register__ru: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_register__rw: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_buflist_item__c: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_buflist_item__f: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX__shada_buflist_item__l: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const MPACK_ITEM_SIZE: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
@@ -2871,8 +2822,7 @@ unsafe extern "C" fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi:
 unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh0 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh0 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh0 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh1 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh1 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
@@ -2881,25 +2831,19 @@ unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint3
 unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh2 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh2 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh2 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh3 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh3 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh3 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh4 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh4 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh4 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh5 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh5 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_uint(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut val: uint32_t,
-) {
+unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
     if val > 0xffff as uint32_t {
         let c2rust_fresh6 = *buf;
         *buf = (*buf).offset(1);
@@ -2935,10 +2879,7 @@ unsafe extern "C" fn mpack_bool(mut buf: *mut *mut ::core::ffi::c_char, mut val:
         })) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_array(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut len: uint32_t,
-) {
+unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
     if len < 0x10 as uint32_t {
         let c2rust_fresh12 = *buf;
         *buf = (*buf).offset(1);
@@ -2956,10 +2897,7 @@ unsafe extern "C" fn mpack_array(
     };
 }
 #[inline]
-unsafe extern "C" fn mpack_map(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut len: uint32_t,
-) {
+unsafe extern "C" fn mpack_map(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
     if len < 0x10 as uint32_t {
         let c2rust_fresh15 = *buf;
         *buf = (*buf).offset(1);
@@ -2982,31 +2920,33 @@ unsafe extern "C" fn mpack_remaining(mut packer: *mut PackerBuffer) -> size_t {
 }
 #[inline]
 unsafe extern "C" fn file_space(mut fp: *mut FileDescriptor) -> size_t {
-    return (*fp).buffer.offset(ARENA_BLOCK_SIZE as isize).offset_from((*fp).write_pos)
-        as size_t;
+    return (*fp)
+        .buffer
+        .offset(ARENA_BLOCK_SIZE as isize)
+        .offset_from((*fp).write_pos) as size_t;
 }
 #[inline]
 unsafe extern "C" fn op_reg_index(regname: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if ascii_isdigit(regname) {
-        return regname - '0' as ::core::ffi::c_int
+        return regname - '0' as ::core::ffi::c_int;
     } else if regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
         && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
     {
         return regname as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int
-            + 10 as ::core::ffi::c_int
+            + 10 as ::core::ffi::c_int;
     } else if regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
         && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
     {
         return regname as uint8_t as ::core::ffi::c_int - 'A' as ::core::ffi::c_int
-            + 10 as ::core::ffi::c_int
+            + 10 as ::core::ffi::c_int;
     } else if regname == '-' as ::core::ffi::c_int {
-        return DELETION_REGISTER as ::core::ffi::c_int
+        return DELETION_REGISTER as ::core::ffi::c_int;
     } else if regname == '*' as ::core::ffi::c_int {
-        return STAR_REGISTER as ::core::ffi::c_int
+        return STAR_REGISTER as ::core::ffi::c_int;
     } else if regname == '+' as ::core::ffi::c_int {
-        return PLUS_REGISTER as ::core::ffi::c_int
+        return PLUS_REGISTER as ::core::ffi::c_int;
     } else {
-        return -1 as ::core::ffi::c_int
+        return -1 as ::core::ffi::c_int;
     };
 }
 pub const DEFAULT_POS: pos_T = pos_T {
@@ -3208,8 +3148,7 @@ static mut sd_default_values: [ShadaEntry; 12] = [
 #[inline]
 unsafe extern "C" fn hmll_init(hmll: *mut HMLList, size: size_t) {
     *hmll = HMLList {
-        entries: xcalloc(size, ::core::mem::size_of::<HMLListEntry>())
-            as *mut HMLListEntry,
+        entries: xcalloc(size, ::core::mem::size_of::<HMLListEntry>()) as *mut HMLListEntry,
         first: ::core::ptr::null_mut::<HMLListEntry>(),
         last: ::core::ptr::null_mut::<HMLListEntry>(),
         free_entry: ::core::ptr::null_mut::<HMLListEntry>(),
@@ -3222,12 +3161,16 @@ unsafe extern "C" fn hmll_init(hmll: *mut HMLList, size: size_t) {
 }
 #[inline]
 unsafe extern "C" fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEntry) {
-    if hmll_entry == (*hmll).last_free_entry.offset(-(1 as ::core::ffi::c_int as isize))
+    if hmll_entry
+        == (*hmll)
+            .last_free_entry
+            .offset(-(1 as ::core::ffi::c_int as isize))
     {
         (*hmll).last_free_entry = (*hmll).last_free_entry.offset(-1);
     } else {
         '_c2rust_label: {
-            if (*hmll).free_entry.is_null() {} else {
+            if (*hmll).free_entry.is_null() {
+            } else {
                 __assert_fail(
                     b"hmll->free_entry == NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
@@ -3246,7 +3189,8 @@ unsafe extern "C" fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEnt
         ::core::ptr::null_mut::<cstr_t>(),
     );
     '_c2rust_label_0: {
-        if !val.is_null() {} else {
+        if !val.is_null() {
+        } else {
             __assert_fail(
                 b"val\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
@@ -3281,14 +3225,15 @@ unsafe extern "C" fn hmll_insert(
             hmll_entry = ::core::ptr::null_mut::<HMLListEntry>();
         }
         '_c2rust_label: {
-            if !(*hmll).first.is_null() {} else {
+            if !(*hmll).first.is_null() {
+            } else {
                 __assert_fail(
                     b"hmll->first != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     484 as ::core::ffi::c_uint,
-                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -3297,17 +3242,17 @@ unsafe extern "C" fn hmll_insert(
     let mut target_entry: *mut HMLListEntry = ::core::ptr::null_mut::<HMLListEntry>();
     if (*hmll).free_entry.is_null() {
         '_c2rust_label_0: {
-            if (*hmll).last_free_entry.offset_from((*hmll).entries) as size_t
-                == (*hmll).num_entries
-            {} else {
+            if (*hmll).last_free_entry.offset_from((*hmll).entries) as size_t == (*hmll).num_entries
+            {
+            } else {
                 __assert_fail(
                     b"(size_t)(hmll->last_free_entry - hmll->entries) == hmll->num_entries\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     490 as ::core::ffi::c_uint,
-                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -3317,16 +3262,18 @@ unsafe extern "C" fn hmll_insert(
     } else {
         '_c2rust_label_1: {
             if ((*hmll).last_free_entry.offset_from((*hmll).entries) as size_t)
-                .wrapping_sub(1 as size_t) == (*hmll).num_entries
-            {} else {
+                .wrapping_sub(1 as size_t)
+                == (*hmll).num_entries
+            {
+            } else {
                 __assert_fail(
                     b"(size_t)(hmll->last_free_entry - hmll->entries) - 1 == hmll->num_entries\0"
                         .as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     494 as ::core::ffi::c_uint,
-                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -3367,9 +3314,8 @@ unsafe extern "C" fn hmll_dealloc(hmll: *mut HMLList) {
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<cstr_t>(),
     };
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*hmll)
-        .contained_entries
-        .values as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*hmll).contained_entries.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -3391,10 +3337,10 @@ unsafe extern "C" fn sd_reader_skip(
         return kSDReadStatusReadError;
     } else if skip_bytes != offset as ptrdiff_t {
         '_c2rust_label: {
-            if skip_bytes < offset as ptrdiff_t {} else {
+            if skip_bytes < offset as ptrdiff_t {
+            } else {
                 __assert_fail(
-                    b"skip_bytes < (ptrdiff_t)offset\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"skip_bytes < (ptrdiff_t)offset\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     548 as ::core::ffi::c_uint,
@@ -3464,10 +3410,7 @@ unsafe extern "C" fn shada_read_file(
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
-            gettext(
-                b"Reading ShaDa file \"%s\"%s%s%s%s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"Reading ShaDa file \"%s\"%s%s%s%s\0".as_ptr() as *const ::core::ffi::c_char),
             fname,
             if flags & kShaDaWantInfo as ::core::ffi::c_int != 0 {
                 gettext(b" info\0".as_ptr() as *const ::core::ffi::c_char)
@@ -3502,8 +3445,8 @@ unsafe extern "C" fn shada_read_file(
         {
             semsg(
                 gettext(
-                    b"E886: System error while opening ShaDa file %s for reading: %s\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"E886: System error while opening ShaDa file %s for reading: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 ),
                 fname,
                 uv_strerror(of_ret),
@@ -3530,12 +3473,7 @@ unsafe extern "C" fn shada_hist_iter(
         timestamp: 0,
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     };
-    let ret: *const ::core::ffi::c_void = hist_iter(
-        iter,
-        history_type,
-        zero,
-        &raw mut hist_he,
-    );
+    let ret: *const ::core::ffi::c_void = hist_iter(iter, history_type, zero, &raw mut hist_he);
     if hist_he.hisstr.is_null() {
         *hist = ShadaEntry {
             type_0: kSDItemMissing,
@@ -3559,8 +3497,7 @@ unsafe extern "C" fn shada_hist_iter(
                 history_item: history_item {
                     histtype: history_type,
                     string: hist_he.hisstr,
-                    sep: (if history_type as ::core::ffi::c_int
-                        == HIST_SEARCH as ::core::ffi::c_int
+                    sep: (if history_type as ::core::ffi::c_int == HIST_SEARCH as ::core::ffi::c_int
                     {
                         *hist_he
                             .hisstr
@@ -3576,11 +3513,7 @@ unsafe extern "C" fn shada_hist_iter(
     }
     return ret;
 }
-unsafe extern "C" fn hms_insert(
-    hms_p: *mut HistoryMergerState,
-    entry: ShadaEntry,
-    do_iter: bool,
-) {
+unsafe extern "C" fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntry, do_iter: bool) {
     if do_iter {
         while (*hms_p).last_hist_entry.type_0 as ::core::ffi::c_int
             != kSDItemMissing as ::core::ffi::c_int
@@ -3617,7 +3550,7 @@ unsafe extern "C" fn hms_insert(
             *key_alloc = entry.data.history_item.string as cstr_t;
             return;
         } else {
-            return
+            return;
         }
     }
     let mut insert_after: *mut HMLListEntry = ::core::ptr::null_mut::<HMLListEntry>();
@@ -3677,8 +3610,8 @@ unsafe extern "C" fn hms_to_he_array(
     let mut cur_entry: *mut HMLListEntry = (*hms_p).hmll.first as *mut HMLListEntry;
     while !cur_entry.is_null() {
         (*hist).timestamp = (*cur_entry).data.timestamp;
-        (*hist).hisnum = hist.offset_from(hist_array) as ::core::ffi::c_int
-            + 1 as ::core::ffi::c_int;
+        (*hist).hisnum =
+            hist.offset_from(hist_array) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
         (*hist).hisstr = (*cur_entry).data.data.history_item.string;
         (*hist).hisstrlen = strlen((*cur_entry).data.data.history_item.string);
         (*hist).additional_data = (*cur_entry).data.additional_data;
@@ -3706,9 +3639,11 @@ unsafe extern "C" fn var_shada_iter(
     if iter.is_null() {
         hi = (*globvarht).ht_array;
         while (hi.offset_from(hifirst) as size_t) < hinum
-            && ((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed
+            && ((*hi).hi_key.is_null()
+                || (*hi).hi_key == &raw mut hash_removed
                 || var_flavour((*hi).hi_key) as ::core::ffi::c_uint
-                    & flavour as ::core::ffi::c_uint == 0)
+                    & flavour as ::core::ffi::c_uint
+                    == 0)
         {
             hi = hi.offset(1);
         }
@@ -3733,8 +3668,8 @@ unsafe extern "C" fn var_shada_iter(
             break;
         }
         if !((*hi).hi_key.is_null() || (*hi).hi_key == &raw mut hash_removed)
-            && var_flavour((*hi).hi_key) as ::core::ffi::c_uint
-                & flavour as ::core::ffi::c_uint != 0
+            && var_flavour((*hi).hi_key) as ::core::ffi::c_uint & flavour as ::core::ffi::c_uint
+                != 0
         {
             return hi as *const ::core::ffi::c_void;
         }
@@ -3756,7 +3691,7 @@ unsafe extern "C" fn find_buffer(
     if new_item {
         *key_alloc = xstrdup(fname) as cstr_t;
     } else {
-        return *ref_0
+        return *ref_0;
     }
     let mut buf: *mut buf_T = firstbuf;
     while !buf.is_null() {
@@ -3794,11 +3729,9 @@ unsafe extern "C" fn marklist_insert(
             }
         } else if i != jl_len {
             memmove(
-                jumps
-                    .offset(
-                        ((i + 1 as ::core::ffi::c_int) as size_t).wrapping_mul(jump_size)
-                            as isize,
-                    ) as *mut ::core::ffi::c_void,
+                jumps.offset(
+                    ((i + 1 as ::core::ffi::c_int) as size_t).wrapping_mul(jump_size) as isize,
+                ) as *mut ::core::ffi::c_void,
                 jumps.offset((i as size_t).wrapping_mul(jump_size) as isize)
                     as *const ::core::ffi::c_void,
                 jump_size.wrapping_mul((jl_len - i) as size_t),
@@ -3806,7 +3739,7 @@ unsafe extern "C" fn marklist_insert(
         }
     } else if i == 0 as ::core::ffi::c_int {
         if jl_len == JUMPLISTSIZE {
-            return -1 as ::core::ffi::c_int
+            return -1 as ::core::ffi::c_int;
         } else if jl_len > 0 as ::core::ffi::c_int {
             memmove(
                 jumps.offset(jump_size as isize) as *mut ::core::ffi::c_void,
@@ -3817,10 +3750,7 @@ unsafe extern "C" fn marklist_insert(
     }
     return i;
 }
-unsafe extern "C" fn shada_read(
-    sd_reader: *mut FileDescriptor,
-    flags: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn shada_read(sd_reader: *mut FileDescriptor, flags: ::core::ffi::c_int) {
     let mut oldfiles_list: *mut list_T = get_vim_var_list(VV_OLDFILES);
     let force: bool = flags & kShaDaForceit as ::core::ffi::c_int != 0;
     let get_old_files: bool = flags
@@ -3829,9 +3759,7 @@ unsafe extern "C" fn shada_read(
         && (force as ::core::ffi::c_int != 0
             || tv_list_len(oldfiles_list) == 0 as ::core::ffi::c_int);
     let want_marks: bool = flags & kShaDaWantMarks as ::core::ffi::c_int != 0;
-    let srni_flags: ::core::ffi::c_uint = ((if flags
-        & kShaDaWantInfo as ::core::ffi::c_int != 0
-    {
+    let srni_flags: ::core::ffi::c_uint = ((if flags & kShaDaWantInfo as ::core::ffi::c_int != 0 {
         kSDReadUndisableableData as ::core::ffi::c_int
             | kSDReadRegisters as ::core::ffi::c_int
             | kSDReadGlobalMarks as ::core::ffi::c_int
@@ -3854,20 +3782,17 @@ unsafe extern "C" fn shada_read(
             })
     } else {
         0 as ::core::ffi::c_int
-    })
-        | (if want_marks as ::core::ffi::c_int != 0
-            && get_shada_parameter('\'' as ::core::ffi::c_int) > 0 as ::core::ffi::c_int
-        {
-            kSDReadLocalMarks as ::core::ffi::c_int
-                | kSDReadChanges as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        })
-        | (if get_old_files as ::core::ffi::c_int != 0 {
-            kSDReadLocalMarks as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        })) as ::core::ffi::c_uint;
+    }) | (if want_marks as ::core::ffi::c_int != 0
+        && get_shada_parameter('\'' as ::core::ffi::c_int) > 0 as ::core::ffi::c_int
+    {
+        kSDReadLocalMarks as ::core::ffi::c_int | kSDReadChanges as ::core::ffi::c_int
+    } else {
+        0 as ::core::ffi::c_int
+    }) | (if get_old_files as ::core::ffi::c_int != 0 {
+        kSDReadLocalMarks as ::core::ffi::c_int
+    } else {
+        0 as ::core::ffi::c_int
+    })) as ::core::ffi::c_uint;
     if srni_flags == 0 as ::core::ffi::c_uint {
         return;
     }
@@ -3952,19 +3877,12 @@ unsafe extern "C" fn shada_read(
     if get_old_files as ::core::ffi::c_int != 0
         && (oldfiles_list.is_null() || force as ::core::ffi::c_int != 0)
     {
-        oldfiles_list = tv_list_alloc(
-            kListLenUnknown as ::core::ffi::c_int as ptrdiff_t,
-        );
+        oldfiles_list = tv_list_alloc(kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
         set_vim_var_list(VV_OLDFILES, oldfiles_list);
     }
     let mut srni_ret: ShaDaReadResult = kSDReadStatusSuccess;
     loop {
-        srni_ret = shada_read_next_item(
-            sd_reader,
-            &raw mut cur_entry,
-            srni_flags,
-            0 as size_t,
-        );
+        srni_ret = shada_read_next_item(sd_reader, &raw mut cur_entry, srni_flags, 0 as size_t);
         if srni_ret as ::core::ffi::c_uint
             == kSDReadStatusFinished as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -4022,9 +3940,7 @@ unsafe extern "C" fn shada_read(
                                 } else {
                                     get_search_pattern(&raw mut pat);
                                 }
-                                if !pat.pat.is_null()
-                                    && pat.timestamp >= cur_entry.timestamp
-                                {
+                                if !pat.pat.is_null() && pat.timestamp >= cur_entry.timestamp {
                                     shada_free_shada_entry(&raw mut cur_entry);
                                     break 's_732;
                                 }
@@ -4037,15 +3953,16 @@ unsafe extern "C" fn shada_read(
                                 timestamp: cur_entry.timestamp,
                                 off: SearchOffset {
                                     dir: (if cur_entry.data.search_pattern.search_backward
-                                        as ::core::ffi::c_int != 0
+                                        as ::core::ffi::c_int
+                                        != 0
                                     {
                                         '?' as ::core::ffi::c_int
                                     } else {
                                         '/' as ::core::ffi::c_int
-                                    }) as ::core::ffi::c_char,
+                                    })
+                                        as ::core::ffi::c_char,
                                     line: cur_entry.data.search_pattern.has_line_offset as bool,
-                                    end: cur_entry.data.search_pattern.place_cursor_at_end
-                                        as bool,
+                                    end: cur_entry.data.search_pattern.place_cursor_at_end as bool,
                                     off: cur_entry.data.search_pattern.offset as int64_t,
                                 },
                                 additional_data: cur_entry.additional_data,
@@ -4070,9 +3987,7 @@ unsafe extern "C" fn shada_read(
                                     additional_data: ::core::ptr::null_mut::<AdditionalData>(),
                                 };
                                 sub_get_replacement(&raw mut sub);
-                                if !sub.sub.is_null()
-                                    && sub.timestamp >= cur_entry.timestamp
-                                {
+                                if !sub.sub.is_null() && sub.timestamp >= cur_entry.timestamp {
                                     shada_free_shada_entry(&raw mut cur_entry);
                                     break 's_732;
                                 }
@@ -4095,11 +4010,10 @@ unsafe extern "C" fn shada_read(
                                 shada_free_shada_entry(&raw mut cur_entry);
                             } else {
                                 hms_insert(
-                                    (&raw mut hms as *mut HistoryMergerState)
-                                        .offset(
-                                            cur_entry.data.history_item.histtype as ::core::ffi::c_int
-                                                as isize,
-                                        ),
+                                    (&raw mut hms as *mut HistoryMergerState).offset(
+                                        cur_entry.data.history_item.histtype as ::core::ffi::c_int
+                                            as isize,
+                                    ),
                                     cur_entry,
                                     true_0 != 0,
                                 );
@@ -4116,11 +4030,8 @@ unsafe extern "C" fn shada_read(
                                 shada_free_shada_entry(&raw mut cur_entry);
                             } else {
                                 if !force {
-                                    let reg: *const yankreg_T = op_reg_get(
-                                        cur_entry.data.reg.name,
-                                    );
-                                    if reg.is_null() || (*reg).timestamp >= cur_entry.timestamp
-                                    {
+                                    let reg: *const yankreg_T = op_reg_get(cur_entry.data.reg.name);
+                                    if reg.is_null() || (*reg).timestamp >= cur_entry.timestamp {
                                         shada_free_shada_entry(&raw mut cur_entry);
                                         break 's_732;
                                     }
@@ -4150,15 +4061,12 @@ unsafe extern "C" fn shada_read(
                             shada_free_shada_entry(&raw mut cur_entry);
                         }
                         8 | 7 => {
-                            let mut buf: *mut buf_T = find_buffer(
-                                &raw mut fname_bufs,
-                                cur_entry.data.filemark.fname,
-                            );
+                            let mut buf: *mut buf_T =
+                                find_buffer(&raw mut fname_bufs, cur_entry.data.filemark.fname);
                             if !buf.is_null() {
-                                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut cur_entry
-                                    .data
-                                    .filemark
-                                    .fname as *mut *mut ::core::ffi::c_void;
+                                let mut ptr_: *mut *mut ::core::ffi::c_void =
+                                    &raw mut cur_entry.data.filemark.fname
+                                        as *mut *mut ::core::ffi::c_void;
                                 xfree(*ptr_);
                                 *ptr_ = NULL_0;
                                 *ptr_;
@@ -4187,30 +4095,30 @@ unsafe extern "C" fn shada_read(
                             if cur_entry.type_0 as ::core::ffi::c_int
                                 == kSDItemGlobalMark as ::core::ffi::c_int
                             {
-                                if !mark_set_global(
-                                    cur_entry.data.filemark.name,
-                                    fm,
-                                    !force,
-                                ) {
+                                if !mark_set_global(cur_entry.data.filemark.name, fm, !force) {
                                     shada_free_shada_entry(&raw mut cur_entry);
                                 }
                             } else {
                                 let mut i_0: ::core::ffi::c_int = 0;
                                 i_0 = (*curwin).w_jumplistlen;
                                 while i_0 > 0 as ::core::ffi::c_int {
-                                    let jl_entry: xfmark_T = (*curwin)
-                                        .w_jumplist[(i_0 - 1 as ::core::ffi::c_int) as usize];
+                                    let jl_entry: xfmark_T = (*curwin).w_jumplist
+                                        [(i_0 - 1 as ::core::ffi::c_int) as usize];
                                     if jl_entry.fmark.timestamp <= cur_entry.timestamp {
                                         if marks_equal(
                                             jl_entry.fmark.mark,
                                             cur_entry.data.filemark.mark,
-                                        ) as ::core::ffi::c_int != 0
+                                        )
+                                            as ::core::ffi::c_int
+                                            != 0
                                             && (if buf.is_null() {
                                                 (!jl_entry.fname.is_null()
                                                     && strcmp(fm.fname, jl_entry.fname)
-                                                        == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                                        == 0 as ::core::ffi::c_int)
+                                                    as ::core::ffi::c_int
                                             } else {
-                                                (fm.fmark.fnum == jl_entry.fmark.fnum) as ::core::ffi::c_int
+                                                (fm.fmark.fnum == jl_entry.fmark.fnum)
+                                                    as ::core::ffi::c_int
                                             }) != 0
                                         {
                                             i_0 = -1 as ::core::ffi::c_int;
@@ -4269,22 +4177,17 @@ unsafe extern "C" fn shada_read(
                                         topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,
                                         skipcol: 0 as colnr_T,
                                     };
-                                    let fmarkp___: *mut fmark_T = &raw mut (*buf_0)
-                                        .b_last_cursor;
+                                    let fmarkp___: *mut fmark_T = &raw mut (*buf_0).b_last_cursor;
                                     free_fmark(*fmarkp___);
                                     let fmarkp__: *mut fmark_T = fmarkp___;
-                                    (*fmarkp__).mark = (*cur_entry
-                                        .data
-                                        .buffer_list
-                                        .buffers
-                                        .offset(i_1 as isize))
-                                        .pos;
+                                    (*fmarkp__).mark =
+                                        (*cur_entry.data.buffer_list.buffers.offset(i_1 as isize))
+                                            .pos;
                                     (*fmarkp__).fnum = 0 as ::core::ffi::c_int;
                                     (*fmarkp__).timestamp = os_time();
                                     (*fmarkp__).view = view;
-                                    (*fmarkp__).additional_data = ::core::ptr::null_mut::<
-                                        AdditionalData,
-                                    >();
+                                    (*fmarkp__).additional_data =
+                                        ::core::ptr::null_mut::<AdditionalData>();
                                     buflist_setfpos(
                                         buf_0,
                                         curwin,
@@ -4293,16 +4196,12 @@ unsafe extern "C" fn shada_read(
                                         false_0 != 0,
                                     );
                                     xfree((*buf_0).additional_data as *mut ::core::ffi::c_void);
-                                    (*buf_0).additional_data = (*cur_entry
-                                        .data
-                                        .buffer_list
-                                        .buffers
-                                        .offset(i_1 as isize))
-                                        .additional_data;
+                                    (*buf_0).additional_data =
+                                        (*cur_entry.data.buffer_list.buffers.offset(i_1 as isize))
+                                            .additional_data;
                                     (*cur_entry.data.buffer_list.buffers.offset(i_1 as isize))
-                                        .additional_data = ::core::ptr::null_mut::<
-                                        AdditionalData,
-                                    >();
+                                        .additional_data =
+                                        ::core::ptr::null_mut::<AdditionalData>();
                                 }
                                 i_1 = i_1.wrapping_add(1);
                             }
@@ -4315,10 +4214,8 @@ unsafe extern "C" fn shada_read(
                                     cur_entry.data.filemark.fname as cstr_t,
                                 )
                             {
-                                let mut fname: *mut ::core::ffi::c_char = cur_entry
-                                    .data
-                                    .filemark
-                                    .fname;
+                                let mut fname: *mut ::core::ffi::c_char =
+                                    cur_entry.data.filemark.fname;
                                 if want_marks {
                                     fname = xstrdup(fname);
                                 }
@@ -4329,18 +4226,15 @@ unsafe extern "C" fn shada_read(
                                 );
                                 tv_list_append_allocated_string(oldfiles_list, fname);
                                 if !want_marks {
-                                    cur_entry.data.filemark.fname = ::core::ptr::null_mut::<
-                                        ::core::ffi::c_char,
-                                    >();
+                                    cur_entry.data.filemark.fname =
+                                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                                 }
                             }
                             if !want_marks {
                                 shada_free_shada_entry(&raw mut cur_entry);
                             } else {
-                                let mut buf_1: *mut buf_T = find_buffer(
-                                    &raw mut fname_bufs,
-                                    cur_entry.data.filemark.fname,
-                                );
+                                let mut buf_1: *mut buf_T =
+                                    find_buffer(&raw mut fname_bufs, cur_entry.data.filemark.fname);
                                 if buf_1.is_null() {
                                     shada_free_shada_entry(&raw mut cur_entry);
                                 } else {
@@ -4349,7 +4243,8 @@ unsafe extern "C" fn shada_read(
                                         fnum: (*buf_1).handle as ::core::ffi::c_int,
                                         timestamp: cur_entry.timestamp,
                                         view: fmarkv_T {
-                                            topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,
+                                            topline_offset: MAXLNUM as ::core::ffi::c_int
+                                                as linenr_T,
                                             skipcol: 0 as colnr_T,
                                         },
                                         additional_data: cur_entry.additional_data,
@@ -4375,8 +4270,8 @@ unsafe extern "C" fn shada_read(
                                         let mut i_2: ::core::ffi::c_int = 0;
                                         i_2 = (*buf_1).b_changelistlen;
                                         while i_2 > 0 as ::core::ffi::c_int {
-                                            let jl_entry_0: fmark_T = (*buf_1)
-                                                .b_changelist[(i_2 - 1 as ::core::ffi::c_int) as usize];
+                                            let jl_entry_0: fmark_T = (*buf_1).b_changelist
+                                                [(i_2 - 1 as ::core::ffi::c_int) as usize];
                                             if jl_entry_0.timestamp <= cur_entry.timestamp {
                                                 if marks_equal(
                                                     jl_entry_0.mark,
@@ -4393,7 +4288,8 @@ unsafe extern "C" fn shada_read(
                                             && (*buf_1).b_changelistlen == JUMPLISTSIZE
                                         {
                                             free_fmark(
-                                                (*buf_1).b_changelist[0 as ::core::ffi::c_int as usize],
+                                                (*buf_1).b_changelist
+                                                    [0 as ::core::ffi::c_int as usize],
                                             );
                                         }
                                         i_2 = marklist_insert(
@@ -4431,17 +4327,12 @@ unsafe extern "C" fn shada_read(
                 (&raw mut hms as *mut HistoryMergerState).offset(i_3 as isize),
             );
             clr_history(i_3);
-            let mut new_hisidx: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-                ::core::ffi::c_int,
-            >();
-            let mut new_hisnum: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-                ::core::ffi::c_int,
-            >();
-            let mut hist: *mut histentry_T = hist_get_array(
-                i_3 as uint8_t,
-                &raw mut new_hisidx,
-                &raw mut new_hisnum,
-            );
+            let mut new_hisidx: *mut ::core::ffi::c_int =
+                ::core::ptr::null_mut::<::core::ffi::c_int>();
+            let mut new_hisnum: *mut ::core::ffi::c_int =
+                ::core::ptr::null_mut::<::core::ffi::c_int>();
+            let mut hist: *mut histentry_T =
+                hist_get_array(i_3 as uint8_t, &raw mut new_hisidx, &raw mut new_hisnum);
             if !hist.is_null() {
                 hms_to_he_array(
                     (&raw mut hms as *mut HistoryMergerState).offset(i_3 as isize),
@@ -4491,8 +4382,8 @@ unsafe extern "C" fn shada_read(
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<cstr_t>(),
     };
-    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut fname_bufs.values
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+        &raw mut fname_bufs.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
     *ptr__0;
@@ -4503,9 +4394,8 @@ unsafe extern "C" fn shada_read(
         keys: ::core::ptr::null_mut::<cstr_t>(),
     };
 }
-static mut default_shada_file: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut default_shada_file: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 unsafe extern "C" fn shada_get_default_file() -> *const ::core::ffi::c_char {
     if default_shada_file.is_null() {
         let mut shada_dir: *mut ::core::ffi::c_char = stdpaths_user_state_subpath(
@@ -4526,10 +4416,13 @@ unsafe extern "C" fn shada_filename(
 ) -> *mut ::core::ffi::c_char {
     if file.is_null() || *file as ::core::ffi::c_int == NUL {
         if !p_shadafile.is_null() && *p_shadafile as ::core::ffi::c_int != NUL {
-            if !strequal(p_shadafile, b"NONE\0".as_ptr() as *const ::core::ffi::c_char) {
+            if !strequal(
+                p_shadafile,
+                b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
+            ) {
                 file = p_shadafile;
             } else {
-                return ::core::ptr::null_mut::<::core::ffi::c_char>()
+                return ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
         } else {
             file = find_shada_parameter('n' as ::core::ffi::c_int);
@@ -4544,21 +4437,23 @@ unsafe extern "C" fn shada_filename(
             );
             file = (&raw mut NameBuff as *mut ::core::ffi::c_char)
                 .offset(0 as ::core::ffi::c_int as isize);
-            return xmemdupz(file as *const ::core::ffi::c_void, len)
-                as *mut ::core::ffi::c_char;
+            return xmemdupz(file as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
         }
     }
     return xstrdup(file);
 }
-pub const SHADA_MPACK_FREE_SPACE: ::core::ffi::c_int = 4 as ::core::ffi::c_int
-    * MPACK_ITEM_SIZE;
+pub const SHADA_MPACK_FREE_SPACE: ::core::ffi::c_int = 4 as ::core::ffi::c_int * MPACK_ITEM_SIZE;
 unsafe extern "C" fn shada_check_buffer(mut packer: *mut PackerBuffer) {
     if mpack_remaining(packer) < SHADA_MPACK_FREE_SPACE as size_t {
         (*packer).packer_flush.expect("non-null function pointer")(packer);
     }
 }
 unsafe extern "C" fn additional_data_len(mut src: *mut AdditionalData) -> uint32_t {
-    return if !src.is_null() { (*src).nitems } else { 0 as uint32_t };
+    return if !src.is_null() {
+        (*src).nitems
+    } else {
+        0 as uint32_t
+    };
 }
 unsafe extern "C" fn dump_additional_data(
     mut src: *mut AdditionalData,
@@ -4597,8 +4492,8 @@ unsafe extern "C" fn shada_pack_entry(
                 );
             }
             4 => {
-                let is_hist_search: bool = entry.data.history_item.histtype
-                    as ::core::ffi::c_int == HIST_SEARCH as ::core::ffi::c_int;
+                let is_hist_search: bool = entry.data.history_item.histtype as ::core::ffi::c_int
+                    == HIST_SEARCH as ::core::ffi::c_int;
                 let mut arr_size: uint32_t = (2 as uint32_t)
                     .wrapping_add(is_hist_search as uint32_t)
                     .wrapping_add(additional_data_len(entry.additional_data));
@@ -4607,7 +4502,10 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf.ptr,
                     entry.data.history_item.histtype as uint32_t,
                 );
-                mpack_bin(cstr_as_string(entry.data.history_item.string), &raw mut sbuf);
+                mpack_bin(
+                    cstr_as_string(entry.data.history_item.string),
+                    &raw mut sbuf,
+                );
                 if is_hist_search {
                     mpack_uint(
                         &raw mut sbuf.ptr,
@@ -4617,8 +4515,7 @@ unsafe extern "C" fn shada_pack_entry(
                 dump_additional_data(entry.additional_data, &raw mut sbuf);
             }
             6 => {
-                let mut is_blob: bool = entry.data.global_var.value.v_type
-                    as ::core::ffi::c_uint
+                let mut is_blob: bool = entry.data.global_var.value.v_type as ::core::ffi::c_uint
                     == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint;
                 let mut arr_size_0: uint32_t = ((2 as ::core::ffi::c_int
                     + (if is_blob as ::core::ffi::c_int != 0 {
@@ -4637,11 +4534,10 @@ unsafe extern "C" fn shada_pack_entry(
                     *b"variable g:\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                 );
                 memcpy(
-                    (&raw mut vardesc as *mut ::core::ffi::c_char)
-                        .offset(
-                            ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                                .wrapping_sub(1 as usize) as isize,
-                        ) as *mut ::core::ffi::c_void,
+                    (&raw mut vardesc as *mut ::core::ffi::c_char).offset(
+                        ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize)
+                            as isize,
+                    ) as *mut ::core::ffi::c_void,
                     varname.data as *const ::core::ffi::c_void,
                     varname.size.wrapping_add(1 as size_t),
                 );
@@ -4653,10 +4549,8 @@ unsafe extern "C" fn shada_pack_entry(
                 {
                     ret = kSDWriteIgnError;
                     semsg(
-                        gettext(
-                            b"E574: Failed to write variable %s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E574: Failed to write variable %s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         entry.data.global_var.name,
                     );
                     break '_shada_pack_entry_error;
@@ -4672,8 +4566,8 @@ unsafe extern "C" fn shada_pack_entry(
                 }
             }
             3 => {
-                let mut arr_size_1: uint32_t = (1 as uint32_t)
-                    .wrapping_add(additional_data_len(entry.additional_data));
+                let mut arr_size_1: uint32_t =
+                    (1 as uint32_t).wrapping_add(additional_data_len(entry.additional_data));
                 mpack_array(&raw mut sbuf.ptr, arr_size_1);
                 mpack_bin(cstr_as_string(entry.data.sub_string.sub), &raw mut sbuf);
                 dump_additional_data(entry.additional_data, &raw mut sbuf);
@@ -4693,8 +4587,8 @@ unsafe extern "C" fn shada_pack_entry(
                             .data
                             .search_pattern
                             .is_last_used as ::core::ffi::c_int
-                            == entry.data.search_pattern.is_last_used
-                                as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
+                            == entry.data.search_pattern.is_last_used as ::core::ffi::c_int)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize]
@@ -4709,16 +4603,16 @@ unsafe extern "C" fn shada_pack_entry(
                             .data
                             .search_pattern
                             .has_line_offset as ::core::ffi::c_int
-                            == entry.data.search_pattern.has_line_offset
-                                as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
+                            == entry.data.search_pattern.has_line_offset as ::core::ffi::c_int)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .place_cursor_at_end as ::core::ffi::c_int
-                            == entry.data.search_pattern.place_cursor_at_end
-                                as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
+                            == entry.data.search_pattern.place_cursor_at_end as ::core::ffi::c_int)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize]
@@ -4726,21 +4620,23 @@ unsafe extern "C" fn shada_pack_entry(
                             .search_pattern
                             .is_substitute_pattern as ::core::ffi::c_int
                             == entry.data.search_pattern.is_substitute_pattern
-                                as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
+                                as ::core::ffi::c_int) as ::core::ffi::c_int
+                            as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize]
                             .data
                             .search_pattern
                             .highlighted as ::core::ffi::c_int
-                            == entry.data.search_pattern.highlighted
-                                as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
+                            == entry.data.search_pattern.highlighted as ::core::ffi::c_int)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize]
                             .data
                             .search_pattern
-                            .offset == entry.data.search_pattern.offset)
+                            .offset
+                            == entry.data.search_pattern.offset)
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
@@ -4748,8 +4644,8 @@ unsafe extern "C" fn shada_pack_entry(
                             .data
                             .search_pattern
                             .search_backward as ::core::ffi::c_int
-                            == entry.data.search_pattern.search_backward
-                                as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
+                            == entry.data.search_pattern.search_backward as ::core::ffi::c_int)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(additional_data_len(entry.additional_data));
                 mpack_map(&raw mut sbuf.ptr, entry_map_size);
@@ -4763,8 +4659,10 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf,
                 );
                 mpack_bin(entry.data.search_pattern.pat, &raw mut sbuf);
-                if !(sd_default_values[entry.type_0 as usize].data.search_pattern.magic
-                    as ::core::ffi::c_int
+                if !(sd_default_values[entry.type_0 as usize]
+                    .data
+                    .search_pattern
+                    .magic as ::core::ffi::c_int
                     == entry.data.search_pattern.magic as ::core::ffi::c_int)
                 {
                     mpack_str(
@@ -4857,8 +4755,7 @@ unsafe extern "C" fn shada_pack_entry(
                     .data
                     .search_pattern
                     .place_cursor_at_end as ::core::ffi::c_int
-                    == entry.data.search_pattern.place_cursor_at_end
-                        as ::core::ffi::c_int)
+                    == entry.data.search_pattern.place_cursor_at_end as ::core::ffi::c_int)
                 {
                     mpack_str(
                         String_0 {
@@ -4881,8 +4778,7 @@ unsafe extern "C" fn shada_pack_entry(
                     .data
                     .search_pattern
                     .is_substitute_pattern as ::core::ffi::c_int
-                    == entry.data.search_pattern.is_substitute_pattern
-                        as ::core::ffi::c_int)
+                    == entry.data.search_pattern.is_substitute_pattern as ::core::ffi::c_int)
                 {
                     mpack_str(
                         String_0 {
@@ -4947,7 +4843,10 @@ unsafe extern "C" fn shada_pack_entry(
                             .search_backward,
                     );
                 }
-                if !(sd_default_values[entry.type_0 as usize].data.search_pattern.offset
+                if !(sd_default_values[entry.type_0 as usize]
+                    .data
+                    .search_pattern
+                    .offset
                     == entry.data.search_pattern.offset)
                 {
                     mpack_str(
@@ -4970,13 +4869,18 @@ unsafe extern "C" fn shada_pack_entry(
                             .data
                             .filemark
                             .mark
-                            .lnum == entry.data.filemark.mark.lnum) as ::core::ffi::c_int
-                            as uint32_t,
+                            .lnum
+                            == entry.data.filemark.mark.lnum)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
-                        !(sd_default_values[entry.type_0 as usize].data.filemark.mark.col
-                            == entry.data.filemark.mark.col) as ::core::ffi::c_int
-                            as uint32_t,
+                        !(sd_default_values[entry.type_0 as usize]
+                            .data
+                            .filemark
+                            .mark
+                            .col
+                            == entry.data.filemark.mark.col)
+                            as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize].data.filemark.name
@@ -4984,7 +4888,8 @@ unsafe extern "C" fn shada_pack_entry(
                             == entry.data.filemark.name as ::core::ffi::c_int)
                             as ::core::ffi::c_int as uint32_t,
                     )
-                    .wrapping_add(additional_data_len(entry.additional_data)) as size_t;
+                    .wrapping_add(additional_data_len(entry.additional_data))
+                    as size_t;
                 mpack_map(&raw mut sbuf.ptr, entry_map_size_0 as uint32_t);
                 mpack_str(
                     String_0 {
@@ -4996,7 +4901,11 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf,
                 );
                 mpack_bin(cstr_as_string(entry.data.filemark.fname), &raw mut sbuf);
-                if !(sd_default_values[entry.type_0 as usize].data.filemark.mark.lnum
+                if !(sd_default_values[entry.type_0 as usize]
+                    .data
+                    .filemark
+                    .mark
+                    .lnum
                     == entry.data.filemark.mark.lnum)
                 {
                     mpack_str(
@@ -5008,12 +4917,13 @@ unsafe extern "C" fn shada_pack_entry(
                         },
                         &raw mut sbuf,
                     );
-                    mpack_integer(
-                        &raw mut sbuf.ptr,
-                        entry.data.filemark.mark.lnum as Integer,
-                    );
+                    mpack_integer(&raw mut sbuf.ptr, entry.data.filemark.mark.lnum as Integer);
                 }
-                if !(sd_default_values[entry.type_0 as usize].data.filemark.mark.col
+                if !(sd_default_values[entry.type_0 as usize]
+                    .data
+                    .filemark
+                    .mark
+                    .col
                     == entry.data.filemark.mark.col)
                 {
                     mpack_str(
@@ -5025,16 +4935,11 @@ unsafe extern "C" fn shada_pack_entry(
                         },
                         &raw mut sbuf,
                     );
-                    mpack_integer(
-                        &raw mut sbuf.ptr,
-                        entry.data.filemark.mark.col as Integer,
-                    );
+                    mpack_integer(&raw mut sbuf.ptr, entry.data.filemark.mark.col as Integer);
                 }
                 '_c2rust_label: {
-                    if (if entry.type_0 as ::core::ffi::c_int
-                        == kSDItemJump as ::core::ffi::c_int
-                        || entry.type_0 as ::core::ffi::c_int
-                            == kSDItemChange as ::core::ffi::c_int
+                    if (if entry.type_0 as ::core::ffi::c_int == kSDItemJump as ::core::ffi::c_int
+                        || entry.type_0 as ::core::ffi::c_int == kSDItemChange as ::core::ffi::c_int
                     {
                         (sd_default_values[entry.type_0 as usize].data.filemark.name
                             as ::core::ffi::c_int
@@ -5043,7 +4948,8 @@ unsafe extern "C" fn shada_pack_entry(
                     } else {
                         1 as ::core::ffi::c_int
                     }) != 0
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"entry.type == kSDItemJump || entry.type == kSDItemChange ? CHECK_DEFAULT(entry, filemark.name) : true\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -5085,7 +4991,8 @@ unsafe extern "C" fn shada_pack_entry(
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize].data.reg.width
-                            == entry.data.reg.width) as ::core::ffi::c_int as uint32_t,
+                            == entry.data.reg.width) as ::core::ffi::c_int
+                            as uint32_t,
                     )
                     .wrapping_add(
                         !(sd_default_values[entry.type_0 as usize].data.reg.is_unnamed
@@ -5107,10 +5014,7 @@ unsafe extern "C" fn shada_pack_entry(
                 mpack_array(&raw mut sbuf.ptr, entry.data.reg.contents_size as uint32_t);
                 let mut i: size_t = 0 as size_t;
                 while i < entry.data.reg.contents_size {
-                    mpack_bin(
-                        *entry.data.reg.contents.offset(i as isize),
-                        &raw mut sbuf,
-                    );
+                    mpack_bin(*entry.data.reg.contents.offset(i as isize), &raw mut sbuf);
                     i = i.wrapping_add(1);
                 }
                 mpack_str(
@@ -5126,8 +5030,8 @@ unsafe extern "C" fn shada_pack_entry(
                     &raw mut sbuf.ptr,
                     entry.data.reg.name as uint8_t as uint32_t,
                 );
-                if !(sd_default_values[entry.type_0 as usize].data.reg.type_0
-                    as ::core::ffi::c_int == entry.data.reg.type_0 as ::core::ffi::c_int)
+                if !(sd_default_values[entry.type_0 as usize].data.reg.type_0 as ::core::ffi::c_int
+                    == entry.data.reg.type_0 as ::core::ffi::c_int)
                 {
                     mpack_str(
                         String_0 {
@@ -5182,19 +5086,20 @@ unsafe extern "C" fn shada_pack_entry(
                         .wrapping_add(
                             ((*entry.data.buffer_list.buffers.offset(i_0 as isize))
                                 .pos
-                                .lnum != default_pos.lnum) as ::core::ffi::c_int as size_t,
+                                .lnum
+                                != default_pos.lnum)
+                                as ::core::ffi::c_int as size_t,
                         )
                         .wrapping_add(
                             ((*entry.data.buffer_list.buffers.offset(i_0 as isize))
                                 .pos
-                                .col != default_pos.col) as ::core::ffi::c_int as size_t,
+                                .col
+                                != default_pos.col)
+                                as ::core::ffi::c_int as size_t,
                         )
-                        .wrapping_add(
-                            additional_data_len(
-                                (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                                    .additional_data,
-                            ) as size_t,
-                        );
+                        .wrapping_add(additional_data_len(
+                            (*entry.data.buffer_list.buffers.offset(i_0 as isize)).additional_data,
+                        ) as size_t);
                     mpack_map(&raw mut sbuf.ptr, entry_map_size_2 as uint32_t);
                     mpack_str(
                         String_0 {
@@ -5211,7 +5116,9 @@ unsafe extern "C" fn shada_pack_entry(
                         ),
                         &raw mut sbuf,
                     );
-                    if (*entry.data.buffer_list.buffers.offset(i_0 as isize)).pos.lnum
+                    if (*entry.data.buffer_list.buffers.offset(i_0 as isize))
+                        .pos
+                        .lnum
                         != 1 as linenr_T
                     {
                         mpack_str(
@@ -5230,7 +5137,9 @@ unsafe extern "C" fn shada_pack_entry(
                                 .lnum as uint64_t,
                         );
                     }
-                    if (*entry.data.buffer_list.buffers.offset(i_0 as isize)).pos.col
+                    if (*entry.data.buffer_list.buffers.offset(i_0 as isize))
+                        .pos
+                        .col
                         != 0 as ::core::ffi::c_int
                     {
                         mpack_str(
@@ -5250,8 +5159,7 @@ unsafe extern "C" fn shada_pack_entry(
                         );
                     }
                     dump_additional_data(
-                        (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                            .additional_data,
+                        (*entry.data.buffer_list.buffers.offset(i_0 as isize)).additional_data,
                         &raw mut sbuf,
                     );
                     i_0 = i_0.wrapping_add(1);
@@ -5265,8 +5173,7 @@ unsafe extern "C" fn shada_pack_entry(
                         (*entry.data.header.items.offset(i_1 as isize)).key,
                         &raw mut sbuf,
                     );
-                    let obj: Object = (*entry.data.header.items.offset(i_1 as isize))
-                        .value;
+                    let obj: Object = (*entry.data.header.items.offset(i_1 as isize)).value;
                     match obj.type_0 as ::core::ffi::c_uint {
                         4 => {
                             mpack_bin(obj.data.string, &raw mut sbuf);
@@ -5286,8 +5193,7 @@ unsafe extern "C" fn shada_pack_entry(
         packed = packer_take_string(&raw mut sbuf);
         if max_kbyte == 0 || packed.size <= max_kbyte.wrapping_mul(1024 as size_t) {
             shada_check_buffer(packer);
-            if entry.type_0 as ::core::ffi::c_int == kSDItemUnknown as ::core::ffi::c_int
-            {
+            if entry.type_0 as ::core::ffi::c_int == kSDItemUnknown as ::core::ffi::c_int {
                 mpack_uint64(&raw mut (*packer).ptr, entry.data.unknown_item.type_0);
             } else {
                 mpack_uint64(&raw mut (*packer).ptr, entry.type_0 as uint64_t);
@@ -5395,12 +5301,7 @@ unsafe extern "C" fn shada_read_when_writing(
     };
     let mut srni_ret: ShaDaReadResult = kSDReadStatusSuccess;
     loop {
-        srni_ret = shada_read_next_item(
-            sd_reader,
-            &raw mut entry,
-            srni_flags,
-            max_kbyte,
-        );
+        srni_ret = shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte);
         if srni_ret as ::core::ffi::c_uint
             == kSDReadStatusFinished as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -5428,15 +5329,15 @@ unsafe extern "C" fn shada_read_when_writing(
                             shada_free_shada_entry(&raw mut entry);
                         }
                         2 => {
-                            let wms_entry: *mut ShadaEntry = if entry
-                                .data
-                                .search_pattern
-                                .is_substitute_pattern as ::core::ffi::c_int != 0
-                            {
-                                &raw mut (*wms).sub_search_pattern
-                            } else {
-                                &raw mut (*wms).search_pattern
-                            };
+                            let wms_entry: *mut ShadaEntry =
+                                if entry.data.search_pattern.is_substitute_pattern
+                                    as ::core::ffi::c_int
+                                    != 0
+                                {
+                                    &raw mut (*wms).sub_search_pattern
+                                } else {
+                                    &raw mut (*wms).search_pattern
+                                };
                             's_94: {
                                 if (*wms_entry).type_0 as ::core::ffi::c_int
                                     != kSDItemMissing as ::core::ffi::c_int
@@ -5452,8 +5353,7 @@ unsafe extern "C" fn shada_read_when_writing(
                             }
                         }
                         3 => {
-                            let wms_entry_0: *mut ShadaEntry = &raw mut (*wms)
-                                .replacement;
+                            let wms_entry_0: *mut ShadaEntry = &raw mut (*wms).replacement;
                             's_132: {
                                 if (*wms_entry_0).type_0 as ::core::ffi::c_int
                                     != kSDItemMissing as ::core::ffi::c_int
@@ -5474,10 +5374,10 @@ unsafe extern "C" fn shada_read_when_writing(
                             {
                                 ret = shada_pack_entry(packer, entry, 0 as size_t);
                                 shada_free_shada_entry(&raw mut entry);
-                            } else if (*wms)
-                                .hms[entry.data.history_item.histtype as usize]
+                            } else if (*wms).hms[entry.data.history_item.histtype as usize]
                                 .hmll
-                                .size != 0 as size_t
+                                .size
+                                != 0 as size_t
                             {
                                 hms_insert(
                                     (&raw mut (*wms).hms as *mut HistoryMergerState)
@@ -5490,15 +5390,14 @@ unsafe extern "C" fn shada_read_when_writing(
                             }
                         }
                         5 => {
-                            let idx: ::core::ffi::c_int = op_reg_index(
-                                entry.data.reg.name as ::core::ffi::c_int,
-                            );
+                            let idx: ::core::ffi::c_int =
+                                op_reg_index(entry.data.reg.name as ::core::ffi::c_int);
                             if idx < 0 as ::core::ffi::c_int {
                                 ret = shada_pack_entry(packer, entry, 0 as size_t);
                                 shada_free_shada_entry(&raw mut entry);
                             } else {
-                                let wms_entry_1: *mut ShadaEntry = (&raw mut (*wms)
-                                    .registers as *mut ShadaEntry)
+                                let wms_entry_1: *mut ShadaEntry = (&raw mut (*wms).registers
+                                    as *mut ShadaEntry)
                                     .offset(idx as isize);
                                 's_223: {
                                     if (*wms_entry_1).type_0 as ::core::ffi::c_int
@@ -5525,22 +5424,20 @@ unsafe extern "C" fn shada_read_when_writing(
                             shada_free_shada_entry(&raw mut entry);
                         }
                         7 => {
-                            if ascii_isdigit(
-                                entry.data.filemark.name as ::core::ffi::c_int,
-                            ) {
+                            if ascii_isdigit(entry.data.filemark.name as ::core::ffi::c_int) {
                                 let mut processed_mark: bool = false_0 != 0;
-                                let mut i: size_t = ::core::mem::size_of::<
-                                    [ShadaEntry; 10],
-                                >()
+                                let mut i: size_t = ::core::mem::size_of::<[ShadaEntry; 10]>()
                                     .wrapping_div(::core::mem::size_of::<ShadaEntry>())
                                     .wrapping_div(
                                         (::core::mem::size_of::<[ShadaEntry; 10]>()
-                                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                                            as ::core::ffi::c_int as size_t,
+                                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                                            == 0)
+                                            as ::core::ffi::c_int
+                                            as size_t,
                                     );
                                 while i > 0 as size_t {
-                                    let mut wms_entry_2: ShadaEntry = (*wms)
-                                        .numbered_marks[i.wrapping_sub(1 as size_t) as usize];
+                                    let mut wms_entry_2: ShadaEntry =
+                                        (*wms).numbered_marks[i.wrapping_sub(1 as size_t) as usize];
                                     if wms_entry_2.type_0 as ::core::ffi::c_int
                                         == kSDItemGlobalMark as ::core::ffi::c_int
                                     {
@@ -5550,7 +5447,9 @@ unsafe extern "C" fn shada_read_when_writing(
                                             && marks_equal(
                                                 wms_entry_2.data.filemark.mark,
                                                 entry.data.filemark.mark,
-                                            ) as ::core::ffi::c_int != 0
+                                            )
+                                                as ::core::ffi::c_int
+                                                != 0
                                             && strcmp(
                                                 wms_entry_2.data.filemark.fname,
                                                 entry.data.filemark.fname,
@@ -5561,14 +5460,18 @@ unsafe extern "C" fn shada_read_when_writing(
                                             break;
                                         } else if wms_entry_2.timestamp >= entry.timestamp {
                                             processed_mark = true_0 != 0;
-                                            if i
-                                                < ::core::mem::size_of::<[ShadaEntry; 10]>()
-                                                    .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[ShadaEntry; 10]>()
-                                                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                                                            as ::core::ffi::c_int as usize,
-                                                    )
+                                            if i < ::core::mem::size_of::<[ShadaEntry; 10]>()
+                                                .wrapping_div(::core::mem::size_of::<ShadaEntry>())
+                                                .wrapping_div(
+                                                    (::core::mem::size_of::<[ShadaEntry; 10]>()
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ShadaEntry,
+                                                        >(
+                                                        ))
+                                                        == 0)
+                                                        as ::core::ffi::c_int
+                                                        as usize,
+                                                )
                                             {
                                                 replace_numbered_mark(wms, i, entry);
                                             } else {
@@ -5583,22 +5486,20 @@ unsafe extern "C" fn shada_read_when_writing(
                                     replace_numbered_mark(wms, 0 as size_t, entry);
                                 }
                             } else {
-                                let idx_0: ::core::ffi::c_int = mark_global_index(
-                                    entry.data.filemark.name,
-                                );
+                                let idx_0: ::core::ffi::c_int =
+                                    mark_global_index(entry.data.filemark.name);
                                 if idx_0 < 0 as ::core::ffi::c_int {
                                     ret = shada_pack_entry(packer, entry, 0 as size_t);
                                     shada_free_shada_entry(&raw mut entry);
                                 } else {
-                                    let mut mark: *mut ShadaEntry = if idx_0
-                                        < 26 as ::core::ffi::c_int
-                                    {
-                                        (&raw mut (*wms).global_marks as *mut ShadaEntry)
-                                            .offset(idx_0 as isize)
-                                    } else {
-                                        (&raw mut (*wms).numbered_marks as *mut ShadaEntry)
-                                            .offset((idx_0 - 26 as ::core::ffi::c_int) as isize)
-                                    };
+                                    let mut mark: *mut ShadaEntry =
+                                        if idx_0 < 26 as ::core::ffi::c_int {
+                                            (&raw mut (*wms).global_marks as *mut ShadaEntry)
+                                                .offset(idx_0 as isize)
+                                        } else {
+                                            (&raw mut (*wms).numbered_marks as *mut ShadaEntry)
+                                                .offset((idx_0 - 26 as ::core::ffi::c_int) as isize)
+                                        };
                                     if (*mark).type_0 as ::core::ffi::c_int
                                         == kSDItemMissing as ::core::ffi::c_int
                                     {
@@ -5630,13 +5531,8 @@ unsafe extern "C" fn shada_read_when_writing(
                             if shada_removable(entry.data.filemark.fname) {
                                 shada_free_shada_entry(&raw mut entry);
                             } else {
-                                let fname: *const ::core::ffi::c_char = entry
-                                    .data
-                                    .filemark
-                                    .fname;
-                                let mut key: *mut cstr_t = ::core::ptr::null_mut::<
-                                    cstr_t,
-                                >();
+                                let fname: *const ::core::ffi::c_char = entry.data.filemark.fname;
+                                let mut key: *mut cstr_t = ::core::ptr::null_mut::<cstr_t>();
                                 let mut new_item: bool = false_0 != 0;
                                 let mut val: *mut ptr_t = map_put_ref_cstr_t_ptr_t(
                                     &raw mut (*wms).file_marks,
@@ -5648,10 +5544,8 @@ unsafe extern "C" fn shada_read_when_writing(
                                     *key = xstrdup(fname) as cstr_t;
                                 }
                                 if (*val).is_null() {
-                                    *val = xcalloc(
-                                        1 as size_t,
-                                        ::core::mem::size_of::<FileMarks>(),
-                                    ) as ptr_t;
+                                    *val = xcalloc(1 as size_t, ::core::mem::size_of::<FileMarks>())
+                                        as ptr_t;
                                 }
                                 let filemarks: *mut FileMarks = *val as *mut FileMarks;
                                 if entry.timestamp > (*filemarks).greatest_timestamp {
@@ -5660,29 +5554,29 @@ unsafe extern "C" fn shada_read_when_writing(
                                 if entry.type_0 as ::core::ffi::c_int
                                     == kSDItemLocalMark as ::core::ffi::c_int
                                 {
-                                    let idx_1: ::core::ffi::c_int = mark_local_index(
-                                        entry.data.filemark.name,
-                                    );
+                                    let idx_1: ::core::ffi::c_int =
+                                        mark_local_index(entry.data.filemark.name);
                                     if idx_1 < 0 as ::core::ffi::c_int {
-                                        (*filemarks).additional_marks_size = (*filemarks)
-                                            .additional_marks_size
-                                            .wrapping_add(1);
+                                        (*filemarks).additional_marks_size =
+                                            (*filemarks).additional_marks_size.wrapping_add(1);
                                         (*filemarks).additional_marks = xrealloc(
-                                            (*filemarks).additional_marks as *mut ::core::ffi::c_void,
+                                            (*filemarks).additional_marks
+                                                as *mut ::core::ffi::c_void,
                                             (*filemarks)
                                                 .additional_marks_size
                                                 .wrapping_mul(::core::mem::size_of::<ShadaEntry>()),
-                                        ) as *mut ShadaEntry;
-                                        *(*filemarks)
-                                            .additional_marks
-                                            .offset(
-                                                (*filemarks).additional_marks_size.wrapping_sub(1 as size_t)
-                                                    as isize,
-                                            ) = entry;
+                                        )
+                                            as *mut ShadaEntry;
+                                        *(*filemarks).additional_marks.offset(
+                                            (*filemarks)
+                                                .additional_marks_size
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
+                                        ) = entry;
                                     } else {
-                                        let wms_entry_4: *mut ShadaEntry = (&raw mut (*filemarks)
-                                            .marks as *mut ShadaEntry)
-                                            .offset(idx_1 as isize);
+                                        let wms_entry_4: *mut ShadaEntry =
+                                            (&raw mut (*filemarks).marks as *mut ShadaEntry)
+                                                .offset(idx_1 as isize);
                                         let mut set_wms: bool = true_0 != 0;
                                         if (*wms_entry_4).type_0 as ::core::ffi::c_int
                                             != kSDItemMissing as ::core::ffi::c_int
@@ -5691,7 +5585,9 @@ unsafe extern "C" fn shada_read_when_writing(
                                                 shada_free_shada_entry(&raw mut entry);
                                                 break 's_781;
                                             } else if (*wms_entry_4).can_free_entry {
-                                                if *key == (*wms_entry_4).data.filemark.fname as cstr_t {
+                                                if *key
+                                                    == (*wms_entry_4).data.filemark.fname as cstr_t
+                                                {
                                                     *key = entry.data.filemark.fname as cstr_t;
                                                 }
                                                 shada_free_shada_entry(wms_entry_4);
@@ -5700,8 +5596,10 @@ unsafe extern "C" fn shada_read_when_writing(
                                             let mut buf: *mut buf_T = firstbuf;
                                             while !buf.is_null() {
                                                 if !(*buf).b_ffname.is_null()
-                                                    && path_fnamecmp(entry.data.filemark.fname, (*buf).b_ffname)
-                                                        == 0 as ::core::ffi::c_int
+                                                    && path_fnamecmp(
+                                                        entry.data.filemark.fname,
+                                                        (*buf).b_ffname,
+                                                    ) == 0 as ::core::ffi::c_int
                                                 {
                                                     let mut fm: fmark_T = fmark_T {
                                                         mark: pos_T {
@@ -5715,14 +5613,18 @@ unsafe extern "C" fn shada_read_when_writing(
                                                             topline_offset: 0,
                                                             skipcol: 0,
                                                         },
-                                                        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+                                                        additional_data: ::core::ptr::null_mut::<
+                                                            AdditionalData,
+                                                        >(
+                                                        ),
                                                     };
                                                     mark_get(
                                                         buf,
                                                         curwin,
                                                         &raw mut fm,
                                                         kMarkBufLocal,
-                                                        entry.data.filemark.name as ::core::ffi::c_int,
+                                                        entry.data.filemark.name
+                                                            as ::core::ffi::c_int,
                                                     );
                                                     if fm.timestamp >= entry.timestamp {
                                                         set_wms = false_0 != 0;
@@ -5741,8 +5643,8 @@ unsafe extern "C" fn shada_read_when_writing(
                                     let mut i_0: ::core::ffi::c_int = 0;
                                     i_0 = (*filemarks).changes_size as ::core::ffi::c_int;
                                     while i_0 > 0 as ::core::ffi::c_int {
-                                        let jl_entry: ShadaEntry = (*filemarks)
-                                            .changes[(i_0 - 1 as ::core::ffi::c_int) as usize];
+                                        let jl_entry: ShadaEntry = (*filemarks).changes
+                                            [(i_0 - 1 as ::core::ffi::c_int) as usize];
                                         if jl_entry.timestamp <= entry.timestamp {
                                             if marks_equal(
                                                 jl_entry.data.filemark.mark,
@@ -5773,9 +5675,8 @@ unsafe extern "C" fn shada_read_when_writing(
                                     if i_0 != -1 as ::core::ffi::c_int {
                                         (*filemarks).changes[i_0 as usize] = entry;
                                         if (*filemarks).changes_size < JUMPLISTSIZE as size_t {
-                                            (*filemarks).changes_size = (*filemarks)
-                                                .changes_size
-                                                .wrapping_add(1);
+                                            (*filemarks).changes_size =
+                                                (*filemarks).changes_size.wrapping_add(1);
                                         }
                                     } else {
                                         shada_free_shada_entry(&raw mut entry);
@@ -5787,13 +5688,14 @@ unsafe extern "C" fn shada_read_when_writing(
                             let mut i_1: ::core::ffi::c_int = 0;
                             i_1 = (*wms).jumps_size as ::core::ffi::c_int;
                             while i_1 > 0 as ::core::ffi::c_int {
-                                let jl_entry_0: ShadaEntry = (*wms)
-                                    .jumps[(i_1 - 1 as ::core::ffi::c_int) as usize];
+                                let jl_entry_0: ShadaEntry =
+                                    (*wms).jumps[(i_1 - 1 as ::core::ffi::c_int) as usize];
                                 if jl_entry_0.timestamp <= entry.timestamp {
                                     if marks_equal(
                                         jl_entry_0.data.filemark.mark,
                                         entry.data.filemark.mark,
-                                    ) as ::core::ffi::c_int != 0
+                                    ) as ::core::ffi::c_int
+                                        != 0
                                         && strcmp(
                                             jl_entry_0.data.filemark.fname,
                                             entry.data.filemark.fname,
@@ -5841,11 +5743,9 @@ unsafe extern "C" fn shada_read_when_writing(
     return ret;
 }
 #[inline(always)]
-unsafe extern "C" fn ignore_buf(
-    buf: *const buf_T,
-    removable_bufs: *mut Set_ptr_t,
-) -> bool {
-    return buf.is_null() || (*buf).b_ffname.is_null()
+unsafe extern "C" fn ignore_buf(buf: *const buf_T, removable_bufs: *mut Set_ptr_t) -> bool {
+    return buf.is_null()
+        || (*buf).b_ffname.is_null()
         || (*buf).b_p_bl == 0 && (*buf).b_p_initialized as ::core::ffi::c_int != 0
         || bt_quickfix(buf) as ::core::ffi::c_int != 0
         || bt_terminal(buf) as ::core::ffi::c_int != 0
@@ -5853,13 +5753,12 @@ unsafe extern "C" fn ignore_buf(
 }
 #[inline(always)]
 unsafe extern "C" fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaEntry {
-    let mut max_bufs: ::core::ffi::c_int = get_shada_parameter(
-        '%' as ::core::ffi::c_int,
-    );
+    let mut max_bufs: ::core::ffi::c_int = get_shada_parameter('%' as ::core::ffi::c_int);
     let mut buf_count: size_t = 0 as size_t;
     let mut buf: *mut buf_T = firstbuf;
     while !buf.is_null() {
-        if !ignore_buf(buf, removable_bufs) && (*buf).b_p_bl != 0
+        if !ignore_buf(buf, removable_bufs)
+            && (*buf).b_p_bl != 0
             && (max_bufs < 0 as ::core::ffi::c_int || buf_count < max_bufs as size_t)
         {
             buf_count = buf_count.wrapping_add(1);
@@ -5883,9 +5782,7 @@ unsafe extern "C" fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaE
     let mut i: size_t = 0 as size_t;
     let mut buf_0: *mut buf_T = firstbuf;
     while !buf_0.is_null() {
-        if !(ignore_buf(buf_0, removable_bufs) as ::core::ffi::c_int != 0
-            || (*buf_0).b_p_bl == 0)
-        {
+        if !(ignore_buf(buf_0, removable_bufs) as ::core::ffi::c_int != 0 || (*buf_0).b_p_bl == 0) {
             if i >= buf_count {
                 break;
             }
@@ -5893,7 +5790,8 @@ unsafe extern "C" fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaE
                 pos: (*buf_0).b_last_cursor.mark,
                 fname: (*buf_0).b_ffname,
                 additional_data: (*buf_0).additional_data,
-            } as buffer_list_buffer;
+            }
+                as buffer_list_buffer;
             i = i.wrapping_add(1);
         }
         buf_0 = (*buf_0).b_next;
@@ -5908,8 +5806,8 @@ unsafe extern "C" fn add_search_pattern(
     search_last_used: bool,
     search_highlighted: bool,
 ) {
-    let defaults: ShadaEntry = sd_default_values[kSDItemSearchPattern
-        as ::core::ffi::c_int as usize];
+    let defaults: ShadaEntry =
+        sd_default_values[kSDItemSearchPattern as ::core::ffi::c_int as usize];
     let mut pat: SearchPattern = SearchPattern {
         pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         patlen: 0,
@@ -5935,30 +5833,26 @@ unsafe extern "C" fn add_search_pattern(
                     is_set___shada_search_pat_: 0,
                     magic: pat.magic as Boolean,
                     smartcase: !pat.no_scs,
-                    has_line_offset: if is_substitute_pattern as ::core::ffi::c_int != 0
-                    {
-                        defaults.data.search_pattern.has_line_offset
-                            as ::core::ffi::c_int
+                    has_line_offset: if is_substitute_pattern as ::core::ffi::c_int != 0 {
+                        defaults.data.search_pattern.has_line_offset as ::core::ffi::c_int
                     } else {
                         pat.off.line as ::core::ffi::c_int
                     } != 0,
-                    place_cursor_at_end: if is_substitute_pattern as ::core::ffi::c_int
-                        != 0
-                    {
-                        defaults.data.search_pattern.place_cursor_at_end
-                            as ::core::ffi::c_int
+                    place_cursor_at_end: if is_substitute_pattern as ::core::ffi::c_int != 0 {
+                        defaults.data.search_pattern.place_cursor_at_end as ::core::ffi::c_int
                     } else {
                         pat.off.end as ::core::ffi::c_int
                     } != 0,
                     is_last_used: is_substitute_pattern as ::core::ffi::c_int
-                        ^ search_last_used as ::core::ffi::c_int != 0,
+                        ^ search_last_used as ::core::ffi::c_int
+                        != 0,
                     is_substitute_pattern: is_substitute_pattern as Boolean,
                     highlighted: is_substitute_pattern as ::core::ffi::c_int
-                        ^ search_last_used as ::core::ffi::c_int != 0
+                        ^ search_last_used as ::core::ffi::c_int
+                        != 0
                         && search_highlighted as ::core::ffi::c_int != 0,
                     search_backward: !is_substitute_pattern
-                        && pat.off.dir as ::core::ffi::c_int
-                            == '?' as ::core::ffi::c_int,
+                        && pat.off.dir as ::core::ffi::c_int == '?' as ::core::ffi::c_int,
                     offset: if is_substitute_pattern as ::core::ffi::c_int != 0 {
                         defaults.data.search_pattern.offset
                     } else {
@@ -5976,9 +5870,7 @@ unsafe extern "C" fn shada_initialize_registers(
     wms: *mut WriteMergerState,
     mut max_reg_lines: ::core::ffi::c_int,
 ) {
-    let mut reg_iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-        ::core::ffi::c_void,
-    >();
+    let mut reg_iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
     let limit_reg_lines: bool = max_reg_lines >= 0 as ::core::ffi::c_int;
     loop {
         let mut reg: yankreg_T = yankreg_T {
@@ -5991,18 +5883,11 @@ unsafe extern "C" fn shada_initialize_registers(
         };
         let mut name: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
         let mut is_unnamed: bool = false_0 != 0;
-        reg_iter = op_global_reg_iter(
-            reg_iter,
-            &raw mut name,
-            &raw mut reg,
-            &raw mut is_unnamed,
-        );
+        reg_iter = op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed);
         if name as ::core::ffi::c_int == NUL {
             break;
         }
-        if !(limit_reg_lines as ::core::ffi::c_int != 0
-            && reg.y_size > max_reg_lines as size_t)
-        {
+        if !(limit_reg_lines as ::core::ffi::c_int != 0 && reg.y_size > max_reg_lines as size_t) {
             (*wms).registers[op_reg_index(name as ::core::ffi::c_int) as usize] = ShadaEntry {
                 type_0: kSDItemRegister,
                 can_free_entry: false_0 != 0,
@@ -6029,7 +5914,7 @@ unsafe extern "C" fn shada_initialize_registers(
         if reg_iter.is_null() {
             break;
         }
-    };
+    }
 }
 #[inline(always)]
 unsafe extern "C" fn replace_numbered_mark(
@@ -6038,35 +5923,33 @@ unsafe extern "C" fn replace_numbered_mark(
     entry: ShadaEntry,
 ) {
     shada_free_shada_entry(
-        (&raw mut (*wms).numbered_marks as *mut ShadaEntry)
-            .offset(
-                ::core::mem::size_of::<[ShadaEntry; 10]>()
-                    .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[ShadaEntry; 10]>()
-                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-                    .wrapping_sub(1 as usize) as isize,
-            ),
+        (&raw mut (*wms).numbered_marks as *mut ShadaEntry).offset(
+            ::core::mem::size_of::<[ShadaEntry; 10]>()
+                .wrapping_div(::core::mem::size_of::<ShadaEntry>())
+                .wrapping_div(
+                    (::core::mem::size_of::<[ShadaEntry; 10]>()
+                        .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                        == 0) as ::core::ffi::c_int as usize,
+                )
+                .wrapping_sub(1 as usize) as isize,
+        ),
     );
     let mut i: size_t = idx;
-    while i
-        < ::core::mem::size_of::<[ShadaEntry; 10]>()
-            .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-            .wrapping_div(
-                (::core::mem::size_of::<[ShadaEntry; 10]>()
-                    .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            )
-            .wrapping_sub(1 as usize)
+    while i < ::core::mem::size_of::<[ShadaEntry; 10]>()
+        .wrapping_div(::core::mem::size_of::<ShadaEntry>())
+        .wrapping_div(
+            (::core::mem::size_of::<[ShadaEntry; 10]>()
+                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                == 0) as ::core::ffi::c_int as usize,
+        )
+        .wrapping_sub(1 as usize)
     {
         if (*wms).numbered_marks[i as usize].type_0 as ::core::ffi::c_int
             == kSDItemGlobalMark as ::core::ffi::c_int
         {
-            (*wms).numbered_marks[i as usize].data.filemark.name = ('0'
-                as ::core::ffi::c_int + i as ::core::ffi::c_int
-                + 1 as ::core::ffi::c_int) as ::core::ffi::c_char;
+            (*wms).numbered_marks[i as usize].data.filemark.name =
+                ('0' as ::core::ffi::c_int + i as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
+                    as ::core::ffi::c_char;
         }
         i = i.wrapping_add(1);
     }
@@ -6076,29 +5959,27 @@ unsafe extern "C" fn replace_numbered_mark(
             .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
         (&raw mut (*wms).numbered_marks as *mut ShadaEntry).offset(idx as isize)
             as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<ShadaEntry>()
-            .wrapping_mul(
-                ::core::mem::size_of::<[ShadaEntry; 10]>()
-                    .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[ShadaEntry; 10]>()
-                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                            as ::core::ffi::c_int as size_t,
-                    )
-                    .wrapping_sub(1 as size_t)
-                    .wrapping_sub(idx),
-            ),
+        ::core::mem::size_of::<ShadaEntry>().wrapping_mul(
+            ::core::mem::size_of::<[ShadaEntry; 10]>()
+                .wrapping_div(::core::mem::size_of::<ShadaEntry>())
+                .wrapping_div(
+                    (::core::mem::size_of::<[ShadaEntry; 10]>()
+                        .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                        == 0) as ::core::ffi::c_int as size_t,
+                )
+                .wrapping_sub(1 as size_t)
+                .wrapping_sub(idx),
+        ),
     );
     (*wms).numbered_marks[idx as usize] = entry;
-    (*wms).numbered_marks[idx as usize].data.filemark.name = ('0' as ::core::ffi::c_int
-        + idx as ::core::ffi::c_int) as ::core::ffi::c_char;
+    (*wms).numbered_marks[idx as usize].data.filemark.name =
+        ('0' as ::core::ffi::c_int + idx as ::core::ffi::c_int) as ::core::ffi::c_char;
 }
 #[inline]
 unsafe extern "C" fn find_removable_bufs(mut removable_bufs: *mut Set_ptr_t) {
     let mut buf: *mut buf_T = firstbuf;
     while !buf.is_null() {
-        if !(*buf).b_ffname.is_null()
-            && shada_removable((*buf).b_ffname) as ::core::ffi::c_int != 0
+        if !(*buf).b_ffname.is_null() && shada_removable((*buf).b_ffname) as ::core::ffi::c_int != 0
         {
             set_put_ptr_t(
                 removable_bufs,
@@ -6121,9 +6002,7 @@ unsafe extern "C" fn hist_type2char(type_0: ::core::ffi::c_int) -> ::core::ffi::
         }
     };
 }
-unsafe extern "C" fn packer_buffer_for_file(
-    mut file: *mut FileDescriptor,
-) -> PackerBuffer {
+unsafe extern "C" fn packer_buffer_for_file(mut file: *mut FileDescriptor) -> PackerBuffer {
     if file_space(file) < SHADA_MPACK_FREE_SPACE as size_t {
         file_flush(file);
     }
@@ -6133,9 +6012,7 @@ unsafe extern "C" fn packer_buffer_for_file(
         endptr: (*file).buffer.offset(ARENA_BLOCK_SIZE as isize),
         anydata: file as *mut ::core::ffi::c_void,
         anyint: 0 as int64_t,
-        packer_flush: Some(
-            flush_file_buffer as unsafe extern "C" fn(*mut PackerBuffer) -> (),
-        ),
+        packer_flush: Some(flush_file_buffer as unsafe extern "C" fn(*mut PackerBuffer) -> ()),
     };
 }
 unsafe extern "C" fn flush_file_buffer(mut buffer: *mut PackerBuffer) {
@@ -6149,34 +6026,23 @@ unsafe extern "C" fn shada_write(
     sd_reader: *mut FileDescriptor,
 ) -> ShaDaWriteResult {
     let mut file_markss_size: size_t = 0;
-    let mut all_file_markss: *mut *mut FileMarks = ::core::ptr::null_mut::<
-        *mut FileMarks,
-    >();
-    let mut cur_file_marks: *mut *mut FileMarks = ::core::ptr::null_mut::<
-        *mut FileMarks,
-    >();
+    let mut all_file_markss: *mut *mut FileMarks = ::core::ptr::null_mut::<*mut FileMarks>();
+    let mut cur_file_marks: *mut *mut FileMarks = ::core::ptr::null_mut::<*mut FileMarks>();
     let mut val_0: ptr_t = ::core::ptr::null_mut::<::core::ffi::c_void>();
     let mut file_markss_to_dump: size_t = 0;
     let mut ret: ShaDaWriteResult = kSDWriteSuccessful;
-    let mut max_kbyte_i: ::core::ffi::c_int = get_shada_parameter(
-        's' as ::core::ffi::c_int,
-    );
+    let mut max_kbyte_i: ::core::ffi::c_int = get_shada_parameter('s' as ::core::ffi::c_int);
     if max_kbyte_i < 0 as ::core::ffi::c_int {
         max_kbyte_i = 10 as ::core::ffi::c_int;
     }
     if max_kbyte_i == 0 as ::core::ffi::c_int {
         return ret;
     }
-    let wms: *mut WriteMergerState = xcalloc(
-        1 as size_t,
-        ::core::mem::size_of::<WriteMergerState>(),
-    ) as *mut WriteMergerState;
+    let wms: *mut WriteMergerState =
+        xcalloc(1 as size_t, ::core::mem::size_of::<WriteMergerState>()) as *mut WriteMergerState;
     let mut dump_one_history: [bool; 5] = [false; 5];
-    let dump_global_vars: bool = !find_shada_parameter('!' as ::core::ffi::c_int)
-        .is_null();
-    let mut max_reg_lines: ::core::ffi::c_int = get_shada_parameter(
-        '<' as ::core::ffi::c_int,
-    );
+    let dump_global_vars: bool = !find_shada_parameter('!' as ::core::ffi::c_int).is_null();
+    let mut max_reg_lines: ::core::ffi::c_int = get_shada_parameter('<' as ::core::ffi::c_int);
     if max_reg_lines < 0 as ::core::ffi::c_int {
         max_reg_lines = get_shada_parameter('"' as ::core::ffi::c_int);
     }
@@ -6186,10 +6052,9 @@ unsafe extern "C" fn shada_write(
         keys: ::core::ptr::null_mut::<ptr_t>(),
     };
     let max_kbyte: size_t = max_kbyte_i as size_t;
-    let num_marked_files: size_t = get_shada_parameter('\'' as ::core::ffi::c_int)
-        as size_t;
-    let dump_global_marks: bool = get_shada_parameter('f' as ::core::ffi::c_int)
-        != 0 as ::core::ffi::c_int;
+    let num_marked_files: size_t = get_shada_parameter('\'' as ::core::ffi::c_int) as size_t;
+    let dump_global_marks: bool =
+        get_shada_parameter('f' as ::core::ffi::c_int) != 0 as ::core::ffi::c_int;
     let mut dump_history: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < HIST_COUNT as ::core::ffi::c_int {
@@ -6235,15 +6100,18 @@ unsafe extern "C" fn shada_write(
             0 as ::core::ffi::c_int
         })
         | (if num_marked_files != 0 {
-            kSDReadLocalMarks as ::core::ffi::c_int
-                | kSDReadChanges as ::core::ffi::c_int
+            kSDReadLocalMarks as ::core::ffi::c_int | kSDReadChanges as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
         })) as ::core::ffi::c_uint;
     let mut packer: PackerBuffer = packer_buffer_for_file(sd_writer);
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             set_last_cursor(wp);
             wp = (*wp).w_next;
@@ -6351,31 +6219,22 @@ unsafe extern "C" fn shada_write(
             ret = kSDWriteFailed;
         } else {
             if !find_shada_parameter('%' as ::core::ffi::c_int).is_null() {
-                let mut buflist_entry: ShadaEntry = shada_get_buflist(
-                    &raw mut removable_bufs,
-                );
+                let mut buflist_entry: ShadaEntry = shada_get_buflist(&raw mut removable_bufs);
                 if shada_pack_entry(&raw mut packer, buflist_entry, 0 as size_t)
                     as ::core::ffi::c_uint
                     == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    xfree(
-                        buflist_entry.data.buffer_list.buffers
-                            as *mut ::core::ffi::c_void,
-                    );
+                    xfree(buflist_entry.data.buffer_list.buffers as *mut ::core::ffi::c_void);
                     ret = kSDWriteFailed;
                     break '_shada_write_exit;
                 } else {
-                    xfree(
-                        buflist_entry.data.buffer_list.buffers
-                            as *mut ::core::ffi::c_void,
-                    );
+                    xfree(buflist_entry.data.buffer_list.buffers as *mut ::core::ffi::c_void);
                 }
             }
             's_310: {
                 if dump_global_vars {
-                    let mut var_iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-                        ::core::ffi::c_void,
-                    >();
+                    let mut var_iter: *const ::core::ffi::c_void =
+                        ::core::ptr::null::<::core::ffi::c_void>();
                     let cur_timestamp: Timestamp = os_time();
                     loop {
                         let mut vartv: typval_T = typval_T {
@@ -6383,9 +6242,8 @@ unsafe extern "C" fn shada_write(
                             v_lock: VAR_UNLOCKED,
                             vval: typval_vval_union { v_number: 0 },
                         };
-                        let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<
-                            ::core::ffi::c_char,
-                        >();
+                        let mut name: *const ::core::ffi::c_char =
+                            ::core::ptr::null::<::core::ffi::c_char>();
                         var_iter = var_shada_iter(
                             var_iter,
                             &raw mut name,
@@ -6453,8 +6311,7 @@ unsafe extern "C" fn shada_write(
                                 max_kbyte,
                             );
                             if spe_ret as ::core::ffi::c_uint
-                                == kSDWriteFailed as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 tv_clear(&raw mut vartv);
                                 tv_clear(&raw mut tgttv);
@@ -6487,28 +6344,22 @@ unsafe extern "C" fn shada_write(
                     &raw mut removable_bufs,
                 );
             }
-            if dump_one_history[HIST_SEARCH as ::core::ffi::c_int as usize]
-                as ::core::ffi::c_int > 0 as ::core::ffi::c_int
+            if dump_one_history[HIST_SEARCH as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                > 0 as ::core::ffi::c_int
             {
                 let search_highlighted: bool = !(no_hlsearch as ::core::ffi::c_int != 0
                     || !find_shada_parameter('h' as ::core::ffi::c_int).is_null());
                 let search_last_used: bool = search_was_last_used();
                 add_search_pattern(
                     &raw mut (*wms).search_pattern,
-                    Some(
-                        get_search_pattern
-                            as unsafe extern "C" fn(*mut SearchPattern) -> (),
-                    ),
+                    Some(get_search_pattern as unsafe extern "C" fn(*mut SearchPattern) -> ()),
                     false_0 != 0,
                     search_last_used,
                     search_highlighted,
                 );
                 add_search_pattern(
                     &raw mut (*wms).sub_search_pattern,
-                    Some(
-                        get_substitute_pattern
-                            as unsafe extern "C" fn(*mut SearchPattern) -> (),
-                    ),
+                    Some(get_substitute_pattern as unsafe extern "C" fn(*mut SearchPattern) -> ()),
                     true_0 != 0,
                     search_last_used,
                     search_highlighted,
@@ -6532,9 +6383,8 @@ unsafe extern "C" fn shada_write(
                 }
             }
             if dump_global_marks {
-                let mut global_mark_iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-                    ::core::ffi::c_void,
-                >();
+                let mut global_mark_iter: *const ::core::ffi::c_void =
+                    ::core::ptr::null::<::core::ffi::c_void>();
                 let mut digit_mark_idx: size_t = 0 as size_t;
                 loop {
                     let mut name_0: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
@@ -6555,21 +6405,18 @@ unsafe extern "C" fn shada_write(
                         },
                         fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     };
-                    global_mark_iter = mark_global_iter(
-                        global_mark_iter,
-                        &raw mut name_0,
-                        &raw mut fm,
-                    );
+                    global_mark_iter =
+                        mark_global_iter(global_mark_iter, &raw mut name_0, &raw mut fm);
                     if name_0 as ::core::ffi::c_int == NUL {
                         break;
                     }
-                    let mut fname: *const ::core::ffi::c_char = ::core::ptr::null::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut fname: *const ::core::ffi::c_char =
+                        ::core::ptr::null::<::core::ffi::c_char>();
                     's_367: {
                         if fm.fmark.fnum == 0 as ::core::ffi::c_int {
                             '_c2rust_label: {
-                                if !fm.fname.is_null() {} else {
+                                if !fm.fname.is_null() {
+                                } else {
                                     __assert_fail(
                                         b"fm.fname != NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -6588,9 +6435,11 @@ unsafe extern "C" fn shada_write(
                             }
                         } else {
                             let buf: *const buf_T = buflist_findnr(fm.fmark.fnum);
-                            if buf.is_null() || (*buf).b_ffname.is_null()
+                            if buf.is_null()
+                                || (*buf).b_ffname.is_null()
                                 || set_has_ptr_t(&raw mut removable_bufs, buf as ptr_t)
-                                    as ::core::ffi::c_int != 0
+                                    as ::core::ffi::c_int
+                                    != 0
                             {
                                 break 's_367;
                             } else {
@@ -6630,9 +6479,8 @@ unsafe extern "C" fn shada_write(
                 let mut buf_0: *mut buf_T = firstbuf;
                 while !buf_0.is_null() {
                     if !ignore_buf(buf_0, &raw mut removable_bufs) {
-                        let mut local_marks_iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-                            ::core::ffi::c_void,
-                        >();
+                        let mut local_marks_iter: *const ::core::ffi::c_void =
+                            ::core::ptr::null::<::core::ffi::c_void>();
                         let fname_0: *const ::core::ffi::c_char = (*buf_0).b_ffname;
                         let mut map_key: *mut cstr_t = ::core::ptr::null_mut::<cstr_t>();
                         let mut new_item: bool = false_0 != 0;
@@ -6646,10 +6494,8 @@ unsafe extern "C" fn shada_write(
                             *map_key = xstrdup(fname_0) as cstr_t;
                         }
                         if (*val).is_null() {
-                            *val = xcalloc(
-                                1 as size_t,
-                                ::core::mem::size_of::<FileMarks>(),
-                            ) as ptr_t;
+                            *val =
+                                xcalloc(1 as size_t, ::core::mem::size_of::<FileMarks>()) as ptr_t;
                         }
                         let filemarks: *mut FileMarks = *val as *mut FileMarks;
                         loop {
@@ -6667,8 +6513,7 @@ unsafe extern "C" fn shada_write(
                                 },
                                 additional_data: ::core::ptr::null_mut::<AdditionalData>(),
                             };
-                            let mut name_1: ::core::ffi::c_char = NUL
-                                as ::core::ffi::c_char;
+                            let mut name_1: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
                             local_marks_iter = mark_buffer_iter(
                                 local_marks_iter,
                                 buf_0,
@@ -6725,13 +6570,8 @@ unsafe extern "C" fn shada_write(
                 }
             }
             if !sd_reader.is_null() {
-                let srww_ret: ShaDaWriteResult = shada_read_when_writing(
-                    sd_reader,
-                    srni_flags,
-                    max_kbyte,
-                    wms,
-                    &raw mut packer,
-                );
+                let srww_ret: ShaDaWriteResult =
+                    shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, &raw mut packer);
                 if srww_ret as ::core::ffi::c_uint
                     != kSDWriteSuccessful as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -6766,8 +6606,8 @@ unsafe extern "C" fn shada_write(
                     .wrapping_div(::core::mem::size_of::<ShadaEntry>())
                     .wrapping_div(
                         (::core::mem::size_of::<[ShadaEntry; 26]>()
-                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                            as ::core::ffi::c_int as usize,
+                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                            == 0) as ::core::ffi::c_int as usize,
                     )
             {
                 if (*wms).global_marks[i_ as usize].type_0 as ::core::ffi::c_int
@@ -6792,8 +6632,8 @@ unsafe extern "C" fn shada_write(
                     .wrapping_div(::core::mem::size_of::<ShadaEntry>())
                     .wrapping_div(
                         (::core::mem::size_of::<[ShadaEntry; 10]>()
-                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                            as ::core::ffi::c_int as usize,
+                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                            == 0) as ::core::ffi::c_int as usize,
                     )
             {
                 if (*wms).numbered_marks[i__0 as usize].type_0 as ::core::ffi::c_int
@@ -6818,8 +6658,8 @@ unsafe extern "C" fn shada_write(
                     .wrapping_div(::core::mem::size_of::<ShadaEntry>())
                     .wrapping_div(
                         (::core::mem::size_of::<[ShadaEntry; 37]>()
-                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                            as ::core::ffi::c_int as usize,
+                            .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                            == 0) as ::core::ffi::c_int as usize,
                     )
             {
                 if (*wms).registers[i__1 as usize].type_0 as ::core::ffi::c_int
@@ -6840,11 +6680,8 @@ unsafe extern "C" fn shada_write(
             }
             let mut i_1: size_t = 0 as size_t;
             while i_1 < (*wms).jumps_size {
-                if shada_pack_pfreed_entry(
-                    &raw mut packer,
-                    (*wms).jumps[i_1 as usize],
-                    max_kbyte,
-                ) as ::core::ffi::c_uint
+                if shada_pack_pfreed_entry(&raw mut packer, (*wms).jumps[i_1 as usize], max_kbyte)
+                    as ::core::ffi::c_uint
                     == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     ret = kSDWriteFailed;
@@ -6856,11 +6693,8 @@ unsafe extern "C" fn shada_write(
             if (*wms).search_pattern.type_0 as ::core::ffi::c_int
                 != kSDItemMissing as ::core::ffi::c_int
             {
-                if shada_pack_pfreed_entry(
-                    &raw mut packer,
-                    (*wms).search_pattern,
-                    max_kbyte,
-                ) as ::core::ffi::c_uint
+                if shada_pack_pfreed_entry(&raw mut packer, (*wms).search_pattern, max_kbyte)
+                    as ::core::ffi::c_uint
                     == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     ret = kSDWriteFailed;
@@ -6870,11 +6704,8 @@ unsafe extern "C" fn shada_write(
             if (*wms).sub_search_pattern.type_0 as ::core::ffi::c_int
                 != kSDItemMissing as ::core::ffi::c_int
             {
-                if shada_pack_pfreed_entry(
-                    &raw mut packer,
-                    (*wms).sub_search_pattern,
-                    max_kbyte,
-                ) as ::core::ffi::c_uint
+                if shada_pack_pfreed_entry(&raw mut packer, (*wms).sub_search_pattern, max_kbyte)
+                    as ::core::ffi::c_uint
                     == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     ret = kSDWriteFailed;
@@ -6884,11 +6715,8 @@ unsafe extern "C" fn shada_write(
             if (*wms).replacement.type_0 as ::core::ffi::c_int
                 != kSDItemMissing as ::core::ffi::c_int
             {
-                if shada_pack_pfreed_entry(
-                    &raw mut packer,
-                    (*wms).replacement,
-                    max_kbyte,
-                ) as ::core::ffi::c_uint
+                if shada_pack_pfreed_entry(&raw mut packer, (*wms).replacement, max_kbyte)
+                    as ::core::ffi::c_uint
                     == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     ret = kSDWriteFailed;
@@ -6896,9 +6724,9 @@ unsafe extern "C" fn shada_write(
                 }
             }
             file_markss_size = (*wms).file_marks.set.h.size as size_t;
-            all_file_markss = xmalloc(
-                file_markss_size.wrapping_mul(::core::mem::size_of::<*mut FileMarks>()),
-            ) as *mut *mut FileMarks;
+            all_file_markss =
+                xmalloc(file_markss_size.wrapping_mul(::core::mem::size_of::<*mut FileMarks>()))
+                    as *mut *mut FileMarks;
             cur_file_marks = all_file_markss;
             val_0 = ::core::ptr::null_mut::<::core::ffi::c_void>();
             let mut __i: uint32_t = 0;
@@ -6936,23 +6764,20 @@ unsafe extern "C" fn shada_write(
                         .wrapping_div(::core::mem::size_of::<ShadaEntry>())
                         .wrapping_div(
                             (::core::mem::size_of::<[ShadaEntry; 29]>()
-                                .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                                as ::core::ffi::c_int as usize,
+                                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                                == 0) as ::core::ffi::c_int as usize,
                         )
                 {
-                    if (**all_file_markss.offset(i_2 as isize))
-                        .marks[i__2 as usize]
-                        .type_0 as ::core::ffi::c_int
+                    if (**all_file_markss.offset(i_2 as isize)).marks[i__2 as usize].type_0
+                        as ::core::ffi::c_int
                         != kSDItemMissing as ::core::ffi::c_int
                     {
                         if shada_pack_pfreed_entry(
                             &raw mut packer,
-                            (**all_file_markss.offset(i_2 as isize))
-                                .marks[i__2 as usize],
+                            (**all_file_markss.offset(i_2 as isize)).marks[i__2 as usize],
                             max_kbyte,
                         ) as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             ret = kSDWriteFailed;
                             break '_shada_write_exit;
@@ -6976,9 +6801,7 @@ unsafe extern "C" fn shada_write(
                     }
                 }
                 let mut j_0: size_t = 0 as size_t;
-                while j_0
-                    < (**all_file_markss.offset(i_2 as isize)).additional_marks_size
-                {
+                while j_0 < (**all_file_markss.offset(i_2 as isize)).additional_marks_size {
                     if shada_pack_entry(
                         &raw mut packer,
                         *(**all_file_markss.offset(i_2 as isize))
@@ -7019,21 +6842,17 @@ unsafe extern "C" fn shada_write(
                     }
                     if dump_one_history[i_3 as usize] {
                         hms_insert_whole_neovim_history(
-                            (&raw mut (*wms).hms as *mut HistoryMergerState)
-                                .offset(i_3 as isize),
+                            (&raw mut (*wms).hms as *mut HistoryMergerState).offset(i_3 as isize),
                         );
-                        let mut cur_entry: *mut HMLListEntry = (*wms)
-                            .hms[i_3 as usize]
-                            .hmll
-                            .first as *mut HMLListEntry;
+                        let mut cur_entry: *mut HMLListEntry =
+                            (*wms).hms[i_3 as usize].hmll.first as *mut HMLListEntry;
                         while !cur_entry.is_null() {
                             if shada_pack_pfreed_entry(
                                 &raw mut packer,
                                 (*cur_entry).data,
                                 max_kbyte,
                             ) as ::core::ffi::c_uint
-                                == kSDWriteFailed as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 ret = kSDWriteFailed;
                                 break;
@@ -7042,8 +6861,7 @@ unsafe extern "C" fn shada_write(
                             }
                         }
                         if ret as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             break '_shada_write_exit;
                         }
@@ -7056,20 +6874,16 @@ unsafe extern "C" fn shada_write(
     let mut i_4: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i_4 < HIST_COUNT as ::core::ffi::c_int {
         if dump_one_history[i_4 as usize] {
-            hms_dealloc(
-                (&raw mut (*wms).hms as *mut HistoryMergerState).offset(i_4 as isize),
-            );
+            hms_dealloc((&raw mut (*wms).hms as *mut HistoryMergerState).offset(i_4 as isize));
         }
         i_4 += 1;
     }
-    let mut stored_key: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut stored_key: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut __i_0: uint32_t = 0;
     __i_0 = 0 as uint32_t;
     while __i_0 < (*wms).file_marks.set.h.n_keys {
-        stored_key = *(*wms).file_marks.set.keys.offset(__i_0 as isize)
-            as *const ::core::ffi::c_char;
+        stored_key =
+            *(*wms).file_marks.set.keys.offset(__i_0 as isize) as *const ::core::ffi::c_char;
         val_0 = *(*wms).file_marks.values.offset(__i_0 as isize);
         xfree(stored_key as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void);
         xfree(val_0 as *mut ::core::ffi::c_void);
@@ -7081,8 +6895,8 @@ unsafe extern "C" fn shada_write(
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<cstr_t>(),
     };
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*wms).file_marks.values
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*wms).file_marks.values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -7111,9 +6925,7 @@ pub unsafe extern "C" fn shada_write_file(
     if fname.is_null() {
         return FAIL;
     }
-    let mut tempname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tempname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut sd_writer: FileDescriptor = FileDescriptor {
         fd: 0,
         buffer: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -7171,11 +6983,10 @@ pub unsafe extern "C" fn shada_write_file(
                             nomerge = true_0 != 0;
                             break 's_163;
                         } else {
-                            let mut perm: ::core::ffi::c_int = os_getperm(fname)
-                                as ::core::ffi::c_int;
+                            let mut perm: ::core::ffi::c_int =
+                                os_getperm(fname) as ::core::ffi::c_int;
                             perm = if perm >= 0 as ::core::ffi::c_int {
-                                perm & 0o777 as ::core::ffi::c_int
-                                    | 0o600 as ::core::ffi::c_int
+                                perm & 0o777 as ::core::ffi::c_int | 0o600 as ::core::ffi::c_int
                             } else {
                                 0o600 as ::core::ffi::c_int
                             };
@@ -7240,9 +7051,8 @@ pub unsafe extern "C" fn shada_write_file(
             *tail = NUL as ::core::ffi::c_char;
             if !os_isdir(fname) {
                 let mut ret: ::core::ffi::c_int = 0;
-                let mut failed_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                    ::core::ffi::c_char,
-                >();
+                let mut failed_dir: *mut ::core::ffi::c_char =
+                    ::core::ptr::null_mut::<::core::ffi::c_char>();
                 ret = os_mkdir_recurse(
                     fname,
                     0o700 as int32_t,
@@ -7274,8 +7084,8 @@ pub unsafe extern "C" fn shada_write_file(
         if error_0 != 0 {
             semsg(
                 gettext(
-                    b"E886: System error while opening ShaDa file %s for writing: %s\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"E886: System error while opening ShaDa file %s for writing: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 ),
                 fname,
                 uv_strerror(error_0),
@@ -7296,9 +7106,7 @@ pub unsafe extern "C" fn shada_write_file(
         verbose_enter();
         smsg(
             0 as ::core::ffi::c_int,
-            gettext(
-                b"Writing ShaDa file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"Writing ShaDa file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
             fname,
         );
         verbose_leave();
@@ -7314,7 +7122,8 @@ pub unsafe extern "C" fn shada_write_file(
     '_c2rust_label: {
         if sw_ret as ::core::ffi::c_uint
             != kSDWriteIgnError as ::core::ffi::c_int as ::core::ffi::c_uint
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"sw_ret != kSDWriteIgnError\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/shada.c\0".as_ptr()
@@ -7368,8 +7177,7 @@ pub unsafe extern "C" fn shada_write_file(
                         },
                     };
                     if !os_fileinfo(fname, &raw mut old_info)
-                        || old_info.stat.st_mode & __S_IFMT as uint64_t
-                            == 0o40000 as uint64_t
+                        || old_info.stat.st_mode & __S_IFMT as uint64_t == 0o40000 as uint64_t
                         || getuid() != ROOT_UID as __uid_t
                             && (if old_info.stat.st_uid == getuid() as uint64_t {
                                 old_info.stat.st_mode & 0o200 as uint64_t
@@ -7382,10 +7190,8 @@ pub unsafe extern "C" fn shada_write_file(
                             }) == 0
                     {
                         semsg(
-                            gettext(
-                                b"E137: ShaDa file is not writable: %s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E137: ShaDa file is not writable: %s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             fname,
                         );
                         break '_shada_write_file_did_not_remove;
@@ -7396,16 +7202,14 @@ pub unsafe extern "C" fn shada_write_file(
                             {
                                 let old_uid: uv_uid_t = old_info.stat.st_uid as uv_uid_t;
                                 let old_gid: uv_gid_t = old_info.stat.st_gid as uv_gid_t;
-                                let fchown_ret: ::core::ffi::c_int = os_fchown(
-                                    file_fd(&raw mut sd_writer),
-                                    old_uid,
-                                    old_gid,
-                                );
+                                let fchown_ret: ::core::ffi::c_int =
+                                    os_fchown(file_fd(&raw mut sd_writer), old_uid, old_gid);
                                 if fchown_ret != 0 as ::core::ffi::c_int {
                                     semsg(
                                         gettext(
                                             b"E136: Failed setting uid and gid for file %s: %s\0"
-                                                .as_ptr() as *const ::core::ffi::c_char,
+                                                .as_ptr()
+                                                as *const ::core::ffi::c_char,
                                         ),
                                         tempname,
                                         uv_strerror(fchown_ret),
@@ -7416,10 +7220,8 @@ pub unsafe extern "C" fn shada_write_file(
                         }
                         if vim_rename(tempname, fname) == -1 as ::core::ffi::c_int {
                             semsg(
-                                gettext(
-                                    b"E136: Can't rename ShaDa file from %s to %s!\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"E136: Can't rename ShaDa file from %s to %s!\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                                 tempname,
                                 fname,
                             );
@@ -7455,8 +7257,8 @@ pub unsafe extern "C" fn shada_write_file(
             }
             semsg(
                 gettext(
-                    b"E136: Do not forget to remove %s or rename it manually to %s.\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"E136: Do not forget to remove %s or rename it manually to %s.\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 ),
                 tempname,
                 fname,
@@ -7483,7 +7285,8 @@ pub unsafe extern "C" fn shada_read_everything(
 ) -> ::core::ffi::c_int {
     return shada_read_file(
         fname,
-        kShaDaWantInfo as ::core::ffi::c_int | kShaDaWantMarks as ::core::ffi::c_int
+        kShaDaWantInfo as ::core::ffi::c_int
+            | kShaDaWantMarks as ::core::ffi::c_int
             | kShaDaGetOldfiles as ::core::ffi::c_int
             | (if forceit as ::core::ffi::c_int != 0 {
                 kShaDaForceit as ::core::ffi::c_int
@@ -7540,8 +7343,8 @@ unsafe extern "C" fn shada_free_shada_entry(entry: *mut ShadaEntry) {
                         as *mut ::core::ffi::c_void,
                 );
                 xfree(
-                    (*(*entry).data.buffer_list.buffers.offset(i_0 as isize))
-                        .additional_data as *mut ::core::ffi::c_void,
+                    (*(*entry).data.buffer_list.buffers.offset(i_0 as isize)).additional_data
+                        as *mut ::core::ffi::c_void,
                 );
                 i_0 = i_0.wrapping_add(1);
             }
@@ -7549,8 +7352,8 @@ unsafe extern "C" fn shada_free_shada_entry(entry: *mut ShadaEntry) {
         }
         0 | _ => {}
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*entry).additional_data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*entry).additional_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -7598,16 +7401,14 @@ unsafe extern "C" fn msgpack_read_uint64(
     if read_bytes < 0 as ptrdiff_t {
         semsg(
             gettext(
-                b"E886: System error while reading integer from ShaDa file: %s\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"E886: System error while reading integer from ShaDa file: %s\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             ),
             uv_strerror(read_bytes as ::core::ffi::c_int),
         );
         return kSDReadStatusReadError;
     } else if read_bytes == 0 as ptrdiff_t {
-        if allow_eof as ::core::ffi::c_int != 0
-            && file_eof(sd_reader) as ::core::ffi::c_int != 0
-        {
+        if allow_eof as ::core::ffi::c_int != 0 && file_eof(sd_reader) as ::core::ffi::c_int != 0 {
             return kSDReadStatusFinished;
         }
         semsg(
@@ -7649,16 +7450,12 @@ unsafe extern "C" fn msgpack_read_uint64(
             }
         }
         let mut buf: uint64_t = 0 as uint64_t;
-        let mut buf_u8: *mut ::core::ffi::c_char = &raw mut buf
-            as *mut ::core::ffi::c_char;
+        let mut buf_u8: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
         let mut fl_ret: ShaDaReadResult = kSDReadStatusSuccess;
         fl_ret = fread_len(
             sd_reader,
             buf_u8
-                .offset(
-                    ::core::mem::size_of::<uint64_t>().wrapping_sub(length as usize)
-                        as isize,
-                ),
+                .offset(::core::mem::size_of::<uint64_t>().wrapping_sub(length as usize) as isize),
             length,
         );
         if fl_ret as ::core::ffi::c_uint
@@ -7687,19 +7484,13 @@ unsafe extern "C" fn shada_read_next_item(
         items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     let mut read_additional_array_elements: uint32_t = 0;
-    let mut error_alloc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut error_alloc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut mru_ret: ShaDaReadResult = kSDReadStatusSuccess;
     let mut length: size_t = 0;
     let mut parse_pos: uint64_t = 0;
     let mut buf_allocated: bool = false;
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut read_ptr: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut read_ptr: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut read_size: size_t = 0;
     let mut ret: ShaDaReadResult = kSDReadStatusMalformed;
     '_shada_read_next_item_end: {
@@ -7725,24 +7516,14 @@ unsafe extern "C" fn shada_read_next_item(
             if mru_ret as ::core::ffi::c_uint
                 != kSDReadStatusSuccess as ::core::ffi::c_int as ::core::ffi::c_uint
                 || {
-                    mru_ret = msgpack_read_uint64(
-                        sd_reader,
-                        false_0 != 0,
-                        &raw mut timestamp_u64,
-                    );
+                    mru_ret = msgpack_read_uint64(sd_reader, false_0 != 0, &raw mut timestamp_u64);
                     mru_ret as ::core::ffi::c_uint
-                        != kSDReadStatusSuccess as ::core::ffi::c_int
-                            as ::core::ffi::c_uint
+                        != kSDReadStatusSuccess as ::core::ffi::c_int as ::core::ffi::c_uint
                 }
                 || {
-                    mru_ret = msgpack_read_uint64(
-                        sd_reader,
-                        false_0 != 0,
-                        &raw mut length_u64,
-                    );
+                    mru_ret = msgpack_read_uint64(sd_reader, false_0 != 0, &raw mut length_u64);
                     mru_ret as ::core::ffi::c_uint
-                        != kSDReadStatusSuccess as ::core::ffi::c_int
-                            as ::core::ffi::c_uint
+                        != kSDReadStatusSuccess as ::core::ffi::c_int as ::core::ffi::c_uint
                 }
             {
                 return mru_ret;
@@ -7771,12 +7552,13 @@ unsafe extern "C" fn shada_read_next_item(
                 return kSDReadStatusNotShaDa;
             }
             if (if type_u64 > kSDItemChange as ::core::ffi::c_int as uint64_t {
-                (flags & kSDReadUnknown as ::core::ffi::c_int as ::core::ffi::c_uint
-                    == 0) as ::core::ffi::c_int
+                (flags & kSDReadUnknown as ::core::ffi::c_int as ::core::ffi::c_uint == 0)
+                    as ::core::ffi::c_int
             } else {
-                (((1 as ::core::ffi::c_int) << type_u64) as ::core::ffi::c_uint & flags
-                    == 0) as ::core::ffi::c_int
-            }) != 0 || max_kbyte != 0 && length > max_kbyte.wrapping_mul(1024 as size_t)
+                (((1 as ::core::ffi::c_int) << type_u64) as ::core::ffi::c_uint & flags == 0)
+                    as ::core::ffi::c_int
+            }) != 0
+                || max_kbyte != 0 && length > max_kbyte.wrapping_mul(1024 as size_t)
             {
                 if initial_fpos == 0 as uint64_t
                     && (type_u64 == '\n' as uint64_t
@@ -7786,8 +7568,7 @@ unsafe extern "C" fn shada_read_next_item(
                 } else {
                     let srs_ret: ShaDaReadResult = sd_reader_skip(sd_reader, length);
                     if srs_ret as ::core::ffi::c_uint
-                        != kSDReadStatusSuccess as ::core::ffi::c_int
-                            as ::core::ffi::c_uint
+                        != kSDReadStatusSuccess as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         return srs_ret;
                     }
@@ -7811,15 +7592,10 @@ unsafe extern "C" fn shada_read_next_item(
             read_ptr = buf;
             read_size = length;
             if verify_but_ignore {
-                let mut status: ::core::ffi::c_int = unpack_skip(
-                    &raw mut read_ptr,
-                    &raw mut read_size,
-                );
-                let mut spm_ret: ShaDaReadResult = shada_check_status(
-                    parse_pos as uintmax_t,
-                    status,
-                    read_size,
-                );
+                let mut status: ::core::ffi::c_int =
+                    unpack_skip(&raw mut read_ptr, &raw mut read_size);
+                let mut spm_ret: ShaDaReadResult =
+                    shada_check_status(parse_pos as uintmax_t, status, read_size);
                 if buf_allocated {
                     xfree(buf as *mut ::core::ffi::c_void);
                 }
@@ -7834,18 +7610,12 @@ unsafe extern "C" fn shada_read_next_item(
                     (*entry).data.unknown_item.size = length;
                     (*entry).data.unknown_item.type_0 = type_u64;
                     if initial_fpos == 0 as uint64_t {
-                        let mut status_0: ::core::ffi::c_int = unpack_skip(
-                            &raw mut read_ptr,
-                            &raw mut read_size,
-                        );
-                        let mut spm_ret_0: ShaDaReadResult = shada_check_status(
-                            parse_pos as uintmax_t,
-                            status_0,
-                            read_size,
-                        );
+                        let mut status_0: ::core::ffi::c_int =
+                            unpack_skip(&raw mut read_ptr, &raw mut read_size);
+                        let mut spm_ret_0: ShaDaReadResult =
+                            shada_check_status(parse_pos as uintmax_t, status_0, read_size);
                         if spm_ret_0 as ::core::ffi::c_uint
-                            != kSDReadStatusSuccess as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            != kSDReadStatusSuccess as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             if buf_allocated {
                                 xfree(buf as *mut ::core::ffi::c_void);
@@ -7854,22 +7624,20 @@ unsafe extern "C" fn shada_read_next_item(
                             return spm_ret_0;
                         }
                     }
-                    (*entry).data.unknown_item.contents = (if buf_allocated
-                        as ::core::ffi::c_int != 0
-                    {
-                        buf as *mut ::core::ffi::c_void
-                    } else {
-                        xmemdup(buf as *const ::core::ffi::c_void, length)
-                    }) as *mut ::core::ffi::c_char;
+                    (*entry).data.unknown_item.contents =
+                        (if buf_allocated as ::core::ffi::c_int != 0 {
+                            buf as *mut ::core::ffi::c_void
+                        } else {
+                            xmemdup(buf as *const ::core::ffi::c_void, length)
+                        }) as *mut ::core::ffi::c_char;
                     return kSDReadStatusSuccess;
                 }
                 (*entry).data = sd_default_values[type_u64 as usize].data;
                 's_900: {
                     match type_u64 as ShadaEntryType as ::core::ffi::c_int {
                         2 => {
-                            let mut it: *mut KeyDict__shada_search_pat = &raw mut (*entry)
-                                .data
-                                .search_pattern;
+                            let mut it: *mut KeyDict__shada_search_pat =
+                                &raw mut (*entry).data.search_pattern;
                             if !unpack_keydict(
                                 it as *mut ::core::ffi::c_void,
                                 Some(
@@ -7877,7 +7645,8 @@ unsafe extern "C" fn shada_read_next_item(
                                         as unsafe extern "C" fn(
                                             *const ::core::ffi::c_char,
                                             size_t,
-                                        ) -> *mut KeySetLink,
+                                        )
+                                            -> *mut KeySetLink,
                                 ),
                                 &raw mut ad,
                                 &raw mut read_ptr,
@@ -7933,7 +7702,8 @@ unsafe extern "C" fn shada_read_next_item(
                                         as unsafe extern "C" fn(
                                             *const ::core::ffi::c_char,
                                             size_t,
-                                        ) -> *mut KeySetLink,
+                                        )
+                                            -> *mut KeySetLink,
                                 ),
                                 &raw mut ad,
                                 &raw mut read_ptr,
@@ -7993,7 +7763,8 @@ unsafe extern "C" fn shada_read_next_item(
                                     (*entry).data.filemark.fname = xmemdupz(
                                         it_0.f.data as *const ::core::ffi::c_void,
                                         it_0.f.size,
-                                    ) as *mut ::core::ffi::c_char;
+                                    )
+                                        as *mut ::core::ffi::c_char;
                                 }
                                 if (*entry).data.filemark.fname.is_null() {
                                     semsg(
@@ -8004,8 +7775,7 @@ unsafe extern "C" fn shada_read_next_item(
                                         initial_fpos,
                                     );
                                     break '_shada_read_next_item_error;
-                                } else if (*entry).data.filemark.mark.lnum <= 0 as linenr_T
-                                {
+                                } else if (*entry).data.filemark.mark.lnum <= 0 as linenr_T {
                                     semsg(
                                         gettext(
                                             b"E575: Error while reading ShaDa file: mark entry at position %lu has invalid line number\0"
@@ -8014,8 +7784,7 @@ unsafe extern "C" fn shada_read_next_item(
                                         initial_fpos,
                                     );
                                     break '_shada_read_next_item_error;
-                                } else if (*entry).data.filemark.mark.col
-                                    < 0 as ::core::ffi::c_int
+                                } else if (*entry).data.filemark.mark.col < 0 as ::core::ffi::c_int
                                 {
                                     semsg(
                                         gettext(
@@ -8048,7 +7817,8 @@ unsafe extern "C" fn shada_read_next_item(
                                         as unsafe extern "C" fn(
                                             *const ::core::ffi::c_char,
                                             size_t,
-                                        ) -> *mut KeySetLink,
+                                        )
+                                            -> *mut KeySetLink,
                                 ),
                                 &raw mut ad,
                                 &raw mut read_ptr,
@@ -8080,11 +7850,11 @@ unsafe extern "C" fn shada_read_next_item(
                             } else {
                                 (*entry).data.reg.contents_size = it_1.rc.size;
                                 (*entry).data.reg.contents = xmalloc(
-                                    it_1
-                                        .rc
+                                    it_1.rc
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<String_0>()),
-                                ) as *mut String_0;
+                                )
+                                    as *mut String_0;
                                 let mut j: size_t = 0 as size_t;
                                 while j < it_1.rc.size {
                                     *(*entry).data.reg.contents.offset(j as isize) = copy_string(
@@ -8128,10 +7898,8 @@ unsafe extern "C" fn shada_read_next_item(
                             }
                         }
                         4 => {
-                            let mut len: ssize_t = unpack_array(
-                                &raw mut read_ptr,
-                                &raw mut read_size,
-                            );
+                            let mut len: ssize_t =
+                                unpack_array(&raw mut read_ptr, &raw mut read_size);
                             if len < 2 as ssize_t {
                                 semsg(
                                     gettext(
@@ -8157,10 +7925,8 @@ unsafe extern "C" fn shada_read_next_item(
                                     );
                                     break '_shada_read_next_item_error;
                                 } else {
-                                    let item: String_0 = unpack_string(
-                                        &raw mut read_ptr,
-                                        &raw mut read_size,
-                                    );
+                                    let item: String_0 =
+                                        unpack_string(&raw mut read_ptr, &raw mut read_size);
                                     if item.data.is_null() {
                                         semsg(
                                             gettext(
@@ -8171,11 +7937,11 @@ unsafe extern "C" fn shada_read_next_item(
                                         );
                                         break '_shada_read_next_item_error;
                                     } else if !memchr(
-                                            item.data as *const ::core::ffi::c_void,
-                                            0 as ::core::ffi::c_int,
-                                            item.size,
-                                        )
-                                        .is_null()
+                                        item.data as *const ::core::ffi::c_void,
+                                        0 as ::core::ffi::c_int,
+                                        item.size,
+                                    )
+                                    .is_null()
                                     {
                                         semsg(
                                             gettext(
@@ -8187,11 +7953,10 @@ unsafe extern "C" fn shada_read_next_item(
                                         break '_shada_read_next_item_error;
                                     } else {
                                         (*entry).data.history_item.histtype = hist_type as uint8_t;
-                                        let is_hist_search: bool = (*entry)
-                                            .data
-                                            .history_item
-                                            .histtype as ::core::ffi::c_int
-                                            == HIST_SEARCH as ::core::ffi::c_int;
+                                        let is_hist_search: bool =
+                                            (*entry).data.history_item.histtype
+                                                as ::core::ffi::c_int
+                                                == HIST_SEARCH as ::core::ffi::c_int;
                                         if is_hist_search {
                                             if len < 3 as ssize_t {
                                                 semsg(
@@ -8218,8 +7983,8 @@ unsafe extern "C" fn shada_read_next_item(
                                                     );
                                                     break '_shada_read_next_item_error;
                                                 } else {
-                                                    (*entry).data.history_item.sep = sep_type
-                                                        as ::core::ffi::c_char;
+                                                    (*entry).data.history_item.sep =
+                                                        sep_type as ::core::ffi::c_char;
                                                 }
                                             }
                                         }
@@ -8227,8 +7992,8 @@ unsafe extern "C" fn shada_read_next_item(
                                             .size
                                             .wrapping_add(1 as size_t)
                                             .wrapping_add(1 as size_t);
-                                        (*entry).data.history_item.string = xmalloc(strsize)
-                                            as *mut ::core::ffi::c_char;
+                                        (*entry).data.history_item.string =
+                                            xmalloc(strsize) as *mut ::core::ffi::c_char;
                                         memcpy(
                                             (*entry).data.history_item.string
                                                 as *mut ::core::ffi::c_void,
@@ -8239,29 +8004,26 @@ unsafe extern "C" fn shada_read_next_item(
                                             .data
                                             .history_item
                                             .string
-                                            .offset(strsize.wrapping_sub(2 as size_t) as isize) = 0
-                                            as ::core::ffi::c_char;
+                                            .offset(strsize.wrapping_sub(2 as size_t) as isize) =
+                                            0 as ::core::ffi::c_char;
                                         *(*entry)
                                             .data
                                             .history_item
                                             .string
-                                            .offset(strsize.wrapping_sub(1 as size_t) as isize) = (*entry)
-                                            .data
-                                            .history_item
-                                            .sep;
+                                            .offset(strsize.wrapping_sub(1 as size_t) as isize) =
+                                            (*entry).data.history_item.sep;
                                         read_additional_array_elements = (len
                                             - (2 as ::core::ffi::c_int
-                                                + is_hist_search as ::core::ffi::c_int) as ssize_t)
+                                                + is_hist_search as ::core::ffi::c_int)
+                                                as ssize_t)
                                             as uint32_t;
                                     }
                                 }
                             }
                         }
                         6 => {
-                            let mut len_0: ssize_t = unpack_array(
-                                &raw mut read_ptr,
-                                &raw mut read_size,
-                            );
+                            let mut len_0: ssize_t =
+                                unpack_array(&raw mut read_ptr, &raw mut read_size);
                             if len_0 < 2 as ssize_t {
                                 semsg(
                                     gettext(
@@ -8272,10 +8034,8 @@ unsafe extern "C" fn shada_read_next_item(
                                 );
                                 break '_shada_read_next_item_error;
                             } else {
-                                let mut name: String_0 = unpack_string(
-                                    &raw mut read_ptr,
-                                    &raw mut read_size,
-                                );
+                                let mut name: String_0 =
+                                    unpack_string(&raw mut read_ptr, &raw mut read_size);
                                 if name.data.is_null() {
                                     semsg(
                                         gettext(
@@ -8289,11 +8049,10 @@ unsafe extern "C" fn shada_read_next_item(
                                     (*entry).data.global_var.name = xmemdupz(
                                         name.data as *const ::core::ffi::c_void,
                                         name.size,
-                                    ) as *mut ::core::ffi::c_char;
-                                    let mut binval: String_0 = unpack_string(
-                                        &raw mut read_ptr,
-                                        &raw mut read_size,
-                                    );
+                                    )
+                                        as *mut ::core::ffi::c_char;
+                                    let mut binval: String_0 =
+                                        unpack_string(&raw mut read_ptr, &raw mut read_size);
                                     let mut is_blob: bool = false_0 != 0;
                                     if !binval.data.is_null() {
                                         if len_0 > 2 as ssize_t {
@@ -8302,8 +8061,8 @@ unsafe extern "C" fn shada_read_next_item(
                                                 &raw mut read_ptr,
                                                 &raw mut read_size,
                                                 &raw mut type_0,
-                                            )
-                                                || type_0 != VAR_TYPE_BLOB as ::core::ffi::c_int as Integer
+                                            ) || type_0
+                                                != VAR_TYPE_BLOB as ::core::ffi::c_int as Integer
                                             {
                                                 semsg(
                                                     gettext(
@@ -8340,20 +8099,20 @@ unsafe extern "C" fn shada_read_next_item(
                                             break '_shada_read_next_item_error;
                                         }
                                     }
-                                    read_additional_array_elements = (len_0 - 2 as ssize_t
+                                    read_additional_array_elements = (len_0
+                                        - 2 as ssize_t
                                         - (if is_blob as ::core::ffi::c_int != 0 {
                                             1 as ::core::ffi::c_int
                                         } else {
                                             0 as ::core::ffi::c_int
-                                        }) as ssize_t) as uint32_t;
+                                        }) as ssize_t)
+                                        as uint32_t;
                                 }
                             }
                         }
                         3 => {
-                            let mut len_1: ssize_t = unpack_array(
-                                &raw mut read_ptr,
-                                &raw mut read_size,
-                            );
+                            let mut len_1: ssize_t =
+                                unpack_array(&raw mut read_ptr, &raw mut read_size);
                             if len_1 < 1 as ssize_t {
                                 semsg(
                                     gettext(
@@ -8364,10 +8123,8 @@ unsafe extern "C" fn shada_read_next_item(
                                 );
                                 break '_shada_read_next_item_error;
                             } else {
-                                let mut sub: String_0 = unpack_string(
-                                    &raw mut read_ptr,
-                                    &raw mut read_size,
-                                );
+                                let mut sub: String_0 =
+                                    unpack_string(&raw mut read_ptr, &raw mut read_size);
                                 if sub.data.is_null() {
                                     semsg(
                                         gettext(
@@ -8378,20 +8135,17 @@ unsafe extern "C" fn shada_read_next_item(
                                     );
                                     break '_shada_read_next_item_error;
                                 } else {
-                                    (*entry).data.sub_string.sub = xmemdupz(
-                                        sub.data as *const ::core::ffi::c_void,
-                                        sub.size,
-                                    ) as *mut ::core::ffi::c_char;
-                                    read_additional_array_elements = (len_1 - 1 as ssize_t)
-                                        as uint32_t;
+                                    (*entry).data.sub_string.sub =
+                                        xmemdupz(sub.data as *const ::core::ffi::c_void, sub.size)
+                                            as *mut ::core::ffi::c_char;
+                                    read_additional_array_elements =
+                                        (len_1 - 1 as ssize_t) as uint32_t;
                                 }
                             }
                         }
                         9 => {
-                            let mut len_2: ssize_t = unpack_array(
-                                &raw mut read_ptr,
-                                &raw mut read_size,
-                            );
+                            let mut len_2: ssize_t =
+                                unpack_array(&raw mut read_ptr, &raw mut read_size);
                             if len_2 < 0 as ssize_t {
                                 semsg(
                                     gettext(
@@ -8405,26 +8159,26 @@ unsafe extern "C" fn shada_read_next_item(
                                 (*entry).data.buffer_list.buffers = xcalloc(
                                     len_2 as size_t,
                                     ::core::mem::size_of::<buffer_list_buffer>(),
-                                ) as *mut buffer_list_buffer;
+                                )
+                                    as *mut buffer_list_buffer;
                                 let mut i: size_t = 0 as size_t;
                                 loop {
                                     if i >= len_2 as size_t {
                                         break 's_900;
                                     }
-                                    (*entry).data.buffer_list.size = (*entry)
-                                        .data
-                                        .buffer_list
-                                        .size
-                                        .wrapping_add(1);
-                                    let mut it_2: KeyDict__shada_buflist_item = KeyDict__shada_buflist_item {
-                                        is_set___shada_buflist_item_: 0 as OptionalKeys,
-                                        l: 0,
-                                        c: 0,
-                                        f: String_0 {
-                                            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                            size: 0,
-                                        },
-                                    };
+                                    (*entry).data.buffer_list.size =
+                                        (*entry).data.buffer_list.size.wrapping_add(1);
+                                    let mut it_2: KeyDict__shada_buflist_item =
+                                        KeyDict__shada_buflist_item {
+                                            is_set___shada_buflist_item_: 0 as OptionalKeys,
+                                            l: 0,
+                                            c: 0,
+                                            f: String_0 {
+                                                data: ::core::ptr::null_mut::<::core::ffi::c_char>(
+                                                ),
+                                                size: 0,
+                                            },
+                                        };
                                     let mut it_ad: AdditionalDataBuilder = KV_INITIAL_VALUE;
                                     if !unpack_keydict(
                                         &raw mut it_2 as *mut ::core::ffi::c_void,
@@ -8433,7 +8187,8 @@ unsafe extern "C" fn shada_read_next_item(
                                                 as unsafe extern "C" fn(
                                                     *const ::core::ffi::c_char,
                                                     size_t,
-                                                ) -> *mut KeySetLink,
+                                                )
+                                                    -> *mut KeySetLink,
                                         ),
                                         &raw mut it_ad,
                                         &raw mut read_ptr,
@@ -8451,16 +8206,13 @@ unsafe extern "C" fn shada_read_next_item(
                                         xfree(it_ad.items as *mut ::core::ffi::c_void);
                                         it_ad.capacity = 0 as size_t;
                                         it_ad.size = it_ad.capacity;
-                                        it_ad.items = ::core::ptr::null_mut::<
-                                            ::core::ffi::c_char,
-                                        >();
+                                        it_ad.items =
+                                            ::core::ptr::null_mut::<::core::ffi::c_char>();
                                         break '_shada_read_next_item_error;
                                     } else {
-                                        let mut e: *mut buffer_list_buffer = (*entry)
-                                            .data
-                                            .buffer_list
-                                            .buffers
-                                            .offset(i as isize) as *mut buffer_list_buffer;
+                                        let mut e: *mut buffer_list_buffer =
+                                            (*entry).data.buffer_list.buffers.offset(i as isize)
+                                                as *mut buffer_list_buffer;
                                         (*e).additional_data = it_ad.items as *mut AdditionalData;
                                         (*e).pos = default_pos;
                                         if it_2.is_set___shada_buflist_item_
@@ -8488,7 +8240,8 @@ unsafe extern "C" fn shada_read_next_item(
                                             (*e).fname = xmemdupz(
                                                 it_2.f.data as *const ::core::ffi::c_void,
                                                 it_2.f.size,
-                                            ) as *mut ::core::ffi::c_char;
+                                            )
+                                                as *mut ::core::ffi::c_char;
                                         }
                                         if (*e).pos.lnum <= 0 as linenr_T {
                                             semsg(
@@ -8533,10 +8286,8 @@ unsafe extern "C" fn shada_read_next_item(
                 let mut i_0: uint32_t = 0 as uint32_t;
                 while i_0 < read_additional_array_elements {
                     let mut item_start: *const ::core::ffi::c_char = read_ptr;
-                    let mut status_2: ::core::ffi::c_int = unpack_skip(
-                        &raw mut read_ptr,
-                        &raw mut read_size,
-                    );
+                    let mut status_2: ::core::ffi::c_int =
+                        unpack_skip(&raw mut read_ptr, &raw mut read_size);
                     if status_2 != 0 {
                         break '_shada_read_next_item_error;
                     }
@@ -8581,10 +8332,8 @@ unsafe extern "C" fn shada_read_next_item(
 unsafe extern "C" fn shada_removable(mut name: *const ::core::ffi::c_char) -> bool {
     let mut part: [::core::ffi::c_char; 4097] = [0; 4097];
     let mut retval: bool = false_0 != 0;
-    let mut new_name: *mut ::core::ffi::c_char = home_replace_save(
-        ::core::ptr::null_mut::<buf_T>(),
-        name,
-    );
+    let mut new_name: *mut ::core::ffi::c_char =
+        home_replace_save(::core::ptr::null_mut::<buf_T>(), name);
     let mut p: *mut ::core::ffi::c_char = p_shada;
     while *p != 0 {
         copy_option_part(
@@ -8599,15 +8348,13 @@ unsafe extern "C" fn shada_removable(mut name: *const ::core::ffi::c_char) -> bo
                 ),
             b", \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
-        if part[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            != 'r' as ::core::ffi::c_int
+        if part[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 'r' as ::core::ffi::c_int
         {
             continue;
         }
         home_replace(
             ::core::ptr::null::<buf_T>(),
-            (&raw mut part as *mut ::core::ffi::c_char)
-                .offset(1 as ::core::ffi::c_int as isize),
+            (&raw mut part as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
             &raw mut NameBuff as *mut ::core::ffi::c_char,
             MAXPATHL as size_t,
             true_0 != 0,
@@ -8630,9 +8377,7 @@ unsafe extern "C" fn shada_init_jumps(
     removable_bufs: *mut Set_ptr_t,
 ) -> size_t {
     let mut jumps_size: size_t = 0 as size_t;
-    let mut jump_iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-        ::core::ffi::c_void,
-    >();
+    let mut jump_iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
     setpcmark();
     cleanup_jumplist(curwin, false_0 != 0);
     loop {
@@ -8676,8 +8421,7 @@ unsafe extern "C" fn shada_init_jumps(
                 (fm.fmark.fnum != 0 as ::core::ffi::c_int) as ::core::ffi::c_int
             } == 0
             {
-                let fname: *const ::core::ffi::c_char = if fm.fmark.fnum
-                    == 0 as ::core::ffi::c_int
+                let fname: *const ::core::ffi::c_char = if fm.fmark.fnum == 0 as ::core::ffi::c_int
                 {
                     if fm.fname.is_null() {
                         ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -8716,21 +8460,18 @@ unsafe extern "C" fn shada_init_jumps(
 }
 #[no_mangle]
 pub unsafe extern "C" fn shada_encode_regs() -> String_0 {
-    let wms: *mut WriteMergerState = xcalloc(
-        1 as size_t,
-        ::core::mem::size_of::<WriteMergerState>(),
-    ) as *mut WriteMergerState;
+    let wms: *mut WriteMergerState =
+        xcalloc(1 as size_t, ::core::mem::size_of::<WriteMergerState>()) as *mut WriteMergerState;
     shada_initialize_registers(wms, -1 as ::core::ffi::c_int);
     let mut packer: PackerBuffer = packer_string_buffer();
     let mut i: size_t = 0 as size_t;
-    while i
-        < ::core::mem::size_of::<[ShadaEntry; 37]>()
-            .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-            .wrapping_div(
-                (::core::mem::size_of::<[ShadaEntry; 37]>()
-                    .wrapping_rem(::core::mem::size_of::<ShadaEntry>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            )
+    while i < ::core::mem::size_of::<[ShadaEntry; 37]>()
+        .wrapping_div(::core::mem::size_of::<ShadaEntry>())
+        .wrapping_div(
+            (::core::mem::size_of::<[ShadaEntry; 37]>()
+                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
+                == 0) as ::core::ffi::c_int as usize,
+        )
     {
         if (*wms).registers[i as usize].type_0 as ::core::ffi::c_int
             == kSDItemRegister as ::core::ffi::c_int
@@ -8770,10 +8511,8 @@ pub unsafe extern "C" fn shada_encode_jumps() -> String_0 {
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     }; 100];
-    let mut jumps_size: size_t = shada_init_jumps(
-        &raw mut jumps as *mut ShadaEntry,
-        &raw mut removable_bufs,
-    );
+    let mut jumps_size: size_t =
+        shada_init_jumps(&raw mut jumps as *mut ShadaEntry, &raw mut removable_bufs);
     let mut packer: PackerBuffer = packer_string_buffer();
     let mut i: size_t = 0 as size_t;
     while i < jumps_size {
@@ -8797,8 +8536,7 @@ pub unsafe extern "C" fn shada_encode_buflist() -> String_0 {
     let mut buflist_entry: ShadaEntry = shada_get_buflist(&raw mut removable_bufs);
     let mut packer: PackerBuffer = packer_string_buffer();
     if kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-        == shada_pack_entry(&raw mut packer, buflist_entry, 0 as size_t)
-            as ::core::ffi::c_uint
+        == shada_pack_entry(&raw mut packer, buflist_entry, 0 as size_t) as ::core::ffi::c_uint
     {
         abort();
     }
@@ -8808,9 +8546,7 @@ pub unsafe extern "C" fn shada_encode_buflist() -> String_0 {
 #[no_mangle]
 pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
     let mut packer: PackerBuffer = packer_string_buffer();
-    let mut var_iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-        ::core::ffi::c_void,
-    >();
+    let mut var_iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
     let cur_timestamp: Timestamp = os_time();
     loop {
         let mut vartv: typval_T = typval_T {
@@ -8818,9 +8554,7 @@ pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
-        let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         var_iter = var_shada_iter(
             var_iter,
             &raw mut name,
@@ -8874,10 +8608,7 @@ pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
     return packer_take_string(&raw mut packer);
 }
 #[no_mangle]
-pub unsafe extern "C" fn shada_read_string(
-    mut string: String_0,
-    flags: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn shada_read_string(mut string: String_0, flags: ::core::ffi::c_int) {
     if string.size == 0 as size_t {
         return;
     }
@@ -8896,12 +8627,9 @@ pub unsafe extern "C" fn shada_read_string(
     close_file(&raw mut sd_reader);
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_shada_parameter(
-    mut type_0: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn get_shada_parameter(mut type_0: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = find_shada_parameter(type_0);
-    if !p.is_null() && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-    {
+    if !p.is_null() && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
         return atoi(p);
     }
     return -1 as ::core::ffi::c_int;

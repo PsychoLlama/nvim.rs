@@ -50,10 +50,7 @@ extern "C" {
         non_blocking: bool,
     ) -> ptrdiff_t;
     fn os_fsync(fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn os_file_mkdir(
-        fname: *mut ::core::ffi::c_char,
-        mode: int32_t,
-    ) -> ::core::ffi::c_int;
+    fn os_file_mkdir(fname: *mut ::core::ffi::c_char, mode: int32_t) -> ::core::ffi::c_int;
 }
 pub type size_t = usize;
 #[derive(Copy, Clone)]
@@ -178,15 +175,15 @@ pub type TriState = ::core::ffi::c_int;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn file_space(mut fp: *mut FileDescriptor) -> size_t {
-    return (*fp).buffer.offset(ARENA_BLOCK_SIZE as isize).offset_from((*fp).write_pos)
-        as size_t;
+    return (*fp)
+        .buffer
+        .offset(ARENA_BLOCK_SIZE as isize)
+        .offset_from((*fp).write_pos) as size_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn file_open(
@@ -205,9 +202,8 @@ pub unsafe extern "C" fn file_open(
         }
     }
     if flags & kFileCreateOnly as ::core::ffi::c_int != 0 {
-        os_open_flags
-            |= 0o100 as ::core::ffi::c_int | 0o200 as ::core::ffi::c_int
-                | 0o1 as ::core::ffi::c_int;
+        os_open_flags |=
+            0o100 as ::core::ffi::c_int | 0o200 as ::core::ffi::c_int | 0o1 as ::core::ffi::c_int;
         '_c2rust_label_0: {};
         if kTrue as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
             wr = kTrue;
@@ -216,7 +212,8 @@ pub unsafe extern "C" fn file_open(
     if flags & kFileCreate as ::core::ffi::c_int != 0 {
         os_open_flags |= 0o100 as ::core::ffi::c_int | 0o1 as ::core::ffi::c_int;
         '_c2rust_label_1: {
-            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {} else {
+            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {
+            } else {
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -235,7 +232,8 @@ pub unsafe extern "C" fn file_open(
     if flags & kFileTruncate as ::core::ffi::c_int != 0 {
         os_open_flags |= 0o1000 as ::core::ffi::c_int | 0o1 as ::core::ffi::c_int;
         '_c2rust_label_2: {
-            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {} else {
+            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {
+            } else {
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -254,7 +252,8 @@ pub unsafe extern "C" fn file_open(
     if flags & kFileAppend as ::core::ffi::c_int != 0 {
         os_open_flags |= 0o2000 as ::core::ffi::c_int | 0o1 as ::core::ffi::c_int;
         '_c2rust_label_3: {
-            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {} else {
+            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {
+            } else {
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -273,7 +272,8 @@ pub unsafe extern "C" fn file_open(
     if flags & kFileReadOnly as ::core::ffi::c_int != 0 {
         os_open_flags |= 0 as ::core::ffi::c_int;
         '_c2rust_label_4: {
-            if wr as ::core::ffi::c_int != kTrue as ::core::ffi::c_int {} else {
+            if wr as ::core::ffi::c_int != kTrue as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"wr != kTrue\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0"
@@ -298,7 +298,8 @@ pub unsafe extern "C" fn file_open(
     if flags & kFileMkDir as ::core::ffi::c_int != 0 {
         os_open_flags |= 0o100 as ::core::ffi::c_int | 0o1 as ::core::ffi::c_int;
         '_c2rust_label_6: {
-            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {} else {
+            if flags & kFileCreateOnly as ::core::ffi::c_int == 0 {
+            } else {
                 __assert_fail(
                     b"!(flags & kFileCreateOnly)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -315,10 +316,8 @@ pub unsafe extern "C" fn file_open(
         }
     }
     if flags & kFileMkDir as ::core::ffi::c_int != 0 {
-        let mut mkdir_ret: ::core::ffi::c_int = os_file_mkdir(
-            fname as *mut ::core::ffi::c_char,
-            0o755 as int32_t,
-        );
+        let mut mkdir_ret: ::core::ffi::c_int =
+            os_file_mkdir(fname as *mut ::core::ffi::c_char, 0o755 as int32_t);
         if mkdir_ret < 0 as ::core::ffi::c_int {
             return mkdir_ret;
         }
@@ -336,20 +335,23 @@ pub unsafe extern "C" fn file_open_fd(
     flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     (*ret_fp).wr = flags
-        & (kFileCreate as ::core::ffi::c_int | kFileCreateOnly as ::core::ffi::c_int
-            | kFileTruncate as ::core::ffi::c_int | kFileAppend as ::core::ffi::c_int
-            | kFileWriteOnly as ::core::ffi::c_int) != 0;
+        & (kFileCreate as ::core::ffi::c_int
+            | kFileCreateOnly as ::core::ffi::c_int
+            | kFileTruncate as ::core::ffi::c_int
+            | kFileAppend as ::core::ffi::c_int
+            | kFileWriteOnly as ::core::ffi::c_int)
+        != 0;
     (*ret_fp).non_blocking = flags & kFileNonBlocking as ::core::ffi::c_int != 0;
     '_c2rust_label: {
-        if !(*ret_fp).wr || !(*ret_fp).non_blocking {} else {
+        if !(*ret_fp).wr || !(*ret_fp).non_blocking {
+        } else {
             __assert_fail(
-                b"!ret_fp->wr || !ret_fp->non_blocking\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"!ret_fp->wr || !ret_fp->non_blocking\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 113 as ::core::ffi::c_uint,
-                b"int file_open_fd(FileDescriptor *const, const int, const int)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"int file_open_fd(FileDescriptor *const, const int, const int)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -362,9 +364,7 @@ pub unsafe extern "C" fn file_open_fd(
     return 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn file_open_stdin(
-    mut fp: *mut FileDescriptor,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn file_open_stdin(mut fp: *mut FileDescriptor) -> ::core::ffi::c_int {
     let mut error: ::core::ffi::c_int = file_open_fd(
         fp,
         os_open_stdin_fd(),
@@ -399,10 +399,7 @@ pub unsafe extern "C" fn file_open_buffer(
     (*ret_fp).bytes_read = 0 as uint64_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn file_close(
-    fp: *mut FileDescriptor,
-    do_fsync: bool,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> ::core::ffi::c_int {
     if (*fp).fd < 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
@@ -469,19 +466,19 @@ pub unsafe extern "C" fn file_read(
     size: size_t,
 ) -> ptrdiff_t {
     '_c2rust_label: {
-        if !(*fp).wr {} else {
+        if !(*fp).wr {
+        } else {
             __assert_fail(
                 b"!fp->wr\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 230 as ::core::ffi::c_uint,
-                b"ptrdiff_t file_read(FileDescriptor *const, char *const, const size_t)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"ptrdiff_t file_read(FileDescriptor *const, char *const, const size_t)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
-    let mut from_buffer: size_t = if ((*fp).write_pos.offset_from((*fp).read_pos)
-        as size_t) < size
+    let mut from_buffer: size_t = if ((*fp).write_pos.offset_from((*fp).read_pos) as size_t) < size
     {
         (*fp).write_pos.offset_from((*fp).read_pos) as size_t
     } else {
@@ -496,7 +493,8 @@ pub unsafe extern "C" fn file_read(
     let mut read_remaining: size_t = size.wrapping_sub(from_buffer);
     if read_remaining == 0 {
         (*fp).bytes_read = ((*fp).bytes_read as ::core::ffi::c_ulong)
-            .wrapping_add(from_buffer as ::core::ffi::c_ulong) as uint64_t;
+            .wrapping_add(from_buffer as ::core::ffi::c_ulong)
+            as uint64_t;
         (*fp).read_pos = (*fp).read_pos.offset(from_buffer as isize);
         return from_buffer as ptrdiff_t;
     }
@@ -528,8 +526,8 @@ pub unsafe extern "C" fn file_read(
                 .wrapping_div(::core::mem::size_of::<iovec>())
                 .wrapping_div(
                     (::core::mem::size_of::<[iovec; 2]>()
-                        .wrapping_rem(::core::mem::size_of::<iovec>()) == 0)
-                        as ::core::ffi::c_int as size_t,
+                        .wrapping_rem(::core::mem::size_of::<iovec>())
+                        == 0) as ::core::ffi::c_int as size_t,
                 ),
             (*fp).non_blocking,
         );
@@ -544,7 +542,7 @@ pub unsafe extern "C" fn file_read(
                 read_remaining = read_remaining.wrapping_sub(r_ret as size_t);
             }
         } else if r_ret < 0 as ptrdiff_t {
-            return r_ret
+            return r_ret;
         }
         called_read = true_0 != 0;
     }
@@ -574,7 +572,8 @@ pub unsafe extern "C" fn file_write(
     size: size_t,
 ) -> ptrdiff_t {
     '_c2rust_label: {
-        if (*fp).wr {} else {
+        if (*fp).wr {
+        } else {
             __assert_fail(
                 b"fp->wr\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
@@ -617,7 +616,8 @@ pub unsafe extern "C" fn file_write(
 #[no_mangle]
 pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
     '_c2rust_label: {
-        if !(*fp).wr {} else {
+        if !(*fp).wr {
+        } else {
             __assert_fail(
                 b"!fp->wr\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/fileio.c\0".as_ptr()
@@ -628,8 +628,7 @@ pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptr
             );
         }
     };
-    let mut from_buffer: size_t = if ((*fp).write_pos.offset_from((*fp).read_pos)
-        as size_t) < size
+    let mut from_buffer: size_t = if ((*fp).write_pos.offset_from((*fp).read_pos) as size_t) < size
     {
         (*fp).write_pos.offset_from((*fp).read_pos) as size_t
     } else {
@@ -639,7 +638,8 @@ pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptr
     if skip_remaining == 0 as size_t {
         (*fp).read_pos = (*fp).read_pos.offset(from_buffer as isize);
         (*fp).bytes_read = ((*fp).bytes_read as ::core::ffi::c_ulong)
-            .wrapping_add(from_buffer as ::core::ffi::c_ulong) as uint64_t;
+            .wrapping_add(from_buffer as ::core::ffi::c_ulong)
+            as uint64_t;
         return from_buffer as ptrdiff_t;
     }
     (*fp).write_pos = (*fp).buffer;
@@ -660,12 +660,13 @@ pub unsafe extern "C" fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptr
             (*fp).non_blocking,
         );
         if r_ret < 0 as ptrdiff_t {
-            return r_ret
+            return r_ret;
         } else if r_ret as size_t > skip_remaining {
             (*fp).read_pos = (*fp).buffer.offset(skip_remaining as isize);
             (*fp).write_pos = (*fp).buffer.offset(r_ret as isize);
             (*fp).bytes_read = ((*fp).bytes_read as ::core::ffi::c_ulong)
-                .wrapping_add(size as ::core::ffi::c_ulong) as uint64_t;
+                .wrapping_add(size as ::core::ffi::c_ulong)
+                as uint64_t;
             return size as ptrdiff_t;
         }
         skip_remaining = skip_remaining.wrapping_sub(r_ret as size_t);

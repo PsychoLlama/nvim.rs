@@ -24,10 +24,7 @@ extern "C" {
         __n: size_t,
     ) -> ::core::ffi::c_int;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn tcgetattr(
-        __fd: ::core::ffi::c_int,
-        __termios_p: *mut termios,
-    ) -> ::core::ffi::c_int;
+    fn tcgetattr(__fd: ::core::ffi::c_int, __termios_p: *mut termios) -> ::core::ffi::c_int;
     fn tcsetattr(
         __fd: ::core::ffi::c_int,
         __optional_actions: ::core::ffi::c_int,
@@ -37,10 +34,7 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn termkey_interpret_mouse(
         tk: *mut TermKey,
         key: *const TermKeyKey,
@@ -56,10 +50,7 @@ extern "C" {
         mode: *mut ::core::ffi::c_int,
         value: *mut ::core::ffi::c_int,
     ) -> TermKeyResult;
-    fn new_driver_csi(
-        tk: *mut TermKey,
-        term: *mut TerminfoEntry,
-    ) -> *mut ::core::ffi::c_void;
+    fn new_driver_csi(tk: *mut TermKey, term: *mut TerminfoEntry) -> *mut ::core::ffi::c_void;
     fn free_driver_csi(info: *mut ::core::ffi::c_void);
     fn peekkey_csi(
         tk: *mut TermKey,
@@ -68,18 +59,9 @@ extern "C" {
         force: ::core::ffi::c_int,
         nbytep: *mut size_t,
     ) -> TermKeyResult;
-    fn new_driver_ti(
-        tk: *mut TermKey,
-        term: *mut TerminfoEntry,
-    ) -> *mut ::core::ffi::c_void;
-    fn start_driver_ti(
-        tk: *mut TermKey,
-        info: *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
-    fn stop_driver_ti(
-        tk: *mut TermKey,
-        info: *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int;
+    fn new_driver_ti(tk: *mut TermKey, term: *mut TerminfoEntry) -> *mut ::core::ffi::c_void;
+    fn start_driver_ti(tk: *mut TermKey, info: *mut ::core::ffi::c_void) -> ::core::ffi::c_int;
+    fn stop_driver_ti(tk: *mut TermKey, info: *mut ::core::ffi::c_void) -> ::core::ffi::c_int;
     fn free_driver_ti(info: *mut ::core::ffi::c_void);
     fn peekkey_ti(
         tk: *mut TermKey,
@@ -160,9 +142,8 @@ pub struct TermKey {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_1 {
-    pub emit_codepoint: Option<
-        unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> (),
-    >,
+    pub emit_codepoint:
+        Option<unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> ()>,
     pub peekkey_simple: Option<
         unsafe extern "C" fn(
             *mut TermKey,
@@ -171,9 +152,8 @@ pub struct C2Rust_Unnamed_1 {
             *mut size_t,
         ) -> TermKeyResult,
     >,
-    pub peekkey_mouse: Option<
-        unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult,
-    >,
+    pub peekkey_mouse:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -288,25 +268,13 @@ pub struct TermKeyDriverNode {
 #[repr(C)]
 pub struct TermKeyDriver {
     pub name: *const ::core::ffi::c_char,
-    pub new_driver: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut TerminfoEntry,
-        ) -> *mut ::core::ffi::c_void,
-    >,
+    pub new_driver:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void>,
     pub free_driver: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>,
-    pub start_driver: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
-    >,
-    pub stop_driver: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
-    >,
+    pub start_driver:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
+    pub stop_driver:
+        Option<unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub peekkey: Option<
         unsafe extern "C" fn(
             *mut TermKey,
@@ -382,35 +350,22 @@ pub struct modnames {
     pub alt: *const ::core::ffi::c_char,
     pub ctrl: *const ::core::ffi::c_char,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub static mut termkey_driver_ti: TermKeyDriver = TermKeyDriver {
     name: b"terminfo\0".as_ptr() as *const ::core::ffi::c_char,
     new_driver: Some(
         new_driver_ti
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut TerminfoEntry,
-            ) -> *mut ::core::ffi::c_void,
+            as unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void,
     ),
-    free_driver: Some(
-        free_driver_ti as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
-    ),
+    free_driver: Some(free_driver_ti as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
     start_driver: Some(
         start_driver_ti
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
+            as unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
     stop_driver: Some(
         stop_driver_ti
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
+            as unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
     peekkey: Some(
         peekkey_ti
@@ -428,14 +383,9 @@ pub static mut termkey_driver_csi: TermKeyDriver = TermKeyDriver {
     name: b"CSI\0".as_ptr() as *const ::core::ffi::c_char,
     new_driver: Some(
         new_driver_csi
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut TerminfoEntry,
-            ) -> *mut ::core::ffi::c_void,
+            as unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void,
     ),
-    free_driver: Some(
-        free_driver_csi as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
-    ),
+    free_driver: Some(free_driver_csi as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
     start_driver: None,
     stop_driver: None,
     peekkey: Some(
@@ -746,10 +696,10 @@ unsafe extern "C" fn snprint_cameltospaces(
     let mut prev_lower: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut l: size_t = 0 as size_t;
     while *src as ::core::ffi::c_int != 0 && l < size.wrapping_sub(1 as size_t) {
-        if *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0 && prev_lower != 0
+        if *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+            && prev_lower != 0
         {
             if !str.is_null() {
                 let c2rust_fresh0 = l;
@@ -762,29 +712,26 @@ unsafe extern "C" fn snprint_cameltospaces(
         }
         prev_lower = *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize)
             as ::core::ffi::c_int
-            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int;
+            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int;
         let c2rust_fresh1 = src;
         src = src.offset(1);
         let c2rust_fresh2 = l;
         l = l.wrapping_add(1);
-        *str.offset(c2rust_fresh2 as isize) = tolower(
-            *c2rust_fresh1 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_char;
+        *str.offset(c2rust_fresh2 as isize) =
+            tolower(*c2rust_fresh1 as ::core::ffi::c_int) as ::core::ffi::c_char;
     }
     *str.offset(l as isize) = 0 as ::core::ffi::c_char;
     while *src != 0 {
-        if *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0 && prev_lower != 0
+        if *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+            && prev_lower != 0
         {
             l = l.wrapping_add(1);
         }
         prev_lower = *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize)
             as ::core::ffi::c_int
-            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int;
+            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int;
         src = src.offset(1);
         l = l.wrapping_add(1);
     }
@@ -798,15 +745,14 @@ unsafe extern "C" fn strpncmp_camel(
     let mut str: *const ::core::ffi::c_char = *strp;
     let mut strcamel: *const ::core::ffi::c_char = *strcamelp;
     let mut prev_lower: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while (*str as ::core::ffi::c_int != 0 || *strcamel as ::core::ffi::c_int != 0)
-        && n != 0
-    {
-        let mut b: ::core::ffi::c_char = tolower(*strcamel as ::core::ffi::c_int)
-            as ::core::ffi::c_char;
+    while (*str as ::core::ffi::c_int != 0 || *strcamel as ::core::ffi::c_int != 0) && n != 0 {
+        let mut b: ::core::ffi::c_char =
+            tolower(*strcamel as ::core::ffi::c_int) as ::core::ffi::c_char;
         if *(*__ctype_b_loc()).offset(*strcamel as ::core::ffi::c_int as isize)
             as ::core::ffi::c_int
-            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0 && prev_lower != 0
+            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
+            && prev_lower != 0
         {
             if *str as ::core::ffi::c_int != ' ' as ::core::ffi::c_int {
                 break;
@@ -820,8 +766,7 @@ unsafe extern "C" fn strpncmp_camel(
         }
         prev_lower = *(*__ctype_b_loc()).offset(*strcamel as ::core::ffi::c_int as isize)
             as ::core::ffi::c_int
-            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int;
+            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int;
         str = str.offset(1);
         strcamel = strcamel.offset(1);
         n = n.wrapping_sub(1);
@@ -831,8 +776,7 @@ unsafe extern "C" fn strpncmp_camel(
     return *str as ::core::ffi::c_int - *strcamel as ::core::ffi::c_int;
 }
 unsafe extern "C" fn termkey_alloc() -> *mut TermKey {
-    let mut tk: *mut TermKey = xmalloc(::core::mem::size_of::<TermKey>())
-        as *mut TermKey;
+    let mut tk: *mut TermKey = xmalloc(::core::mem::size_of::<TermKey>()) as *mut TermKey;
     (*tk).fd = -1 as ::core::ffi::c_int;
     (*tk).flags = 0 as ::core::ffi::c_int;
     (*tk).canonflags = 0 as ::core::ffi::c_int;
@@ -857,15 +801,9 @@ unsafe extern "C" fn termkey_alloc() -> *mut TermKey {
     (*tk).drivers = ::core::ptr::null_mut::<TermKeyDriverNode>();
     (*tk).method.emit_codepoint = Some(
         emit_codepoint
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                ::core::ffi::c_int,
-                *mut TermKeyKey,
-            ) -> (),
+            as unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> (),
     )
-        as Option<
-            unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> (),
-        >;
+        as Option<unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> ()>;
     (*tk).method.peekkey_simple = Some(
         peekkey_simple
             as unsafe extern "C" fn(
@@ -885,18 +823,10 @@ unsafe extern "C" fn termkey_alloc() -> *mut TermKey {
         >;
     (*tk).method.peekkey_mouse = Some(
         peekkey_mouse
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut TermKeyKey,
-                *mut size_t,
-            ) -> TermKeyResult,
+            as unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult,
     )
         as Option<
-            unsafe extern "C" fn(
-                *mut TermKey,
-                *mut TermKeyKey,
-                *mut size_t,
-            ) -> TermKeyResult,
+            unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult,
         >;
     return tk;
 }
@@ -919,11 +849,9 @@ unsafe extern "C" fn termkey_init(
     i = 0 as ::core::ffi::c_int;
     '_abort_free_keynames: {
         while !keynames[i as usize].name.is_null() {
-            if termkey_register_keyname(
-                tk,
-                keynames[i as usize].sym,
-                keynames[i as usize].name,
-            ) as ::core::ffi::c_int == -1 as ::core::ffi::c_int
+            if termkey_register_keyname(tk, keynames[i as usize].sym, keynames[i as usize].name)
+                as ::core::ffi::c_int
+                == -1 as ::core::ffi::c_int
             {
                 break '_abort_free_keynames;
             }
@@ -951,17 +879,17 @@ unsafe extern "C" fn termkey_init(
         i = 0 as ::core::ffi::c_int;
         '_abort_free_drivers: {
             while !drivers[i as usize].is_null() {
-                let mut info: *mut ::core::ffi::c_void = Some(
-                        (**(&raw mut drivers as *mut *mut TermKeyDriver)
-                            .offset(i as isize))
+                let mut info: *mut ::core::ffi::c_void =
+                    Some(
+                        (**(&raw mut drivers as *mut *mut TermKeyDriver).offset(i as isize))
                             .new_driver
                             .expect("non-null function pointer"),
                     )
                     .expect("non-null function pointer")(tk, term);
                 if !info.is_null() {
-                    let mut thisdrv: *mut TermKeyDriverNode = xmalloc(
-                        ::core::mem::size_of::<TermKeyDriverNode>(),
-                    ) as *mut TermKeyDriverNode;
+                    let mut thisdrv: *mut TermKeyDriverNode =
+                        xmalloc(::core::mem::size_of::<TermKeyDriverNode>())
+                            as *mut TermKeyDriverNode;
                     if thisdrv.is_null() {
                         break '_abort_free_drivers;
                     }
@@ -981,13 +909,17 @@ unsafe extern "C" fn termkey_init(
                 *__errno_location() = ENOENT;
                 break '_abort_free_keynames;
             } else {
-                return 1 as ::core::ffi::c_int
+                return 1 as ::core::ffi::c_int;
             }
         }
         let mut p: *mut TermKeyDriverNode = (*tk).drivers;
         while !p.is_null() {
-            Some((*(*p).driver).free_driver.expect("non-null function pointer"))
-                .expect("non-null function pointer")((*p).info);
+            Some(
+                (*(*p).driver)
+                    .free_driver
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")((*p).info);
             let mut next: *mut TermKeyDriverNode = (*p).next;
             xfree(p as *mut ::core::ffi::c_void);
             p = next;
@@ -1012,12 +944,11 @@ pub unsafe extern "C" fn termkey_new_abstract(
         xfree(tk as *mut ::core::ffi::c_void);
         return ::core::ptr::null_mut::<TermKey>();
     }
-    if flags & TERMKEY_FLAG_NOSTART as ::core::ffi::c_int == 0 && termkey_start(tk) == 0
-    {
+    if flags & TERMKEY_FLAG_NOSTART as ::core::ffi::c_int == 0 && termkey_start(tk) == 0 {
         xfree(tk as *mut ::core::ffi::c_void);
         return ::core::ptr::null_mut::<TermKey>();
     } else {
-        return tk
+        return tk;
     };
 }
 #[no_mangle]
@@ -1029,8 +960,12 @@ pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
     let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
     p = (*tk).drivers;
     while !p.is_null() {
-        Some((*(*p).driver).free_driver.expect("non-null function pointer"))
-            .expect("non-null function pointer")((*p).info);
+        Some(
+            (*(*p).driver)
+                .free_driver
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")((*p).info);
         let mut next: *mut TermKeyDriverNode = (*p).next;
         xfree(p as *mut ::core::ffi::c_void);
         p = next;
@@ -1091,8 +1026,13 @@ pub unsafe extern "C" fn termkey_start(mut tk: *mut TermKey) -> ::core::ffi::c_i
     p = (*tk).drivers;
     while !p.is_null() {
         if (*(*p).driver).start_driver.is_some() {
-            if Some((*(*p).driver).start_driver.expect("non-null function pointer"))
-                .expect("non-null function pointer")(tk, (*p).info) == 0
+            if Some(
+                (*(*p).driver)
+                    .start_driver
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")(tk, (*p).info)
+                == 0
             {
                 return 0 as ::core::ffi::c_int;
             }
@@ -1111,8 +1051,12 @@ pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_in
     p = (*tk).drivers;
     while !p.is_null() {
         if (*(*p).driver).stop_driver.is_some() {
-            Some((*(*p).driver).stop_driver.expect("non-null function pointer"))
-                .expect("non-null function pointer")(tk, (*p).info);
+            Some(
+                (*(*p).driver)
+                    .stop_driver
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")(tk, (*p).info);
         }
         p = (*p).next;
     }
@@ -1123,10 +1067,7 @@ pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_in
     return 1 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn termkey_set_flags(
-    mut tk: *mut TermKey,
-    mut newflags: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn termkey_set_flags(mut tk: *mut TermKey, mut newflags: ::core::ffi::c_int) {
     (*tk).flags = newflags;
     if (*tk).flags & TERMKEY_FLAG_SPACESYMBOL as ::core::ffi::c_int != 0 {
         (*tk).canonflags |= TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int;
@@ -1135,9 +1076,7 @@ pub unsafe extern "C" fn termkey_set_flags(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn termkey_get_canonflags(
-    mut tk: *mut TermKey,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn termkey_get_canonflags(mut tk: *mut TermKey) -> ::core::ffi::c_int {
     return (*tk).canonflags;
 }
 #[no_mangle]
@@ -1161,10 +1100,8 @@ pub unsafe extern "C" fn termkey_set_buffer_size(
     mut tk: *mut TermKey,
     mut size: size_t,
 ) -> ::core::ffi::c_int {
-    let mut buffer: *mut ::core::ffi::c_uchar = xrealloc(
-        (*tk).buffer as *mut ::core::ffi::c_void,
-        size,
-    ) as *mut ::core::ffi::c_uchar;
+    let mut buffer: *mut ::core::ffi::c_uchar =
+        xrealloc((*tk).buffer as *mut ::core::ffi::c_void, size) as *mut ::core::ffi::c_uchar;
     (*tk).buffer = buffer;
     (*tk).buffsize = size;
     return 1 as ::core::ffi::c_int;
@@ -1249,7 +1186,8 @@ unsafe extern "C" fn parse_utf8(
         *cp = UNICODE_INVALID as ::core::ffi::c_int;
     }
     if *cp >= 0xd800 as ::core::ffi::c_int && *cp <= 0xdfff as ::core::ffi::c_int
-        || *cp == 0xfffe as ::core::ffi::c_int || *cp == 0xffff as ::core::ffi::c_int
+        || *cp == 0xfffe as ::core::ffi::c_int
+        || *cp == 0xffff as ::core::ffi::c_int
     {
         *cp = UNICODE_INVALID as ::core::ffi::c_int;
     }
@@ -1296,27 +1234,22 @@ unsafe extern "C" fn emit_codepoint(
         (*key).type_0 = TERMKEY_TYPE_KEYSYM;
         (*key).code.sym = TERMKEY_SYM_DEL;
         (*key).modifiers = 0 as ::core::ffi::c_int;
-    } else if codepoint > 0 as ::core::ffi::c_int
-        && codepoint < 0x80 as ::core::ffi::c_int
-    {
+    } else if codepoint > 0 as ::core::ffi::c_int && codepoint < 0x80 as ::core::ffi::c_int {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).code.codepoint = codepoint;
         (*key).modifiers = 0 as ::core::ffi::c_int;
-    } else if codepoint >= 0x80 as ::core::ffi::c_int
-        && codepoint < 0xa0 as ::core::ffi::c_int
-    {
+    } else if codepoint >= 0x80 as ::core::ffi::c_int && codepoint < 0xa0 as ::core::ffi::c_int {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).code.codepoint = codepoint - 0x40 as ::core::ffi::c_int;
-        (*key).modifiers = TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int
-            | TERMKEY_KEYMOD_ALT as ::core::ffi::c_int;
+        (*key).modifiers =
+            TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int | TERMKEY_KEYMOD_ALT as ::core::ffi::c_int;
     } else {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).code.codepoint = codepoint;
         (*key).modifiers = 0 as ::core::ffi::c_int;
     }
     termkey_canonicalise(tk, key);
-    if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
-    {
+    if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int {
         fill_utf8(
             (*key).code.codepoint,
             &raw mut (*key).utf8 as *mut ::core::ffi::c_char,
@@ -1324,23 +1257,17 @@ unsafe extern "C" fn emit_codepoint(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn termkey_canonicalise(
-    mut tk: *mut TermKey,
-    mut key: *mut TermKeyKey,
-) {
+pub unsafe extern "C" fn termkey_canonicalise(mut tk: *mut TermKey, mut key: *mut TermKeyKey) {
     let mut flags: ::core::ffi::c_int = (*tk).canonflags;
     if flags & TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int != 0 {
-        if (*key).type_0 as ::core::ffi::c_int
-            == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
+        if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
             && (*key).code.codepoint == 0x20 as ::core::ffi::c_int
         {
             (*key).type_0 = TERMKEY_TYPE_KEYSYM;
             (*key).code.sym = TERMKEY_SYM_SPACE;
         }
-    } else if (*key).type_0 as ::core::ffi::c_int
-        == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
-        && (*key).code.sym as ::core::ffi::c_int
-            == TERMKEY_SYM_SPACE as ::core::ffi::c_int
+    } else if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
+        && (*key).code.sym as ::core::ffi::c_int == TERMKEY_SYM_SPACE as ::core::ffi::c_int
     {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).code.codepoint = 0x20 as ::core::ffi::c_int;
@@ -1350,10 +1277,8 @@ pub unsafe extern "C" fn termkey_canonicalise(
         );
     }
     if flags & TERMKEY_CANON_DELBS as ::core::ffi::c_int != 0 {
-        if (*key).type_0 as ::core::ffi::c_int
-            == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
-            && (*key).code.sym as ::core::ffi::c_int
-                == TERMKEY_SYM_DEL as ::core::ffi::c_int
+        if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
+            && (*key).code.sym as ::core::ffi::c_int == TERMKEY_SYM_DEL as ::core::ffi::c_int
         {
             (*key).code.sym = TERMKEY_SYM_BACKSPACE;
         }
@@ -1380,9 +1305,13 @@ unsafe extern "C" fn peekkey(
     let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
     p = (*tk).drivers;
     while !p.is_null() {
-        ret = (*(*p).driver)
-            .peekkey
-            .expect("non-null function pointer")(tk, (*p).info, key, force, nbytep);
+        ret = (*(*p).driver).peekkey.expect("non-null function pointer")(
+            tk,
+            (*p).info,
+            key,
+            force,
+            nbytep,
+        );
         's_115: {
             match ret as ::core::ffi::c_uint {
                 1 => {
@@ -1390,8 +1319,7 @@ unsafe extern "C" fn peekkey(
                     if (*tk).buffstart > halfsize {
                         memcpy(
                             (*tk).buffer as *mut ::core::ffi::c_void,
-                            (*tk).buffer.offset(halfsize as isize)
-                                as *const ::core::ffi::c_void,
+                            (*tk).buffer.offset(halfsize as isize) as *const ::core::ffi::c_void,
                             halfsize,
                         );
                         (*tk).buffstart = (*tk).buffstart.wrapping_sub(halfsize);
@@ -1439,8 +1367,13 @@ unsafe extern "C" fn peekkey_simple(
             if force == 0 {
                 return TERMKEY_RES_AGAIN;
             }
-            Some((*tk).method.emit_codepoint.expect("non-null function pointer"))
-                .expect("non-null function pointer")(tk, b0 as ::core::ffi::c_int, key);
+            Some(
+                (*tk)
+                    .method
+                    .emit_codepoint
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")(tk, b0 as ::core::ffi::c_int, key);
             *nbytep = 1 as size_t;
             return TERMKEY_RES_KEY;
         }
@@ -1458,8 +1391,13 @@ unsafe extern "C" fn peekkey_simple(
         }
         return metakey_result;
     } else if (b0 as ::core::ffi::c_int) < 0xa0 as ::core::ffi::c_int {
-        Some((*tk).method.emit_codepoint.expect("non-null function pointer"))
-            .expect("non-null function pointer")(tk, b0 as ::core::ffi::c_int, key);
+        Some(
+            (*tk)
+                .method
+                .emit_codepoint
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(tk, b0 as ::core::ffi::c_int, key);
         *nbytep = 1 as size_t;
         return TERMKEY_RES_KEY;
     } else if (*tk).flags & TERMKEY_FLAG_UTF8 as ::core::ffi::c_int != 0 {
@@ -1480,15 +1418,20 @@ unsafe extern "C" fn peekkey_simple(
         }
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).modifiers = 0 as ::core::ffi::c_int;
-        Some((*tk).method.emit_codepoint.expect("non-null function pointer"))
-            .expect("non-null function pointer")(tk, codepoint, key);
+        Some(
+            (*tk)
+                .method
+                .emit_codepoint
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(tk, codepoint, key);
         return res;
     } else {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).code.codepoint = b0 as ::core::ffi::c_int;
         (*key).modifiers = 0 as ::core::ffi::c_int;
-        (*key).utf8[0 as ::core::ffi::c_int as usize] = (*key).code.codepoint
-            as ::core::ffi::c_char;
+        (*key).utf8[0 as ::core::ffi::c_int as usize] =
+            (*key).code.codepoint as ::core::ffi::c_char;
         (*key).utf8[1 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
         *nbytep = 1 as size_t;
         return TERMKEY_RES_KEY;
@@ -1503,28 +1446,31 @@ unsafe extern "C" fn peekkey_mouse(
         return TERMKEY_RES_AGAIN;
     }
     (*key).type_0 = TERMKEY_TYPE_MOUSE;
-    (*key).code.mouse[0 as ::core::ffi::c_int as usize] = (*(*tk)
-        .buffer
-        .offset((*tk).buffstart.wrapping_add(0 as size_t) as isize)
-        as ::core::ffi::c_char as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int)
-        as ::core::ffi::c_char;
-    (*key).code.mouse[1 as ::core::ffi::c_int as usize] = (*(*tk)
-        .buffer
-        .offset((*tk).buffstart.wrapping_add(1 as size_t) as isize)
-        as ::core::ffi::c_char as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int)
-        as ::core::ffi::c_char;
-    (*key).code.mouse[2 as ::core::ffi::c_int as usize] = (*(*tk)
-        .buffer
-        .offset((*tk).buffstart.wrapping_add(2 as size_t) as isize)
-        as ::core::ffi::c_char as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int)
-        as ::core::ffi::c_char;
+    (*key).code.mouse[0 as ::core::ffi::c_int as usize] =
+        (*(*tk)
+            .buffer
+            .offset((*tk).buffstart.wrapping_add(0 as size_t) as isize)
+            as ::core::ffi::c_char as ::core::ffi::c_int
+            - 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
+    (*key).code.mouse[1 as ::core::ffi::c_int as usize] =
+        (*(*tk)
+            .buffer
+            .offset((*tk).buffstart.wrapping_add(1 as size_t) as isize)
+            as ::core::ffi::c_char as ::core::ffi::c_int
+            - 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
+    (*key).code.mouse[2 as ::core::ffi::c_int as usize] =
+        (*(*tk)
+            .buffer
+            .offset((*tk).buffstart.wrapping_add(2 as size_t) as isize)
+            as ::core::ffi::c_char as ::core::ffi::c_int
+            - 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
     (*key).code.mouse[3 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
-    (*key).modifiers = ((*key).code.mouse[0 as ::core::ffi::c_int as usize]
-        as ::core::ffi::c_int & 0x1c as ::core::ffi::c_int) >> 2 as ::core::ffi::c_int;
-    (*key).code.mouse[0 as ::core::ffi::c_int as usize] = ((*key)
-        .code
-        .mouse[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-        & !(0x1c as ::core::ffi::c_int)) as ::core::ffi::c_char;
+    (*key).modifiers = ((*key).code.mouse[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+        & 0x1c as ::core::ffi::c_int)
+        >> 2 as ::core::ffi::c_int;
+    (*key).code.mouse[0 as ::core::ffi::c_int as usize] =
+        ((*key).code.mouse[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+            & !(0x1c as ::core::ffi::c_int)) as ::core::ffi::c_char;
     *nbytep = 3 as size_t;
     return TERMKEY_RES_KEY;
 }
@@ -1534,19 +1480,11 @@ pub unsafe extern "C" fn termkey_getkey(
     mut key: *mut TermKeyKey,
 ) -> TermKeyResult {
     let mut nbytes: size_t = 0 as size_t;
-    let mut ret: TermKeyResult = peekkey(
-        tk,
-        key,
-        0 as ::core::ffi::c_int,
-        &raw mut nbytes,
-    );
-    if ret as ::core::ffi::c_uint
-        == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    let mut ret: TermKeyResult = peekkey(tk, key, 0 as ::core::ffi::c_int, &raw mut nbytes);
+    if ret as ::core::ffi::c_uint == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint {
         eat_bytes(tk, nbytes);
     }
-    if ret as ::core::ffi::c_uint
-        == TERMKEY_RES_AGAIN as ::core::ffi::c_int as ::core::ffi::c_uint
+    if ret as ::core::ffi::c_uint == TERMKEY_RES_AGAIN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         peekkey(tk, key, 1 as ::core::ffi::c_int, &raw mut nbytes);
     }
@@ -1558,15 +1496,8 @@ pub unsafe extern "C" fn termkey_getkey_force(
     mut key: *mut TermKeyKey,
 ) -> TermKeyResult {
     let mut nbytes: size_t = 0 as size_t;
-    let mut ret: TermKeyResult = peekkey(
-        tk,
-        key,
-        1 as ::core::ffi::c_int,
-        &raw mut nbytes,
-    );
-    if ret as ::core::ffi::c_uint
-        == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    let mut ret: TermKeyResult = peekkey(tk, key, 1 as ::core::ffi::c_int, &raw mut nbytes);
+    if ret as ::core::ffi::c_uint == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint {
         eat_bytes(tk, nbytes);
     }
     return ret;
@@ -1614,13 +1545,12 @@ pub unsafe extern "C" fn termkey_register_keyname(
             (*tk).keynames as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*const ::core::ffi::c_char>()
                 .wrapping_mul((sym as size_t).wrapping_add(1 as size_t)),
-        ) as *mut *const ::core::ffi::c_char;
+        )
+            as *mut *const ::core::ffi::c_char;
         (*tk).keynames = new_keynames;
         let mut i: ::core::ffi::c_int = (*tk).nkeynames;
         while i < sym as ::core::ffi::c_int {
-            *(*tk).keynames.offset(i as isize) = ::core::ptr::null::<
-                ::core::ffi::c_char,
-            >();
+            *(*tk).keynames.offset(i as isize) = ::core::ptr::null::<::core::ffi::c_char>();
             i += 1;
         }
         (*tk).nkeynames = sym as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
@@ -1649,9 +1579,7 @@ unsafe extern "C" fn termkey_lookup_keyname_format(
 ) -> *const ::core::ffi::c_char {
     *sym = TERMKEY_SYM_NONE;
     while (*sym as ::core::ffi::c_int) < (*tk).nkeynames {
-        let mut thiskey: *const ::core::ffi::c_char = *(*tk)
-            .keynames
-            .offset(*sym as isize);
+        let mut thiskey: *const ::core::ffi::c_char = *(*tk).keynames.offset(*sym as isize);
         if !thiskey.is_null() {
             let mut len: size_t = strlen(thiskey);
             if format as ::core::ffi::c_uint
@@ -1665,7 +1593,7 @@ unsafe extern "C" fn termkey_lookup_keyname_format(
                     return thisstr;
                 }
             } else if strncmp(str, thiskey, len) == 0 as ::core::ffi::c_int {
-                return (str as *mut ::core::ffi::c_char).offset(len as isize)
+                return (str as *mut ::core::ffi::c_char).offset(len as isize);
             }
         }
         *sym += 1;
@@ -1767,43 +1695,41 @@ pub unsafe extern "C" fn termkey_strfkey(
 ) -> size_t {
     let mut pos: size_t = 0 as size_t;
     let mut l: size_t = 0 as size_t;
-    let mut mods: *mut modnames = (&raw mut modnames as *mut modnames)
-        .offset(
-            ((format as ::core::ffi::c_uint
-                & TERMKEY_FORMAT_LONGMOD as ::core::ffi::c_int as ::core::ffi::c_uint
+    let mut mods: *mut modnames = (&raw mut modnames as *mut modnames).offset(
+        ((format as ::core::ffi::c_uint
+            & TERMKEY_FORMAT_LONGMOD as ::core::ffi::c_int as ::core::ffi::c_uint
+            != 0) as ::core::ffi::c_int
+            + (format as ::core::ffi::c_uint
+                & TERMKEY_FORMAT_ALTISMETA as ::core::ffi::c_int as ::core::ffi::c_uint
                 != 0) as ::core::ffi::c_int
-                + (format as ::core::ffi::c_uint
-                    & TERMKEY_FORMAT_ALTISMETA as ::core::ffi::c_int
-                        as ::core::ffi::c_uint != 0) as ::core::ffi::c_int
-                    * 2 as ::core::ffi::c_int
-                + (format as ::core::ffi::c_uint
-                    & TERMKEY_FORMAT_LOWERMOD as ::core::ffi::c_int
-                        as ::core::ffi::c_uint != 0) as ::core::ffi::c_int
-                    * 4 as ::core::ffi::c_int) as isize,
-        ) as *mut modnames;
+                * 2 as ::core::ffi::c_int
+            + (format as ::core::ffi::c_uint
+                & TERMKEY_FORMAT_LOWERMOD as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0) as ::core::ffi::c_int
+                * 4 as ::core::ffi::c_int) as isize,
+    ) as *mut modnames;
     let mut wrapbracket: ::core::ffi::c_int = (format as ::core::ffi::c_uint
-        & TERMKEY_FORMAT_WRAPBRACKET as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && ((*key).type_0 as ::core::ffi::c_int
-            != TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
-            || (*key).modifiers != 0 as ::core::ffi::c_int)) as ::core::ffi::c_int;
+        & TERMKEY_FORMAT_WRAPBRACKET as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0
+        && ((*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
+            || (*key).modifiers != 0 as ::core::ffi::c_int))
+        as ::core::ffi::c_int;
     let mut sep: ::core::ffi::c_char = (if format as ::core::ffi::c_uint
-        & TERMKEY_FORMAT_SPACEMOD as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        & TERMKEY_FORMAT_SPACEMOD as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0
     {
         ' ' as ::core::ffi::c_int
     } else {
         '-' as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
     if format as ::core::ffi::c_uint
-        & TERMKEY_FORMAT_CARETCTRL as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && (*key).type_0 as ::core::ffi::c_int
-            == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
+        & TERMKEY_FORMAT_CARETCTRL as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0
+        && (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
         && (*key).modifiers == TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int
     {
-        let mut codepoint: ::core::ffi::c_long = (*key).code.codepoint
-            as ::core::ffi::c_long;
-        if codepoint >= 'a' as ::core::ffi::c_long
-            && codepoint <= 'z' as ::core::ffi::c_long
-        {
+        let mut codepoint: ::core::ffi::c_long = (*key).code.codepoint as ::core::ffi::c_long;
+        if codepoint >= 'a' as ::core::ffi::c_long && codepoint <= 'z' as ::core::ffi::c_long {
             l = snprintf(
                 buffer.offset(pos as isize),
                 len.wrapping_sub(pos),
@@ -1812,18 +1738,15 @@ pub unsafe extern "C" fn termkey_strfkey(
                 } else {
                     b"^%c\0".as_ptr() as *const ::core::ffi::c_char
                 },
-                codepoint as ::core::ffi::c_char as ::core::ffi::c_int
-                    - 0x20 as ::core::ffi::c_int,
+                codepoint as ::core::ffi::c_char as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int,
             ) as size_t;
             if l <= 0 as size_t {
                 return pos;
             }
             pos = pos.wrapping_add(l);
             return pos;
-        } else if codepoint >= '@' as ::core::ffi::c_long
-            && codepoint < 'A' as ::core::ffi::c_long
-            || codepoint > 'Z' as ::core::ffi::c_long
-                && codepoint <= '_' as ::core::ffi::c_long
+        } else if codepoint >= '@' as ::core::ffi::c_long && codepoint < 'A' as ::core::ffi::c_long
+            || codepoint > 'Z' as ::core::ffi::c_long && codepoint <= '_' as ::core::ffi::c_long
         {
             l = snprintf(
                 buffer.offset(pos as isize),
@@ -1908,19 +1831,13 @@ pub unsafe extern "C" fn termkey_strfkey(
             ) as size_t;
         }
         2 => {
-            let mut name: *const ::core::ffi::c_char = termkey_get_keyname(
-                tk,
-                (*key).code.sym,
-            );
+            let mut name: *const ::core::ffi::c_char = termkey_get_keyname(tk, (*key).code.sym);
             if format as ::core::ffi::c_uint
                 & TERMKEY_FORMAT_LOWERSPACE as ::core::ffi::c_int as ::core::ffi::c_uint
                 != 0
             {
-                l = snprint_cameltospaces(
-                    buffer.offset(pos as isize),
-                    len.wrapping_sub(pos),
-                    name,
-                ) as size_t;
+                l = snprint_cameltospaces(buffer.offset(pos as isize), len.wrapping_sub(pos), name)
+                    as size_t;
             } else {
                 l = snprintf(
                     buffer.offset(pos as isize),
@@ -1936,8 +1853,8 @@ pub unsafe extern "C" fn termkey_strfkey(
                 len.wrapping_sub(pos),
                 b"%c%d\0".as_ptr() as *const ::core::ffi::c_char,
                 if format as ::core::ffi::c_uint
-                    & TERMKEY_FORMAT_LOWERSPACE as ::core::ffi::c_int
-                        as ::core::ffi::c_uint != 0
+                    & TERMKEY_FORMAT_LOWERSPACE as ::core::ffi::c_int as ::core::ffi::c_uint
+                    != 0
                 {
                     'f' as ::core::ffi::c_int
                 } else {
@@ -1994,13 +1911,7 @@ pub unsafe extern "C" fn termkey_strfkey(
             let mut initial: ::core::ffi::c_int = 0;
             let mut mode: ::core::ffi::c_int = 0;
             let mut value: ::core::ffi::c_int = 0;
-            termkey_interpret_modereport(
-                tk,
-                key,
-                &raw mut initial,
-                &raw mut mode,
-                &raw mut value,
-            );
+            termkey_interpret_modereport(tk, key, &raw mut initial, &raw mut mode, &raw mut value);
             if initial != 0 {
                 l = snprintf(
                     buffer.offset(pos as isize),

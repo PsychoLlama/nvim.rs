@@ -37,10 +37,7 @@ extern "C" {
     static mut VIsual_active: bool;
     static mut State: ::core::ffi::c_int;
     static mut finish_op: bool;
-    fn syn_check_group(
-        name: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
+    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn ui_mode_info_set();
 }
@@ -175,9 +172,7 @@ pub const MODE_LANGMAP: C2Rust_Unnamed_1 = 32;
 pub const MODE_OP_PENDING: C2Rust_Unnamed_1 = 4;
 pub const MODE_VISUAL: C2Rust_Unnamed_1 = 2;
 pub const MODE_NORMAL: C2Rust_Unnamed_1 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_WRN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
@@ -187,16 +182,12 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 pub const SHAPE_MOUSE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static mut e_digit_expected: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E548: Digit expected\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E548: Digit expected\0")
 };
 #[no_mangle]
 pub static mut shape_table: [cursorentry_T; 18] = [
     cursorentry_T {
-        full_name: b"normal\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"normal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -209,8 +200,7 @@ pub static mut shape_table: [cursorentry_T; 18] = [
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"visual\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"visual\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -223,8 +213,7 @@ pub static mut shape_table: [cursorentry_T; 18] = [
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"insert\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"insert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -237,8 +226,7 @@ pub static mut shape_table: [cursorentry_T; 18] = [
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"replace\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"replace\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -293,8 +281,7 @@ pub static mut shape_table: [cursorentry_T; 18] = [
         used_for: (SHAPE_CURSOR + SHAPE_MOUSE) as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"operator\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"operator\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -391,8 +378,7 @@ pub static mut shape_table: [cursorentry_T; 18] = [
         used_for: SHAPE_MOUSE as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"more\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"more\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -433,8 +419,7 @@ pub static mut shape_table: [cursorentry_T; 18] = [
         used_for: SHAPE_CURSOR as ::core::ffi::c_char,
     },
     cursorentry_T {
-        full_name: b"terminal\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        full_name: b"terminal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         shape: SHAPE_BLOCK,
         mshape: 0 as ::core::ffi::c_int,
         percentage: 0 as ::core::ffi::c_int,
@@ -449,14 +434,11 @@ pub static mut shape_table: [cursorentry_T; 18] = [
 ];
 #[no_mangle]
 pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
-    let mut all: Array = arena_array(
-        arena,
-        SHAPE_IDX_COUNT as ::core::ffi::c_int as size_t,
-    );
+    let mut all: Array = arena_array(arena, SHAPE_IDX_COUNT as ::core::ffi::c_int as size_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < SHAPE_IDX_COUNT as ::core::ffi::c_int {
-        let mut cur: *mut cursorentry_T = (&raw mut shape_table as *mut cursorentry_T)
-            .offset(i as isize);
+        let mut cur: *mut cursorentry_T =
+            (&raw mut shape_table as *mut cursorentry_T).offset(i as isize);
         let mut dic: Dict = arena_dict(
             arena,
             (3 as ::core::ffi::c_int
@@ -492,9 +474,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh2 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.offset(c2rust_fresh2 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"mouse_shape\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"mouse_shape\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -510,45 +490,33 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             };
             match (*cur).shape as ::core::ffi::c_uint {
                 0 => {
-                    shape_str = cstr_as_string(
-                        b"block\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    shape_str = cstr_as_string(b"block\0".as_ptr() as *const ::core::ffi::c_char);
                 }
                 2 => {
-                    shape_str = cstr_as_string(
-                        b"vertical\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    shape_str =
+                        cstr_as_string(b"vertical\0".as_ptr() as *const ::core::ffi::c_char);
                 }
                 1 => {
-                    shape_str = cstr_as_string(
-                        b"horizontal\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    shape_str =
+                        cstr_as_string(b"horizontal\0".as_ptr() as *const ::core::ffi::c_char);
                 }
                 _ => {
-                    shape_str = cstr_as_string(
-                        b"unknown\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    shape_str = cstr_as_string(b"unknown\0".as_ptr() as *const ::core::ffi::c_char);
                 }
             }
             let c2rust_fresh3 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"cursor_shape\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"cursor_shape\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: shape_str,
-                    },
+                    data: C2Rust_Unnamed { string: shape_str },
                 },
             };
             let c2rust_fresh4 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"cell_percentage\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"cell_percentage\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -559,9 +527,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh5 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"blinkwait\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"blinkwait\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -583,9 +549,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh7 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"blinkoff\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"blinkoff\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -633,9 +597,7 @@ pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
             let c2rust_fresh11 = dic.size;
             dic.size = dic.size.wrapping_add(1);
             *dic.items.offset(c2rust_fresh11 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"attr_id_lm\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                key: cstr_as_string(b"attr_id_lm\0".as_ptr() as *const ::core::ffi::c_char),
                 value: object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
@@ -668,8 +630,7 @@ pub unsafe extern "C" fn parse_shape_opt(
     let mut found_ve: bool = false_0 != 0;
     let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while round <= 2 as ::core::ffi::c_int {
-        if round == 2 as ::core::ffi::c_int || *p_guicursor as ::core::ffi::c_int == NUL
-        {
+        if round == 2 as ::core::ffi::c_int || *p_guicursor as ::core::ffi::c_int == NUL {
             clear_shape_table();
             if *p_guicursor as ::core::ffi::c_int == NUL {
                 ui_mode_info_set();
@@ -678,14 +639,8 @@ pub unsafe extern "C" fn parse_shape_opt(
         }
         let mut modep: *mut ::core::ffi::c_char = p_guicursor;
         while !modep.is_null() && *modep as ::core::ffi::c_int != NUL {
-            let mut colonp: *mut ::core::ffi::c_char = vim_strchr(
-                modep,
-                ':' as ::core::ffi::c_int,
-            );
-            let mut commap: *mut ::core::ffi::c_char = vim_strchr(
-                modep,
-                ',' as ::core::ffi::c_int,
-            );
+            let mut colonp: *mut ::core::ffi::c_char = vim_strchr(modep, ':' as ::core::ffi::c_int);
+            let mut commap: *mut ::core::ffi::c_char = vim_strchr(modep, ',' as ::core::ffi::c_int);
             if colonp.is_null() || !commap.is_null() && commap < colonp {
                 return b"E545: Missing colon\0".as_ptr() as *const ::core::ffi::c_char;
             }
@@ -695,10 +650,10 @@ pub unsafe extern "C" fn parse_shape_opt(
             let mut all_idx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
             while modep < colonp || all_idx >= 0 as ::core::ffi::c_int {
                 if all_idx < 0 as ::core::ffi::c_int {
-                    if *modep.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-                        || *modep.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+                    if *modep.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '-' as ::core::ffi::c_int
+                        || *modep.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == ':' as ::core::ffi::c_int
                     {
                         len = 1 as ::core::ffi::c_int;
                     } else {
@@ -706,45 +661,39 @@ pub unsafe extern "C" fn parse_shape_opt(
                     }
                     if len == 1 as ::core::ffi::c_int
                         && (if (*modep.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
-                            || *modep.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int > 'Z' as ::core::ffi::c_int
+                            as ::core::ffi::c_int)
+                            < 'A' as ::core::ffi::c_int
+                            || *modep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                > 'Z' as ::core::ffi::c_int
                         {
-                            *modep.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
+                            *modep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         } else {
-                            *modep.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
+                            *modep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                                 + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
                         }) == 'a' as ::core::ffi::c_int
                     {
-                        all_idx = SHAPE_IDX_COUNT as ::core::ffi::c_int
-                            - 1 as ::core::ffi::c_int;
+                        all_idx = SHAPE_IDX_COUNT as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
                     } else {
                         idx = 0 as ::core::ffi::c_int;
                         while idx < SHAPE_IDX_COUNT as ::core::ffi::c_int {
-                            if strncasecmp(
-                                modep,
-                                shape_table[idx as usize].name,
-                                len as size_t,
-                            ) == 0 as ::core::ffi::c_int
+                            if strncasecmp(modep, shape_table[idx as usize].name, len as size_t)
+                                == 0 as ::core::ffi::c_int
                             {
                                 break;
                             }
                             idx += 1;
                         }
                         if idx == SHAPE_IDX_COUNT as ::core::ffi::c_int
-                            || shape_table[idx as usize].used_for as ::core::ffi::c_int
-                                & what == 0 as ::core::ffi::c_int
+                            || shape_table[idx as usize].used_for as ::core::ffi::c_int & what
+                                == 0 as ::core::ffi::c_int
                         {
-                            return b"E546: Illegal mode\0".as_ptr()
-                                as *const ::core::ffi::c_char;
+                            return b"E546: Illegal mode\0".as_ptr() as *const ::core::ffi::c_char;
                         }
                         if len == 2 as ::core::ffi::c_int
-                            && *modep.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == 'v' as ::core::ffi::c_int
-                            && *modep.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+                            && *modep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                == 'v' as ::core::ffi::c_int
+                            && *modep.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                == 'e' as ::core::ffi::c_int
                         {
                             found_ve = true_0 != 0;
                         }
@@ -764,16 +713,14 @@ pub unsafe extern "C" fn parse_shape_opt(
                     len = 0 as ::core::ffi::c_int;
                     if strncasecmp(
                         p,
-                        b"ver\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        b"ver\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                         3 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
                         len = 3 as ::core::ffi::c_int;
                     } else if strncasecmp(
                         p,
-                        b"hor\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        b"hor\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                         3 as ::core::ffi::c_int as size_t,
                     ) == 0 as ::core::ffi::c_int
                     {
@@ -806,14 +753,10 @@ pub unsafe extern "C" fn parse_shape_opt(
                     if len != 0 as ::core::ffi::c_int {
                         p = p.offset(len as isize);
                         if !ascii_isdigit(*p as ::core::ffi::c_int) {
-                            return &raw const e_digit_expected
-                                as *const ::core::ffi::c_char;
+                            return &raw const e_digit_expected as *const ::core::ffi::c_char;
                         }
-                        let mut n: ::core::ffi::c_int = getdigits_int(
-                            &raw mut p,
-                            false_0 != 0,
-                            0 as ::core::ffi::c_int,
-                        );
+                        let mut n: ::core::ffi::c_int =
+                            getdigits_int(&raw mut p, false_0 != 0, 0 as ::core::ffi::c_int);
                         if len == 3 as ::core::ffi::c_int {
                             if n == 0 as ::core::ffi::c_int {
                                 return b"E549: Illegal percentage\0".as_ptr()
@@ -855,10 +798,8 @@ pub unsafe extern "C" fn parse_shape_opt(
                         }
                         p = p.offset(5 as ::core::ffi::c_int as isize);
                     } else {
-                        let mut endp: *mut ::core::ffi::c_char = vim_strchr(
-                            p,
-                            '-' as ::core::ffi::c_int,
-                        );
+                        let mut endp: *mut ::core::ffi::c_char =
+                            vim_strchr(p, '-' as ::core::ffi::c_int);
                         if commap.is_null() {
                             if endp.is_null() {
                                 endp = p.offset(strlen(p) as isize);
@@ -866,21 +807,16 @@ pub unsafe extern "C" fn parse_shape_opt(
                         } else if endp > commap || endp.is_null() {
                             endp = commap;
                         }
-                        let mut slashp: *mut ::core::ffi::c_char = vim_strchr(
-                            p,
-                            '/' as ::core::ffi::c_int,
-                        );
+                        let mut slashp: *mut ::core::ffi::c_char =
+                            vim_strchr(p, '/' as ::core::ffi::c_int);
                         if !slashp.is_null() && slashp < endp {
                             i = syn_check_group(p, slashp.offset_from(p) as size_t);
                             p = slashp.offset(1 as ::core::ffi::c_int as isize);
                         }
                         if round == 2 as ::core::ffi::c_int {
-                            shape_table[idx as usize].id = syn_check_group(
-                                p,
-                                endp.offset_from(p) as size_t,
-                            );
-                            shape_table[idx as usize].id_lm = shape_table[idx as usize]
-                                .id;
+                            shape_table[idx as usize].id =
+                                syn_check_group(p, endp.offset_from(p) as size_t);
+                            shape_table[idx as usize].id_lm = shape_table[idx as usize].id;
                             if !slashp.is_null() && slashp < endp {
                                 shape_table[idx as usize].id = i;
                             }
@@ -893,36 +829,27 @@ pub unsafe extern "C" fn parse_shape_opt(
                 }
             }
             modep = p;
-            if !modep.is_null()
-                && *modep as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-            {
+            if !modep.is_null() && *modep as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
                 modep = modep.offset(1);
             }
         }
         round += 1;
     }
     if !found_ve {
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].shape = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .shape;
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].percentage = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .percentage;
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkwait = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .blinkwait;
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkon = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .blinkon;
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkoff = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .blinkoff;
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].id = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .id;
-        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].id_lm = shape_table[SHAPE_IDX_V
-                as ::core::ffi::c_int as usize]
-            .id_lm;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].shape =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].shape;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].percentage =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].percentage;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkwait =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].blinkwait;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkon =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].blinkon;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkoff =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].blinkoff;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].id =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].id;
+        shape_table[SHAPE_IDX_VE as ::core::ffi::c_int as usize].id_lm =
+            shape_table[SHAPE_IDX_V as ::core::ffi::c_int as usize].id_lm;
     }
     ui_mode_info_set();
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -944,9 +871,7 @@ pub unsafe extern "C" fn cursor_mode_str2int(
 ) -> ::core::ffi::c_int {
     let mut mode_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while mode_idx < SHAPE_IDX_COUNT as ::core::ffi::c_int {
-        if strcmp(shape_table[mode_idx as usize].full_name, mode)
-            == 0 as ::core::ffi::c_int
-        {
+        if strcmp(shape_table[mode_idx as usize].full_name, mode) == 0 as ::core::ffi::c_int {
             return mode_idx;
         }
         mode_idx += 1;
@@ -963,9 +888,7 @@ pub unsafe extern "C" fn cursor_mode_str2int(
     return -1 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn cursor_mode_uses_syn_id(
-    mut syn_id: ::core::ffi::c_int,
-) -> bool {
+pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int) -> bool {
     if *p_guicursor as ::core::ffi::c_int == NUL {
         return false_0 != 0;
     }
@@ -983,33 +906,33 @@ pub unsafe extern "C" fn cursor_mode_uses_syn_id(
 #[no_mangle]
 pub unsafe extern "C" fn cursor_get_mode_idx() -> ::core::ffi::c_int {
     if State == MODE_SHOWMATCH as ::core::ffi::c_int {
-        return SHAPE_IDX_SM as ::core::ffi::c_int
+        return SHAPE_IDX_SM as ::core::ffi::c_int;
     } else if State == MODE_TERMINAL as ::core::ffi::c_int {
-        return SHAPE_IDX_TERM as ::core::ffi::c_int
+        return SHAPE_IDX_TERM as ::core::ffi::c_int;
     } else if State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-        return SHAPE_IDX_R as ::core::ffi::c_int
+        return SHAPE_IDX_R as ::core::ffi::c_int;
     } else if State & REPLACE_FLAG as ::core::ffi::c_int != 0 {
-        return SHAPE_IDX_R as ::core::ffi::c_int
+        return SHAPE_IDX_R as ::core::ffi::c_int;
     } else if State & MODE_INSERT as ::core::ffi::c_int != 0 {
-        return SHAPE_IDX_I as ::core::ffi::c_int
+        return SHAPE_IDX_I as ::core::ffi::c_int;
     } else if State & MODE_CMDLINE as ::core::ffi::c_int != 0 {
         if cmdline_at_end() {
-            return SHAPE_IDX_C as ::core::ffi::c_int
+            return SHAPE_IDX_C as ::core::ffi::c_int;
         } else if cmdline_overstrike() {
-            return SHAPE_IDX_CR as ::core::ffi::c_int
+            return SHAPE_IDX_CR as ::core::ffi::c_int;
         } else {
-            return SHAPE_IDX_CI as ::core::ffi::c_int
+            return SHAPE_IDX_CI as ::core::ffi::c_int;
         }
     } else if finish_op {
-        return SHAPE_IDX_O as ::core::ffi::c_int
+        return SHAPE_IDX_O as ::core::ffi::c_int;
     } else if VIsual_active {
         if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-            return SHAPE_IDX_VE as ::core::ffi::c_int
+            return SHAPE_IDX_VE as ::core::ffi::c_int;
         } else {
-            return SHAPE_IDX_V as ::core::ffi::c_int
+            return SHAPE_IDX_V as ::core::ffi::c_int;
         }
     } else {
-        return SHAPE_IDX_N as ::core::ffi::c_int
+        return SHAPE_IDX_N as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn clear_shape_table() {

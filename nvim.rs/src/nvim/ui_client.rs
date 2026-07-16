@@ -20,10 +20,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn close(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -41,22 +38,15 @@ extern "C" {
     fn api_free_array(value: Array);
     fn api_metadata() -> Object;
     fn copy_array(array: Array, arena: *mut Arena) -> Array;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_dict_to_keydict(
         retval: *mut ::core::ffi::c_void,
         hashy: FieldHashfn,
         dict: Dict,
         err: *mut Error,
     ) -> bool;
-    fn KeyDict_highlight_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_highlight_get_field(str: *const ::core::ffi::c_char, len: size_t)
+        -> *mut KeySetLink;
     fn channel_job_start(
         argv: *mut *mut ::core::ffi::c_char,
         exepath: *const ::core::ffi::c_char,
@@ -85,9 +75,7 @@ extern "C" {
     fn multiqueue_put_event(self_0: *mut MultiQueue, event: Event);
     fn multiqueue_process_events(self_0: *mut MultiQueue);
     fn multiqueue_empty(self_0: *mut MultiQueue) -> bool;
-    fn socket_address_tcp_host_end(
-        address: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn socket_address_tcp_host_end(address: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn loop_poll_events(loop_0: *mut Loop, ms: int64_t) -> bool;
     static mut t_colors: ::core::ffi::c_int;
     static mut stdin_isatty: bool;
@@ -103,11 +91,7 @@ extern "C" {
     ) -> HlAttrs;
     static mut main_loop: Loop;
     fn os_exit(r: ::core::ffi::c_int) -> !;
-    fn rpc_send_event(
-        id: uint64_t,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-    ) -> bool;
+    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
     fn os_env_exists(name: *const ::core::ffi::c_char, nonempty: bool) -> bool;
     fn os_get_pid() -> int64_t;
     fn time_msg(mesg: *const ::core::ffi::c_char, start: *const proftime_T);
@@ -123,12 +107,7 @@ extern "C" {
     fn tui_is_stopped(tui_0: *mut TUIData) -> bool;
     fn tui_grid_resize(tui_0: *mut TUIData, g: Integer, width: Integer, height: Integer);
     fn tui_grid_clear(tui_0: *mut TUIData, g: Integer);
-    fn tui_grid_cursor_goto(
-        tui_0: *mut TUIData,
-        grid: Integer,
-        row: Integer,
-        col: Integer,
-    );
+    fn tui_grid_cursor_goto(tui_0: *mut TUIData, grid: Integer, row: Integer, col: Integer);
     fn tui_mode_info_set(tui_0: *mut TUIData, guicursor_enabled: bool, args: Array);
     fn tui_update_menu(tui_0: *mut TUIData);
     fn tui_busy_start(tui_0: *mut TUIData);
@@ -763,9 +742,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -792,9 +770,7 @@ pub struct C2Rust_Unnamed_3 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_4 {
@@ -890,12 +866,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -948,12 +922,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -980,9 +952,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -993,9 +964,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -1020,15 +990,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_11 {
@@ -1143,9 +1108,8 @@ pub struct KeySetLink {
     pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
-pub type FieldHashfn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
->;
+pub type FieldHashfn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_highlight {
@@ -1229,9 +1193,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1276,9 +1239,7 @@ pub struct uv_process_options_s {
     pub gid: uv_gid_t,
 }
 pub type uv_process_options_t = uv_process_options_s;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -1472,16 +1433,12 @@ pub struct winsize {
     pub ws_ypixel: ::core::ffi::c_ushort,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 47],
-        [::core::ffi::c_char; 47],
-    >(*b"void ui_client_attach(int, int, char *, _Bool)\0")
+    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+        *b"void ui_client_attach(int, int, char *, _Bool)\0",
+    )
 };
-pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615
-    as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
@@ -1577,8 +1534,8 @@ pub const KEYSET_OPTIDX_highlight__url: ::core::ffi::c_int = 5 as ::core::ffi::c
 static mut tui: *mut TUIData = ::core::ptr::null_mut::<TUIData>();
 static mut tui_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut tui_height: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut tui_term: *mut ::core::ffi::c_char = b"\0".as_ptr()
-    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+static mut tui_term: *mut ::core::ffi::c_char =
+    b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 static mut tui_rgb: bool = false_0 != 0;
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_start_server(
@@ -1669,13 +1626,11 @@ pub unsafe extern "C" fn ui_client_start_server(
     }
     if ui_client_forward_stdin {
         close(0 as ::core::ffi::c_int);
-        dup(
-            if stderr_isatty as ::core::ffi::c_int != 0 {
-                STDERR_FILENO
-            } else {
-                STDOUT_FILENO
-            },
-        );
+        dup(if stderr_isatty as ::core::ffi::c_int != 0 {
+            STDERR_FILENO
+        } else {
+            STDOUT_FILENO
+        });
     }
     return (*channel).id;
 }
@@ -1861,7 +1816,8 @@ pub unsafe extern "C" fn ui_client_attach(
         items: ::core::ptr::null_mut::<KeyValuePair>(),
     };
     '_c2rust_label: {
-        if m.data.dict.size > 0 as size_t {} else {
+        if m.data.dict.size > 0 as size_t {
+        } else {
             __assert_fail(
                 b"m.data.dict.size > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ui_client.c\0".as_ptr()
@@ -1937,7 +1893,7 @@ pub unsafe extern "C" fn ui_client_attach(
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed {
                 string: cstr_as_string(
-                    b"https://neovim.io\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"https://neovim.io\0".as_ptr() as *const ::core::ffi::c_char
                 ),
             },
         },
@@ -1949,9 +1905,7 @@ pub unsafe extern "C" fn ui_client_attach(
         value: object {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed {
-                string: cstr_as_string(
-                    b"Apache 2\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                string: cstr_as_string(b"Apache 2\0".as_ptr() as *const ::core::ffi::c_char),
             },
         },
     };
@@ -2027,7 +1981,7 @@ pub unsafe extern "C" fn ui_client_run() -> ! {
         } else {
             loop_poll_events(&raw mut main_loop, -1 as int64_t);
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_stop() {
@@ -2120,10 +2074,7 @@ unsafe extern "C" fn ui_client_dict2hlattrs(mut d: Dict, mut rgb: bool) -> HlAtt
         &raw mut dict as *mut ::core::ffi::c_void,
         Some(
             KeyDict_highlight_get_field
-                as unsafe extern "C" fn(
-                    *const ::core::ffi::c_char,
-                    size_t,
-                ) -> *mut KeySetLink,
+                as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
         ),
         d,
         &raw mut err,
@@ -2148,14 +2099,11 @@ unsafe extern "C" fn ui_client_dict2hlattrs(mut d: Dict, mut rgb: bool) -> HlAtt
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
     if args.size < 3 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2164,8 +2112,7 @@ pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
             b"ui_client_event_grid_resize\0".as_ptr() as *const ::core::ffi::c_char,
             241 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'grid_resize'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'grid_resize'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2183,12 +2130,12 @@ pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
         xfree(grid_line_buf_char as *mut ::core::ffi::c_void);
         xfree(grid_line_buf_attr as *mut ::core::ffi::c_void);
         grid_line_buf_size = width as size_t;
-        grid_line_buf_char = xmalloc(
-            grid_line_buf_size.wrapping_mul(::core::mem::size_of::<schar_T>()),
-        ) as *mut schar_T;
-        grid_line_buf_attr = xmalloc(
-            grid_line_buf_size.wrapping_mul(::core::mem::size_of::<sattr_T>()),
-        ) as *mut sattr_T;
+        grid_line_buf_char =
+            xmalloc(grid_line_buf_size.wrapping_mul(::core::mem::size_of::<schar_T>()))
+                as *mut schar_T;
+        grid_line_buf_attr =
+            xmalloc(grid_line_buf_size.wrapping_mul(::core::mem::size_of::<sattr_T>()))
+                as *mut sattr_T;
     }
 }
 #[no_mangle]
@@ -2223,8 +2170,7 @@ pub unsafe extern "C" fn ui_client_event_raw_line(mut g: *mut GridLineEvent) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_connect(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2240,16 +2186,13 @@ pub unsafe extern "C" fn ui_client_event_connect(mut args: Array) {
     let mut s: String_0 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
         .data
         .string;
-    let mut server_addr: *mut ::core::ffi::c_char = xmemdupz(
-        s.data as *const ::core::ffi::c_void,
-        s.size,
-    ) as *mut ::core::ffi::c_char;
+    let mut server_addr: *mut ::core::ffi::c_char =
+        xmemdupz(s.data as *const ::core::ffi::c_void, s.size) as *mut ::core::ffi::c_char;
     multiqueue_put_event(
         main_loop.fast_events,
         Event {
             handler: Some(
-                channel_connect_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                channel_connect_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 server_addr as *mut ::core::ffi::c_void,
@@ -2268,10 +2211,9 @@ pub unsafe extern "C" fn ui_client_event_connect(mut args: Array) {
     ui_client_channel_id = UINT64_MAX as uint64_t;
 }
 unsafe extern "C" fn channel_connect_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut server_addr: *mut ::core::ffi::c_char = *argv
-        .offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
-    let mut err: *const ::core::ffi::c_char = b"\0".as_ptr()
-        as *const ::core::ffi::c_char;
+    let mut server_addr: *mut ::core::ffi::c_char =
+        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
+    let mut err: *const ::core::ffi::c_char = b"\0".as_ptr() as *const ::core::ffi::c_char;
     let mut is_tcp: bool = !socket_address_tcp_host_end(server_addr).is_null();
     let mut on_data: CallbackReader = CallbackReader {
         cb: Callback {
@@ -2318,8 +2260,7 @@ unsafe extern "C" fn channel_connect_event(mut argv: *mut *mut ::core::ffi::c_vo
         b"channel_connect_event\0".as_ptr() as *const ::core::ffi::c_char,
         312 as ::core::ffi::c_int,
         true_0 != 0,
-        b"Connected to server %s on channel %ld\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Connected to server %s on channel %ld\0".as_ptr() as *const ::core::ffi::c_char,
         server_addr,
         chan,
     );
@@ -2339,9 +2280,7 @@ pub unsafe extern "C" fn ui_client_event_restart(mut args: Array) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
-    let mut listen_addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut listen_addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut is_tcp: bool = false;
     let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut chan_id: uint64_t = 0;
@@ -2357,8 +2296,7 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
         logmsg(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ui_client_attach_to_restarted_server\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"ui_client_attach_to_restarted_server\0".as_ptr() as *const ::core::ffi::c_char,
             343 as ::core::ffi::c_int,
             true_0 != 0,
             b"Error handling ui event 'restart'\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2395,12 +2333,10 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
             logmsg(
                 LOGLVL_ERR,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"ui_client_attach_to_restarted_server\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"ui_client_attach_to_restarted_server\0".as_ptr() as *const ::core::ffi::c_char,
                 353 as ::core::ffi::c_int,
                 true_0 != 0,
-                b"cannot connect to server %s: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"cannot connect to server %s: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 listen_addr,
                 err,
             );
@@ -2410,12 +2346,10 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
             logmsg(
                 LOGLVL_INF,
                 ::core::ptr::null::<::core::ffi::c_char>(),
-                b"ui_client_attach_to_restarted_server\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"ui_client_attach_to_restarted_server\0".as_ptr() as *const ::core::ffi::c_char,
                 361 as ::core::ffi::c_int,
                 true_0 != 0,
-                b"restarted server address=%s id=%ld\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"restarted server address=%s id=%ld\0".as_ptr() as *const ::core::ffi::c_char,
                 listen_addr,
                 chan_id,
             );
@@ -2431,8 +2365,7 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_error_exit(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2441,8 +2374,7 @@ pub unsafe extern "C" fn ui_client_event_error_exit(mut args: Array) {
             b"ui_client_event_error_exit\0".as_ptr() as *const ::core::ffi::c_char,
             372 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'error_exit'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'error_exit'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2453,11 +2385,9 @@ pub unsafe extern "C" fn ui_client_event_error_exit(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mode_info_set(mut args: Array) {
     if args.size < 2 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2466,8 +2396,7 @@ pub unsafe extern "C" fn ui_client_event_mode_info_set(mut args: Array) {
             b"ui_client_event_mode_info_set\0".as_ptr() as *const ::core::ffi::c_char,
             6 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'mode_info_set'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'mode_info_set'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2502,11 +2431,9 @@ pub unsafe extern "C" fn ui_client_event_mouse_off(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_mode_change(mut args: Array) {
     if args.size < 2 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2515,8 +2442,7 @@ pub unsafe extern "C" fn ui_client_event_mode_change(mut args: Array) {
             b"ui_client_event_mode_change\0".as_ptr() as *const ::core::ffi::c_char,
             44 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'mode_change'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'mode_change'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2547,8 +2473,7 @@ pub unsafe extern "C" fn ui_client_event_suspend(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_set_title(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2557,8 +2482,7 @@ pub unsafe extern "C" fn ui_client_event_set_title(mut args: Array) {
             b"ui_client_event_set_title\0".as_ptr() as *const ::core::ffi::c_char,
             76 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'set_title'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'set_title'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2570,8 +2494,7 @@ pub unsafe extern "C" fn ui_client_event_set_title(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_set_icon(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2580,8 +2503,7 @@ pub unsafe extern "C" fn ui_client_event_set_icon(mut args: Array) {
             b"ui_client_event_set_icon\0".as_ptr() as *const ::core::ffi::c_char,
             87 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'set_icon'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'set_icon'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2593,8 +2515,7 @@ pub unsafe extern "C" fn ui_client_event_set_icon(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_screenshot(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2603,8 +2524,7 @@ pub unsafe extern "C" fn ui_client_event_screenshot(mut args: Array) {
             b"ui_client_event_screenshot\0".as_ptr() as *const ::core::ffi::c_char,
             98 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'screenshot'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'screenshot'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2616,8 +2536,7 @@ pub unsafe extern "C" fn ui_client_event_screenshot(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_option_set(mut args: Array) {
     if args.size < 2 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2626,8 +2545,7 @@ pub unsafe extern "C" fn ui_client_event_option_set(mut args: Array) {
             b"ui_client_event_option_set\0".as_ptr() as *const ::core::ffi::c_char,
             109 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'option_set'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'option_set'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2640,8 +2558,7 @@ pub unsafe extern "C" fn ui_client_event_option_set(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_chdir(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2662,8 +2579,7 @@ pub unsafe extern "C" fn ui_client_event_chdir(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_ui_send(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2684,27 +2600,21 @@ pub unsafe extern "C" fn ui_client_event_ui_send(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_default_colors_set(mut args: Array) {
     if args.size < 5 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(4 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(4 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
-            b"ui_client_event_default_colors_set\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"ui_client_event_default_colors_set\0".as_ptr() as *const ::core::ffi::c_char,
             147 as ::core::ffi::c_int,
             true_0 != 0,
             b"Error handling ui event 'default_colors_set'\0".as_ptr()
@@ -2732,17 +2642,13 @@ pub unsafe extern "C" fn ui_client_event_default_colors_set(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_hl_attr_define(mut args: Array) {
     if args.size < 4 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2751,8 +2657,7 @@ pub unsafe extern "C" fn ui_client_event_hl_attr_define(mut args: Array) {
             b"ui_client_event_hl_attr_define\0".as_ptr() as *const ::core::ffi::c_char,
             165 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'hl_attr_define'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'hl_attr_define'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2760,11 +2665,15 @@ pub unsafe extern "C" fn ui_client_event_hl_attr_define(mut args: Array) {
         .data
         .integer;
     let mut arg_2: HlAttrs = ui_client_dict2hlattrs(
-        (*args.items.offset(1 as ::core::ffi::c_int as isize)).data.dict,
+        (*args.items.offset(1 as ::core::ffi::c_int as isize))
+            .data
+            .dict,
         true_0 != 0,
     );
     let mut arg_3: HlAttrs = ui_client_dict2hlattrs(
-        (*args.items.offset(2 as ::core::ffi::c_int as isize)).data.dict,
+        (*args.items.offset(2 as ::core::ffi::c_int as isize))
+            .data
+            .dict,
         false_0 != 0,
     );
     let mut arg_4: Array = (*args.items.offset(3 as ::core::ffi::c_int as isize))
@@ -2775,8 +2684,7 @@ pub unsafe extern "C" fn ui_client_event_hl_attr_define(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_clear(mut args: Array) {
     if args.size < 1 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2785,8 +2693,7 @@ pub unsafe extern "C" fn ui_client_event_grid_clear(mut args: Array) {
             b"ui_client_event_grid_clear\0".as_ptr() as *const ::core::ffi::c_char,
             179 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'grid_clear'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'grid_clear'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2798,14 +2705,11 @@ pub unsafe extern "C" fn ui_client_event_grid_clear(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_cursor_goto(mut args: Array) {
     if args.size < 3 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2814,8 +2718,7 @@ pub unsafe extern "C" fn ui_client_event_grid_cursor_goto(mut args: Array) {
             b"ui_client_event_grid_cursor_goto\0".as_ptr() as *const ::core::ffi::c_char,
             192 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'grid_cursor_goto'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'grid_cursor_goto'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2833,26 +2736,19 @@ pub unsafe extern "C" fn ui_client_event_grid_cursor_goto(mut args: Array) {
 #[no_mangle]
 pub unsafe extern "C" fn ui_client_event_grid_scroll(mut args: Array) {
     if args.size < 7 as size_t
-        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(4 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(4 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(5 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(5 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*args.items.offset(6 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*args.items.offset(6 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         logmsg(
@@ -2861,8 +2757,7 @@ pub unsafe extern "C" fn ui_client_event_grid_scroll(mut args: Array) {
             b"ui_client_event_grid_scroll\0".as_ptr() as *const ::core::ffi::c_char,
             211 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Error handling ui event 'grid_scroll'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Error handling ui event 'grid_scroll'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2936,7 +2831,9 @@ static mut event_handlers: [UIClientHandler; 27] = unsafe {
             fn_0: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(Array) -> !>,
                 Option<unsafe extern "C" fn(Array) -> ()>,
-            >(Some(ui_client_event_grid_line as unsafe extern "C" fn(Array) -> !)),
+            >(Some(
+                ui_client_event_grid_line as unsafe extern "C" fn(Array) -> !,
+            )),
         },
         UIClientHandler {
             name: b"mouse_off\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2988,27 +2885,19 @@ static mut event_handlers: [UIClientHandler; 27] = unsafe {
         },
         UIClientHandler {
             name: b"mode_info_set\0".as_ptr() as *const ::core::ffi::c_char,
-            fn_0: Some(
-                ui_client_event_mode_info_set as unsafe extern "C" fn(Array) -> (),
-            ),
+            fn_0: Some(ui_client_event_mode_info_set as unsafe extern "C" fn(Array) -> ()),
         },
         UIClientHandler {
             name: b"hl_attr_define\0".as_ptr() as *const ::core::ffi::c_char,
-            fn_0: Some(
-                ui_client_event_hl_attr_define as unsafe extern "C" fn(Array) -> (),
-            ),
+            fn_0: Some(ui_client_event_hl_attr_define as unsafe extern "C" fn(Array) -> ()),
         },
         UIClientHandler {
             name: b"grid_cursor_goto\0".as_ptr() as *const ::core::ffi::c_char,
-            fn_0: Some(
-                ui_client_event_grid_cursor_goto as unsafe extern "C" fn(Array) -> (),
-            ),
+            fn_0: Some(ui_client_event_grid_cursor_goto as unsafe extern "C" fn(Array) -> ()),
         },
         UIClientHandler {
             name: b"default_colors_set\0".as_ptr() as *const ::core::ffi::c_char,
-            fn_0: Some(
-                ui_client_event_default_colors_set as unsafe extern "C" fn(Array) -> (),
-            ),
+            fn_0: Some(ui_client_event_default_colors_set as unsafe extern "C" fn(Array) -> ()),
         },
     ]
 };
@@ -3022,102 +2911,90 @@ pub unsafe extern "C" fn ui_client_handler_hash(
         4 => {
             low = 0 as ::core::ffi::c_int;
         }
-        5 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                99 => {
-                    low = 1 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 2 as ::core::ffi::c_int;
-                }
-                _ => {}
+        5 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            99 => {
+                low = 1 as ::core::ffi::c_int;
             }
-        }
-        7 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                99 => {
-                    low = 3 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 4 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 5 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 6 as ::core::ffi::c_int;
-                }
-                _ => {}
+            102 => {
+                low = 2 as ::core::ffi::c_int;
             }
-        }
-        8 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                109 => {
-                    low = 7 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 8 as ::core::ffi::c_int;
-                }
-                _ => {}
+            _ => {}
+        },
+        7 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            99 => {
+                low = 3 as ::core::ffi::c_int;
             }
-        }
-        9 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                98 => {
-                    low = 9 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 10 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 11 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 12 as ::core::ffi::c_int;
-                }
-                _ => {}
+            114 => {
+                low = 4 as ::core::ffi::c_int;
             }
-        }
-        10 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                98 => {
-                    low = 13 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 14 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 15 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 16 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 17 as ::core::ffi::c_int;
-                }
-                _ => {}
+            115 => {
+                low = 5 as ::core::ffi::c_int;
             }
-        }
-        11 => {
-            match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                99 => {
-                    low = 18 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 19 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 20 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 21 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 22 as ::core::ffi::c_int;
-                }
-                _ => {}
+            117 => {
+                low = 6 as ::core::ffi::c_int;
             }
-        }
+            _ => {}
+        },
+        8 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            109 => {
+                low = 7 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 8 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        9 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            98 => {
+                low = 9 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 10 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 11 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 12 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        10 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            98 => {
+                low = 13 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 14 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 15 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 16 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 17 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        11 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            99 => {
+                low = 18 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 19 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 20 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 21 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 22 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
         13 => {
             low = 23 as ::core::ffi::c_int;
         }

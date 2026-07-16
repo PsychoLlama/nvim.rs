@@ -7,10 +7,7 @@ extern "C" {
     ) -> !;
     fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
     fn calloc(__nmemb: size_t, __size: size_t) -> *mut ::core::ffi::c_void;
-    fn realloc(
-        __ptr: *mut ::core::ffi::c_void,
-        __size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn realloc(__ptr: *mut ::core::ffi::c_void, __size: size_t) -> *mut ::core::ffi::c_void;
     fn free(__ptr: *mut ::core::ffi::c_void);
     fn memcpy(
         __dest: *mut ::core::ffi::c_void,
@@ -41,10 +38,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     static mut arena_alloc_count: size_t;
     static e_outofmem: [::core::ffi::c_char; 0];
@@ -76,27 +71,20 @@ pub struct Arena {
 }
 pub type MemMalloc = Option<unsafe extern "C" fn(size_t) -> *mut ::core::ffi::c_void>;
 pub type MemFree = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
-pub type MemCalloc = Option<
-    unsafe extern "C" fn(size_t, size_t) -> *mut ::core::ffi::c_void,
->;
-pub type MemRealloc = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, size_t) -> *mut ::core::ffi::c_void,
->;
-pub type MergeSortGetFunc = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
->;
-pub type MergeSortSetFunc = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
->;
+pub type MemCalloc = Option<unsafe extern "C" fn(size_t, size_t) -> *mut ::core::ffi::c_void>;
+pub type MemRealloc =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, size_t) -> *mut ::core::ffi::c_void>;
+pub type MergeSortGetFunc =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>;
+pub type MergeSortSetFunc =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>;
 pub type MergeSortCompareFunc = Option<
     unsafe extern "C" fn(
         *const ::core::ffi::c_void,
         *const ::core::ffi::c_void,
     ) -> ::core::ffi::c_int,
 >;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -104,24 +92,17 @@ pub const ARENA_EMPTY: Arena = Arena {
     size: 0 as size_t,
 };
 #[no_mangle]
-pub static mut mem_malloc: MemMalloc = Some(
-    malloc as unsafe extern "C" fn(size_t) -> *mut ::core::ffi::c_void,
-);
+pub static mut mem_malloc: MemMalloc =
+    Some(malloc as unsafe extern "C" fn(size_t) -> *mut ::core::ffi::c_void);
 #[no_mangle]
-pub static mut mem_free: MemFree = Some(
-    free as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
-);
+pub static mut mem_free: MemFree =
+    Some(free as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ());
 #[no_mangle]
-pub static mut mem_calloc: MemCalloc = Some(
-    calloc as unsafe extern "C" fn(size_t, size_t) -> *mut ::core::ffi::c_void,
-);
+pub static mut mem_calloc: MemCalloc =
+    Some(calloc as unsafe extern "C" fn(size_t, size_t) -> *mut ::core::ffi::c_void);
 #[no_mangle]
 pub static mut mem_realloc: MemRealloc = Some(
-    realloc
-        as unsafe extern "C" fn(
-            *mut ::core::ffi::c_void,
-            size_t,
-        ) -> *mut ::core::ffi::c_void,
+    realloc as unsafe extern "C" fn(*mut ::core::ffi::c_void, size_t) -> *mut ::core::ffi::c_void,
 );
 unsafe extern "C" fn try_to_free_memory() {
     static mut trying_to_free: bool = false_0 != 0;
@@ -141,18 +122,16 @@ unsafe extern "C" fn do_outofmem_msg(mut size: size_t) {
     emsg_silent = 0 as ::core::ffi::c_int;
     did_outofmem_msg = true_0 != 0;
     semsg(
-        gettext(
-            b"E342: Out of memory!  (allocating %lu bytes)\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
+        gettext(b"E342: Out of memory!  (allocating %lu bytes)\0".as_ptr()
+            as *const ::core::ffi::c_char),
         size as uint64_t,
     );
 }
 #[no_mangle]
 pub unsafe extern "C" fn try_malloc(mut size: size_t) -> *mut ::core::ffi::c_void {
     let mut allocated_size: size_t = if size != 0 { size } else { 1 as size_t };
-    let mut ret: *mut ::core::ffi::c_void = mem_malloc
-        .expect("non-null function pointer")(allocated_size);
+    let mut ret: *mut ::core::ffi::c_void =
+        mem_malloc.expect("non-null function pointer")(allocated_size);
     if ret.is_null() {
         try_to_free_memory();
         ret = mem_malloc.expect("non-null function pointer")(allocated_size);
@@ -160,9 +139,7 @@ pub unsafe extern "C" fn try_malloc(mut size: size_t) -> *mut ::core::ffi::c_voi
     return ret;
 }
 #[no_mangle]
-pub unsafe extern "C" fn verbose_try_malloc(
-    mut size: size_t,
-) -> *mut ::core::ffi::c_void {
+pub unsafe extern "C" fn verbose_try_malloc(mut size: size_t) -> *mut ::core::ffi::c_void {
     let mut ret: *mut ::core::ffi::c_void = try_malloc(size);
     if ret.is_null() {
         do_outofmem_msg(size);
@@ -182,10 +159,7 @@ pub unsafe extern "C" fn xfree(mut ptr: *mut ::core::ffi::c_void) {
     mem_free.expect("non-null function pointer")(ptr);
 }
 #[no_mangle]
-pub unsafe extern "C" fn xcalloc(
-    mut count: size_t,
-    mut size: size_t,
-) -> *mut ::core::ffi::c_void {
+pub unsafe extern "C" fn xcalloc(mut count: size_t, mut size: size_t) -> *mut ::core::ffi::c_void {
     let mut allocated_count: size_t = if count != 0 && size != 0 {
         count
     } else {
@@ -196,12 +170,11 @@ pub unsafe extern "C" fn xcalloc(
     } else {
         1 as size_t
     };
-    let mut ret: *mut ::core::ffi::c_void = mem_calloc
-        .expect("non-null function pointer")(allocated_count, allocated_size);
+    let mut ret: *mut ::core::ffi::c_void =
+        mem_calloc.expect("non-null function pointer")(allocated_count, allocated_size);
     if ret.is_null() {
         try_to_free_memory();
-        ret = mem_calloc
-            .expect("non-null function pointer")(allocated_count, allocated_size);
+        ret = mem_calloc.expect("non-null function pointer")(allocated_count, allocated_size);
         if ret.is_null() {
             preserve_exit(&raw const e_outofmem as *const ::core::ffi::c_char);
         }
@@ -214,8 +187,8 @@ pub unsafe extern "C" fn xrealloc(
     mut size: size_t,
 ) -> *mut ::core::ffi::c_void {
     let mut allocated_size: size_t = if size != 0 { size } else { 1 as size_t };
-    let mut ret: *mut ::core::ffi::c_void = mem_realloc
-        .expect("non-null function pointer")(ptr, allocated_size);
+    let mut ret: *mut ::core::ffi::c_void =
+        mem_realloc.expect("non-null function pointer")(ptr, allocated_size);
     if ret.is_null() {
         try_to_free_memory();
         ret = mem_realloc.expect("non-null function pointer")(ptr, allocated_size);
@@ -229,16 +202,13 @@ pub unsafe extern "C" fn xrealloc(
 pub unsafe extern "C" fn xmallocz(mut size: size_t) -> *mut ::core::ffi::c_void {
     let mut total_size: size_t = size.wrapping_add(1 as size_t);
     if total_size < size {
-        preserve_exit(
-            gettext(
-                b"Nvim: Data too large to fit into virtual memory space\n\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        preserve_exit(gettext(
+            b"Nvim: Data too large to fit into virtual memory space\n\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
     }
     let mut ret: *mut ::core::ffi::c_void = xmalloc(total_size);
-    *(ret as *mut ::core::ffi::c_char).offset(size as isize) = NUL
-        as ::core::ffi::c_char;
+    *(ret as *mut ::core::ffi::c_char).offset(size as isize) = NUL as ::core::ffi::c_char;
     return ret;
 }
 #[no_mangle]
@@ -276,8 +246,8 @@ pub unsafe extern "C" fn xmemscan(
     mut c: ::core::ffi::c_char,
     mut size: size_t,
 ) -> *mut ::core::ffi::c_void {
-    let mut p: *const ::core::ffi::c_char = memchr(addr, c as ::core::ffi::c_int, size)
-        as *const ::core::ffi::c_char;
+    let mut p: *const ::core::ffi::c_char =
+        memchr(addr, c as ::core::ffi::c_int, size) as *const ::core::ffi::c_char;
     return (if !p.is_null() {
         p as *mut ::core::ffi::c_char
     } else {
@@ -291,14 +261,14 @@ pub unsafe extern "C" fn strchrsub(
     mut x: ::core::ffi::c_char,
 ) {
     '_c2rust_label: {
-        if c as ::core::ffi::c_int != '\0' as ::core::ffi::c_int {} else {
+        if c as ::core::ffi::c_int != '\0' as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"c != NUL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 305 as ::core::ffi::c_uint,
-                b"void strchrsub(char *, char, char)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void strchrsub(char *, char, char)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -310,7 +280,7 @@ pub unsafe extern "C" fn strchrsub(
         let c2rust_fresh0 = str;
         str = str.offset(1);
         *c2rust_fresh0 = x;
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn memchrsub(
@@ -320,8 +290,7 @@ pub unsafe extern "C" fn memchrsub(
     mut len: size_t,
 ) {
     let mut p: *mut ::core::ffi::c_char = data as *mut ::core::ffi::c_char;
-    let mut end: *mut ::core::ffi::c_char = (data as *mut ::core::ffi::c_char)
-        .offset(len as isize);
+    let mut end: *mut ::core::ffi::c_char = (data as *mut ::core::ffi::c_char).offset(len as isize);
     loop {
         p = memchr(
             p as *const ::core::ffi::c_void,
@@ -334,7 +303,7 @@ pub unsafe extern "C" fn memchrsub(
         let c2rust_fresh1 = p;
         p = p.offset(1);
         *c2rust_fresh1 = x;
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn strcnt(
@@ -342,14 +311,14 @@ pub unsafe extern "C" fn strcnt(
     mut c: ::core::ffi::c_char,
 ) -> size_t {
     '_c2rust_label: {
-        if c as ::core::ffi::c_int != 0 as ::core::ffi::c_int {} else {
+        if c as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"c != 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 337 as ::core::ffi::c_uint,
-                b"size_t strcnt(const char *, char)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"size_t strcnt(const char *, char)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -406,11 +375,8 @@ pub unsafe extern "C" fn xstpncpy(
     mut src: *const ::core::ffi::c_char,
     mut maxlen: size_t,
 ) -> *mut ::core::ffi::c_char {
-    let mut p: *const ::core::ffi::c_char = memchr(
-        src as *const ::core::ffi::c_void,
-        NUL,
-        maxlen,
-    ) as *const ::core::ffi::c_char;
+    let mut p: *const ::core::ffi::c_char =
+        memchr(src as *const ::core::ffi::c_void, NUL, maxlen) as *const ::core::ffi::c_char;
     if !p.is_null() {
         let mut srclen: size_t = p.offset_from(src) as size_t;
         memcpy(
@@ -446,7 +412,11 @@ pub unsafe extern "C" fn xstrlcpy(
         } else {
             dsize.wrapping_sub(1 as size_t)
         };
-        memcpy(dst as *mut ::core::ffi::c_void, src as *const ::core::ffi::c_void, len);
+        memcpy(
+            dst as *mut ::core::ffi::c_void,
+            src as *const ::core::ffi::c_void,
+            len,
+        );
         *dst.offset(len as isize) = NUL as ::core::ffi::c_char;
     }
     return slen;
@@ -458,27 +428,29 @@ pub unsafe extern "C" fn xstrlcat(
     dsize: size_t,
 ) -> size_t {
     '_c2rust_label: {
-        if dsize > 0 as size_t {} else {
+        if dsize > 0 as size_t {
+        } else {
             __assert_fail(
                 b"dsize > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 460 as ::core::ffi::c_uint,
-                b"size_t xstrlcat(char *const, const char *const, const size_t)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"size_t xstrlcat(char *const, const char *const, const size_t)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
     let dlen: size_t = strlen(dst);
     '_c2rust_label_0: {
-        if dlen < dsize {} else {
+        if dlen < dsize {
+        } else {
             __assert_fail(
                 b"dlen < dsize\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/memory.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 462 as ::core::ffi::c_uint,
-                b"size_t xstrlcat(char *const, const char *const, const size_t)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"size_t xstrlcat(char *const, const char *const, const size_t)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -489,8 +461,7 @@ pub unsafe extern "C" fn xstrlcat(
             src as *const ::core::ffi::c_void,
             dsize.wrapping_sub(dlen).wrapping_sub(1 as size_t),
         );
-        *dst.offset(dsize.wrapping_sub(1 as size_t) as isize) = NUL
-            as ::core::ffi::c_char;
+        *dst.offset(dsize.wrapping_sub(1 as size_t) as isize) = NUL as ::core::ffi::c_char;
     } else {
         memmove(
             dst.offset(dlen as isize) as *mut ::core::ffi::c_void,
@@ -501,16 +472,11 @@ pub unsafe extern "C" fn xstrlcat(
     return slen.wrapping_add(dlen);
 }
 #[no_mangle]
-pub unsafe extern "C" fn xstrdup(
-    mut str: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    return xmemdupz(str as *const ::core::ffi::c_void, strlen(str))
-        as *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn xstrdup(mut str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    return xmemdupz(str as *const ::core::ffi::c_void, strlen(str)) as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
-pub unsafe extern "C" fn xstrdupnul(
-    str: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn xstrdupnul(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     if str.is_null() {
         return xmallocz(0 as size_t) as *mut ::core::ffi::c_char;
     }
@@ -531,8 +497,7 @@ pub unsafe extern "C" fn xmemrchr(
         if *(src as *mut uint8_t).offset(len as isize) as ::core::ffi::c_int
             == c as ::core::ffi::c_int
         {
-            return (src as *mut uint8_t).offset(len as isize)
-                as *mut ::core::ffi::c_void;
+            return (src as *mut uint8_t).offset(len as isize) as *mut ::core::ffi::c_void;
         }
     }
     return NULL;
@@ -542,14 +507,15 @@ pub unsafe extern "C" fn xstrndup(
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
 ) -> *mut ::core::ffi::c_char {
-    let mut p: *const ::core::ffi::c_char = memchr(
-        str as *const ::core::ffi::c_void,
-        NUL,
-        len,
-    ) as *const ::core::ffi::c_char;
+    let mut p: *const ::core::ffi::c_char =
+        memchr(str as *const ::core::ffi::c_void, NUL, len) as *const ::core::ffi::c_char;
     return xmemdupz(
         str as *const ::core::ffi::c_void,
-        if !p.is_null() { p.offset_from(str) as size_t } else { len },
+        if !p.is_null() {
+            p.offset_from(str) as size_t
+        } else {
+            len
+        },
     ) as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
@@ -581,8 +547,7 @@ pub unsafe extern "C" fn time_to_bytes(mut time_: time_t, mut buf: *mut uint8_t)
     let mut i: size_t = 7 as size_t;
     let mut bufi: size_t = 0 as size_t;
     while bufi < 8 as size_t {
-        *buf.offset(bufi as isize) = (time_ as uint64_t >> i.wrapping_mul(8 as size_t))
-            as uint8_t;
+        *buf.offset(bufi as isize) = (time_ as uint64_t >> i.wrapping_mul(8 as size_t)) as uint8_t;
         i = i.wrapping_sub(1);
         bufi = bufi.wrapping_add(1);
     }
@@ -712,8 +677,8 @@ pub unsafe extern "C" fn arena_finish(mut arena: *mut Arena) -> ArenaMem {
 #[no_mangle]
 pub unsafe extern "C" fn alloc_block() -> *mut ::core::ffi::c_void {
     if arena_reuse_blk_count > 0 as size_t {
-        let mut retval: *mut ::core::ffi::c_void = arena_reuse_blk
-            as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void;
+        let mut retval: *mut ::core::ffi::c_void =
+            arena_reuse_blk as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void;
         arena_reuse_blk = (*arena_reuse_blk).prev;
         arena_reuse_blk_count = arena_reuse_blk_count.wrapping_sub(1);
         return retval;
@@ -728,11 +693,9 @@ pub unsafe extern "C" fn arena_alloc_block(mut arena: *mut Arena) {
     (*arena).cur_blk = alloc_block() as *mut ::core::ffi::c_char;
     (*arena).pos = 0 as size_t;
     (*arena).size = ARENA_BLOCK_SIZE as size_t;
-    let mut blk: *mut consumed_blk = arena_alloc(
-        arena,
-        ::core::mem::size_of::<consumed_blk>(),
-        true_0 != 0,
-    ) as *mut consumed_blk;
+    let mut blk: *mut consumed_blk =
+        arena_alloc(arena, ::core::mem::size_of::<consumed_blk>(), true_0 != 0)
+            as *mut consumed_blk;
     (*blk).prev = prev_blk;
 }
 unsafe extern "C" fn arena_align_offset(mut off: uint64_t) -> size_t {
@@ -765,8 +728,7 @@ pub unsafe extern "C" fn arena_alloc(
     };
     if alloc_pos.wrapping_add(size) > (*arena).size {
         if size
-            > (ARENA_BLOCK_SIZE as usize)
-                .wrapping_sub(::core::mem::size_of::<consumed_blk>())
+            > (ARENA_BLOCK_SIZE as usize).wrapping_sub(::core::mem::size_of::<consumed_blk>())
                 >> 1 as ::core::ffi::c_int
         {
             arena_alloc_count = arena_alloc_count.wrapping_add(1);
@@ -776,9 +738,8 @@ pub unsafe extern "C" fn arena_alloc(
             } else {
                 hdr_size
             };
-            let mut alloc: *mut ::core::ffi::c_char = xmalloc(
-                size.wrapping_add(aligned_hdr_size),
-            ) as *mut ::core::ffi::c_char;
+            let mut alloc: *mut ::core::ffi::c_char =
+                xmalloc(size.wrapping_add(aligned_hdr_size)) as *mut ::core::ffi::c_char;
             let mut cur_blk: *mut consumed_blk = (*arena).cur_blk as *mut consumed_blk;
             let mut fix_blk: *mut consumed_blk = alloc as *mut consumed_blk;
             (*fix_blk).prev = (*cur_blk).prev;
@@ -827,11 +788,9 @@ pub unsafe extern "C" fn arena_allocz(
     mut arena: *mut Arena,
     mut size: size_t,
 ) -> *mut ::core::ffi::c_char {
-    let mut mem: *mut ::core::ffi::c_char = arena_alloc(
-        arena,
-        size.wrapping_add(1 as size_t),
-        false_0 != 0,
-    ) as *mut ::core::ffi::c_char;
+    let mut mem: *mut ::core::ffi::c_char =
+        arena_alloc(arena, size.wrapping_add(1 as size_t), false_0 != 0)
+            as *mut ::core::ffi::c_char;
     *mem.offset(size as isize) = NUL as ::core::ffi::c_char;
     return mem;
 }
@@ -842,7 +801,11 @@ pub unsafe extern "C" fn arena_memdupz(
     mut size: size_t,
 ) -> *mut ::core::ffi::c_char {
     let mut mem: *mut ::core::ffi::c_char = arena_allocz(arena, size);
-    memcpy(mem as *mut ::core::ffi::c_void, buf as *const ::core::ffi::c_void, size);
+    memcpy(
+        mem as *mut ::core::ffi::c_void,
+        buf as *const ::core::ffi::c_void,
+        size,
+    );
     return mem;
 }
 #[no_mangle]

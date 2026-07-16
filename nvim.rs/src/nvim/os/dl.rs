@@ -1,8 +1,5 @@
 extern "C" {
-    fn uv_dlopen(
-        filename: *const ::core::ffi::c_char,
-        lib: *mut uv_lib_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_dlopen(filename: *const ::core::ffi::c_char, lib: *mut uv_lib_t) -> ::core::ffi::c_int;
     fn uv_dlclose(lib: *mut uv_lib_t);
     fn uv_dlsym(
         lib: *mut uv_lib_t,
@@ -20,22 +17,15 @@ pub struct uv_lib_t {
     pub handle: *mut ::core::ffi::c_void,
     pub errmsg: *mut ::core::ffi::c_char,
 }
-pub type int_int_fn = Option<
-    unsafe extern "C" fn(::core::ffi::c_int) -> ::core::ffi::c_int,
->;
+pub type int_int_fn = Option<unsafe extern "C" fn(::core::ffi::c_int) -> ::core::ffi::c_int>;
 pub type gen_fn = Option<unsafe extern "C" fn() -> ()>;
-pub type str_int_fn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int,
->;
-pub type int_str_fn = Option<
-    unsafe extern "C" fn(::core::ffi::c_int) -> *const ::core::ffi::c_char,
->;
-pub type str_str_fn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char) -> *const ::core::ffi::c_char,
->;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub type str_int_fn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> ::core::ffi::c_int>;
+pub type int_str_fn =
+    Option<unsafe extern "C" fn(::core::ffi::c_int) -> *const ::core::ffi::c_char>;
+pub type str_str_fn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char) -> *const ::core::ffi::c_char>;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub unsafe extern "C" fn os_libcall(
     mut libname: *const ::core::ffi::c_char,
@@ -62,8 +52,11 @@ pub unsafe extern "C" fn os_libcall(
         return false_0 != 0;
     }
     let mut fn_0: gen_fn = None;
-    if uv_dlsym(&raw mut lib, funcname, &raw mut fn_0 as *mut *mut ::core::ffi::c_void)
-        != 0
+    if uv_dlsym(
+        &raw mut lib,
+        funcname,
+        &raw mut fn_0 as *mut *mut ::core::ffi::c_void,
+    ) != 0
     {
         semsg(
             b"dlerror = \"%s\"\0".as_ptr() as *const ::core::ffi::c_char

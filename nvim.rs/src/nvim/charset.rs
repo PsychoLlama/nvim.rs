@@ -34,11 +34,7 @@ extern "C" {
         c: ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
     fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char;
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     static mut dy_flags: ::core::ffi::c_uint;
     static mut p_isf: *mut ::core::ffi::c_char;
@@ -52,15 +48,9 @@ extern "C" {
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_printable(c: ::core::ffi::c_int) -> bool;
-    fn utf_class_tab(
-        c: ::core::ffi::c_int,
-        chartab: *const uint64_t,
-    ) -> ::core::ffi::c_int;
+    fn utf_class_tab(c: ::core::ffi::c_int, chartab: *const uint64_t) -> ::core::ffi::c_int;
     fn mb_islower(a: ::core::ffi::c_int) -> bool;
     fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn mb_isupper(a: ::core::ffi::c_int) -> bool;
@@ -1641,20 +1631,17 @@ pub const STR2NR_HEX: C2Rust_Unnamed_14 = 4;
 pub const STR2NR_OCT: C2Rust_Unnamed_14 = 2;
 pub const STR2NR_BIN: C2Rust_Unnamed_14 = 1;
 pub const STR2NR_DEC: C2Rust_Unnamed_14 = 0;
-pub const INT32_MIN: ::core::ffi::c_int = -2147483647 as ::core::ffi::c_int
-    - 1 as ::core::ffi::c_int;
-pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 as ::core::ffi::c_long
-    - 1 as ::core::ffi::c_long;
+pub const INT32_MIN: ::core::ffi::c_int =
+    -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+pub const INT64_MIN: ::core::ffi::c_long =
+    -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
 pub const INT32_MAX: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615
-    as ::core::ffi::c_ulong;
-pub const INTMAX_MIN: ::core::ffi::c_long = -9223372036854775807 as ::core::ffi::c_long
-    - 1 as ::core::ffi::c_long;
+pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
+pub const INTMAX_MIN: ::core::ffi::c_long =
+    -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
 pub const INTMAX_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
@@ -1707,36 +1694,35 @@ pub unsafe extern "C" fn buf_init_chartab(
         while c < ' ' as ::core::ffi::c_int {
             let c2rust_fresh0 = c;
             c = c + 1;
-            g_chartab[c2rust_fresh0 as usize] = (if dy_flags
-                & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            {
-                4 as ::core::ffi::c_int
-            } else {
-                2 as ::core::ffi::c_int
-            }) as uint8_t;
+            g_chartab[c2rust_fresh0 as usize] =
+                (if dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+                    4 as ::core::ffi::c_int
+                } else {
+                    2 as ::core::ffi::c_int
+                }) as uint8_t;
         }
         while c <= '~' as ::core::ffi::c_int {
             let c2rust_fresh1 = c;
             c = c + 1;
-            g_chartab[c2rust_fresh1 as usize] = (1 as ::core::ffi::c_int + CT_PRINT_CHAR)
-                as uint8_t;
+            g_chartab[c2rust_fresh1 as usize] =
+                (1 as ::core::ffi::c_int + CT_PRINT_CHAR) as uint8_t;
         }
         while c < 256 as ::core::ffi::c_int {
             if c >= 0xa0 as ::core::ffi::c_int {
                 let c2rust_fresh2 = c;
                 c = c + 1;
-                g_chartab[c2rust_fresh2 as usize] = ((CT_PRINT_CHAR | CT_FNAME_CHAR)
-                    + 1 as ::core::ffi::c_int) as uint8_t;
+                g_chartab[c2rust_fresh2 as usize] =
+                    ((CT_PRINT_CHAR | CT_FNAME_CHAR) + 1 as ::core::ffi::c_int) as uint8_t;
             } else {
                 let c2rust_fresh3 = c;
                 c = c + 1;
-                g_chartab[c2rust_fresh3 as usize] = (if dy_flags
-                    & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-                {
-                    4 as ::core::ffi::c_int
-                } else {
-                    2 as ::core::ffi::c_int
-                }) as uint8_t;
+                g_chartab[c2rust_fresh3 as usize] =
+                    (if dy_flags & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                    {
+                        4 as ::core::ffi::c_int
+                    } else {
+                        2 as ::core::ffi::c_int
+                    }) as uint8_t;
             }
         }
     }
@@ -1746,13 +1732,13 @@ pub unsafe extern "C" fn buf_init_chartab(
         ::core::mem::size_of::<[uint64_t; 4]>(),
     );
     if (*buf).b_p_lisp != 0 {
-        (*buf)
-            .b_chartab[('-' as ::core::ffi::c_int as ::core::ffi::c_uint
-            >> 6 as ::core::ffi::c_int) as usize] = ((*buf)
-            .b_chartab[('-' as ::core::ffi::c_int as ::core::ffi::c_uint
-            >> 6 as ::core::ffi::c_int) as usize] as ::core::ffi::c_ulonglong
+        (*buf).b_chartab[('-' as ::core::ffi::c_int as ::core::ffi::c_uint
+            >> 6 as ::core::ffi::c_int) as usize] = ((*buf).b_chartab
+            [('-' as ::core::ffi::c_int as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as usize]
+            as ::core::ffi::c_ulonglong
             | (1 as ::core::ffi::c_ulonglong)
-                << ('-' as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int)) as uint64_t;
+                << ('-' as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int))
+            as uint64_t;
     }
     let mut i: ::core::ffi::c_int = if global as ::core::ffi::c_int != 0 {
         0 as ::core::ffi::c_int
@@ -1760,9 +1746,7 @@ pub unsafe extern "C" fn buf_init_chartab(
         3 as ::core::ffi::c_int
     };
     while i <= 3 as ::core::ffi::c_int {
-        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         if i == 0 as ::core::ffi::c_int {
             p = p_isi;
         } else if i == 1 as ::core::ffi::c_int {
@@ -1781,9 +1765,7 @@ pub unsafe extern "C" fn buf_init_chartab(
     return OK;
 }
 #[no_mangle]
-pub unsafe extern "C" fn check_isopt(
-    mut var: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn check_isopt(mut var: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     return parse_isopt(var, ::core::ptr::null_mut::<buf_T>(), true_0 != 0);
 }
 unsafe extern "C" fn parse_isopt(
@@ -1826,7 +1808,8 @@ unsafe extern "C" fn parse_isopt(
                 c2 = mb_ptr2char_adv(&raw mut p);
             }
         }
-        if c <= 0 as ::core::ffi::c_int || c >= 256 as ::core::ffi::c_int
+        if c <= 0 as ::core::ffi::c_int
+            || c >= 256 as ::core::ffi::c_int
             || c2 < c && c2 != -1 as ::core::ffi::c_int
             || c2 >= 256 as ::core::ffi::c_int
             || !(*p as ::core::ffi::c_int == NUL
@@ -1834,8 +1817,7 @@ unsafe extern "C" fn parse_isopt(
         {
             return FAIL;
         }
-        let mut trail_comma: bool = *p as ::core::ffi::c_int
-            == ',' as ::core::ffi::c_int;
+        let mut trail_comma: bool = *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int;
         p = skip_to_option_part(p);
         if trail_comma as ::core::ffi::c_int != 0 && *p as ::core::ffi::c_int == NUL {
             return FAIL;
@@ -1853,69 +1835,71 @@ unsafe extern "C" fn parse_isopt(
             }
         }
         while c <= c2 {
-            if !do_isalpha || mb_islower(c) as ::core::ffi::c_int != 0
+            if !do_isalpha
+                || mb_islower(c) as ::core::ffi::c_int != 0
                 || mb_isupper(c) as ::core::ffi::c_int != 0
             {
                 if var == p_isi as *const ::core::ffi::c_char {
                     if tilde {
-                        g_chartab[c as usize] = (g_chartab[c as usize]
-                            as ::core::ffi::c_int
-                            & !CT_ID_CHAR as uint8_t as ::core::ffi::c_int) as uint8_t;
+                        g_chartab[c as usize] = (g_chartab[c as usize] as ::core::ffi::c_int
+                            & !CT_ID_CHAR as uint8_t as ::core::ffi::c_int)
+                            as uint8_t;
                     } else {
-                        g_chartab[c as usize] = (g_chartab[c as usize]
-                            as ::core::ffi::c_int | CT_ID_CHAR) as uint8_t;
+                        g_chartab[c as usize] =
+                            (g_chartab[c as usize] as ::core::ffi::c_int | CT_ID_CHAR) as uint8_t;
                     }
                 } else if var == p_isp as *const ::core::ffi::c_char {
                     if c < ' ' as ::core::ffi::c_int || c > '~' as ::core::ffi::c_int {
                         if tilde {
-                            g_chartab[c as usize] = ((g_chartab[c as usize]
-                                as ::core::ffi::c_int & !CT_CELL_MASK)
+                            g_chartab[c as usize] = ((g_chartab[c as usize] as ::core::ffi::c_int
+                                & !CT_CELL_MASK)
                                 + (if dy_flags
-                                    & kOptDyFlagUhex as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint != 0
+                                    & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    != 0
                                 {
                                     4 as ::core::ffi::c_int
                                 } else {
                                     2 as ::core::ffi::c_int
                                 })) as uint8_t;
-                            g_chartab[c as usize] = (g_chartab[c as usize]
-                                as ::core::ffi::c_int
+                            g_chartab[c as usize] = (g_chartab[c as usize] as ::core::ffi::c_int
                                 & !CT_PRINT_CHAR as uint8_t as ::core::ffi::c_int)
                                 as uint8_t;
                         } else {
-                            g_chartab[c as usize] = ((g_chartab[c as usize]
-                                as ::core::ffi::c_int & !CT_CELL_MASK)
-                                + 1 as ::core::ffi::c_int) as uint8_t;
-                            g_chartab[c as usize] = (g_chartab[c as usize]
-                                as ::core::ffi::c_int | CT_PRINT_CHAR) as uint8_t;
+                            g_chartab[c as usize] = ((g_chartab[c as usize] as ::core::ffi::c_int
+                                & !CT_CELL_MASK)
+                                + 1 as ::core::ffi::c_int)
+                                as uint8_t;
+                            g_chartab[c as usize] = (g_chartab[c as usize] as ::core::ffi::c_int
+                                | CT_PRINT_CHAR)
+                                as uint8_t;
                         }
                     }
                 } else if var == p_isf as *const ::core::ffi::c_char {
                     if tilde {
-                        g_chartab[c as usize] = (g_chartab[c as usize]
-                            as ::core::ffi::c_int
+                        g_chartab[c as usize] = (g_chartab[c as usize] as ::core::ffi::c_int
                             & !CT_FNAME_CHAR as uint8_t as ::core::ffi::c_int)
                             as uint8_t;
                     } else {
-                        g_chartab[c as usize] = (g_chartab[c as usize]
-                            as ::core::ffi::c_int | CT_FNAME_CHAR) as uint8_t;
+                        g_chartab[c as usize] = (g_chartab[c as usize] as ::core::ffi::c_int
+                            | CT_FNAME_CHAR)
+                            as uint8_t;
                     }
                 } else if tilde {
-                    (*buf)
-                        .b_chartab[(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int)
-                        as usize] = ((*buf)
-                        .b_chartab[(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int)
-                        as usize] as ::core::ffi::c_ulonglong
-                        & !((1 as ::core::ffi::c_ulonglong)
-                            << (c & 0x3f as ::core::ffi::c_int))) as uint64_t;
+                    (*buf).b_chartab
+                        [(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as usize] = ((*buf)
+                        .b_chartab
+                        [(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as usize]
+                        as ::core::ffi::c_ulonglong
+                        & !((1 as ::core::ffi::c_ulonglong) << (c & 0x3f as ::core::ffi::c_int)))
+                        as uint64_t;
                 } else {
-                    (*buf)
-                        .b_chartab[(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int)
-                        as usize] = ((*buf)
-                        .b_chartab[(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int)
-                        as usize] as ::core::ffi::c_ulonglong
-                        | (1 as ::core::ffi::c_ulonglong)
-                            << (c & 0x3f as ::core::ffi::c_int)) as uint64_t;
+                    (*buf).b_chartab
+                        [(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as usize] = ((*buf)
+                        .b_chartab
+                        [(c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as usize]
+                        as ::core::ffi::c_ulonglong
+                        | (1 as ::core::ffi::c_ulonglong) << (c & 0x3f as ::core::ffi::c_int))
+                        as uint64_t;
                 }
             }
             c += 1;
@@ -1928,9 +1912,7 @@ pub unsafe extern "C" fn trans_characters(
     mut buf: *mut ::core::ffi::c_char,
     mut bufsize: ::core::ffi::c_int,
 ) {
-    let mut trs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut trs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: ::core::ffi::c_int = strlen(buf) as ::core::ffi::c_int;
     let mut room: ::core::ffi::c_int = bufsize - len;
     while *buf as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
@@ -1948,8 +1930,7 @@ pub unsafe extern "C" fn trans_characters(
                 }
                 memmove(
                     buf.offset(trs_len as isize) as *mut ::core::ffi::c_void,
-                    buf.offset(1 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
+                    buf.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
                     len as size_t,
                 );
             }
@@ -1964,10 +1945,7 @@ pub unsafe extern "C" fn trans_characters(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn transstr_len(
-    s: *const ::core::ffi::c_char,
-    mut untab: bool,
-) -> size_t {
+pub unsafe extern "C" fn transstr_len(s: *const ::core::ffi::c_char, mut untab: bool) -> size_t {
     let mut p: *const ::core::ffi::c_char = s;
     let mut len: size_t = 0 as size_t;
     while *p != 0 {
@@ -1980,12 +1958,11 @@ pub unsafe extern "C" fn transstr_len(
                 while off < l {
                     let mut c: ::core::ffi::c_int = utf_ptr2char(p.offset(off as isize));
                     let mut hexbuf: [::core::ffi::c_char; 9] = [0; 9];
-                    len = len
-                        .wrapping_add(
-                            transchar_hex(&raw mut hexbuf as *mut ::core::ffi::c_char, c),
-                        );
-                    off = off
-                        .wrapping_add(utf_ptr2len(p.offset(off as isize)) as size_t);
+                    len = len.wrapping_add(transchar_hex(
+                        &raw mut hexbuf as *mut ::core::ffi::c_char,
+                        c,
+                    ));
+                    off = off.wrapping_add(utf_ptr2len(p.offset(off as isize)) as size_t);
                 }
             }
             p = p.offset(l as isize);
@@ -1995,17 +1972,15 @@ pub unsafe extern "C" fn transstr_len(
         } else {
             let c2rust_fresh12 = p;
             p = p.offset(1);
-            let b2c_l: ::core::ffi::c_int = byte2cells(
-                *c2rust_fresh12 as uint8_t as ::core::ffi::c_int,
+            let b2c_l: ::core::ffi::c_int =
+                byte2cells(*c2rust_fresh12 as uint8_t as ::core::ffi::c_int);
+            len = len.wrapping_add(
+                (if b2c_l > 0 as ::core::ffi::c_int {
+                    b2c_l
+                } else {
+                    4 as ::core::ffi::c_int
+                }) as size_t,
             );
-            len = len
-                .wrapping_add(
-                    (if b2c_l > 0 as ::core::ffi::c_int {
-                        b2c_l
-                    } else {
-                        4 as ::core::ffi::c_int
-                    }) as size_t,
-                );
         }
     }
     return len;
@@ -2024,7 +1999,8 @@ pub unsafe extern "C" fn transstr_buf(
         .offset(buflen as isize)
         .offset(-(1 as ::core::ffi::c_int as isize));
     while (slen < 0 as ssize_t || p.offset_from(s) < slen as isize)
-        && *p as ::core::ffi::c_int != NUL && buf_p < buf_e
+        && *p as ::core::ffi::c_int != NUL
+        && buf_p < buf_e
     {
         let l: size_t = utfc_ptr2len(p) as size_t;
         if l > 1 as size_t {
@@ -2043,22 +2019,18 @@ pub unsafe extern "C" fn transstr_buf(
                 while off < l {
                     let mut c: ::core::ffi::c_int = utf_ptr2char(p.offset(off as isize));
                     let mut hexbuf: [::core::ffi::c_char; 9] = [0; 9];
-                    let hexlen: size_t = transchar_hex(
-                        &raw mut hexbuf as *mut ::core::ffi::c_char,
-                        c,
-                    );
+                    let hexlen: size_t =
+                        transchar_hex(&raw mut hexbuf as *mut ::core::ffi::c_char, c);
                     if buf_p.offset(hexlen as isize) > buf_e {
                         break;
                     }
                     memmove(
                         buf_p as *mut ::core::ffi::c_void,
-                        &raw mut hexbuf as *mut ::core::ffi::c_char
-                            as *const ::core::ffi::c_void,
+                        &raw mut hexbuf as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
                         hexlen,
                     );
                     buf_p = buf_p.offset(hexlen as isize);
-                    off = off
-                        .wrapping_add(utf_ptr2len(p.offset(off as isize)) as size_t);
+                    off = off.wrapping_add(utf_ptr2len(p.offset(off as isize)) as size_t);
                 }
             }
             p = p.offset(l as isize);
@@ -2071,9 +2043,8 @@ pub unsafe extern "C" fn transstr_buf(
         } else {
             let c2rust_fresh15 = p;
             p = p.offset(1);
-            let tb: *const ::core::ffi::c_char = transchar_byte(
-                *c2rust_fresh15 as uint8_t as ::core::ffi::c_int,
-            );
+            let tb: *const ::core::ffi::c_char =
+                transchar_byte(*c2rust_fresh15 as uint8_t as ::core::ffi::c_int);
             let tb_len: size_t = strlen(tb);
             if buf_p.offset(tb_len as isize) > buf_e {
                 break;
@@ -2088,7 +2059,8 @@ pub unsafe extern "C" fn transstr_buf(
     }
     *buf_p = NUL as ::core::ffi::c_char;
     '_c2rust_label: {
-        if buf_p <= buf_e {} else {
+        if buf_p <= buf_e {
+        } else {
             __assert_fail(
                 b"buf_p <= buf_e\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
@@ -2162,7 +2134,11 @@ pub unsafe extern "C" fn str_foldcase(
     };
     let mut len: ::core::ffi::c_int = orglen;
     if buf.is_null() {
-        ga_init(&raw mut ga, 1 as ::core::ffi::c_int, 10 as ::core::ffi::c_int);
+        ga_init(
+            &raw mut ga,
+            1 as ::core::ffi::c_int,
+            10 as ::core::ffi::c_int,
+        );
         ga_grow(&raw mut ga, len + 1 as ::core::ffi::c_int);
         memmove(ga.ga_data, str as *const ::core::ffi::c_void, len as size_t);
         ga.ga_len = len;
@@ -2177,36 +2153,29 @@ pub unsafe extern "C" fn str_foldcase(
         );
     }
     if buf.is_null() {
-        *(ga.ga_data as *mut ::core::ffi::c_char).offset(len as isize) = NUL
-            as ::core::ffi::c_char;
+        *(ga.ga_data as *mut ::core::ffi::c_char).offset(len as isize) = NUL as ::core::ffi::c_char;
     } else {
         *buf.offset(len as isize) = NUL as ::core::ffi::c_char;
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while (if buf.is_null() {
-        *(ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
-            as ::core::ffi::c_int
+        *(ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize) as ::core::ffi::c_int
     } else {
         *buf.offset(i as isize) as ::core::ffi::c_int
     }) != NUL
     {
-        let mut c: ::core::ffi::c_int = utf_ptr2char(
-            if buf.is_null() {
-                (ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
-            } else {
-                buf.offset(i as isize)
-            },
-        );
-        let mut olen: ::core::ffi::c_int = utf_ptr2len(
-            if buf.is_null() {
-                (ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
-            } else {
-                buf.offset(i as isize)
-            },
-        );
+        let mut c: ::core::ffi::c_int = utf_ptr2char(if buf.is_null() {
+            (ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
+        } else {
+            buf.offset(i as isize)
+        });
+        let mut olen: ::core::ffi::c_int = utf_ptr2len(if buf.is_null() {
+            (ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
+        } else {
+            buf.offset(i as isize)
+        });
         let mut lc: ::core::ffi::c_int = mb_tolower(c);
-        if (c < 0x80 as ::core::ffi::c_int || olen > 1 as ::core::ffi::c_int) && c != lc
-        {
+        if (c < 0x80 as ::core::ffi::c_int || olen > 1 as ::core::ffi::c_int) && c != lc {
             let mut nlen: ::core::ffi::c_int = utf_char2len(lc);
             if olen != nlen {
                 if nlen > olen {
@@ -2222,16 +2191,18 @@ pub unsafe extern "C" fn str_foldcase(
                         memmove(
                             (ga.ga_data as *mut ::core::ffi::c_char)
                                 .offset(i as isize)
-                                .offset(nlen as isize) as *mut ::core::ffi::c_void,
+                                .offset(nlen as isize)
+                                as *mut ::core::ffi::c_void,
                             (ga.ga_data as *mut ::core::ffi::c_char)
                                 .offset(i as isize)
-                                .offset(olen as isize) as *const ::core::ffi::c_void,
+                                .offset(olen as isize)
+                                as *const ::core::ffi::c_void,
                             strlen(
-                                    (ga.ga_data as *mut ::core::ffi::c_char)
-                                        .offset(i as isize)
-                                        .offset(olen as isize),
-                                )
-                                .wrapping_add(1 as size_t),
+                                (ga.ga_data as *mut ::core::ffi::c_char)
+                                    .offset(i as isize)
+                                    .offset(olen as isize),
+                            )
+                            .wrapping_add(1 as size_t),
                         );
                         ga.ga_len += nlen - olen;
                     } else {
@@ -2256,14 +2227,11 @@ pub unsafe extern "C" fn str_foldcase(
                 },
             );
         }
-        i
-            += utfc_ptr2len(
-                if buf.is_null() {
-                    (ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
-                } else {
-                    buf.offset(i as isize)
-                },
-            );
+        i += utfc_ptr2len(if buf.is_null() {
+            (ga.ga_data as *mut ::core::ffi::c_char).offset(i as isize)
+        } else {
+            buf.offset(i as isize)
+        });
     }
     if buf.is_null() {
         return ga.ga_data as *mut ::core::ffi::c_char;
@@ -2272,9 +2240,7 @@ pub unsafe extern "C" fn str_foldcase(
 }
 static mut transchar_charbuf: [uint8_t; 11] = [0; 11];
 #[no_mangle]
-pub unsafe extern "C" fn transchar(
-    mut c: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn transchar(mut c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     return transchar_buf(curbuf, c);
 }
 #[no_mangle]
@@ -2295,8 +2261,7 @@ pub unsafe extern "C" fn transchar_buf(
             -c & 0xff as ::core::ffi::c_int
         };
     }
-    if !chartab_initialized
-        && (c >= ' ' as ::core::ffi::c_int && c <= '~' as ::core::ffi::c_int)
+    if !chartab_initialized && (c >= ' ' as ::core::ffi::c_int && c <= '~' as ::core::ffi::c_int)
         || c <= 0xff as ::core::ffi::c_int && vim_isprintc(c) as ::core::ffi::c_int != 0
     {
         transchar_charbuf[i as usize] = c as uint8_t;
@@ -2318,9 +2283,7 @@ pub unsafe extern "C" fn transchar_buf(
     return &raw mut transchar_charbuf as *mut uint8_t as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
-pub unsafe extern "C" fn transchar_byte(
-    c: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn transchar_byte(c: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     return transchar_byte_buf(curbuf, c);
 }
 #[no_mangle]
@@ -2350,7 +2313,8 @@ pub unsafe extern "C" fn transchar_nonprint(
         c = NL;
     }
     '_c2rust_label: {
-        if c <= 0xff as ::core::ffi::c_int {} else {
+        if c <= 0xff as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"c <= 0xff\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
@@ -2367,8 +2331,8 @@ pub unsafe extern "C" fn transchar_nonprint(
         transchar_hex(charbuf, c);
     } else {
         *charbuf.offset(0 as ::core::ffi::c_int as isize) = '^' as ::core::ffi::c_char;
-        *charbuf.offset(1 as ::core::ffi::c_int as isize) = (c
-            ^ 0x40 as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
+        *charbuf.offset(1 as ::core::ffi::c_int as isize) =
+            (c ^ 0x40 as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
         *charbuf.offset(2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     };
 }
@@ -2385,35 +2349,29 @@ pub unsafe extern "C" fn transchar_hex(
         if c > 0xffff as ::core::ffi::c_int {
             let c2rust_fresh5 = i;
             i = i.wrapping_add(1);
-            *buf.offset(c2rust_fresh5 as isize) = nr2hex(
-                c as ::core::ffi::c_uint >> 20 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_char;
+            *buf.offset(c2rust_fresh5 as isize) =
+                nr2hex(c as ::core::ffi::c_uint >> 20 as ::core::ffi::c_int) as ::core::ffi::c_char;
             let c2rust_fresh6 = i;
             i = i.wrapping_add(1);
-            *buf.offset(c2rust_fresh6 as isize) = nr2hex(
-                c as ::core::ffi::c_uint >> 16 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_char;
+            *buf.offset(c2rust_fresh6 as isize) =
+                nr2hex(c as ::core::ffi::c_uint >> 16 as ::core::ffi::c_int) as ::core::ffi::c_char;
         }
         let c2rust_fresh7 = i;
         i = i.wrapping_add(1);
-        *buf.offset(c2rust_fresh7 as isize) = nr2hex(
-            c as ::core::ffi::c_uint >> 12 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_char;
+        *buf.offset(c2rust_fresh7 as isize) =
+            nr2hex(c as ::core::ffi::c_uint >> 12 as ::core::ffi::c_int) as ::core::ffi::c_char;
         let c2rust_fresh8 = i;
         i = i.wrapping_add(1);
-        *buf.offset(c2rust_fresh8 as isize) = nr2hex(
-            c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_char;
+        *buf.offset(c2rust_fresh8 as isize) =
+            nr2hex(c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int) as ::core::ffi::c_char;
     }
     let c2rust_fresh9 = i;
     i = i.wrapping_add(1);
-    *buf.offset(c2rust_fresh9 as isize) = nr2hex(
-        c as ::core::ffi::c_uint >> 4 as ::core::ffi::c_int,
-    ) as ::core::ffi::c_char;
+    *buf.offset(c2rust_fresh9 as isize) =
+        nr2hex(c as ::core::ffi::c_uint >> 4 as ::core::ffi::c_int) as ::core::ffi::c_char;
     let c2rust_fresh10 = i;
     i = i.wrapping_add(1);
-    *buf.offset(c2rust_fresh10 as isize) = nr2hex(c as ::core::ffi::c_uint)
-        as ::core::ffi::c_char;
+    *buf.offset(c2rust_fresh10 as isize) = nr2hex(c as ::core::ffi::c_uint) as ::core::ffi::c_char;
     let c2rust_fresh11 = i;
     i = i.wrapping_add(1);
     *buf.offset(c2rust_fresh11 as isize) = '>' as ::core::ffi::c_char;
@@ -2431,7 +2389,7 @@ pub unsafe extern "C" fn rl_mirror_ascii(
     } else {
         str.offset(strlen(str) as isize)
     })
-        .offset(-(1 as ::core::ffi::c_int as isize));
+    .offset(-(1 as ::core::ffi::c_int as isize));
     while p1 < p2 {
         let mut t: ::core::ffi::c_char = *p1;
         *p1 = *p2;
@@ -2463,7 +2421,11 @@ pub unsafe extern "C" fn char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c
             (if c == K_SPECIAL {
                 KS_SPECIAL
             } else {
-                (if c == NUL { KS_ZERO } else { -c & 0xff as ::core::ffi::c_int })
+                (if c == NUL {
+                    KS_ZERO
+                } else {
+                    -c & 0xff as ::core::ffi::c_int
+                })
             }),
         ) + 2 as ::core::ffi::c_int;
     }
@@ -2474,9 +2436,7 @@ pub unsafe extern "C" fn char2cells(mut c: ::core::ffi::c_int) -> ::core::ffi::c
         & CT_CELL_MASK;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ptr2cells(
-    mut p_in: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn ptr2cells(mut p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut uint8_t = p_in as *mut uint8_t;
     if *p as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
         return utf_ptr2cells(p_in);
@@ -2484,9 +2444,7 @@ pub unsafe extern "C" fn ptr2cells(
     return g_chartab[*p as usize] as ::core::ffi::c_int & CT_CELL_MASK;
 }
 #[no_mangle]
-pub unsafe extern "C" fn vim_strsize(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn vim_strsize(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return vim_strnsize(s, MAXCOL as ::core::ffi::c_int);
 }
 #[no_mangle]
@@ -2495,24 +2453,22 @@ pub unsafe extern "C" fn vim_strnsize(
     mut len: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if !s.is_null() {} else {
+        if !s.is_null() {
+        } else {
             __assert_fail(
                 b"s != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 766 as ::core::ffi::c_uint,
-                b"int vim_strnsize(const char *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int vim_strnsize(const char *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     let mut size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while *s as ::core::ffi::c_int != NUL
-        && {
-            len -= 1;
-            len >= 0 as ::core::ffi::c_int
-        }
-    {
+    while *s as ::core::ffi::c_int != NUL && {
+        len -= 1;
+        len >= 0 as ::core::ffi::c_int
+    } {
         let mut l: ::core::ffi::c_int = utfc_ptr2len(s);
         size += ptr2cells(s);
         s = s.offset(l as isize);
@@ -2522,7 +2478,8 @@ pub unsafe extern "C" fn vim_strnsize(
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_isIDc(mut c: ::core::ffi::c_int) -> bool {
-    return c > 0 as ::core::ffi::c_int && c < 0x100 as ::core::ffi::c_int
+    return c > 0 as ::core::ffi::c_int
+        && c < 0x100 as ::core::ffi::c_int
         && g_chartab[c as usize] as ::core::ffi::c_int & CT_ID_CHAR != 0;
 }
 #[no_mangle]
@@ -2530,26 +2487,19 @@ pub unsafe extern "C" fn vim_iswordc(c: ::core::ffi::c_int) -> bool {
     return vim_iswordc_buf(c, curbuf);
 }
 #[no_mangle]
-pub unsafe extern "C" fn vim_iswordc_tab(
-    c: ::core::ffi::c_int,
-    chartab: *const uint64_t,
-) -> bool {
+pub unsafe extern "C" fn vim_iswordc_tab(c: ::core::ffi::c_int, chartab: *const uint64_t) -> bool {
     return if c >= 0x100 as ::core::ffi::c_int {
         (utf_class_tab(c, chartab) >= 2 as ::core::ffi::c_int) as ::core::ffi::c_int
     } else {
         (c > 0 as ::core::ffi::c_int
-            && *chartab
-                .offset((c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as isize)
+            && *chartab.offset((c as ::core::ffi::c_uint >> 6 as ::core::ffi::c_int) as isize)
                 as ::core::ffi::c_ulonglong
                 & (1 as ::core::ffi::c_ulonglong) << (c & 0x3f as ::core::ffi::c_int)
                 != 0 as ::core::ffi::c_ulonglong) as ::core::ffi::c_int
     } != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn vim_iswordc_buf(
-    c: ::core::ffi::c_int,
-    buf: *mut buf_T,
-) -> bool {
+pub unsafe extern "C" fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T) -> bool {
     return vim_iswordc_tab(c, &raw mut (*buf).b_chartab as *mut uint64_t);
 }
 #[no_mangle]
@@ -2557,10 +2507,7 @@ pub unsafe extern "C" fn vim_iswordp(p: *const ::core::ffi::c_char) -> bool {
     return vim_iswordp_buf(p, curbuf);
 }
 #[no_mangle]
-pub unsafe extern "C" fn vim_iswordp_buf(
-    p: *const ::core::ffi::c_char,
-    buf: *mut buf_T,
-) -> bool {
+pub unsafe extern "C" fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool {
     let mut c: ::core::ffi::c_int = *p as uint8_t as ::core::ffi::c_int;
     if utf8len_tab[c as usize] as ::core::ffi::c_int > 1 as ::core::ffi::c_int {
         c = utf_ptr2char(p);
@@ -2575,8 +2522,10 @@ pub unsafe extern "C" fn vim_isfilec(mut c: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_is_fname_char(mut c: ::core::ffi::c_int) -> bool {
-    return vim_isfilec(c) as ::core::ffi::c_int != 0 || c == ',' as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int || c == '@' as ::core::ffi::c_int
+    return vim_isfilec(c) as ::core::ffi::c_int != 0
+        || c == ',' as ::core::ffi::c_int
+        || c == ' ' as ::core::ffi::c_int
+        || c == '@' as ::core::ffi::c_int
         || c == ':' as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -2584,9 +2533,9 @@ pub unsafe extern "C" fn vim_isfilec_or_wc(mut c: ::core::ffi::c_int) -> bool {
     let mut buf: [::core::ffi::c_char; 2] = [0; 2];
     buf[0 as ::core::ffi::c_int as usize] = c as ::core::ffi::c_char;
     buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-    return vim_isfilec(c) as ::core::ffi::c_int != 0 || c == ']' as ::core::ffi::c_int
-        || path_has_wildcard(&raw mut buf as *mut ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0;
+    return vim_isfilec(c) as ::core::ffi::c_int != 0
+        || c == ']' as ::core::ffi::c_int
+        || path_has_wildcard(&raw mut buf as *mut ::core::ffi::c_char) as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_isprintc(mut c: ::core::ffi::c_int) -> bool {
@@ -2597,9 +2546,7 @@ pub unsafe extern "C" fn vim_isprintc(mut c: ::core::ffi::c_int) -> bool {
         && g_chartab[c as usize] as ::core::ffi::c_int & CT_PRINT_CHAR != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn skipwhite(
-    mut p: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn skipwhite(mut p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     while ascii_iswhite(*p as ::core::ffi::c_int) {
         p = p.offset(1);
     }
@@ -2610,9 +2557,7 @@ pub unsafe extern "C" fn skipwhite_len(
     mut p: *const ::core::ffi::c_char,
     mut len: size_t,
 ) -> *mut ::core::ffi::c_char {
-    while len > 0 as size_t
-        && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-    {
+    while len > 0 as size_t && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
         p = p.offset(1);
         len = len.wrapping_sub(1);
     }
@@ -2627,9 +2572,7 @@ pub unsafe extern "C" fn getwhitecols(mut p: *const ::core::ffi::c_char) -> intp
     return skipwhite(p).offset_from(p) as intptr_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn skipdigits(
-    mut q: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn skipdigits(mut q: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *const ::core::ffi::c_char = q;
     while ascii_isdigit(*p as ::core::ffi::c_int) {
         p = p.offset(1);
@@ -2637,9 +2580,7 @@ pub unsafe extern "C" fn skipdigits(
     return p as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
-pub unsafe extern "C" fn skipbin(
-    mut q: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn skipbin(mut q: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char {
     let mut p: *const ::core::ffi::c_char = q;
     while ascii_isbdigit(*p as ::core::ffi::c_int) {
         p = p.offset(1);
@@ -2647,9 +2588,7 @@ pub unsafe extern "C" fn skipbin(
     return p;
 }
 #[no_mangle]
-pub unsafe extern "C" fn skiphex(
-    mut q: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn skiphex(mut q: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = q;
     while ascii_isxdigit(*p as ::core::ffi::c_int) {
         p = p.offset(1);
@@ -2657,9 +2596,7 @@ pub unsafe extern "C" fn skiphex(
     return p;
 }
 #[no_mangle]
-pub unsafe extern "C" fn skiptodigit(
-    mut q: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn skiptodigit(mut q: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = q;
     while *p as ::core::ffi::c_int != NUL && !ascii_isdigit(*p as ::core::ffi::c_int) {
         p = p.offset(1);
@@ -2677,9 +2614,7 @@ pub unsafe extern "C" fn skiptobin(
     return p;
 }
 #[no_mangle]
-pub unsafe extern "C" fn skiptohex(
-    mut q: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn skiptohex(mut q: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = q;
     while *p as ::core::ffi::c_int != NUL && !ascii_isxdigit(*p as ::core::ffi::c_int) {
         p = p.offset(1);
@@ -2743,8 +2678,7 @@ pub unsafe extern "C" fn getdigits(
     mut def: intmax_t,
 ) -> intmax_t {
     let mut number: intmax_t = 0;
-    let mut ok: ::core::ffi::c_int = try_getdigits(pp, &raw mut number)
-        as ::core::ffi::c_int;
+    let mut ok: ::core::ffi::c_int = try_getdigits(pp, &raw mut number) as ::core::ffi::c_int;
     if strict as ::core::ffi::c_int != 0 && ok == 0 {
         abort();
     }
@@ -2759,15 +2693,15 @@ pub unsafe extern "C" fn getdigits_int(
     let mut number: intmax_t = getdigits(pp, strict, def as intmax_t);
     if strict {
         '_c2rust_label: {
-            if number
-                >= (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                    as intmax_t && number <= 2147483647 as intmax_t
-            {} else {
+            if number >= (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as intmax_t
+                && number <= 2147483647 as intmax_t
+            {
+            } else {
                 __assert_fail(
                     b"number >= INT_MIN && number <= INT_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     1134 as ::core::ffi::c_uint,
                     b"int getdigits_int(char **, _Bool, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2775,7 +2709,7 @@ pub unsafe extern "C" fn getdigits_int(
             }
         };
     } else if !(number >= INT_MIN as intmax_t && number <= INT_MAX as intmax_t) {
-        return def
+        return def;
     }
     return number as ::core::ffi::c_int;
 }
@@ -2797,15 +2731,15 @@ pub unsafe extern "C" fn getdigits_int32(
     let mut number: intmax_t = getdigits(pp, strict, def as intmax_t);
     if strict {
         '_c2rust_label: {
-            if number
-                >= (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                    as intmax_t && number <= 2147483647 as intmax_t
-            {} else {
+            if number >= (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as intmax_t
+                && number <= 2147483647 as intmax_t
+            {
+            } else {
                 __assert_fail(
                     b"number >= INT32_MIN && number <= INT32_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/charset.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     1166 as ::core::ffi::c_uint,
                     b"int32_t getdigits_int32(char **, _Bool, int32_t)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2813,7 +2747,7 @@ pub unsafe extern "C" fn getdigits_int32(
             }
         };
     } else if !(number >= INT32_MIN as intmax_t && number <= INT32_MAX as intmax_t) {
-        return def
+        return def;
     }
     return number as int32_t;
 }
@@ -2838,8 +2772,8 @@ pub unsafe extern "C" fn vim_str2nr(
 ) {
     let mut ptr: *const ::core::ffi::c_char = start;
     let mut pre: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let negative: bool = *ptr.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int == '-' as ::core::ffi::c_int;
+    let negative: bool = *ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        == '-' as ::core::ffi::c_int;
     let mut un: uvarnumber_T = 0 as uvarnumber_T;
     if !len.is_null() {
         *len = 0 as ::core::ffi::c_int;
@@ -2861,17 +2795,24 @@ pub unsafe extern "C" fn vim_str2nr(
                                     if (maxlen == 0 as ::core::ffi::c_int
                                         || (ptr
                                             .offset(2 as ::core::ffi::c_int as isize)
-                                            .offset_from(start) as ::core::ffi::c_int) < maxlen)
+                                            .offset_from(start)
+                                            as ::core::ffi::c_int)
+                                            < maxlen)
                                         && *ptr.offset(0 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == '0' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == '0' as ::core::ffi::c_int
                                         && (*ptr.offset(1 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == 'x' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == 'x' as ::core::ffi::c_int
                                             || *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                                as ::core::ffi::c_int == 'X' as ::core::ffi::c_int)
+                                                as ::core::ffi::c_int
+                                                == 'X' as ::core::ffi::c_int)
                                         && ascii_isxdigit(
                                             *ptr.offset(2 as ::core::ffi::c_int as isize)
                                                 as ::core::ffi::c_int,
-                                        ) as ::core::ffi::c_int != 0
+                                        )
+                                            as ::core::ffi::c_int
+                                            != 0
                                     {
                                         ptr = ptr.offset(2 as ::core::ffi::c_int as isize);
                                     }
@@ -2881,17 +2822,24 @@ pub unsafe extern "C" fn vim_str2nr(
                                     if (maxlen == 0 as ::core::ffi::c_int
                                         || (ptr
                                             .offset(2 as ::core::ffi::c_int as isize)
-                                            .offset_from(start) as ::core::ffi::c_int) < maxlen)
+                                            .offset_from(start)
+                                            as ::core::ffi::c_int)
+                                            < maxlen)
                                         && *ptr.offset(0 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == '0' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == '0' as ::core::ffi::c_int
                                         && (*ptr.offset(1 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == 'b' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == 'b' as ::core::ffi::c_int
                                             || *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                                as ::core::ffi::c_int == 'B' as ::core::ffi::c_int)
+                                                as ::core::ffi::c_int
+                                                == 'B' as ::core::ffi::c_int)
                                         && ascii_isbdigit(
                                             *ptr.offset(2 as ::core::ffi::c_int as isize)
                                                 as ::core::ffi::c_int,
-                                        ) as ::core::ffi::c_int != 0
+                                        )
+                                            as ::core::ffi::c_int
+                                            != 0
                                     {
                                         ptr = ptr.offset(2 as ::core::ffi::c_int as isize);
                                     }
@@ -2901,17 +2849,24 @@ pub unsafe extern "C" fn vim_str2nr(
                                     if (maxlen == 0 as ::core::ffi::c_int
                                         || (ptr
                                             .offset(2 as ::core::ffi::c_int as isize)
-                                            .offset_from(start) as ::core::ffi::c_int) < maxlen)
+                                            .offset_from(start)
+                                            as ::core::ffi::c_int)
+                                            < maxlen)
                                         && *ptr.offset(0 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == '0' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == '0' as ::core::ffi::c_int
                                         && (*ptr.offset(1 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == 'o' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == 'o' as ::core::ffi::c_int
                                             || *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                                as ::core::ffi::c_int == 'O' as ::core::ffi::c_int)
+                                                as ::core::ffi::c_int
+                                                == 'O' as ::core::ffi::c_int)
                                         && ascii_isodigit(
                                             *ptr.offset(2 as ::core::ffi::c_int as isize)
                                                 as ::core::ffi::c_int,
-                                        ) as ::core::ffi::c_int != 0
+                                        )
+                                            as ::core::ffi::c_int
+                                            != 0
                                     {
                                         ptr = ptr.offset(2 as ::core::ffi::c_int as isize);
                                     }
@@ -2926,31 +2881,36 @@ pub unsafe extern "C" fn vim_str2nr(
                             & (STR2NR_HEX as ::core::ffi::c_int
                                 | STR2NR_OCT as ::core::ffi::c_int
                                 | STR2NR_OOCT as ::core::ffi::c_int
-                                | STR2NR_BIN as ::core::ffi::c_int) != 0
+                                | STR2NR_BIN as ::core::ffi::c_int)
+                            != 0
                             && (maxlen == 0 as ::core::ffi::c_int
                                 || (ptr
                                     .offset(1 as ::core::ffi::c_int as isize)
-                                    .offset_from(start) as ::core::ffi::c_int) < maxlen)
-                            && *ptr.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == '0' as ::core::ffi::c_int
-                            && *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int != '8' as ::core::ffi::c_int
-                            && *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int != '9' as ::core::ffi::c_int
+                                    .offset_from(start)
+                                    as ::core::ffi::c_int)
+                                    < maxlen)
+                            && *ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                == '0' as ::core::ffi::c_int
+                            && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                != '8' as ::core::ffi::c_int
+                            && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                != '9' as ::core::ffi::c_int
                         {
-                            pre = *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                as uint8_t as ::core::ffi::c_int;
+                            pre = *ptr.offset(1 as ::core::ffi::c_int as isize) as uint8_t
+                                as ::core::ffi::c_int;
                             if what & STR2NR_HEX as ::core::ffi::c_int != 0
                                 && (maxlen == 0 as ::core::ffi::c_int
                                     || (ptr
                                         .offset(2 as ::core::ffi::c_int as isize)
-                                        .offset_from(start) as ::core::ffi::c_int) < maxlen)
+                                        .offset_from(start)
+                                        as ::core::ffi::c_int)
+                                        < maxlen)
                                 && (pre == 'X' as ::core::ffi::c_int
                                     || pre == 'x' as ::core::ffi::c_int)
-                                && ascii_isxdigit(
-                                    *ptr.offset(2 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                                && ascii_isxdigit(*ptr.offset(2 as ::core::ffi::c_int as isize)
+                                    as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    != 0
                             {
                                 ptr = ptr.offset(2 as ::core::ffi::c_int as isize);
                                 break '_vim_str2nr_hex;
@@ -2958,13 +2918,15 @@ pub unsafe extern "C" fn vim_str2nr(
                                 && (maxlen == 0 as ::core::ffi::c_int
                                     || (ptr
                                         .offset(2 as ::core::ffi::c_int as isize)
-                                        .offset_from(start) as ::core::ffi::c_int) < maxlen)
+                                        .offset_from(start)
+                                        as ::core::ffi::c_int)
+                                        < maxlen)
                                 && (pre == 'B' as ::core::ffi::c_int
                                     || pre == 'b' as ::core::ffi::c_int)
-                                && ascii_isbdigit(
-                                    *ptr.offset(2 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                                && ascii_isbdigit(*ptr.offset(2 as ::core::ffi::c_int as isize)
+                                    as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    != 0
                             {
                                 ptr = ptr.offset(2 as ::core::ffi::c_int as isize);
                                 break '_vim_str2nr_bin;
@@ -2972,13 +2934,15 @@ pub unsafe extern "C" fn vim_str2nr(
                                 && (maxlen == 0 as ::core::ffi::c_int
                                     || (ptr
                                         .offset(2 as ::core::ffi::c_int as isize)
-                                        .offset_from(start) as ::core::ffi::c_int) < maxlen)
+                                        .offset_from(start)
+                                        as ::core::ffi::c_int)
+                                        < maxlen)
                                 && (pre == 'O' as ::core::ffi::c_int
                                     || pre == 'o' as ::core::ffi::c_int)
-                                && ascii_isodigit(
-                                    *ptr.offset(2 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                                && ascii_isodigit(*ptr.offset(2 as ::core::ffi::c_int as isize)
+                                    as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    != 0
                             {
                                 ptr = ptr.offset(2 as ::core::ffi::c_int as isize);
                                 break '_vim_str2nr_oct;
@@ -2993,10 +2957,13 @@ pub unsafe extern "C" fn vim_str2nr(
                                     let mut i: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
                                     while (maxlen == 0 as ::core::ffi::c_int
                                         || (ptr.offset(i as isize).offset_from(start)
-                                            as ::core::ffi::c_int) < maxlen)
+                                            as ::core::ffi::c_int)
+                                            < maxlen)
                                         && ascii_isdigit(
-                                            *ptr.offset(i as isize) as ::core::ffi::c_int,
-                                        ) as ::core::ffi::c_int != 0
+                                            *ptr.offset(i as isize) as ::core::ffi::c_int
+                                        )
+                                            as ::core::ffi::c_int
+                                            != 0
                                     {
                                         if *ptr.offset(i as isize) as ::core::ffi::c_int
                                             > '7' as ::core::ffi::c_int
@@ -3022,8 +2989,8 @@ pub unsafe extern "C" fn vim_str2nr(
                             ptr = ptr.offset(1);
                             if (maxlen == 0 as ::core::ffi::c_int
                                 || (ptr.offset_from(start) as ::core::ffi::c_int) < maxlen)
-                                && ascii_isdigit(*ptr as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int != 0
+                                && ascii_isdigit(*ptr as ::core::ffi::c_int) as ::core::ffi::c_int
+                                    != 0
                             {
                                 continue;
                             }
@@ -3033,21 +3000,17 @@ pub unsafe extern "C" fn vim_str2nr(
                             break;
                         }
                         let digit_1: uvarnumber_T = (*ptr as ::core::ffi::c_int
-                            - '0' as ::core::ffi::c_int) as uvarnumber_T;
-                        if un
-                            < (UVARNUMBER_MAX as uvarnumber_T)
-                                .wrapping_div(10 as uvarnumber_T)
+                            - '0' as ::core::ffi::c_int)
+                            as uvarnumber_T;
+                        if un < (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(10 as uvarnumber_T)
                             || un
-                                == (UVARNUMBER_MAX as uvarnumber_T)
-                                    .wrapping_div(10 as uvarnumber_T)
+                                == (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(10 as uvarnumber_T)
                                 && (10 as ::core::ffi::c_int != 10 as ::core::ffi::c_int
                                     || digit_1
                                         <= (UVARNUMBER_MAX as uvarnumber_T)
                                             .wrapping_rem(10 as uvarnumber_T))
                         {
-                            un = (10 as uvarnumber_T)
-                                .wrapping_mul(un)
-                                .wrapping_add(digit_1);
+                            un = (10 as uvarnumber_T).wrapping_mul(un).wrapping_add(digit_1);
                         } else {
                             un = UVARNUMBER_MAX as uvarnumber_T;
                             if !overflow.is_null() {
@@ -3069,8 +3032,7 @@ pub unsafe extern "C" fn vim_str2nr(
                         ptr = ptr.offset(1);
                         if (maxlen == 0 as ::core::ffi::c_int
                             || (ptr.offset_from(start) as ::core::ffi::c_int) < maxlen)
-                            && ascii_isxdigit(*ptr as ::core::ffi::c_int)
-                                as ::core::ffi::c_int != 0
+                            && ascii_isxdigit(*ptr as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                         {
                             continue;
                         }
@@ -3079,14 +3041,9 @@ pub unsafe extern "C" fn vim_str2nr(
                     if !ascii_isxdigit(*ptr as ::core::ffi::c_int) {
                         break;
                     }
-                    let digit_2: uvarnumber_T = hex2nr(*ptr as ::core::ffi::c_int)
-                        as uvarnumber_T;
-                    if un
-                        < (UVARNUMBER_MAX as uvarnumber_T)
-                            .wrapping_div(16 as uvarnumber_T)
-                        || un
-                            == (UVARNUMBER_MAX as uvarnumber_T)
-                                .wrapping_div(16 as uvarnumber_T)
+                    let digit_2: uvarnumber_T = hex2nr(*ptr as ::core::ffi::c_int) as uvarnumber_T;
+                    if un < (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(16 as uvarnumber_T)
+                        || un == (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(16 as uvarnumber_T)
                             && (16 as ::core::ffi::c_int != 10 as ::core::ffi::c_int
                                 || digit_2
                                     <= (UVARNUMBER_MAX as uvarnumber_T)
@@ -3107,7 +3064,8 @@ pub unsafe extern "C" fn vim_str2nr(
             while maxlen == 0 as ::core::ffi::c_int
                 || (ptr.offset_from(start) as ::core::ffi::c_int) < maxlen
             {
-                if what & STR2NR_QUOTE as ::core::ffi::c_int != 0 && ptr > after_prefix
+                if what & STR2NR_QUOTE as ::core::ffi::c_int != 0
+                    && ptr > after_prefix
                     && *ptr as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
                 {
                     ptr = ptr.offset(1);
@@ -3125,12 +3083,10 @@ pub unsafe extern "C" fn vim_str2nr(
                 {
                     break;
                 }
-                let digit: uvarnumber_T = (*ptr as ::core::ffi::c_int
-                    - '0' as ::core::ffi::c_int) as uvarnumber_T;
+                let digit: uvarnumber_T =
+                    (*ptr as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as uvarnumber_T;
                 if un < (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(2 as uvarnumber_T)
-                    || un
-                        == (UVARNUMBER_MAX as uvarnumber_T)
-                            .wrapping_div(2 as uvarnumber_T)
+                    || un == (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(2 as uvarnumber_T)
                         && (2 as ::core::ffi::c_int != 10 as ::core::ffi::c_int
                             || digit
                                 <= (UVARNUMBER_MAX as uvarnumber_T)
@@ -3151,14 +3107,14 @@ pub unsafe extern "C" fn vim_str2nr(
         while maxlen == 0 as ::core::ffi::c_int
             || (ptr.offset_from(start) as ::core::ffi::c_int) < maxlen
         {
-            if what & STR2NR_QUOTE as ::core::ffi::c_int != 0 && ptr > after_prefix_0
+            if what & STR2NR_QUOTE as ::core::ffi::c_int != 0
+                && ptr > after_prefix_0
                 && *ptr as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
             {
                 ptr = ptr.offset(1);
                 if (maxlen == 0 as ::core::ffi::c_int
                     || (ptr.offset_from(start) as ::core::ffi::c_int) < maxlen)
-                    && ascii_isodigit(*ptr as ::core::ffi::c_int) as ::core::ffi::c_int
-                        != 0
+                    && ascii_isodigit(*ptr as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                 {
                     continue;
                 }
@@ -3167,14 +3123,13 @@ pub unsafe extern "C" fn vim_str2nr(
             if !ascii_isodigit(*ptr as ::core::ffi::c_int) {
                 break;
             }
-            let digit_0: uvarnumber_T = (*ptr as ::core::ffi::c_int
-                - '0' as ::core::ffi::c_int) as uvarnumber_T;
+            let digit_0: uvarnumber_T =
+                (*ptr as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as uvarnumber_T;
             if un < (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(8 as uvarnumber_T)
                 || un == (UVARNUMBER_MAX as uvarnumber_T).wrapping_div(8 as uvarnumber_T)
                     && (8 as ::core::ffi::c_int != 10 as ::core::ffi::c_int
                         || digit_0
-                            <= (UVARNUMBER_MAX as uvarnumber_T)
-                                .wrapping_rem(10 as uvarnumber_T))
+                            <= (UVARNUMBER_MAX as uvarnumber_T).wrapping_rem(10 as uvarnumber_T))
             {
                 un = (8 as uvarnumber_T).wrapping_mul(un).wrapping_add(digit_0);
             } else {
@@ -3186,7 +3141,8 @@ pub unsafe extern "C" fn vim_str2nr(
             ptr = ptr.offset(1);
         }
     }
-    if strict as ::core::ffi::c_int != 0 && ptr.offset_from(start) != maxlen as isize
+    if strict as ::core::ffi::c_int != 0
+        && ptr.offset_from(start) != maxlen as isize
         && (*ptr as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && *ptr as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             || *ptr as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
@@ -3236,13 +3192,9 @@ pub unsafe extern "C" fn hex2nr(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int
     return c - '0' as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn hexhex2nr(
-    mut p: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn hexhex2nr(mut p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if !ascii_isxdigit(*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-        || !ascii_isxdigit(
-            *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        )
+        || !ascii_isxdigit(*p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
     {
         return -1 as ::core::ffi::c_int;
     }
@@ -3289,8 +3241,8 @@ pub unsafe extern "C" fn backslash_halve(mut p: *mut ::core::ffi::c_char) {
 pub unsafe extern "C" fn backslash_halve_save(
     mut p: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    let mut res: *mut ::core::ffi::c_char = xmalloc(strlen(p).wrapping_add(1 as size_t))
-        as *mut ::core::ffi::c_char;
+    let mut res: *mut ::core::ffi::c_char =
+        xmalloc(strlen(p).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
     let mut dst: *mut ::core::ffi::c_char = res;
     while *p as ::core::ffi::c_int != NUL {
         if rem_backslash(p) {

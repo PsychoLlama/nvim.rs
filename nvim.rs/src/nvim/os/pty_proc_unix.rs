@@ -7,11 +7,7 @@ extern "C" {
         __function: *const ::core::ffi::c_char,
     ) -> !;
     fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn fcntl(
-        __fd: ::core::ffi::c_int,
-        __cmd: ::core::ffi::c_int,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
     fn signal(__sig: ::core::ffi::c_int, __handler: __sighandler_t) -> __sighandler_t;
     fn kill(__pid: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn killpg(__pgrp: __pid_t, __sig: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -26,11 +22,7 @@ extern "C" {
     fn setsid() -> __pid_t;
     fn ptsname(__fd: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn strerror(__errnum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
-    fn ioctl(
-        __fd: ::core::ffi::c_int,
-        __request: ::core::ffi::c_ulong,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn ioctl(__fd: ::core::ffi::c_int, __request: ::core::ffi::c_ulong, ...) -> ::core::ffi::c_int;
     fn waitpid(
         __pid: __pid_t,
         __stat_loc: *mut ::core::ffi::c_int,
@@ -208,9 +200,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -237,9 +228,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -368,9 +357,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -382,9 +370,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -396,15 +383,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_5 {
@@ -618,12 +600,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -670,12 +650,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_12 {
@@ -719,9 +697,7 @@ pub struct PtyProc {
     pub winsize: winsize,
     pub tty_fd: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_NONBLOCK: ::core::ffi::c_int = 0o4000 as ::core::ffi::c_int;
 pub const F_GETFL: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const F_SETFL: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
@@ -984,21 +960,16 @@ unsafe extern "C" fn proc_init(
     };
 }
 #[inline]
-unsafe extern "C" fn proc_get_exepath(
-    mut proc: *mut Proc,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi::c_char {
     return if !(*proc).exepath.is_null() {
         (*proc).exepath
     } else {
-        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize)
-            as *const ::core::ffi::c_char
+        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_char
     };
 }
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn pty_proc_spawn(
-    mut ptyproc: *mut PtyProc,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn pty_proc_spawn(mut ptyproc: *mut PtyProc) -> ::core::ffi::c_int {
     static mut termios_default: termios = termios {
         c_iflag: 0,
         c_oflag: 0,
@@ -1015,11 +986,12 @@ pub unsafe extern "C" fn pty_proc_spawn(
     let mut status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut proc: *mut Proc = ptyproc as *mut Proc;
     '_c2rust_label: {
-        if (*proc).err.s.closed {} else {
+        if (*proc).err.s.closed {
+        } else {
             __assert_fail(
                 b"proc->err.s.closed\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/pty_proc_unix.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/os/pty_proc_unix.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 181 as ::core::ffi::c_uint,
                 b"int pty_proc_spawn(PtyProc *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1027,10 +999,7 @@ pub unsafe extern "C" fn pty_proc_spawn(
     };
     uv_signal_start(
         &raw mut (*(*proc).loop_0).children_watcher,
-        Some(
-            chld_handler
-                as unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
-        ),
+        Some(chld_handler as unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()),
         SIGCHLD,
     );
     (*ptyproc).winsize = winsize {
@@ -1075,9 +1044,7 @@ pub unsafe extern "C" fn pty_proc_spawn(
                 as *const ::core::ffi::c_char,
             strerror(*__errno_location()),
         );
-    } else if fcntl(master, F_SETFL, master_status_flags | O_NONBLOCK)
-        == -1 as ::core::ffi::c_int
-    {
+    } else if fcntl(master, F_SETFL, master_status_flags | O_NONBLOCK) == -1 as ::core::ffi::c_int {
         status = -*__errno_location();
         logmsg(
             LOGLVL_ERR,
@@ -1100,21 +1067,14 @@ pub unsafe extern "C" fn pty_proc_spawn(
             b"Failed to set CLOEXEC on ptmx file descriptor\0".as_ptr()
                 as *const ::core::ffi::c_char,
         );
-    } else if !(!(*proc).in_0.closed
-        && {
-            status = set_duplicating_descriptor(master, &raw mut (*proc).in_0.uv.pipe);
+    } else if !(!(*proc).in_0.closed && {
+        status = set_duplicating_descriptor(master, &raw mut (*proc).in_0.uv.pipe);
+        status != 0
+    }) {
+        if !(!(*proc).out.s.closed && {
+            status = set_duplicating_descriptor(master, &raw mut (*proc).out.s.uv.pipe);
             status != 0
-        })
-    {
-        if !(!(*proc).out.s.closed
-            && {
-                status = set_duplicating_descriptor(
-                    master,
-                    &raw mut (*proc).out.s.uv.pipe,
-                );
-                status != 0
-            })
-        {
+        }) {
             (*ptyproc).tty_fd = master;
             (*proc).pid = pid;
             return 0 as ::core::ffi::c_int;
@@ -1170,14 +1130,16 @@ pub unsafe extern "C" fn pty_proc_flush_master(mut ptyproc: *mut PtyProc) {
         if !(n < 0 as ::core::ffi::c_int && *__errno_location() == EINTR) {
             break;
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn pty_proc_close(mut ptyproc: *mut PtyProc) {
     pty_proc_close_master(ptyproc);
     let mut proc: *mut Proc = ptyproc as *mut Proc;
     if (*proc).internal_close_cb.is_some() {
-        (*proc).internal_close_cb.expect("non-null function pointer")(proc);
+        (*proc)
+            .internal_close_cb
+            .expect("non-null function pointer")(proc);
     }
 }
 #[no_mangle]
@@ -1205,12 +1167,10 @@ unsafe extern "C" fn init_child(mut ptyproc: *mut PtyProc) -> ! {
     signal(SIGALRM, SIG_DFL);
     let mut proc: *mut Proc = ptyproc as *mut Proc;
     let mut err: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if !(*proc).cwd.is_null()
-        && {
-            err = uv_chdir((*proc).cwd);
-            err != 0 as ::core::ffi::c_int
-        }
-    {
+    if !(*proc).cwd.is_null() && {
+        err = uv_chdir((*proc).cwd);
+        err != 0 as ::core::ffi::c_int
+    } {
         logmsg(
             LOGLVL_ERR,
             ::core::ptr::null::<::core::ffi::c_char>(),
@@ -1225,11 +1185,12 @@ unsafe extern "C" fn init_child(mut ptyproc: *mut PtyProc) -> ! {
     }
     let mut prog: *const ::core::ffi::c_char = proc_get_exepath(proc);
     '_c2rust_label: {
-        if !(*proc).env.is_null() {} else {
+        if !(*proc).env.is_null() {
+        } else {
             __assert_fail(
                 b"proc->env\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/os/pty_proc_unix.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/os/pty_proc_unix.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 324 as ::core::ffi::c_uint,
                 b"void init_child(PtyProc *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
@@ -1265,29 +1226,29 @@ unsafe extern "C" fn init_termios(mut termios: *mut termios) {
     (*termios).c_oflag |= FF0 as tcflag_t;
     (*termios).c_lflag |= ECHOCTL as tcflag_t;
     (*termios).c_lflag |= ECHOKE as tcflag_t;
-    (*termios).c_cc[VINTR as usize] = (0x1f as ::core::ffi::c_int
-        & 'C' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VQUIT as usize] = (0x1f as ::core::ffi::c_int
-        & '\\' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VINTR as usize] =
+        (0x1f as ::core::ffi::c_int & 'C' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VQUIT as usize] =
+        (0x1f as ::core::ffi::c_int & '\\' as ::core::ffi::c_int) as cc_t;
     (*termios).c_cc[VERASE as usize] = 0x7f as cc_t;
-    (*termios).c_cc[VKILL as usize] = (0x1f as ::core::ffi::c_int
-        & 'U' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VEOF as usize] = (0x1f as ::core::ffi::c_int
-        & 'D' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VKILL as usize] =
+        (0x1f as ::core::ffi::c_int & 'U' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VEOF as usize] =
+        (0x1f as ::core::ffi::c_int & 'D' as ::core::ffi::c_int) as cc_t;
     (*termios).c_cc[VEOL as usize] = _POSIX_VDISABLE as cc_t;
     (*termios).c_cc[VEOL2 as usize] = _POSIX_VDISABLE as cc_t;
-    (*termios).c_cc[VSTART as usize] = (0x1f as ::core::ffi::c_int
-        & 'Q' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VSTOP as usize] = (0x1f as ::core::ffi::c_int
-        & 'S' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VSUSP as usize] = (0x1f as ::core::ffi::c_int
-        & 'Z' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VREPRINT as usize] = (0x1f as ::core::ffi::c_int
-        & 'R' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VWERASE as usize] = (0x1f as ::core::ffi::c_int
-        & 'W' as ::core::ffi::c_int) as cc_t;
-    (*termios).c_cc[VLNEXT as usize] = (0x1f as ::core::ffi::c_int
-        & 'V' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VSTART as usize] =
+        (0x1f as ::core::ffi::c_int & 'Q' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VSTOP as usize] =
+        (0x1f as ::core::ffi::c_int & 'S' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VSUSP as usize] =
+        (0x1f as ::core::ffi::c_int & 'Z' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VREPRINT as usize] =
+        (0x1f as ::core::ffi::c_int & 'R' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VWERASE as usize] =
+        (0x1f as ::core::ffi::c_int & 'W' as ::core::ffi::c_int) as cc_t;
+    (*termios).c_cc[VLNEXT as usize] =
+        (0x1f as ::core::ffi::c_int & 'V' as ::core::ffi::c_int) as cc_t;
     (*termios).c_cc[VMIN as usize] = 1 as cc_t;
     (*termios).c_cc[VTIME as usize] = 0 as cc_t;
 }
@@ -1319,8 +1280,7 @@ unsafe extern "C" fn set_duplicating_descriptor(
             b"set_duplicating_descriptor\0".as_ptr() as *const ::core::ffi::c_char,
             404 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Failed to set CLOEXEC on duplicate fd\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Failed to set CLOEXEC on duplicate fd\0".as_ptr() as *const ::core::ffi::c_char,
         );
     } else {
         status = uv_pipe_open(pipe, fd_dup as uv_file);
@@ -1331,22 +1291,18 @@ unsafe extern "C" fn set_duplicating_descriptor(
                 b"set_duplicating_descriptor\0".as_ptr() as *const ::core::ffi::c_char,
                 411 as ::core::ffi::c_int,
                 true_0 != 0,
-                b"Failed to set pipe to descriptor %d: %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Failed to set pipe to descriptor %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 fd_dup,
                 uv_strerror(status),
             );
         } else {
-            return status
+            return status;
         }
     }
     close(fd_dup);
     return status;
 }
-unsafe extern "C" fn chld_handler(
-    mut handle: *mut uv_signal_t,
-    mut signum: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn chld_handler(mut handle: *mut uv_signal_t, mut signum: ::core::ffi::c_int) {
     let mut stat: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut pid: ::core::ffi::c_int = 0;
     let mut loop_0: *mut Loop = (*(*handle).loop_0).data as *mut Loop;
@@ -1365,27 +1321,28 @@ unsafe extern "C" fn chld_handler(
         }
         if pid > 0 as ::core::ffi::c_int {
             if stat & 0xff as ::core::ffi::c_int == 0x7f as ::core::ffi::c_int {
-                (*proc)
-                    .state_cb
-                    .expect(
-                        "non-null function pointer",
-                    )(proc, true_0 != 0, (*proc).data);
+                (*proc).state_cb.expect("non-null function pointer")(
+                    proc,
+                    true_0 != 0,
+                    (*proc).data,
+                );
             } else if stat == __W_CONTINUED {
-                (*proc)
-                    .state_cb
-                    .expect(
-                        "non-null function pointer",
-                    )(proc, false_0 != 0, (*proc).data);
+                (*proc).state_cb.expect("non-null function pointer")(
+                    proc,
+                    false_0 != 0,
+                    (*proc).data,
+                );
             } else {
                 if stat & 0x7f as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                    (*proc).status = (stat & 0xff00 as ::core::ffi::c_int)
-                        >> 8 as ::core::ffi::c_int;
+                    (*proc).status =
+                        (stat & 0xff00 as ::core::ffi::c_int) >> 8 as ::core::ffi::c_int;
                 } else if ((stat & 0x7f as ::core::ffi::c_int) + 1 as ::core::ffi::c_int)
                     as ::core::ffi::c_schar as ::core::ffi::c_int
-                    >> 1 as ::core::ffi::c_int > 0 as ::core::ffi::c_int
+                    >> 1 as ::core::ffi::c_int
+                    > 0 as ::core::ffi::c_int
                 {
-                    (*proc).status = 128 as ::core::ffi::c_int
-                        + (stat & 0x7f as ::core::ffi::c_int);
+                    (*proc).status =
+                        128 as ::core::ffi::c_int + (stat & 0x7f as ::core::ffi::c_int);
                 }
                 (*proc).internal_exit_cb.expect("non-null function pointer")(proc);
             }

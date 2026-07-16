@@ -122,15 +122,12 @@ pub struct hashmap {
     pub env: *mut xdfenv_t,
     pub xpp: *const xpparam_t,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF
-    | XDF_HISTOGRAM_DIFF;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
+pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
 pub const NON_UNIQUE: ::core::ffi::c_ulong = ULONG_MAX;
 unsafe extern "C" fn is_anchor(
     mut xpp: *const xpparam_t,
@@ -162,10 +159,10 @@ unsafe extern "C" fn insert_record(
     } else {
         (*(*map).env).xdf2.recs
     };
-    let mut record: *mut xrecord_t = *records
-        .offset((line - 1 as ::core::ffi::c_int) as isize);
+    let mut record: *mut xrecord_t = *records.offset((line - 1 as ::core::ffi::c_int) as isize);
     let mut index: ::core::ffi::c_int = ((*record).ha << 1 as ::core::ffi::c_int)
-        .wrapping_rem((*map).alloc as ::core::ffi::c_ulong) as ::core::ffi::c_int;
+        .wrapping_rem((*map).alloc as ::core::ffi::c_ulong)
+        as ::core::ffi::c_int;
     while (*(*map).entries.offset(index as isize)).line1 != 0 {
         if (*(*map).entries.offset(index as isize)).hash != (*record).ha {
             index += 1;
@@ -181,8 +178,7 @@ unsafe extern "C" fn insert_record(
             {
                 (*(*map).entries.offset(index as isize)).line2 = NON_UNIQUE;
             } else {
-                (*(*map).entries.offset(index as isize)).line2 = line
-                    as ::core::ffi::c_ulong;
+                (*(*map).entries.offset(index as isize)).line2 = line as ::core::ffi::c_ulong;
             }
             return;
         }
@@ -192,17 +188,15 @@ unsafe extern "C" fn insert_record(
     }
     (*(*map).entries.offset(index as isize)).line1 = line as ::core::ffi::c_ulong;
     (*(*map).entries.offset(index as isize)).hash = (*record).ha;
-    (*(*map).entries.offset(index as isize))
-        .set_anchor(
-            is_anchor(
-                xpp,
-                (**(*(*map).env)
-                    .xdf1
-                    .recs
-                    .offset((line - 1 as ::core::ffi::c_int) as isize))
-                    .ptr,
-            ) as ::core::ffi::c_uint as ::core::ffi::c_uint,
-        );
+    (*(*map).entries.offset(index as isize)).set_anchor(is_anchor(
+        xpp,
+        (**(*(*map).env)
+            .xdf1
+            .recs
+            .offset((line - 1 as ::core::ffi::c_int) as isize))
+        .ptr,
+    ) as ::core::ffi::c_uint
+        as ::core::ffi::c_uint);
     if (*map).first.is_null() {
         (*map).first = (*map).entries.offset(index as isize);
     }
@@ -229,9 +223,9 @@ unsafe extern "C" fn fill_hashmap(
     (*result).xpp = xpp;
     (*result).env = env;
     (*result).alloc = count1 * 2 as ::core::ffi::c_int;
-    (*result).entries = xmalloc(
-        ((*result).alloc as size_t).wrapping_mul(::core::mem::size_of::<entry>()),
-    ) as *mut entry as *mut entry;
+    (*result).entries =
+        xmalloc(((*result).alloc as size_t).wrapping_mul(::core::mem::size_of::<entry>()))
+            as *mut entry as *mut entry;
     if (*result).entries.is_null() {
         return -1 as ::core::ffi::c_int;
     }
@@ -270,8 +264,7 @@ unsafe extern "C" fn binary_search(
     let mut left: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut right: ::core::ffi::c_int = longest;
     while (left + 1 as ::core::ffi::c_int) < right {
-        let mut middle: ::core::ffi::c_int = left
-            + (right - left) / 2 as ::core::ffi::c_int;
+        let mut middle: ::core::ffi::c_int = left + (right - left) / 2 as ::core::ffi::c_int;
         if (**sequence.offset(middle as isize)).line2 > (*entry).line2 {
             right = middle;
         } else {
@@ -281,9 +274,9 @@ unsafe extern "C" fn binary_search(
     return left;
 }
 unsafe extern "C" fn find_longest_common_sequence(mut map: *mut hashmap) -> *mut entry {
-    let mut sequence: *mut *mut entry = xmalloc(
-        ((*map).nr as size_t).wrapping_mul(::core::mem::size_of::<*mut entry>()),
-    ) as *mut *mut entry;
+    let mut sequence: *mut *mut entry =
+        xmalloc(((*map).nr as size_t).wrapping_mul(::core::mem::size_of::<*mut entry>()))
+            as *mut *mut entry;
     let mut longest: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0;
     let mut entry: *mut entry = ::core::ptr::null_mut::<entry>();
@@ -357,7 +350,8 @@ unsafe extern "C" fn walk_common_sequence(
         if !first.is_null() {
             next1 = (*first).line1 as ::core::ffi::c_int;
             next2 = (*first).line2 as ::core::ffi::c_int;
-            while next1 > line1 && next2 > line2
+            while next1 > line1
+                && next2 > line2
                 && match_0(
                     map,
                     next1 - 1 as ::core::ffi::c_int,
@@ -394,19 +388,15 @@ unsafe extern "C" fn walk_common_sequence(
             return 0 as ::core::ffi::c_int;
         }
         while !(*first).next.is_null()
-            && (*(*first).next).line1
-                == (*first).line1.wrapping_add(1 as ::core::ffi::c_ulong)
-            && (*(*first).next).line2
-                == (*first).line2.wrapping_add(1 as ::core::ffi::c_ulong)
+            && (*(*first).next).line1 == (*first).line1.wrapping_add(1 as ::core::ffi::c_ulong)
+            && (*(*first).next).line2 == (*first).line2.wrapping_add(1 as ::core::ffi::c_ulong)
         {
             first = (*first).next;
         }
-        line1 = (*first).line1.wrapping_add(1 as ::core::ffi::c_ulong)
-            as ::core::ffi::c_int;
-        line2 = (*first).line2.wrapping_add(1 as ::core::ffi::c_ulong)
-            as ::core::ffi::c_int;
+        line1 = (*first).line1.wrapping_add(1 as ::core::ffi::c_ulong) as ::core::ffi::c_int;
+        line2 = (*first).line2.wrapping_add(1 as ::core::ffi::c_ulong) as ::core::ffi::c_int;
         first = (*first).next;
-    };
+    }
 }
 unsafe extern "C" fn fall_back_to_classic_diff(
     mut map: *mut hashmap,
@@ -464,8 +454,8 @@ unsafe extern "C" fn patience_diff(
             *(*env)
                 .xdf2
                 .rchg
-                .offset((c2rust_fresh1 - 1 as ::core::ffi::c_int) as isize) = 1
-                as ::core::ffi::c_char;
+                .offset((c2rust_fresh1 - 1 as ::core::ffi::c_int) as isize) =
+                1 as ::core::ffi::c_char;
         }
         return 0 as ::core::ffi::c_int;
     } else if count2 == 0 {
@@ -480,8 +470,8 @@ unsafe extern "C" fn patience_diff(
             *(*env)
                 .xdf1
                 .rchg
-                .offset((c2rust_fresh3 - 1 as ::core::ffi::c_int) as isize) = 1
-                as ::core::ffi::c_char;
+                .offset((c2rust_fresh3 - 1 as ::core::ffi::c_int) as isize) =
+                1 as ::core::ffi::c_char;
         }
         return 0 as ::core::ffi::c_int;
     }
@@ -490,8 +480,17 @@ unsafe extern "C" fn patience_diff(
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<hashmap>(),
     );
-    if fill_hashmap(file1, file2, xpp, env, &raw mut map, line1, count1, line2, count2)
-        != 0
+    if fill_hashmap(
+        file1,
+        file2,
+        xpp,
+        env,
+        &raw mut map,
+        line1,
+        count1,
+        line2,
+        count2,
+    ) != 0
     {
         return -1 as ::core::ffi::c_int;
     }
@@ -507,8 +506,8 @@ unsafe extern "C" fn patience_diff(
             *(*env)
                 .xdf1
                 .rchg
-                .offset((c2rust_fresh5 - 1 as ::core::ffi::c_int) as isize) = 1
-                as ::core::ffi::c_char;
+                .offset((c2rust_fresh5 - 1 as ::core::ffi::c_int) as isize) =
+                1 as ::core::ffi::c_char;
         }
         loop {
             let c2rust_fresh6 = count2;
@@ -521,8 +520,8 @@ unsafe extern "C" fn patience_diff(
             *(*env)
                 .xdf2
                 .rchg
-                .offset((c2rust_fresh7 - 1 as ::core::ffi::c_int) as isize) = 1
-                as ::core::ffi::c_char;
+                .offset((c2rust_fresh7 - 1 as ::core::ffi::c_int) as isize) =
+                1 as ::core::ffi::c_char;
         }
         xfree(map.entries as *mut ::core::ffi::c_void);
         return 0 as ::core::ffi::c_int;

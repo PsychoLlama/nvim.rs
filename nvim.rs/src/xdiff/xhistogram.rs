@@ -136,15 +136,12 @@ pub struct record {
     pub cnt: ::core::ffi::c_uint,
     pub next: *mut record,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF
-    | XDF_HISTOGRAM_DIFF;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
+pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
 pub const MAX_PTR: ::core::ffi::c_int = INT_MAX;
 unsafe extern "C" fn cmp_recs(
     mut xpp: *const xpparam_t,
@@ -176,16 +173,15 @@ unsafe extern "C" fn scanA(
             .xdf1
             .recs
             .offset((ptr - 1 as ::core::ffi::c_int) as isize))
-            .ha
-            .wrapping_add(
-                (**(*(*index).env)
-                    .xdf1
-                    .recs
-                    .offset((ptr - 1 as ::core::ffi::c_int) as isize))
-                    .ha >> (*index).table_bits,
-            )
-            & ((1 as ::core::ffi::c_ulong) << (*index).table_bits)
-                .wrapping_sub(1 as ::core::ffi::c_ulong)) as ::core::ffi::c_int;
+        .ha
+        .wrapping_add(
+            (**(*(*index).env)
+                .xdf1
+                .recs
+                .offset((ptr - 1 as ::core::ffi::c_int) as isize))
+            .ha >> (*index).table_bits,
+        ) & ((1 as ::core::ffi::c_ulong) << (*index).table_bits)
+            .wrapping_sub(1 as ::core::ffi::c_ulong)) as ::core::ffi::c_int;
         rec_chain = (*index).records.offset(tbl_idx as isize) as *mut *mut record;
         rec = *rec_chain;
         chain_len = 0 as ::core::ffi::c_uint;
@@ -196,36 +192,27 @@ unsafe extern "C" fn scanA(
                     *(*(*index).env)
                         .xdf1
                         .recs
-                        .offset(
-                            (*rec).ptr.wrapping_sub(1 as ::core::ffi::c_uint) as isize,
-                        ),
+                        .offset((*rec).ptr.wrapping_sub(1 as ::core::ffi::c_uint) as isize),
                     *(*(*index).env)
                         .xdf1
                         .recs
                         .offset((ptr - 1 as ::core::ffi::c_int) as isize),
                 ) != 0
                 {
-                    *(*index)
-                        .next_ptrs
-                        .offset(
-                            (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift)
-                                as isize,
-                        ) = (*rec).ptr;
+                    *(*index).next_ptrs.offset(
+                        (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift) as isize,
+                    ) = (*rec).ptr;
                     (*rec).ptr = ptr as ::core::ffi::c_uint;
-                    (*rec).cnt = if (2147483647 as ::core::ffi::c_int
-                        as ::core::ffi::c_uint)
+                    (*rec).cnt = if (2147483647 as ::core::ffi::c_int as ::core::ffi::c_uint)
                         < (*rec).cnt.wrapping_add(1 as ::core::ffi::c_uint)
                     {
                         2147483647 as ::core::ffi::c_int as ::core::ffi::c_uint
                     } else {
                         (*rec).cnt.wrapping_add(1 as ::core::ffi::c_uint)
                     };
-                    *(*index)
-                        .line_map
-                        .offset(
-                            (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift)
-                                as isize,
-                        ) = rec as *mut record;
+                    *(*index).line_map.offset(
+                        (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift) as isize,
+                    ) = rec as *mut record;
                     break 's_95;
                 } else {
                     rec = (*rec).next;
@@ -245,10 +232,8 @@ unsafe extern "C" fn scanA(
             *rec_chain = rec;
             *(*index)
                 .line_map
-                .offset(
-                    (ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift)
-                        as isize,
-                ) = rec as *mut record;
+                .offset((ptr as ::core::ffi::c_uint).wrapping_sub((*index).ptr_shift) as isize) =
+                rec as *mut record;
         }
         ptr -= 1;
     }
@@ -263,26 +248,22 @@ unsafe extern "C" fn try_lcs(
     mut line2: ::core::ffi::c_int,
     mut count2: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut b_next: ::core::ffi::c_uint = (b_ptr + 1 as ::core::ffi::c_int)
-        as ::core::ffi::c_uint;
-    let mut rec: *mut record = *(*index)
-        .records
-        .offset(
-            ((**(*(*index).env)
+    let mut b_next: ::core::ffi::c_uint = (b_ptr + 1 as ::core::ffi::c_int) as ::core::ffi::c_uint;
+    let mut rec: *mut record = *(*index).records.offset(
+        ((**(*(*index).env)
+            .xdf2
+            .recs
+            .offset((b_ptr - 1 as ::core::ffi::c_int) as isize))
+        .ha
+        .wrapping_add(
+            (**(*(*index).env)
                 .xdf2
                 .recs
                 .offset((b_ptr - 1 as ::core::ffi::c_int) as isize))
-                .ha
-                .wrapping_add(
-                    (**(*(*index).env)
-                        .xdf2
-                        .recs
-                        .offset((b_ptr - 1 as ::core::ffi::c_int) as isize))
-                        .ha >> (*index).table_bits,
-                )
-                & ((1 as ::core::ffi::c_ulong) << (*index).table_bits)
-                    .wrapping_sub(1 as ::core::ffi::c_ulong)) as isize,
-        ) as *mut record;
+            .ha >> (*index).table_bits,
+        ) & ((1 as ::core::ffi::c_ulong) << (*index).table_bits)
+            .wrapping_sub(1 as ::core::ffi::c_ulong)) as isize,
+    ) as *mut record;
     let mut as_0: ::core::ffi::c_uint = 0;
     let mut ae: ::core::ffi::c_uint = 0;
     let mut bs: ::core::ffi::c_uint = 0;
@@ -298,9 +279,7 @@ unsafe extern "C" fn try_lcs(
                     *(*(*index).env)
                         .xdf1
                         .recs
-                        .offset(
-                            (*rec).ptr.wrapping_sub(1 as ::core::ffi::c_uint) as isize,
-                        ),
+                        .offset((*rec).ptr.wrapping_sub(1 as ::core::ffi::c_uint) as isize),
                     *(*(*index).env)
                         .xdf2
                         .recs
@@ -335,22 +314,16 @@ unsafe extern "C" fn try_lcs(
                         && line2 < bs as ::core::ffi::c_int
                         && cmp_recs(
                             (*index).xpp,
-                            *(*(*index).env)
-                                .xdf1
-                                .recs
-                                .offset(
-                                    as_0
-                                        .wrapping_sub(1 as ::core::ffi::c_uint)
-                                        .wrapping_sub(1 as ::core::ffi::c_uint) as isize,
-                                ),
-                            *(*(*index).env)
-                                .xdf2
-                                .recs
-                                .offset(
-                                    bs
-                                        .wrapping_sub(1 as ::core::ffi::c_uint)
-                                        .wrapping_sub(1 as ::core::ffi::c_uint) as isize,
-                                ),
+                            *(*(*index).env).xdf1.recs.offset(
+                                as_0.wrapping_sub(1 as ::core::ffi::c_uint)
+                                    .wrapping_sub(1 as ::core::ffi::c_uint)
+                                    as isize,
+                            ),
+                            *(*(*index).env).xdf2.recs.offset(
+                                bs.wrapping_sub(1 as ::core::ffi::c_uint)
+                                    .wrapping_sub(1 as ::core::ffi::c_uint)
+                                    as isize,
+                            ),
                         ) != 0
                     {
                         as_0 = as_0.wrapping_sub(1);
@@ -360,39 +333,31 @@ unsafe extern "C" fn try_lcs(
                                 < (**(*index)
                                     .line_map
                                     .offset(as_0.wrapping_sub((*index).ptr_shift) as isize))
-                                    .cnt
+                                .cnt
                             {
                                 rc
                             } else {
                                 (**(*index)
                                     .line_map
                                     .offset(as_0.wrapping_sub((*index).ptr_shift) as isize))
-                                    .cnt
+                                .cnt
                             };
                         }
                     }
-                    while (ae as ::core::ffi::c_int)
-                        < line1 + count1 - 1 as ::core::ffi::c_int
-                        && (be as ::core::ffi::c_int)
-                            < line2 + count2 - 1 as ::core::ffi::c_int
+                    while (ae as ::core::ffi::c_int) < line1 + count1 - 1 as ::core::ffi::c_int
+                        && (be as ::core::ffi::c_int) < line2 + count2 - 1 as ::core::ffi::c_int
                         && cmp_recs(
                             (*index).xpp,
-                            *(*(*index).env)
-                                .xdf1
-                                .recs
-                                .offset(
-                                    ae
-                                        .wrapping_add(1 as ::core::ffi::c_uint)
-                                        .wrapping_sub(1 as ::core::ffi::c_uint) as isize,
-                                ),
-                            *(*(*index).env)
-                                .xdf2
-                                .recs
-                                .offset(
-                                    be
-                                        .wrapping_add(1 as ::core::ffi::c_uint)
-                                        .wrapping_sub(1 as ::core::ffi::c_uint) as isize,
-                                ),
+                            *(*(*index).env).xdf1.recs.offset(
+                                ae.wrapping_add(1 as ::core::ffi::c_uint)
+                                    .wrapping_sub(1 as ::core::ffi::c_uint)
+                                    as isize,
+                            ),
+                            *(*(*index).env).xdf2.recs.offset(
+                                be.wrapping_add(1 as ::core::ffi::c_uint)
+                                    .wrapping_sub(1 as ::core::ffi::c_uint)
+                                    as isize,
+                            ),
                         ) != 0
                     {
                         ae = ae.wrapping_add(1);
@@ -402,14 +367,14 @@ unsafe extern "C" fn try_lcs(
                                 < (**(*index)
                                     .line_map
                                     .offset(ae.wrapping_sub((*index).ptr_shift) as isize))
-                                    .cnt
+                                .cnt
                             {
                                 rc
                             } else {
                                 (**(*index)
                                     .line_map
                                     .offset(ae.wrapping_sub((*index).ptr_shift) as isize))
-                                    .cnt
+                                .cnt
                             };
                         }
                     }
@@ -524,8 +489,7 @@ unsafe extern "C" fn find_lcs(
     index.line_map = ::core::ptr::null_mut::<*mut record>();
     index.rcha.head = ::core::ptr::null_mut::<chanode_t>();
     index.table_bits = xdl_hashbits(count1 as ::core::ffi::c_uint);
-    index.records_size = ((1 as ::core::ffi::c_int) << index.table_bits)
-        as ::core::ffi::c_uint;
+    index.records_size = ((1 as ::core::ffi::c_int) << index.table_bits) as ::core::ffi::c_uint;
     sz = index.records_size as ::core::ffi::c_int;
     sz = (sz as ::core::ffi::c_ulong)
         .wrapping_mul(::core::mem::size_of::<*mut record>() as ::core::ffi::c_ulong)
@@ -551,9 +515,8 @@ unsafe extern "C" fn find_lcs(
             );
             sz = index.line_map_size as ::core::ffi::c_int;
             sz = (sz as ::core::ffi::c_ulong)
-                .wrapping_mul(
-                    ::core::mem::size_of::<::core::ffi::c_uint>() as ::core::ffi::c_ulong,
-                ) as ::core::ffi::c_int;
+                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_uint>() as ::core::ffi::c_ulong)
+                as ::core::ffi::c_int;
             index.next_ptrs = xmalloc(sz as size_t) as *mut ::core::ffi::c_uint;
             if !index.next_ptrs.is_null() {
                 memset(
@@ -576,15 +539,8 @@ unsafe extern "C" fn find_lcs(
                             .wrapping_add(1 as ::core::ffi::c_uint);
                         b_ptr = line2;
                         while b_ptr <= line2 + count2 - 1 as ::core::ffi::c_int {
-                            b_ptr = try_lcs(
-                                &raw mut index,
-                                lcs,
-                                b_ptr,
-                                line1,
-                                count1,
-                                line2,
-                                count2,
-                            );
+                            b_ptr =
+                                try_lcs(&raw mut index, lcs, b_ptr, line1, count1, line2, count2);
                         }
                         if index.has_common != 0 && index.max_chain_length < index.cnt {
                             ret = 1 as ::core::ffi::c_int;
@@ -635,8 +591,8 @@ unsafe extern "C" fn histogram_diff(
                 *(*env)
                     .xdf2
                     .rchg
-                    .offset((c2rust_fresh1 - 1 as ::core::ffi::c_int) as isize) = 1
-                    as ::core::ffi::c_char;
+                    .offset((c2rust_fresh1 - 1 as ::core::ffi::c_int) as isize) =
+                    1 as ::core::ffi::c_char;
             }
             return 0 as ::core::ffi::c_int;
         } else if count2 == 0 {
@@ -651,8 +607,8 @@ unsafe extern "C" fn histogram_diff(
                 *(*env)
                     .xdf1
                     .rchg
-                    .offset((c2rust_fresh3 - 1 as ::core::ffi::c_int) as isize) = 1
-                    as ::core::ffi::c_char;
+                    .offset((c2rust_fresh3 - 1 as ::core::ffi::c_int) as isize) =
+                    1 as ::core::ffi::c_char;
             }
             return 0 as ::core::ffi::c_int;
         }
@@ -668,9 +624,7 @@ unsafe extern "C" fn histogram_diff(
         if lcs_found != 0 {
             result = fall_back_to_classic_diff(xpp, env, line1, count1, line2, count2);
             break;
-        } else if lcs.begin1 == 0 as ::core::ffi::c_uint
-            && lcs.begin2 == 0 as ::core::ffi::c_uint
-        {
+        } else if lcs.begin1 == 0 as ::core::ffi::c_uint && lcs.begin2 == 0 as ::core::ffi::c_uint {
             loop {
                 let c2rust_fresh4 = count1;
                 count1 = count1 - 1;
@@ -682,8 +636,8 @@ unsafe extern "C" fn histogram_diff(
                 *(*env)
                     .xdf1
                     .rchg
-                    .offset((c2rust_fresh5 - 1 as ::core::ffi::c_int) as isize) = 1
-                    as ::core::ffi::c_char;
+                    .offset((c2rust_fresh5 - 1 as ::core::ffi::c_int) as isize) =
+                    1 as ::core::ffi::c_char;
             }
             loop {
                 let c2rust_fresh6 = count2;
@@ -696,8 +650,8 @@ unsafe extern "C" fn histogram_diff(
                 *(*env)
                     .xdf2
                     .rchg
-                    .offset((c2rust_fresh7 - 1 as ::core::ffi::c_int) as isize) = 1
-                    as ::core::ffi::c_char;
+                    .offset((c2rust_fresh7 - 1 as ::core::ffi::c_int) as isize) =
+                    1 as ::core::ffi::c_char;
             }
             result = 0 as ::core::ffi::c_int;
             break;
@@ -706,23 +660,19 @@ unsafe extern "C" fn histogram_diff(
                 xpp,
                 env,
                 line1,
-                lcs.begin1.wrapping_sub(line1 as ::core::ffi::c_uint)
-                    as ::core::ffi::c_int,
+                lcs.begin1.wrapping_sub(line1 as ::core::ffi::c_uint) as ::core::ffi::c_int,
                 line2,
-                lcs.begin2.wrapping_sub(line2 as ::core::ffi::c_uint)
-                    as ::core::ffi::c_int,
+                lcs.begin2.wrapping_sub(line2 as ::core::ffi::c_uint) as ::core::ffi::c_int,
             );
             if result != 0 {
                 break;
             }
             count1 = ((line1 + count1 - 1 as ::core::ffi::c_int) as ::core::ffi::c_uint)
                 .wrapping_sub(lcs.end1) as ::core::ffi::c_int;
-            line1 = lcs.end1.wrapping_add(1 as ::core::ffi::c_uint)
-                as ::core::ffi::c_int;
+            line1 = lcs.end1.wrapping_add(1 as ::core::ffi::c_uint) as ::core::ffi::c_int;
             count2 = ((line2 + count2 - 1 as ::core::ffi::c_int) as ::core::ffi::c_uint)
                 .wrapping_sub(lcs.end2) as ::core::ffi::c_int;
-            line2 = lcs.end2.wrapping_add(1 as ::core::ffi::c_uint)
-                as ::core::ffi::c_int;
+            line2 = lcs.end2.wrapping_add(1 as ::core::ffi::c_uint) as ::core::ffi::c_int;
         }
     }
     return result;
@@ -741,11 +691,9 @@ pub unsafe extern "C" fn xdl_do_histogram_diff(
         xpp,
         env,
         ((*env).xdf1.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
-        ((*env).xdf1.dend - (*env).xdf1.dstart + 1 as ::core::ffi::c_long)
-            as ::core::ffi::c_int,
+        ((*env).xdf1.dend - (*env).xdf1.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
         ((*env).xdf2.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
-        ((*env).xdf2.dend - (*env).xdf2.dstart + 1 as ::core::ffi::c_long)
-            as ::core::ffi::c_int,
+        ((*env).xdf2.dend - (*env).xdf2.dstart + 1 as ::core::ffi::c_long) as ::core::ffi::c_int,
     );
 }
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

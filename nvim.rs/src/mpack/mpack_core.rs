@@ -80,15 +80,14 @@ pub unsafe extern "C" fn mpack_read(
     let mut ptrlen: size_t = 0;
     let mut advanced: size_t = 0;
     let mut ptr: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut ptr_save: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr_save: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     '_c2rust_label: {
-        if !(*buf).is_null() {} else {
+        if !(*buf).is_null() {
+        } else {
             __assert_fail(
                 b"*buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 50 as ::core::ffi::c_uint,
                 b"int mpack_read(mpack_tokbuf_t *, const char **, size_t *, mpack_token_t *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -128,7 +127,8 @@ pub unsafe extern "C" fn mpack_read(
                 return MPACK_ERROR as ::core::ffi::c_int;
             }
             '_c2rust_label_0: {
-                if (*tokbuf).plen == 0 {} else {
+                if (*tokbuf).plen == 0 {
+                } else {
                     __assert_fail(
                         b"!tokbuf->plen\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
@@ -141,8 +141,8 @@ pub unsafe extern "C" fn mpack_read(
             };
             (*tokbuf).plen = (*tok).length.wrapping_add(1 as mpack_uint32_t) as size_t;
             '_c2rust_label_1: {
-                if (*tokbuf).plen <= ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                {} else {
+                if (*tokbuf).plen <= ::core::mem::size_of::<[::core::ffi::c_char; 9]>() {
+                } else {
                     __assert_fail(
                         b"tokbuf->plen <= sizeof(tokbuf->pending)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -157,7 +157,8 @@ pub unsafe extern "C" fn mpack_read(
             (*tokbuf).ppos = 0 as size_t;
             status = mpack_rpending(buf, buflen, tokbuf);
             '_c2rust_label_2: {
-                if status == 0 {} else {
+                if status == 0 {
+                } else {
                     __assert_fail(
                         b"!status\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
@@ -191,9 +192,7 @@ pub unsafe extern "C" fn mpack_write(
     mut t: *const mpack_token_t,
 ) -> ::core::ffi::c_int {
     let mut status: ::core::ffi::c_int = 0;
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut ptrlen: size_t = 0;
     let mut tok: mpack_token_t = if (*tokbuf).plen != 0 {
         (*tokbuf).pending_tok
@@ -201,11 +200,12 @@ pub unsafe extern "C" fn mpack_write(
         *t
     };
     '_c2rust_label: {
-        if !(*buf).is_null() && *buflen != 0 {} else {
+        if !(*buf).is_null() && *buflen != 0 {
+        } else {
             __assert_fail(
                 b"*buf && *buflen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 117 as ::core::ffi::c_uint,
                 b"int mpack_write(mpack_tokbuf_t *, char **, size_t *, const mpack_token_t *)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn mpack_write(
             tok.length
         }) as size_t;
         if count == pending {
-            return MPACK_OK as ::core::ffi::c_int
+            return MPACK_OK as ::core::ffi::c_int;
         } else {
             (*tokbuf).pending_tok = tok;
             return MPACK_EOF as ::core::ffi::c_int;
@@ -259,20 +259,20 @@ pub unsafe extern "C" fn mpack_write(
         return status;
     }
     if *buflen < MPACK_MAX_TOKEN_LEN as size_t {
-        let mut toklen: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-            .wrapping_sub(ptrlen);
+        let mut toklen: size_t =
+            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(ptrlen);
         let mut write_cnt: size_t = if toklen < *buflen { toklen } else { *buflen };
         memcpy(
             *buf as *mut ::core::ffi::c_void,
-            &raw mut (*tokbuf).pending as *mut ::core::ffi::c_char
-                as *const ::core::ffi::c_void,
+            &raw mut (*tokbuf).pending as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
             write_cnt,
         );
         *buf = (*buf).offset(write_cnt as isize);
         *buflen = (*buflen).wrapping_sub(write_cnt);
         if write_cnt < toklen {
             '_c2rust_label_0: {
-                if *buflen == 0 {} else {
+                if *buflen == 0 {
+                } else {
                     __assert_fail(
                         b"!*buflen\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
@@ -308,28 +308,28 @@ pub unsafe extern "C" fn mpack_rtoken(
     *buf = (*buf).offset(1);
     let mut t: ::core::ffi::c_uchar = *c2rust_fresh0 as ::core::ffi::c_uchar;
     if (t as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return mpack_value(MPACK_TOKEN_UINT, 1 as mpack_uint32_t, mpack_byte(t), tok)
+        return mpack_value(MPACK_TOKEN_UINT, 1 as mpack_uint32_t, mpack_byte(t), tok);
     } else if (t as ::core::ffi::c_int) < 0x90 as ::core::ffi::c_int {
         return mpack_blob(
             MPACK_TOKEN_MAP,
             (t as ::core::ffi::c_int & 0xf as ::core::ffi::c_int) as mpack_uint32_t,
             0 as ::core::ffi::c_int,
             tok,
-        )
+        );
     } else if (t as ::core::ffi::c_int) < 0xa0 as ::core::ffi::c_int {
         return mpack_blob(
             MPACK_TOKEN_ARRAY,
             (t as ::core::ffi::c_int & 0xf as ::core::ffi::c_int) as mpack_uint32_t,
             0 as ::core::ffi::c_int,
             tok,
-        )
+        );
     } else if (t as ::core::ffi::c_int) < 0xc0 as ::core::ffi::c_int {
         return mpack_blob(
             MPACK_TOKEN_STR,
             (t as ::core::ffi::c_int & 0x1f as ::core::ffi::c_int) as mpack_uint32_t,
             0 as ::core::ffi::c_int,
             tok,
-        )
+        );
     } else if (t as ::core::ffi::c_int) < 0xe0 as ::core::ffi::c_int {
         match t as ::core::ffi::c_int {
             192 => {
@@ -423,8 +423,7 @@ pub unsafe extern "C" fn mpack_rtoken(
                 *buflen = (*buflen).wrapping_sub(1);
                 let c2rust_fresh1 = *buf;
                 *buf = (*buf).offset(1);
-                (*tok).data.ext_type = *c2rust_fresh1 as ::core::ffi::c_uchar
-                    as ::core::ffi::c_int;
+                (*tok).data.ext_type = *c2rust_fresh1 as ::core::ffi::c_uchar as ::core::ffi::c_int;
                 return MPACK_OK as ::core::ffi::c_int;
             }
             217 | 218 | 219 => {
@@ -463,7 +462,7 @@ pub unsafe extern "C" fn mpack_rtoken(
             _ => return MPACK_ERROR as ::core::ffi::c_int,
         }
     } else {
-        return mpack_value(MPACK_TOKEN_SINT, 1 as mpack_uint32_t, mpack_byte(t), tok)
+        return mpack_value(MPACK_TOKEN_SINT, 1 as mpack_uint32_t, mpack_byte(t), tok);
     };
 }
 unsafe extern "C" fn mpack_rpending(
@@ -473,14 +472,15 @@ unsafe extern "C" fn mpack_rpending(
 ) -> ::core::ffi::c_int {
     let mut count: size_t = 0;
     '_c2rust_label: {
-        if (*state).ppos < (*state).plen {} else {
+        if (*state).ppos < (*state).plen {
+        } else {
             __assert_fail(
                 b"state->ppos < state->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 255 as ::core::ffi::c_uint,
-                b"int mpack_rpending(const char **, size_t *, mpack_tokbuf_t *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"int mpack_rpending(const char **, size_t *, mpack_tokbuf_t *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -490,8 +490,8 @@ unsafe extern "C" fn mpack_rpending(
         *buflen
     };
     memcpy(
-        (&raw mut (*state).pending as *mut ::core::ffi::c_char)
-            .offset((*state).ppos as isize) as *mut ::core::ffi::c_void,
+        (&raw mut (*state).pending as *mut ::core::ffi::c_char).offset((*state).ppos as isize)
+            as *mut ::core::ffi::c_void,
         *buf as *const ::core::ffi::c_void,
         count,
     );
@@ -514,13 +514,17 @@ unsafe extern "C" fn mpack_rvalue(
         (*tok).length = remaining;
         return MPACK_EOF as ::core::ffi::c_int;
     }
-    mpack_value(type_0, remaining, mpack_byte(0 as ::core::ffi::c_uchar), tok);
+    mpack_value(
+        type_0,
+        remaining,
+        mpack_byte(0 as ::core::ffi::c_uchar),
+        tok,
+    );
     while remaining != 0 {
         *buflen = (*buflen).wrapping_sub(1);
         let c2rust_fresh3 = *buf;
         *buf = (*buf).offset(1);
-        let mut byte: mpack_uint32_t = *c2rust_fresh3 as ::core::ffi::c_uchar
-            as mpack_uint32_t;
+        let mut byte: mpack_uint32_t = *c2rust_fresh3 as ::core::ffi::c_uchar as mpack_uint32_t;
         let mut byte_idx: mpack_uint32_t = 0;
         let mut byte_shift: mpack_uint32_t = 0;
         remaining = remaining.wrapping_sub(1);
@@ -541,13 +545,10 @@ unsafe extern "C" fn mpack_rvalue(
         let mut lo: mpack_uint32_t = (*tok).data.value.lo;
         let mut msb: mpack_uint32_t = ((*tok).length == 8 as mpack_uint32_t
             && hi >> 31 as ::core::ffi::c_int != 0
-            || (*tok).length == 4 as mpack_uint32_t
-                && lo >> 31 as ::core::ffi::c_int != 0
-            || (*tok).length == 2 as mpack_uint32_t
-                && lo >> 15 as ::core::ffi::c_int != 0
-            || (*tok).length == 1 as mpack_uint32_t
-                && lo >> 7 as ::core::ffi::c_int != 0) as ::core::ffi::c_int
-            as mpack_uint32_t;
+            || (*tok).length == 4 as mpack_uint32_t && lo >> 31 as ::core::ffi::c_int != 0
+            || (*tok).length == 2 as mpack_uint32_t && lo >> 15 as ::core::ffi::c_int != 0
+            || (*tok).length == 1 as mpack_uint32_t && lo >> 7 as ::core::ffi::c_int != 0)
+            as ::core::ffi::c_int as mpack_uint32_t;
         if msb == 0 {
             (*tok).type_0 = MPACK_TOKEN_UINT;
         }
@@ -568,16 +569,15 @@ unsafe extern "C" fn mpack_rblob(
             value: mpack_value_t { lo: 0, hi: 0 },
         },
     };
-    let mut required: mpack_uint32_t = tlen
-        .wrapping_add(
-            (if type_0 as ::core::ffi::c_uint
-                == MPACK_TOKEN_EXT as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                1 as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) as mpack_uint32_t,
-        );
+    let mut required: mpack_uint32_t = tlen.wrapping_add(
+        (if type_0 as ::core::ffi::c_uint
+            == MPACK_TOKEN_EXT as ::core::ffi::c_int as ::core::ffi::c_uint
+        {
+            1 as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        }) as mpack_uint32_t,
+    );
     if *buflen < required as size_t {
         (*tok).length = required;
         return MPACK_EOF as ::core::ffi::c_int;
@@ -586,14 +586,12 @@ unsafe extern "C" fn mpack_rblob(
     mpack_rvalue(MPACK_TOKEN_UINT, tlen, buf, buflen, &raw mut l);
     (*tok).type_0 = type_0;
     (*tok).length = l.data.value.lo;
-    if type_0 as ::core::ffi::c_uint
-        == MPACK_TOKEN_EXT as ::core::ffi::c_int as ::core::ffi::c_uint
+    if type_0 as ::core::ffi::c_uint == MPACK_TOKEN_EXT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         *buflen = (*buflen).wrapping_sub(1);
         let c2rust_fresh2 = *buf;
         *buf = (*buf).offset(1);
-        (*tok).data.ext_type = *c2rust_fresh2 as ::core::ffi::c_uchar
-            as ::core::ffi::c_int;
+        (*tok).data.ext_type = *c2rust_fresh2 as ::core::ffi::c_uchar as ::core::ffi::c_int;
     }
     return MPACK_OK as ::core::ffi::c_int;
 }
@@ -633,11 +631,12 @@ unsafe extern "C" fn mpack_wpending(
 ) -> ::core::ffi::c_int {
     let mut count: size_t = 0;
     '_c2rust_label: {
-        if (*state).ppos < (*state).plen {} else {
+        if (*state).ppos < (*state).plen {
+        } else {
             __assert_fail(
                 b"state->ppos < state->plen\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 361 as ::core::ffi::c_uint,
                 b"int mpack_wpending(char **, size_t *, mpack_tokbuf_t *)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -651,8 +650,8 @@ unsafe extern "C" fn mpack_wpending(
     };
     memcpy(
         *buf as *mut ::core::ffi::c_void,
-        (&raw mut (*state).pending as *mut ::core::ffi::c_char)
-            .offset((*state).ppos as isize) as *const ::core::ffi::c_void,
+        (&raw mut (*state).pending as *mut ::core::ffi::c_char).offset((*state).ppos as isize)
+            as *const ::core::ffi::c_void,
         count,
     );
     (*state).ppos = (*state).ppos.wrapping_add(count);
@@ -673,19 +672,19 @@ unsafe extern "C" fn mpack_wpint(
     let mut lo: mpack_uint32_t = val.lo;
     if hi != 0 {
         return (mpack_w1(buf, buflen, 0xcf as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, hi) != 0 || mpack_w4(buf, buflen, lo) != 0)
-            as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, hi) != 0
+            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else if lo > 0xffff as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xce as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else if lo > 0xff as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xcd as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, lo) != 0) as ::core::ffi::c_int
+            || mpack_w2(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else if lo > 0x7f as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xcc as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, lo) != 0) as ::core::ffi::c_int
+            || mpack_w1(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else {
-        return mpack_w1(buf, buflen, lo)
+        return mpack_w1(buf, buflen, lo);
     };
 }
 unsafe extern "C" fn mpack_wnint(
@@ -697,19 +696,19 @@ unsafe extern "C" fn mpack_wnint(
     let mut lo: mpack_uint32_t = val.lo;
     if lo < 0x80000000 as ::core::ffi::c_uint {
         return (mpack_w1(buf, buflen, 0xd3 as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, hi) != 0 || mpack_w4(buf, buflen, lo) != 0)
-            as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, hi) != 0
+            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else if lo < 0xffff8000 as ::core::ffi::c_uint {
         return (mpack_w1(buf, buflen, 0xd2 as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else if lo < 0xffffff80 as ::core::ffi::c_uint {
         return (mpack_w1(buf, buflen, 0xd1 as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, lo) != 0) as ::core::ffi::c_int
+            || mpack_w2(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else if lo < 0xffffffe0 as ::core::ffi::c_uint {
         return (mpack_w1(buf, buflen, 0xd0 as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, lo) != 0) as ::core::ffi::c_int
+            || mpack_w1(buf, buflen, lo) != 0) as ::core::ffi::c_int;
     } else {
-        return mpack_w1(buf, buflen, (0x100 as mpack_uint32_t).wrapping_add(lo))
+        return mpack_w1(buf, buflen, (0x100 as mpack_uint32_t).wrapping_add(lo));
     };
 }
 unsafe extern "C" fn mpack_wfloat(
@@ -719,13 +718,15 @@ unsafe extern "C" fn mpack_wfloat(
 ) -> ::core::ffi::c_int {
     if (*tok).length == 4 as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xca as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, (*tok).data.value.lo) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, (*tok).data.value.lo) != 0)
+            as ::core::ffi::c_int;
     } else if (*tok).length == 8 as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xcb as mpack_uint32_t) != 0
             || mpack_w4(buf, buflen, (*tok).data.value.hi) != 0
-            || mpack_w4(buf, buflen, (*tok).data.value.lo) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, (*tok).data.value.lo) != 0)
+            as ::core::ffi::c_int;
     } else {
-        return MPACK_ERROR as ::core::ffi::c_int
+        return MPACK_ERROR as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn mpack_wstr(
@@ -734,16 +735,16 @@ unsafe extern "C" fn mpack_wstr(
     mut len: mpack_uint32_t,
 ) -> ::core::ffi::c_int {
     if len < 0x20 as mpack_uint32_t {
-        return mpack_w1(buf, buflen, 0xa0 as mpack_uint32_t | len)
+        return mpack_w1(buf, buflen, 0xa0 as mpack_uint32_t | len);
     } else if len < 0x100 as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xd9 as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w1(buf, buflen, len) != 0) as ::core::ffi::c_int;
     } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xda as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
     } else {
         return (mpack_w1(buf, buflen, 0xdb as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn mpack_wbin(
@@ -753,13 +754,13 @@ unsafe extern "C" fn mpack_wbin(
 ) -> ::core::ffi::c_int {
     if len < 0x100 as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xc4 as mpack_uint32_t) != 0
-            || mpack_w1(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w1(buf, buflen, len) != 0) as ::core::ffi::c_int;
     } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xc5 as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
     } else {
         return (mpack_w1(buf, buflen, 0xc6 as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn mpack_wext(
@@ -770,12 +771,12 @@ unsafe extern "C" fn mpack_wext(
 ) -> ::core::ffi::c_int {
     let mut t: mpack_uint32_t = 0;
     '_c2rust_label: {
-        if type_0 >= 0 as ::core::ffi::c_int && type_0 < 0x80 as ::core::ffi::c_int
-        {} else {
+        if type_0 >= 0 as ::core::ffi::c_int && type_0 < 0x80 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"type >= 0 && type < 0x80\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/mpack/mpack_core.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 478 as ::core::ffi::c_uint,
                 b"int mpack_wext(char **, size_t *, int, mpack_uint32_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -807,16 +808,16 @@ unsafe extern "C" fn mpack_wext(
         _ => {
             if len < 0x100 as mpack_uint32_t {
                 return (mpack_w1(buf, buflen, 0xc7 as mpack_uint32_t) != 0
-                    || mpack_w1(buf, buflen, len) != 0 || mpack_w1(buf, buflen, t) != 0)
-                    as ::core::ffi::c_int
+                    || mpack_w1(buf, buflen, len) != 0
+                    || mpack_w1(buf, buflen, t) != 0) as ::core::ffi::c_int;
             } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
                 return (mpack_w1(buf, buflen, 0xc8 as mpack_uint32_t) != 0
-                    || mpack_w2(buf, buflen, len) != 0 || mpack_w1(buf, buflen, t) != 0)
-                    as ::core::ffi::c_int
+                    || mpack_w2(buf, buflen, len) != 0
+                    || mpack_w1(buf, buflen, t) != 0) as ::core::ffi::c_int;
             } else {
                 return (mpack_w1(buf, buflen, 0xc9 as mpack_uint32_t) != 0
-                    || mpack_w4(buf, buflen, len) != 0 || mpack_w1(buf, buflen, t) != 0)
-                    as ::core::ffi::c_int
+                    || mpack_w4(buf, buflen, len) != 0
+                    || mpack_w1(buf, buflen, t) != 0) as ::core::ffi::c_int;
             }
         }
     };
@@ -827,13 +828,13 @@ unsafe extern "C" fn mpack_warray(
     mut len: mpack_uint32_t,
 ) -> ::core::ffi::c_int {
     if len < 0x10 as mpack_uint32_t {
-        return mpack_w1(buf, buflen, 0x90 as mpack_uint32_t | len)
+        return mpack_w1(buf, buflen, 0x90 as mpack_uint32_t | len);
     } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xdc as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
     } else {
         return (mpack_w1(buf, buflen, 0xdd as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn mpack_wmap(
@@ -842,13 +843,13 @@ unsafe extern "C" fn mpack_wmap(
     mut len: mpack_uint32_t,
 ) -> ::core::ffi::c_int {
     if len < 0x10 as mpack_uint32_t {
-        return mpack_w1(buf, buflen, 0x80 as mpack_uint32_t | len)
+        return mpack_w1(buf, buflen, 0x80 as mpack_uint32_t | len);
     } else if len < 0x10000 as ::core::ffi::c_int as mpack_uint32_t {
         return (mpack_w1(buf, buflen, 0xde as mpack_uint32_t) != 0
-            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w2(buf, buflen, len) != 0) as ::core::ffi::c_int;
     } else {
         return (mpack_w1(buf, buflen, 0xdf as mpack_uint32_t) != 0
-            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int
+            || mpack_w4(buf, buflen, len) != 0) as ::core::ffi::c_int;
     };
 }
 unsafe extern "C" fn mpack_w1(
@@ -870,8 +871,7 @@ unsafe extern "C" fn mpack_w2(
     *bl = (*bl).wrapping_sub(2 as size_t);
     let c2rust_fresh9 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh9 = (v >> 8 as ::core::ffi::c_int & 0xff as mpack_uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh9 = (v >> 8 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh10 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh10 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
@@ -885,16 +885,15 @@ unsafe extern "C" fn mpack_w4(
     *bl = (*bl).wrapping_sub(4 as size_t);
     let c2rust_fresh4 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh4 = (v >> 24 as ::core::ffi::c_int & 0xff as mpack_uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh4 =
+        (v >> 24 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh5 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh5 = (v >> 16 as ::core::ffi::c_int & 0xff as mpack_uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh5 =
+        (v >> 16 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh6 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh6 = (v >> 8 as ::core::ffi::c_int & 0xff as mpack_uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh6 = (v >> 8 as ::core::ffi::c_int & 0xff as mpack_uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh7 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh7 = (v & 0xff as mpack_uint32_t) as ::core::ffi::c_char;

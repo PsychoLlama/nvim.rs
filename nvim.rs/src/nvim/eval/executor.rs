@@ -8,10 +8,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_void;
     fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
     fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T;
-    fn grow_string_tv(
-        tv1: *mut typval_T,
-        s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn grow_string_tv(tv1: *mut typval_T, s2: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T);
     fn tv_clear(tv: *mut typval_T);
@@ -270,9 +267,7 @@ pub struct listwatch_S {
     pub lw_item: *mut listitem_T,
     pub lw_next: *mut listwatch_T,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn tv_op_blob(
@@ -402,10 +397,8 @@ unsafe extern "C" fn tv_op_string(
         return FAIL;
     }
     let mut numbuf: [::core::ffi::c_char; 65] = [0; 65];
-    let mut s2: *const ::core::ffi::c_char = tv_get_string_buf(
-        tv2,
-        &raw mut numbuf as *mut ::core::ffi::c_char,
-    );
+    let mut s2: *const ::core::ffi::c_char =
+        tv_get_string_buf(tv2, &raw mut numbuf as *mut ::core::ffi::c_char);
     if grow_string_tv(tv1, s2) == OK {
         return OK;
     }
@@ -421,16 +414,15 @@ unsafe extern "C" fn tv_op_nr_or_string(
     mut tv2: *const typval_T,
     mut op: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if (*tv2).v_type as ::core::ffi::c_uint
-        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
+    if (*tv2).v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return FAIL;
     }
     if !vim_strchr(
-            b"+-*/%\0".as_ptr() as *const ::core::ffi::c_char,
-            *op as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"+-*/%\0".as_ptr() as *const ::core::ffi::c_char,
+        *op as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         return tv_op_number(tv1, tv2, op);
     }
@@ -482,8 +474,7 @@ pub unsafe extern "C" fn eexe_mod_op(
     tv2: *const typval_T,
     op: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    if (*tv2).v_type as ::core::ffi::c_uint
-        == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
+    if (*tv2).v_type as ::core::ffi::c_uint == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
         || (*tv2).v_type as ::core::ffi::c_uint
             == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
         || ((*tv2).v_type as ::core::ffi::c_uint
@@ -493,8 +484,7 @@ pub unsafe extern "C" fn eexe_mod_op(
             && *op as ::core::ffi::c_int == '.' as ::core::ffi::c_int
     {
         semsg(
-            &raw const e_letwrong as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            &raw const e_letwrong as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             op,
         );
         return FAIL;
@@ -520,8 +510,7 @@ pub unsafe extern "C" fn eexe_mod_op(
     }
     if retval != OK {
         semsg(
-            &raw const e_letwrong as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            &raw const e_letwrong as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             op,
         );
     }

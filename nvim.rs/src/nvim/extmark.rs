@@ -146,11 +146,7 @@ extern "C" {
         itr: *mut MarkTreeIter,
     ) -> MTKey;
     fn marktree_lookup(b: *mut MarkTree, id: uint64_t, itr: *mut MarkTreeIter) -> MTKey;
-    fn marktree_get_altpos(
-        b: *mut MarkTree,
-        mark: MTKey,
-        itr: *mut MarkTreeIter,
-    ) -> MTPos;
+    fn marktree_get_altpos(b: *mut MarkTree, mark: MTKey, itr: *mut MarkTreeIter) -> MTPos;
     fn marktree_get_alt(b: *mut MarkTree, mark: MTKey, itr: *mut MarkTreeIter) -> MTKey;
     fn ml_find_line_or_offset(
         buf: *mut buf_T,
@@ -1826,9 +1822,7 @@ pub const kExtmarkVirtText: ExtmarkType = 8;
 pub const kExtmarkSignHL: ExtmarkType = 4;
 pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const KV_INITIAL_VALUE: ExtmarkInfoArray = ExtmarkInfoArray {
     size: 0 as size_t,
@@ -1891,27 +1885,26 @@ pub unsafe extern "C" fn extmark_set(
     );
     let mut id: uint32_t = if !idp.is_null() { *idp } else { 0 as uint32_t };
     let mut flags: uint16_t = (mt_flags(right_gravity, no_undo, invalidate, decor.ext)
-        as ::core::ffi::c_int | decor_flags as ::core::ffi::c_int) as uint16_t;
+        as ::core::ffi::c_int
+        | decor_flags as ::core::ffi::c_int) as uint16_t;
     '_revised: {
         if id == 0 as uint32_t {
             *ns = (*ns).wrapping_add(1);
             id = *ns;
         } else {
-            let mut itr: [MarkTreeIter; 1] = [
-                MarkTreeIter {
-                    pos: MTPos { row: 0 as int32_t, col: 0 },
-                    lvl: 0,
-                    x: ::core::ptr::null_mut::<MTNode>(),
-                    i: 0,
-                    s: [C2Rust_Unnamed_14 {
-                        oldcol: 0,
-                        i: 0,
-                    }; 20],
-                    intersect_idx: 0,
-                    intersect_pos: MTPos { row: 0, col: 0 },
-                    intersect_pos_x: MTPos { row: 0, col: 0 },
+            let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+                pos: MTPos {
+                    row: 0 as int32_t,
+                    col: 0,
                 },
-            ];
+                lvl: 0,
+                x: ::core::ptr::null_mut::<MTNode>(),
+                i: 0,
+                s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
+                intersect_idx: 0,
+                intersect_pos: MTPos { row: 0, col: 0 },
+                intersect_pos_x: MTPos { row: 0, col: 0 },
+            }];
             let mut old_mark: MTKey = marktree_lookup_ns(
                 &raw mut (*buf).b_marktree as *mut MarkTree,
                 ns_id,
@@ -1926,7 +1919,8 @@ pub unsafe extern "C" fn extmark_set(
                     extmark_del_id(buf, ns_id, id);
                 } else {
                     '_c2rust_label: {
-                        if !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {} else {
+                        if !(*(&raw mut itr as *mut MarkTreeIter)).x.is_null() {
+                        } else {
                             __assert_fail(
                                 b"marktree_itr_valid(itr)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -1938,17 +1932,16 @@ pub unsafe extern "C" fn extmark_set(
                             );
                         }
                     };
-                    if old_mark.pos.row == row as int32_t
-                        && old_mark.pos.col == col as int32_t
-                    {
+                    if old_mark.pos.row == row as int32_t && old_mark.pos.col == col as int32_t {
                         if !mt_invalid(old_mark)
                             && mt_decor_any(old_mark) as ::core::ffi::c_int != 0
                         {
-                            (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                                .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                                .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                                .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                                .flags as ::core::ffi::c_int
+                            (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                                [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                                .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                                [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                                .flags
+                                as ::core::ffi::c_int
                                 & !MT_FLAG_EXTERNAL_MASK as uint16_t as ::core::ffi::c_int)
                                 as uint16_t;
                             buf_decor_remove(
@@ -1960,14 +1953,15 @@ pub unsafe extern "C" fn extmark_set(
                                 true_0 != 0,
                             );
                         }
-                        (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                            .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                            .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                            .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                            .flags as ::core::ffi::c_int | flags as ::core::ffi::c_int)
+                        (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                            .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                            .flags as ::core::ffi::c_int
+                            | flags as ::core::ffi::c_int)
                             as uint16_t;
-                        (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                            .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                        (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
                             .decor_data = decor.data;
                         marktree_revise_meta(
                             &raw mut (*buf).b_marktree as *mut MarkTree,
@@ -2021,12 +2015,20 @@ pub unsafe extern "C" fn extmark_set(
             buf,
             decor,
             row,
-            if end_row > -1 as ::core::ffi::c_int { end_row } else { row },
+            if end_row > -1 as ::core::ffi::c_int {
+                end_row
+            } else {
+                row
+            },
         );
         decor_redraw(
             buf,
             row,
-            if end_row > -1 as ::core::ffi::c_int { end_row } else { row },
+            if end_row > -1 as ::core::ffi::c_int {
+                end_row
+            } else {
+                row
+            },
             col as ::core::ffi::c_int,
             decor,
         );
@@ -2042,34 +2044,29 @@ unsafe extern "C" fn extmark_setraw(
     mut col: colnr_T,
     mut invalid: bool,
 ) {
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     let mut key: MTKey = marktree_lookup(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         mark,
         &raw mut itr as *mut MarkTreeIter,
     );
-    let mut move_0: bool = key.pos.row != row as int32_t
-        || key.pos.col != col as int32_t;
+    let mut move_0: bool = key.pos.row != row as int32_t || key.pos.col != col as int32_t;
     if key.pos.row < 0 as int32_t || !move_0 && !invalid {
         return;
     }
-    if !invalid && mt_decor_any(key) as ::core::ffi::c_int != 0
-        && key.pos.row != row as int32_t
-    {
+    if !invalid && mt_decor_any(key) as ::core::ffi::c_int != 0 && key.pos.row != row as int32_t {
         decor_redraw(
             buf,
             key.pos.row as ::core::ffi::c_int,
@@ -2087,16 +2084,16 @@ unsafe extern "C" fn extmark_setraw(
         &raw mut altitr as *mut MarkTreeIter,
     );
     if invalid {
-        (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-            .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+        (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+            .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
             .flags as ::core::ffi::c_int
             & !MT_FLAG_INVALID as uint16_t as ::core::ffi::c_int) as uint16_t;
-        (*(*(&raw mut altitr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut altitr as *mut MarkTreeIter)).i as usize]
-            .flags = ((*(*(&raw mut altitr as *mut MarkTreeIter)).x)
-            .key[(*(&raw mut altitr as *mut MarkTreeIter)).i as usize]
+        (*(*(&raw mut altitr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut altitr as *mut MarkTreeIter)).i as usize]
+            .flags = ((*(*(&raw mut altitr as *mut MarkTreeIter)).x).key
+            [(*(&raw mut altitr as *mut MarkTreeIter)).i as usize]
             .flags as ::core::ffi::c_int
             & !MT_FLAG_INVALID as uint16_t as ::core::ffi::c_int) as uint16_t;
         marktree_revise_meta(
@@ -2106,15 +2103,22 @@ unsafe extern "C" fn extmark_setraw(
             } else {
                 &raw mut itr as *mut MarkTreeIter
             },
-            if mt_end(key) as ::core::ffi::c_int != 0 { alt } else { key },
+            if mt_end(key) as ::core::ffi::c_int != 0 {
+                alt
+            } else {
+                key
+            },
         );
     } else if !mt_invalid(key)
         && key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_SIGNTEXT != 0
         && (*buf).b_signcols.autom as ::core::ffi::c_int != 0
     {
         row1 = (if alt.pos.row
-            < (if key.pos.row < row as int32_t { key.pos.row } else { row as int32_t })
-        {
+            < (if key.pos.row < row as int32_t {
+                key.pos.row
+            } else {
+                row as int32_t
+            }) {
             alt.pos.row
         } else if key.pos.row < row as int32_t {
             key.pos.row
@@ -2122,8 +2126,11 @@ unsafe extern "C" fn extmark_setraw(
             row as int32_t
         }) as ::core::ffi::c_int;
         row2 = (if alt.pos.row
-            > (if key.pos.row > row as int32_t { key.pos.row } else { row as int32_t })
-        {
+            > (if key.pos.row > row as int32_t {
+                key.pos.row
+            } else {
+                row as int32_t
+            }) {
             alt.pos.row
         } else if key.pos.row > row as int32_t {
             key.pos.row
@@ -2134,8 +2141,7 @@ unsafe extern "C" fn extmark_setraw(
             buf,
             row1,
             if ((*curbuf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
-                (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int
-                    - 1 as ::core::ffi::c_int
+                (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
             } else {
                 row2
             },
@@ -2174,8 +2180,7 @@ unsafe extern "C" fn extmark_setraw(
             buf,
             row1,
             if ((*curbuf).b_ml.ml_line_count - 1 as linenr_T) < row2 as linenr_T {
-                (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int
-                    - 1 as ::core::ffi::c_int
+                (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
             } else {
                 row2
             },
@@ -2190,21 +2195,19 @@ pub unsafe extern "C" fn extmark_del_id(
     mut ns_id: uint32_t,
     mut id: uint32_t,
 ) -> bool {
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     let mut key: MTKey = marktree_lookup_ns(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         ns_id,
@@ -2225,7 +2228,8 @@ pub unsafe extern "C" fn extmark_del(
     mut restore: bool,
 ) {
     '_c2rust_label: {
-        if key.pos.row >= 0 as int32_t {} else {
+        if key.pos.row >= 0 as int32_t {
+        } else {
             __assert_fail(
                 b"key.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0".as_ptr()
@@ -2245,18 +2249,23 @@ pub unsafe extern "C" fn extmark_del(
     if other != 0 {
         key2 = marktree_lookup(&raw mut (*buf).b_marktree as *mut MarkTree, other, itr);
         '_c2rust_label_0: {
-            if key2.pos.row >= 0 as int32_t {} else {
+            if key2.pos.row >= 0 as int32_t {
+            } else {
                 __assert_fail(
                     b"key2.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     173 as ::core::ffi::c_uint,
                     b"void extmark_del(buf_T *, MarkTreeIter *, MTKey, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
                 );
             }
         };
-        marktree_del_itr(&raw mut (*buf).b_marktree as *mut MarkTree, itr, false_0 != 0);
+        marktree_del_itr(
+            &raw mut (*buf).b_marktree as *mut MarkTree,
+            itr,
+            false_0 != 0,
+        );
         if restore {
             marktree_itr_get(
                 &raw mut (*buf).b_marktree as *mut MarkTree,
@@ -2296,7 +2305,12 @@ pub unsafe extern "C" fn extmark_clear(
     mut u_row: ::core::ffi::c_int,
     mut u_col: colnr_T,
 ) -> bool {
-    if (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set.h.size == 0 {
+    if (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
+        .set
+        .h
+        .size
+        == 0
+    {
         return false_0 != 0;
     }
     let mut all_ns: bool = ns_id == 0 as uint32_t;
@@ -2312,23 +2326,21 @@ pub unsafe extern "C" fn extmark_clear(
         }
     }
     let mut marks_cleared_any: bool = false_0 != 0;
-    let mut marks_cleared_all: bool = l_row == 0 as ::core::ffi::c_int
-        && l_col == 0 as ::core::ffi::c_int;
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut marks_cleared_all: bool =
+        l_row == 0 as ::core::ffi::c_int && l_col == 0 as ::core::ffi::c_int;
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     marktree_itr_get(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         l_row as int32_t,
@@ -2337,7 +2349,8 @@ pub unsafe extern "C" fn extmark_clear(
     );
     loop {
         let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
-        if mark.pos.row < 0 as int32_t || mark.pos.row > u_row as int32_t
+        if mark.pos.row < 0 as int32_t
+            || mark.pos.row > u_row as int32_t
             || mark.pos.row == u_row as int32_t && mark.pos.col > u_col as int32_t
         {
             if mark.pos.row >= 0 as int32_t {
@@ -2357,8 +2370,9 @@ pub unsafe extern "C" fn extmark_clear(
     if marks_cleared_all {
         if all_ns {
             xfree(
-                (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set.keys
-                    as *mut ::core::ffi::c_void,
+                (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
+                    .set
+                    .keys as *mut ::core::ffi::c_void,
             );
             xfree(
                 (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
@@ -2367,9 +2381,9 @@ pub unsafe extern "C" fn extmark_clear(
                     .hash as *mut ::core::ffi::c_void,
             );
             (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set = SET_INIT;
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*buf)
-                .b_extmark_ns as *mut Map_uint32_t_uint32_t))
-                .values as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).values
+                    as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
@@ -2405,10 +2419,7 @@ pub unsafe extern "C" fn extmark_get(
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [C2Rust_Unnamed_14 {
-            oldcol: 0,
-            i: 0,
-        }; 20],
+        s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -2466,7 +2477,8 @@ pub unsafe extern "C" fn extmark_get(
     }
     while (array.size as int64_t) < amount {
         let mut mark: MTKey = marktree_itr_current(&raw mut itr as *mut MarkTreeIter);
-        if mark.pos.row < 0 as int32_t || mark.pos.row > u_row as int32_t
+        if mark.pos.row < 0 as int32_t
+            || mark.pos.row > u_row as int32_t
             || mark.pos.row == u_row as int32_t && mark.pos.col > u_col as int32_t
         {
             break;
@@ -2516,7 +2528,8 @@ unsafe extern "C" fn push_mark(
             (*array).items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<MTPair>().wrapping_mul((*array).capacity),
         ) as *mut MTPair;
-    } else {};
+    } else {
+    };
     let c2rust_fresh0 = (*array).size;
     (*array).size = (*array).size.wrapping_add(1);
     *(*array).items.offset(c2rust_fresh0 as isize) = mark;
@@ -2538,7 +2551,8 @@ pub unsafe extern "C" fn extmark_from_id(
         return mtpair_from(mark, mark);
     }
     '_c2rust_label: {
-        if mark.pos.row >= 0 as int32_t {} else {
+        if mark.pos.row >= 0 as int32_t {
+        } else {
             __assert_fail(
                 b"mark.pos.row >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0".as_ptr()
@@ -2558,21 +2572,19 @@ pub unsafe extern "C" fn extmark_from_id(
 }
 #[no_mangle]
 pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     marktree_itr_get(
         &raw mut (*buf).b_marktree as *mut MarkTree,
         0 as int32_t,
@@ -2584,8 +2596,7 @@ pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
         if mark.pos.row < 0 as int32_t {
             break;
         }
-        if !(mt_paired(mark) as ::core::ffi::c_int != 0
-            && mt_end(mark) as ::core::ffi::c_int != 0)
+        if !(mt_paired(mark) as ::core::ffi::c_int != 0 && mt_end(mark) as ::core::ffi::c_int != 0)
         {
             decor_free(mt_decor(mark));
         }
@@ -2602,16 +2613,19 @@ pub unsafe extern "C" fn extmark_free_all(mut buf: *mut buf_T) {
         ::core::mem::size_of::<[::core::ffi::c_int; 9]>(),
     );
     xfree(
-        (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set.keys
-            as *mut ::core::ffi::c_void,
+        (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
+            .set
+            .keys as *mut ::core::ffi::c_void,
     );
     xfree(
-        (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set.h.hash
-            as *mut ::core::ffi::c_void,
+        (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t))
+            .set
+            .h
+            .hash as *mut ::core::ffi::c_void,
     );
     (*(&raw mut (*buf).b_extmark_ns as *mut Map_uint32_t_uint32_t)).set = SET_INIT;
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*buf)
-        .b_extmark_ns as *mut Map_uint32_t_uint32_t))
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*buf).b_extmark_ns
+        as *mut Map_uint32_t_uint32_t))
         .values as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
@@ -2629,21 +2643,19 @@ pub unsafe extern "C" fn extmark_splice_delete(
     mut only_copy: bool,
     mut op: ExtmarkOp,
 ) {
-    let mut itr: [MarkTreeIter; 1] = [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ];
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }];
     let mut undo: ExtmarkUndoObject = ExtmarkUndoObject {
         type_0: kExtmarkSplice,
         data: C2Rust_Unnamed_6 {
@@ -2685,8 +2697,10 @@ pub unsafe extern "C" fn extmark_splice_delete(
             }
         }
         let mut invalidated: bool = false_0 != 0;
-        if !only_copy && !mt_invalid(mark)
-            && mt_invalidate(mark) as ::core::ffi::c_int != 0 && !mt_end(mark)
+        if !only_copy
+            && !mt_invalid(mark)
+            && mt_invalidate(mark) as ::core::ffi::c_int != 0
+            && !mt_end(mark)
         {
             let mut enditr: [MarkTreeIter; 1] = [*(&raw mut itr as *mut MarkTreeIter)];
             let mut endpos: MTPos = marktree_get_altpos(
@@ -2697,33 +2711,28 @@ pub unsafe extern "C" fn extmark_splice_delete(
             if !mt_paired(mark) && mark.pos.row < u_row as int32_t
                 || mt_paired(mark) as ::core::ffi::c_int != 0
                     && (mark.pos.row > l_row as int32_t
-                        || mark.pos.row == l_row as int32_t
-                            && mark.pos.col >= l_col as int32_t)
+                        || mark.pos.row == l_row as int32_t && mark.pos.col >= l_col as int32_t)
                     && (endpos.row < u_row as int32_t
-                        || endpos.row == u_row as int32_t
-                            && endpos.col <= u_col as int32_t)
+                        || endpos.row == u_row as int32_t && endpos.col <= u_col as int32_t)
             {
                 if mt_no_undo(mark) {
-                    extmark_del(
-                        buf,
-                        &raw mut itr as *mut MarkTreeIter,
-                        mark,
-                        true_0 != 0,
-                    );
+                    extmark_del(buf, &raw mut itr as *mut MarkTreeIter, mark, true_0 != 0);
                     continue;
                 } else {
                     copy = true_0 != 0;
                     invalidated = true_0 != 0;
-                    (*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
-                        .flags as ::core::ffi::c_int | MT_FLAG_INVALID) as uint16_t;
-                    (*(*(&raw mut enditr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut enditr as *mut MarkTreeIter)).i as usize]
-                        .flags = ((*(*(&raw mut enditr as *mut MarkTreeIter)).x)
-                        .key[(*(&raw mut enditr as *mut MarkTreeIter)).i as usize]
-                        .flags as ::core::ffi::c_int | MT_FLAG_INVALID) as uint16_t;
+                    (*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                        .flags = ((*(*(&raw mut itr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut itr as *mut MarkTreeIter)).i as usize]
+                        .flags as ::core::ffi::c_int
+                        | MT_FLAG_INVALID) as uint16_t;
+                    (*(*(&raw mut enditr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut enditr as *mut MarkTreeIter)).i as usize]
+                        .flags = ((*(*(&raw mut enditr as *mut MarkTreeIter)).x).key
+                        [(*(&raw mut enditr as *mut MarkTreeIter)).i as usize]
+                        .flags as ::core::ffi::c_int
+                        | MT_FLAG_INVALID) as uint16_t;
                     marktree_revise_meta(
                         &raw mut (*buf).b_marktree as *mut MarkTree,
                         &raw mut itr as *mut MarkTreeIter,
@@ -2763,10 +2772,10 @@ pub unsafe extern "C" fn extmark_splice_delete(
                 });
                 (*uvp).items = xrealloc(
                     (*uvp).items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<ExtmarkUndoObject>()
-                        .wrapping_mul((*uvp).capacity),
+                    ::core::mem::size_of::<ExtmarkUndoObject>().wrapping_mul((*uvp).capacity),
                 ) as *mut ExtmarkUndoObject;
-            } else {};
+            } else {
+            };
             let c2rust_fresh1 = (*uvp).size;
             (*uvp).size = (*uvp).size.wrapping_add(1);
             *(*uvp).items.offset(c2rust_fresh1 as isize) = undo;
@@ -2775,13 +2784,10 @@ pub unsafe extern "C" fn extmark_splice_delete(
             &raw mut (*buf).b_marktree as *mut MarkTree,
             &raw mut itr as *mut MarkTreeIter,
         );
-    };
+    }
 }
 #[no_mangle]
-pub unsafe extern "C" fn extmark_apply_undo(
-    mut undo_info: ExtmarkUndoObject,
-    mut undo: bool,
-) {
+pub unsafe extern "C" fn extmark_apply_undo(mut undo_info: ExtmarkUndoObject, mut undo: bool) {
     if undo_info.type_0 as ::core::ffi::c_uint
         == kExtmarkSplice as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -2885,7 +2891,8 @@ pub unsafe extern "C" fn extmark_adjust(
         new_row = (amount_after + old_row as linenr_T) as ::core::ffi::c_int;
     } else {
         '_c2rust_label: {
-            if line2 == MAXLNUM as ::core::ffi::c_int as linenr_T {} else {
+            if line2 == MAXLNUM as ::core::ffi::c_int as linenr_T {
+            } else {
                 __assert_fail(
                     b"line2 == MAXLNUM\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/extmark.c\0"
@@ -2905,7 +2912,8 @@ pub unsafe extern "C" fn extmark_adjust(
             line1 + new_row as linenr_T,
             ::core::ptr::null_mut::<::core::ffi::c_int>(),
             true_0 != 0,
-        ) as bcount_t - start_byte;
+        ) as bcount_t
+            - start_byte;
     }
     extmark_splice_impl(
         buf,
@@ -2973,15 +2981,7 @@ pub unsafe extern "C" fn extmark_splice_impl(
 ) {
     (*buf).deleted_bytes2 = 0 as size_t;
     buf_updates_send_splice(
-        buf,
-        start_row,
-        start_col,
-        start_byte,
-        old_row,
-        old_col,
-        old_byte,
-        new_row,
-        new_col,
+        buf, start_row, start_col, start_byte, old_row, old_col, old_byte, new_row, new_col,
         new_byte,
     );
     if old_row > 0 as ::core::ffi::c_int || old_col > 0 as ::core::ffi::c_int {
@@ -3009,9 +3009,7 @@ pub unsafe extern "C" fn extmark_splice_impl(
         );
     }
     if old_row > 0 as ::core::ffi::c_int || new_row > 0 as ::core::ffi::c_int {
-        let mut count: ::core::ffi::c_int = if (*buf).b_prev_line_count
-            > 0 as ::core::ffi::c_int
-        {
+        let mut count: ::core::ffi::c_int = if (*buf).b_prev_line_count > 0 as ::core::ffi::c_int {
             (*buf).b_prev_line_count
         } else {
             (*buf).b_ml.ml_line_count as ::core::ffi::c_int
@@ -3048,15 +3046,14 @@ pub unsafe extern "C" fn extmark_splice_impl(
         };
         buf_signcols_count_range(buf, start_row, row2, 0 as ::core::ffi::c_int, kNone);
     }
-    if undo as ::core::ffi::c_uint
-        == kExtmarkUndo as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if undo as ::core::ffi::c_uint == kExtmarkUndo as ::core::ffi::c_int as ::core::ffi::c_uint {
         let mut uhp_0: *mut u_header_T = u_force_get_undo_header(buf);
         if uhp_0.is_null() {
             return;
         }
         let mut merged: bool = false_0 != 0;
-        if old_row == 0 as ::core::ffi::c_int && new_row == 0 as ::core::ffi::c_int
+        if old_row == 0 as ::core::ffi::c_int
+            && new_row == 0 as ::core::ffi::c_int
             && (*uhp_0).uh_extmark.size != 0
         {
             let mut item: *mut ExtmarkUndoObject = (*uhp_0)
@@ -3128,14 +3125,13 @@ pub unsafe extern "C" fn extmark_splice_impl(
                     ::core::mem::size_of::<ExtmarkUndoObject>()
                         .wrapping_mul((*uhp_0).uh_extmark.capacity),
                 ) as *mut ExtmarkUndoObject;
-            } else {};
+            } else {
+            };
             let c2rust_fresh3 = (*uhp_0).uh_extmark.size;
             (*uhp_0).uh_extmark.size = (*uhp_0).uh_extmark.size.wrapping_add(1);
             *(*uhp_0).uh_extmark.items.offset(c2rust_fresh3 as isize) = undo_object {
                 type_0: kExtmarkSplice,
-                data: C2Rust_Unnamed_6 {
-                    splice: splice_0,
-                },
+                data: C2Rust_Unnamed_6 { splice: splice_0 },
             };
         }
     }
@@ -3222,9 +3218,7 @@ pub unsafe extern "C" fn extmark_move_region(
         extent_col,
         extent_byte,
     );
-    if undo as ::core::ffi::c_uint
-        == kExtmarkUndo as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if undo as ::core::ffi::c_uint == kExtmarkUndo as ::core::ffi::c_int as ::core::ffi::c_uint {
         let mut uhp: *mut u_header_T = u_force_get_undo_header(buf);
         if uhp.is_null() {
             return;
@@ -3260,7 +3254,8 @@ pub unsafe extern "C" fn extmark_move_region(
                 ::core::mem::size_of::<ExtmarkUndoObject>()
                     .wrapping_mul((*uhp).uh_extmark.capacity),
             ) as *mut ExtmarkUndoObject;
-        } else {};
+        } else {
+        };
         let c2rust_fresh2 = (*uhp).uh_extmark.size;
         (*uhp).uh_extmark.size = (*uhp).uh_extmark.size.wrapping_add(1);
         *(*uhp).uh_extmark.items.offset(c2rust_fresh2 as isize) = undo_object {
@@ -3271,45 +3266,46 @@ pub unsafe extern "C" fn extmark_move_region(
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const MT_FLAG_END: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const MT_FLAG_PAIRED: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
-pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int = (1 as ::core::ffi::c_int
-    as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_EXT | MT_FLAG_DECOR_HL
-    | MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL | MT_FLAG_DECOR_VIRT_LINES
+pub const MT_FLAG_END: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
+pub const MT_FLAG_PAIRED: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
+pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
+pub const MT_FLAG_INVALID: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
+pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_EXT
+    | MT_FLAG_DECOR_HL
+    | MT_FLAG_DECOR_SIGNTEXT
+    | MT_FLAG_DECOR_SIGNHL
+    | MT_FLAG_DECOR_VIRT_LINES
     | MT_FLAG_DECOR_VIRT_TEXT_INLINE;
 pub const MT_FLAG_EXTERNAL_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_MASK
-    | MT_FLAG_NO_UNDO | MT_FLAG_INVALIDATE | MT_FLAG_INVALID
+    | MT_FLAG_NO_UNDO
+    | MT_FLAG_INVALIDATE
+    | MT_FLAG_INVALID
     | MT_FLAG_DECOR_CONCEAL_LINES;
 pub const MARKTREE_END_FLAG: uint64_t = 1 as ::core::ffi::c_int as uint64_t;
 #[inline]
-unsafe extern "C" fn mt_lookup_id(
-    mut ns: uint32_t,
-    mut id: uint32_t,
-    mut enda: bool,
-) -> uint64_t {
+unsafe extern "C" fn mt_lookup_id(mut ns: uint32_t, mut id: uint32_t, mut enda: bool) -> uint64_t {
     return (ns as uint64_t) << 33 as ::core::ffi::c_int
         | (id << 1 as ::core::ffi::c_int) as uint64_t
         | (if enda as ::core::ffi::c_int != 0 {
@@ -3365,22 +3361,19 @@ unsafe extern "C" fn mt_flags(
         MT_FLAG_RIGHT_GRAVITY
     } else {
         0 as ::core::ffi::c_int
-    })
-        | (if no_undo as ::core::ffi::c_int != 0 {
-            MT_FLAG_NO_UNDO
-        } else {
-            0 as ::core::ffi::c_int
-        })
-        | (if invalidate as ::core::ffi::c_int != 0 {
-            MT_FLAG_INVALIDATE
-        } else {
-            0 as ::core::ffi::c_int
-        })
-        | (if decor_ext as ::core::ffi::c_int != 0 {
-            MT_FLAG_DECOR_EXT
-        } else {
-            0 as ::core::ffi::c_int
-        })) as uint16_t;
+    }) | (if no_undo as ::core::ffi::c_int != 0 {
+        MT_FLAG_NO_UNDO
+    } else {
+        0 as ::core::ffi::c_int
+    }) | (if invalidate as ::core::ffi::c_int != 0 {
+        MT_FLAG_INVALIDATE
+    } else {
+        0 as ::core::ffi::c_int
+    }) | (if decor_ext as ::core::ffi::c_int != 0 {
+        MT_FLAG_DECOR_EXT
+    } else {
+        0 as ::core::ffi::c_int
+    })) as uint16_t;
 }
 #[inline]
 unsafe extern "C" fn mtpair_from(mut start: MTKey, mut end: MTKey) -> MTPair {

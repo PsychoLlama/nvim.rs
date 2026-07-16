@@ -27,10 +27,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strpbrk(
         __s: *const ::core::ffi::c_char,
         __accept: *const ::core::ffi::c_char,
@@ -42,10 +40,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn uv_err_name(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
-    fn uv_os_homedir(
-        buffer: *mut ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_os_homedir(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
     fn uv_os_getenv(
         name: *const ::core::ffi::c_char,
         buffer: *mut ::core::ffi::c_char,
@@ -60,10 +55,7 @@ extern "C" {
     fn getpid() -> __pid_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xmemcpyz(
         dst: *mut ::core::ffi::c_void,
         src: *const ::core::ffi::c_void,
@@ -114,10 +106,7 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> bool;
-    fn skip_expr(
-        pp: *mut *mut ::core::ffi::c_char,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
+    fn skip_expr(pp: *mut *mut ::core::ffi::c_char, evalarg: *mut evalarg_T) -> ::core::ffi::c_int;
     fn modify_fname(
         src: *mut ::core::ffi::c_char,
         tilde_file: bool,
@@ -2069,28 +2058,24 @@ pub struct utsname {
     pub machine: [::core::ffi::c_char; 65],
     pub domainname: [::core::ffi::c_char; 65],
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const RUNTIME_DIRNAME: [::core::ffi::c_char; 8] = unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"runtime\0")
-};
+pub const RUNTIME_DIRNAME: [::core::ffi::c_char; 8] =
+    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"runtime\0") };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut default_vim_dir: *mut ::core::ffi::c_char = b"/usr/local/share/nvim\0"
-    .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static mut default_vim_dir: *mut ::core::ffi::c_char =
+    b"/usr/local/share/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
-pub static mut default_vimruntime_dir: *mut ::core::ffi::c_char = b"\0".as_ptr()
-    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static mut default_vimruntime_dir: *mut ::core::ffi::c_char =
+    b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
-pub static mut default_lib_dir: *mut ::core::ffi::c_char = b"/usr/local/lib64/nvim\0"
-    .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static mut default_lib_dir: *mut ::core::ffi::c_char =
+    b"/usr/local/lib64/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
 pub unsafe extern "C" fn env_init() {
     nvim_testing = os_env_exists(
@@ -2109,20 +2094,26 @@ pub unsafe extern "C" fn os_getenv(
     let mut r: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut size: size_t = INIT_SIZE as size_t;
     let mut buf: [::core::ffi::c_char; 64] = [0; 64];
-    r = uv_os_getenv(name, &raw mut buf as *mut ::core::ffi::c_char, &raw mut size);
+    r = uv_os_getenv(
+        name,
+        &raw mut buf as *mut ::core::ffi::c_char,
+        &raw mut size,
+    );
     if r == UV_ENOBUFS as ::core::ffi::c_int {
         e = xmalloc(size) as *mut ::core::ffi::c_char;
         r = uv_os_getenv(name, e, &raw mut size);
-        if r != 0 as ::core::ffi::c_int || size == 0 as size_t
+        if r != 0 as ::core::ffi::c_int
+            || size == 0 as size_t
             || *e.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut e
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut e as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
         }
-    } else if r != 0 as ::core::ffi::c_int || size == 0 as size_t
+    } else if r != 0 as ::core::ffi::c_int
+        || size == 0 as size_t
         || buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL
     {
         e = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2132,7 +2123,8 @@ pub unsafe extern "C" fn os_getenv(
             size,
         ) as *mut ::core::ffi::c_char;
     }
-    if r != 0 as ::core::ffi::c_int && r != UV_ENOENT as ::core::ffi::c_int
+    if r != 0 as ::core::ffi::c_int
+        && r != UV_ENOENT as ::core::ffi::c_int
         && r != UV_UNKNOWN as ::core::ffi::c_int
     {
         logmsg(
@@ -2164,7 +2156,8 @@ pub unsafe extern "C" fn os_getenv_buf(
     if r == UV_ENOBUFS as ::core::ffi::c_int {
         let mut e: *mut ::core::ffi::c_char = xmalloc(size) as *mut ::core::ffi::c_char;
         r = uv_os_getenv(name, e, &raw mut size);
-        if r == 0 as ::core::ffi::c_int && size != 0 as size_t
+        if r == 0 as ::core::ffi::c_int
+            && size != 0 as size_t
             && *e.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         {
             xmemcpyz(
@@ -2175,10 +2168,12 @@ pub unsafe extern "C" fn os_getenv_buf(
         }
         xfree(e as *mut ::core::ffi::c_void);
     }
-    if r != 0 as ::core::ffi::c_int || size == 0 as size_t
+    if r != 0 as ::core::ffi::c_int
+        || size == 0 as size_t
         || *buf.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
-        if r != 0 as ::core::ffi::c_int && r != UV_ENOENT as ::core::ffi::c_int
+        if r != 0 as ::core::ffi::c_int
+            && r != UV_ENOENT as ::core::ffi::c_int
             && r != UV_UNKNOWN as ::core::ffi::c_int
         {
             logmsg(
@@ -2187,8 +2182,7 @@ pub unsafe extern "C" fn os_getenv_buf(
                 b"os_getenv_buf\0".as_ptr() as *const ::core::ffi::c_char,
                 129 as ::core::ffi::c_int,
                 true_0 != 0,
-                b"uv_os_getenv(%s) failed: %d %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"uv_os_getenv(%s) failed: %d %s\0".as_ptr() as *const ::core::ffi::c_char,
                 name,
                 r,
                 uv_err_name(r),
@@ -2224,7 +2218,8 @@ pub unsafe extern "C" fn os_env_exists(
         &raw mut size,
     );
     '_c2rust_label: {
-        if r != UV_EINVAL as ::core::ffi::c_int {} else {
+        if r != UV_EINVAL as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"r != UV_EINVAL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
@@ -2235,7 +2230,8 @@ pub unsafe extern "C" fn os_env_exists(
             );
         }
     };
-    if r != 0 as ::core::ffi::c_int && r != UV_ENOENT as ::core::ffi::c_int
+    if r != 0 as ::core::ffi::c_int
+        && r != UV_ENOENT as ::core::ffi::c_int
         && r != UV_ENOBUFS as ::core::ffi::c_int
     {
         logmsg(
@@ -2268,7 +2264,8 @@ pub unsafe extern "C" fn os_setenv(
     let mut r: ::core::ffi::c_int = 0;
     r = uv_os_setenv(name, value);
     '_c2rust_label: {
-        if r != UV_EINVAL as ::core::ffi::c_int {} else {
+        if r != UV_EINVAL as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"r != UV_EINVAL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
@@ -2299,9 +2296,7 @@ pub unsafe extern "C" fn os_setenv(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_unsetenv(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn os_unsetenv(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
         return -1 as ::core::ffi::c_int;
     }
@@ -2344,8 +2339,7 @@ pub unsafe extern "C" fn os_free_fullenv(mut env: *mut *mut ::core::ffi::c_char)
     }
     let mut it: *mut *mut ::core::ffi::c_char = env;
     while !(*it).is_null() {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = it
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void = it as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -2369,9 +2363,7 @@ pub unsafe extern "C" fn os_copy_fullenv(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_getenvname_at_index(
-    mut index: size_t,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn os_getenvname_at_index(mut index: size_t) -> *mut ::core::ffi::c_char {
     extern "C" {
         #[link_name = "environ"]
         static mut environ_0: *mut *mut ::core::ffi::c_char;
@@ -2385,45 +2377,44 @@ pub unsafe extern "C" fn os_getenvname_at_index(
     }
     let mut str: *mut ::core::ffi::c_char = *environ.offset(index as isize);
     '_c2rust_label: {
-        if !str.is_null() {} else {
+        if !str.is_null() {
+        } else {
             __assert_fail(
                 b"str != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 375 as ::core::ffi::c_uint,
-                b"char *os_getenvname_at_index(size_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"char *os_getenvname_at_index(size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     let end: *const ::core::ffi::c_char = strchr(str, '=' as ::core::ffi::c_int);
     '_c2rust_label_0: {
-        if !end.is_null() {} else {
+        if !end.is_null() {
+        } else {
             __assert_fail(
                 b"end != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 377 as ::core::ffi::c_uint,
-                b"char *os_getenvname_at_index(size_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"char *os_getenvname_at_index(size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     let mut len: ptrdiff_t = end.offset_from(str);
     '_c2rust_label_1: {
-        if len > 0 as ptrdiff_t {} else {
+        if len > 0 as ptrdiff_t {
+        } else {
             __assert_fail(
                 b"len > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 379 as ::core::ffi::c_uint,
-                b"char *os_getenvname_at_index(size_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"char *os_getenvname_at_index(size_t)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    return xmemdupz(str as *const ::core::ffi::c_void, len as size_t)
-        as *mut ::core::ffi::c_char;
+    return xmemdupz(str as *const ::core::ffi::c_void, len as size_t) as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_get_pid() -> int64_t {
@@ -2432,10 +2423,7 @@ pub unsafe extern "C" fn os_get_pid() -> int64_t {
 #[no_mangle]
 pub unsafe extern "C" fn os_hint_priority() {}
 #[no_mangle]
-pub unsafe extern "C" fn os_get_hostname(
-    mut hostname: *mut ::core::ffi::c_char,
-    mut size: size_t,
-) {
+pub unsafe extern "C" fn os_get_hostname(mut hostname: *mut ::core::ffi::c_char, mut size: size_t) {
     let mut vutsname: utsname = utsname {
         sysname: [0; 65],
         nodename: [0; 65],
@@ -2447,19 +2435,18 @@ pub unsafe extern "C" fn os_get_hostname(
     if uname(&raw mut vutsname) < 0 as ::core::ffi::c_int {
         *hostname = NUL as ::core::ffi::c_char;
     } else {
-        xstrlcpy(hostname, &raw mut vutsname.nodename as *mut ::core::ffi::c_char, size);
+        xstrlcpy(
+            hostname,
+            &raw mut vutsname.nodename as *mut ::core::ffi::c_char,
+            size,
+        );
     };
 }
-static mut homedir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut homedir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub unsafe extern "C" fn os_homedir() -> *const ::core::ffi::c_char {
     if homedir.is_null() {
-        emsg(
-            b"os_homedir failed: homedir not initialized\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+        emsg(b"os_homedir failed: homedir not initialized\0".as_ptr() as *const ::core::ffi::c_char);
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     return homedir;
@@ -2468,20 +2455,19 @@ pub unsafe extern "C" fn os_homedir() -> *const ::core::ffi::c_char {
 pub unsafe extern "C" fn init_homedir() {
     xfree(homedir as *mut ::core::ffi::c_void);
     homedir = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut var: *mut ::core::ffi::c_char = os_getenv(
-        b"HOME\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut var: *mut ::core::ffi::c_char =
+        os_getenv(b"HOME\0".as_ptr() as *const ::core::ffi::c_char);
     let mut tofree: *mut ::core::ffi::c_char = var;
     if var.is_null() {
         var = os_uv_homedir();
     }
     if !var.is_null()
         && !os_realpath(
-                var,
-                &raw mut IObuff as *mut ::core::ffi::c_char,
-                IOSIZE as size_t,
-            )
-            .is_null()
+            var,
+            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IOSIZE as size_t,
+        )
+        .is_null()
     {
         var = &raw mut IObuff as *mut ::core::ffi::c_char;
     }
@@ -2533,8 +2519,7 @@ pub unsafe extern "C" fn expand_env_save_opt(
     mut src: *mut ::core::ffi::c_char,
     mut one: bool,
 ) -> *mut ::core::ffi::c_char {
-    let mut p: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut p: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     expand_env_esc(
         src,
         p,
@@ -2569,12 +2554,8 @@ pub unsafe extern "C" fn expand_env_esc(
     mut one: bool,
     mut prefix: *mut ::core::ffi::c_char,
 ) -> size_t {
-    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut var: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut var: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut copy_char: bool = false;
     let mut mustfree: bool = false;
     let mut at_start: bool = true_0 != 0;
@@ -2646,7 +2627,8 @@ pub unsafe extern "C" fn expand_env_esc(
                             if !(c2rust_fresh3 > 0 as ::core::ffi::c_int
                                 && *tail as ::core::ffi::c_int != NUL
                                 && vim_isIDc(*tail as uint8_t as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int != 0)
+                                    as ::core::ffi::c_int
+                                    != 0)
                             {
                                 break;
                             }
@@ -2657,14 +2639,14 @@ pub unsafe extern "C" fn expand_env_esc(
                             *c2rust_fresh5 = *c2rust_fresh4;
                         }
                     }
-                    if *src.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                    if *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '{' as ::core::ffi::c_int
                         && *tail as ::core::ffi::c_int != '}' as ::core::ffi::c_int
                     {
                         var = ::core::ptr::null_mut::<::core::ffi::c_char>();
                     } else {
-                        if *src.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+                        if *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '{' as ::core::ffi::c_int
                         {
                             tail = tail.offset(1);
                         }
@@ -2672,18 +2654,17 @@ pub unsafe extern "C" fn expand_env_esc(
                         var = vim_getenv(dst);
                         mustfree = true_0 != 0;
                     }
-                } else if *src.offset(1 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == NUL
+                } else if *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
                     || vim_ispathsep(
-                        *src.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                        *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    ) as ::core::ffi::c_int
+                        != 0
                     || !vim_strchr(
-                            b" ,\t\n\0".as_ptr() as *const ::core::ffi::c_char,
-                            *src.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                                as ::core::ffi::c_int,
-                        )
-                        .is_null()
+                        b" ,\t\n\0".as_ptr() as *const ::core::ffi::c_char,
+                        *src.offset(1 as ::core::ffi::c_int as isize) as uint8_t
+                            as ::core::ffi::c_int,
+                    )
+                    .is_null()
                 {
                     var = homedir;
                     tail = src.offset(1 as ::core::ffi::c_int as isize);
@@ -2697,7 +2678,8 @@ pub unsafe extern "C" fn expand_env_esc(
                         if !(c2rust_fresh6 > 0 as ::core::ffi::c_int
                             && *tail as ::core::ffi::c_int != 0
                             && vim_isfilec(*tail as uint8_t as ::core::ffi::c_int)
-                                as ::core::ffi::c_int != 0
+                                as ::core::ffi::c_int
+                                != 0
                             && !vim_ispathsep(*tail as ::core::ffi::c_int))
                         {
                             break;
@@ -2735,9 +2717,7 @@ pub unsafe extern "C" fn expand_env_esc(
                             xp_col: 0,
                             xp_selected: 0,
                             xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            xp_files: ::core::ptr::null_mut::<
-                                *mut ::core::ffi::c_char,
-                            >(),
+                            xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
                             xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                             xp_buf: [0; 256],
                             xp_search_dir: kDirectionNotSet,
@@ -2760,14 +2740,12 @@ pub unsafe extern "C" fn expand_env_esc(
                         mustfree = true_0 != 0;
                     }
                 }
-                if esc as ::core::ffi::c_int != 0 && !var.is_null()
-                    && !strpbrk(var, b" \t\0".as_ptr() as *const ::core::ffi::c_char)
-                        .is_null()
+                if esc as ::core::ffi::c_int != 0
+                    && !var.is_null()
+                    && !strpbrk(var, b" \t\0".as_ptr() as *const ::core::ffi::c_char).is_null()
                 {
-                    let mut p: *mut ::core::ffi::c_char = vim_strsave_escaped(
-                        var,
-                        b" \t\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    let mut p: *mut ::core::ffi::c_char =
+                        vim_strsave_escaped(var, b" \t\0".as_ptr() as *const ::core::ffi::c_char);
                     if mustfree {
                         xfree(var as *mut ::core::ffi::c_void);
                     }
@@ -2784,8 +2762,7 @@ pub unsafe extern "C" fn expand_env_esc(
                         strcpy(dst, var);
                         dstlen -= c_1;
                         if after_pathsep(dst, dst.offset(c_1 as isize)) != 0
-                            && vim_ispathsep(*tail as ::core::ffi::c_int)
-                                as ::core::ffi::c_int != 0
+                            && vim_ispathsep(*tail as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                         {
                             tail = tail.offset(1);
                         }
@@ -2802,8 +2779,7 @@ pub unsafe extern "C" fn expand_env_esc(
                 at_start = false_0 != 0;
                 if *src.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
-                    && *src.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != NUL
+                    && *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
                 {
                     let c2rust_fresh9 = src;
                     src = src.offset(1);
@@ -2811,10 +2787,11 @@ pub unsafe extern "C" fn expand_env_esc(
                     dst = dst.offset(1);
                     *c2rust_fresh10 = *c2rust_fresh9;
                     dstlen -= 1;
-                } else if (*src.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-                    || *src.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == ',' as ::core::ffi::c_int) && !one
+                } else if (*src.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == ' ' as ::core::ffi::c_int
+                    || *src.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == ',' as ::core::ffi::c_int)
+                    && !one
                 {
                     at_start = true_0 != 0;
                 }
@@ -2826,8 +2803,7 @@ pub unsafe extern "C" fn expand_env_esc(
                     *c2rust_fresh12 = *c2rust_fresh11;
                     dstlen -= 1;
                     if !prefix.is_null()
-                        && src.offset(-(prefix_len as isize))
-                            >= srcp as *mut ::core::ffi::c_char
+                        && src.offset(-(prefix_len as isize)) >= srcp as *mut ::core::ffi::c_char
                         && strncmp(
                             src.offset(-(prefix_len as isize)),
                             prefix,
@@ -2849,11 +2825,8 @@ unsafe extern "C" fn vim_runtime_dir(
     if vimdir.is_null() || *vimdir as ::core::ffi::c_int == NUL {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut p: *mut ::core::ffi::c_char = concat_fnames(
-        vimdir,
-        RUNTIME_DIRNAME.as_ptr(),
-        true_0 != 0,
-    );
+    let mut p: *mut ::core::ffi::c_char =
+        concat_fnames(vimdir, RUNTIME_DIRNAME.as_ptr(), true_0 != 0);
     if os_isdir(p) {
         return p;
     }
@@ -2913,11 +2886,9 @@ pub unsafe extern "C" fn vim_env_iter_rev(
             .offset(-(1 as ::core::ffi::c_int as isize));
     }
     let varlen: size_t = (varend.offset_from(val) as size_t).wrapping_add(1 as size_t);
-    let colon: *const ::core::ffi::c_char = xmemrchr(
-        val as *const ::core::ffi::c_void,
-        delim as uint8_t,
-        varlen,
-    ) as *const ::core::ffi::c_char;
+    let colon: *const ::core::ffi::c_char =
+        xmemrchr(val as *const ::core::ffi::c_void, delim as uint8_t, varlen)
+            as *const ::core::ffi::c_char;
     if colon.is_null() {
         *len = varlen;
         *dir = val;
@@ -2925,13 +2896,10 @@ pub unsafe extern "C" fn vim_env_iter_rev(
     }
     *dir = colon.offset(1 as ::core::ffi::c_int as isize);
     *len = varend.offset_from(colon) as size_t;
-    return colon.offset(-(1 as ::core::ffi::c_int as isize))
-        as *const ::core::ffi::c_void;
+    return colon.offset(-(1 as ::core::ffi::c_int as isize)) as *const ::core::ffi::c_void;
 }
 #[no_mangle]
-pub unsafe extern "C" fn vim_get_prefix_from_exepath(
-    mut exe_name: *mut ::core::ffi::c_char,
-) {
+pub unsafe extern "C" fn vim_get_prefix_from_exepath(mut exe_name: *mut ::core::ffi::c_char) {
     xstrlcpy(
         exe_name,
         get_vim_var_str(VV_PROGPATH),
@@ -2948,16 +2916,16 @@ pub unsafe extern "C" fn vim_getenv(
 ) -> *mut ::core::ffi::c_char {
     '_c2rust_label: {
         if *get_vim_var_str(VV_PROGPATH).offset(0 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int != '\0' as ::core::ffi::c_int
-        {} else {
+            as ::core::ffi::c_int
+            != '\0' as ::core::ffi::c_int
+        {
+        } else {
             __assert_fail(
-                b"get_vim_var_str(VV_PROGPATH)[0] != NUL\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"get_vim_var_str(VV_PROGPATH)[0] != NUL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 956 as ::core::ffi::c_uint,
-                b"char *vim_getenv(const char *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"char *vim_getenv(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2965,21 +2933,15 @@ pub unsafe extern "C" fn vim_getenv(
     if !kos_env_path.is_null() {
         return kos_env_path;
     }
-    let mut vimruntime: bool = strcmp(
-        name,
-        b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int;
+    let mut vimruntime: bool = strcmp(name, b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char)
+        == 0 as ::core::ffi::c_int;
     if !vimruntime
-        && strcmp(name, b"VIM\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0 as ::core::ffi::c_int
+        && strcmp(name, b"VIM\0".as_ptr() as *const ::core::ffi::c_char) != 0 as ::core::ffi::c_int
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut vim_path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    if vimruntime as ::core::ffi::c_int != 0
-        && *default_vimruntime_dir as ::core::ffi::c_int == NUL
+    let mut vim_path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    if vimruntime as ::core::ffi::c_int != 0 && *default_vimruntime_dir as ::core::ffi::c_int == NUL
     {
         kos_env_path = os_getenv(b"VIM\0".as_ptr() as *const ::core::ffi::c_char);
         if !kos_env_path.is_null() {
@@ -3013,8 +2975,7 @@ pub unsafe extern "C" fn vim_getenv(
                 vim_path_end = remove_tail(
                     vim_path,
                     vim_path_end,
-                    b"doc\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"doc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
             }
             if !vimruntime {
@@ -3028,15 +2989,14 @@ pub unsafe extern "C" fn vim_getenv(
                 vim_path_end = vim_path_end.offset(-1);
             }
             '_c2rust_label_0: {
-                if vim_path_end >= vim_path {} else {
+                if vim_path_end >= vim_path {
+                } else {
                     __assert_fail(
-                        b"vim_path_end >= vim_path\0".as_ptr()
+                        b"vim_path_end >= vim_path\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         1027 as ::core::ffi::c_uint,
-                        b"char *vim_getenv(const char *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"char *vim_getenv(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -3050,14 +3010,14 @@ pub unsafe extern "C" fn vim_getenv(
             }
         }
         '_c2rust_label_1: {
-            if vim_path != &raw mut exe_name as *mut ::core::ffi::c_char {} else {
+            if vim_path != &raw mut exe_name as *mut ::core::ffi::c_char {
+            } else {
                 __assert_fail(
                     b"vim_path != exe_name\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     1035 as ::core::ffi::c_uint,
-                    b"char *vim_getenv(const char *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"char *vim_getenv(const char *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -3068,12 +3028,10 @@ pub unsafe extern "C" fn vim_getenv(
         {
             vim_path = xstrdup(default_vimruntime_dir);
         } else if *default_vim_dir as ::core::ffi::c_int != NUL {
-            if vimruntime as ::core::ffi::c_int != 0
-                && {
-                    vim_path = vim_runtime_dir(default_vim_dir);
-                    vim_path.is_null()
-                }
-            {
+            if vimruntime as ::core::ffi::c_int != 0 && {
+                vim_path = vim_runtime_dir(default_vim_dir);
+                vim_path.is_null()
+            } {
                 vim_path = xstrdup(default_vim_dir);
             }
         }
@@ -3122,9 +3080,8 @@ pub unsafe extern "C" fn home_replace(
     if !homedir.is_null() {
         dirlen = strlen(homedir);
     }
-    let mut homedir_env: *mut ::core::ffi::c_char = os_getenv(
-        b"HOME\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut homedir_env: *mut ::core::ffi::c_char =
+        os_getenv(b"HOME\0".as_ptr() as *const ::core::ffi::c_char);
     let mut homedir_env_mod: *mut ::core::ffi::c_char = homedir_env;
     let mut must_free: bool = false_0 != 0;
     if !homedir_env_mod.is_null()
@@ -3133,9 +3090,7 @@ pub unsafe extern "C" fn home_replace(
         must_free = true_0 != 0;
         let mut usedlen: size_t = 0 as size_t;
         let mut flen: size_t = strlen(homedir_env_mod);
-        let mut fbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut fbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         modify_fname(
             b":p\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             false_0 != 0,
@@ -3146,7 +3101,8 @@ pub unsafe extern "C" fn home_replace(
         );
         flen = strlen(homedir_env_mod);
         '_c2rust_label: {
-            if homedir_env_mod != homedir_env {} else {
+            if homedir_env_mod != homedir_env {
+            } else {
                 __assert_fail(
                     b"homedir_env_mod != homedir_env\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3159,11 +3115,10 @@ pub unsafe extern "C" fn home_replace(
             }
         };
         if vim_ispathsep(
-            *homedir_env_mod.offset(flen.wrapping_sub(1 as size_t) as isize)
-                as ::core::ffi::c_int,
+            *homedir_env_mod.offset(flen.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int,
         ) {
-            *homedir_env_mod.offset(flen.wrapping_sub(1 as size_t) as isize) = NUL
-                as ::core::ffi::c_char;
+            *homedir_env_mod.offset(flen.wrapping_sub(1 as size_t) as isize) =
+                NUL as ::core::ffi::c_char;
         }
     }
     if !homedir_env_mod.is_null() {
@@ -3177,9 +3132,11 @@ pub unsafe extern "C" fn home_replace(
         let mut p: *mut ::core::ffi::c_char = homedir;
         let mut len: size_t = dirlen;
         loop {
-            if len != 0 && path_fnamencmp(src, p, len) == 0 as ::core::ffi::c_int
+            if len != 0
+                && path_fnamencmp(src, p, len) == 0 as ::core::ffi::c_int
                 && (vim_ispathsep(*src.offset(len as isize) as ::core::ffi::c_int)
-                    as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
                     || !one
                         && (*src.offset(len as isize) as ::core::ffi::c_int
                             == ',' as ::core::ffi::c_int
@@ -3265,14 +3222,14 @@ pub unsafe extern "C" fn get_env_name(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     '_c2rust_label: {
-        if idx >= 0 as ::core::ffi::c_int {} else {
+        if idx >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/env.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1216 as ::core::ffi::c_uint,
-                b"char *get_env_name(expand_T *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"char *get_env_name(expand_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -3289,24 +3246,20 @@ pub unsafe extern "C" fn get_env_name(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_setenv_append_path(
-    mut fname: *const ::core::ffi::c_char,
-) -> bool {
+pub unsafe extern "C" fn os_setenv_append_path(mut fname: *const ::core::ffi::c_char) -> bool {
     if !path_is_absolute(fname) {
-        internal_error(
-            b"os_setenv_append_path()\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        internal_error(b"os_setenv_append_path()\0".as_ptr() as *const ::core::ffi::c_char);
         return false_0 != 0;
     }
-    let mut tail: *const ::core::ffi::c_char = path_tail_with_sep(
-        fname as *mut ::core::ffi::c_char,
-    );
+    let mut tail: *const ::core::ffi::c_char =
+        path_tail_with_sep(fname as *mut ::core::ffi::c_char);
     let mut dirlen: size_t = tail.offset_from(fname) as size_t;
     '_c2rust_label: {
         if tail >= fname
             && dirlen.wrapping_add(1 as size_t)
                 < ::core::mem::size_of::<[::core::ffi::c_char; 4096]>()
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"tail >= fname && dirlen + 1 < sizeof(os_buf)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -3323,22 +3276,23 @@ pub unsafe extern "C" fn os_setenv_append_path(
         fname as *const ::core::ffi::c_void,
         dirlen,
     );
-    let mut path: *mut ::core::ffi::c_char = os_getenv(
-        b"PATH\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    let pathlen: size_t = if !path.is_null() { strlen(path) } else { 0 as size_t };
+    let mut path: *mut ::core::ffi::c_char =
+        os_getenv(b"PATH\0".as_ptr() as *const ::core::ffi::c_char);
+    let pathlen: size_t = if !path.is_null() {
+        strlen(path)
+    } else {
+        0 as size_t
+    };
     let newlen: size_t = pathlen.wrapping_add(dirlen).wrapping_add(2 as size_t);
     let mut retval: bool = false_0 != 0;
     if newlen < MAX_ENVPATHLEN as size_t {
-        let mut temp: *mut ::core::ffi::c_char = xmalloc(newlen)
-            as *mut ::core::ffi::c_char;
+        let mut temp: *mut ::core::ffi::c_char = xmalloc(newlen) as *mut ::core::ffi::c_char;
         if pathlen == 0 as size_t {
             *temp.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
         } else {
             xstrlcpy(temp, path, newlen);
             if ENV_SEPCHAR
-                != *path.offset(pathlen.wrapping_sub(1 as size_t) as isize)
-                    as ::core::ffi::c_int
+                != *path.offset(pathlen.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
             {
                 xstrlcat(temp, ENV_SEPSTR.as_ptr(), newlen);
             }
@@ -3362,22 +3316,22 @@ pub unsafe extern "C" fn os_shell_is_cmdexe(mut sh: *const ::core::ffi::c_char) 
         return false_0 != 0;
     }
     if striequal(sh, b"$COMSPEC\0".as_ptr() as *const ::core::ffi::c_char) {
-        let mut comspec: *mut ::core::ffi::c_char = os_getenv_noalloc(
-            b"COMSPEC\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let mut comspec: *mut ::core::ffi::c_char =
+            os_getenv_noalloc(b"COMSPEC\0".as_ptr() as *const ::core::ffi::c_char);
         return striequal(
             b"cmd.exe\0".as_ptr() as *const ::core::ffi::c_char,
             path_tail(comspec),
         );
     }
-    if striequal(sh, b"cmd.exe\0".as_ptr() as *const ::core::ffi::c_char)
-        as ::core::ffi::c_int != 0
-        || striequal(sh, b"cmd\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
+    if striequal(sh, b"cmd.exe\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int != 0
+        || striequal(sh, b"cmd\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int != 0
     {
         return true_0 != 0;
     }
-    return striequal(b"cmd.exe\0".as_ptr() as *const ::core::ffi::c_char, path_tail(sh));
+    return striequal(
+        b"cmd.exe\0".as_ptr() as *const ::core::ffi::c_char,
+        path_tail(sh),
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn vim_unsetenv_ext(mut var: *const ::core::ffi::c_char) {
@@ -3390,8 +3344,7 @@ pub unsafe extern "C" fn vim_unsetenv_ext(mut var: *const ::core::ffi::c_char) {
         didset_vim = false_0 != 0;
     } else if strcasecmp(
         var as *mut ::core::ffi::c_char,
-        b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ) == 0 as ::core::ffi::c_int
     {
         didset_vimruntime = false_0 != 0;
@@ -3419,8 +3372,7 @@ pub unsafe extern "C" fn vim_setenv_ext(
     } else if didset_vimruntime as ::core::ffi::c_int != 0
         && strcasecmp(
             name as *mut ::core::ffi::c_char,
-            b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
     {
         didset_vimruntime = false_0 != 0;
@@ -3431,6 +3383,5 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
-pub const ENV_SEPSTR: [::core::ffi::c_char; 2] = unsafe {
-    ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b":\0")
-};
+pub const ENV_SEPSTR: [::core::ffi::c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b":\0") };

@@ -33,11 +33,7 @@ extern "C" {
         line_end: Integer,
         err: *mut Error,
     );
-    fn parse_virt_text(
-        chunks: Array,
-        err: *mut Error,
-        width: *mut ::core::ffi::c_int,
-    ) -> VirtText;
+    fn parse_virt_text(chunks: Array, err: *mut Error, width: *mut ::core::ffi::c_int) -> VirtText;
     fn msgpack_rpc_get_handler_for(
         name: *const ::core::ffi::c_char,
         name_len: size_t,
@@ -74,12 +70,7 @@ extern "C" {
     fn api_clear_error(value: *mut Error);
     fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
     fn copy_object(obj: Object, arena: *mut Arena) -> Object;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
     fn exec_impl(
@@ -125,10 +116,7 @@ extern "C" {
         err: *mut Error,
     ) -> Dict;
     fn syn_name2id(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn syn_check_group(
-        name: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
+    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn syn_id2attr(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn syn_get_final_id(hl_id: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn nlua_exec(
@@ -202,9 +190,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -2348,9 +2335,7 @@ pub const OPT_WINONLY: C2Rust_Unnamed_17 = 8;
 pub const OPT_MODELINE: C2Rust_Unnamed_17 = 4;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub unsafe extern "C" fn nvim_exec(
     mut channel_id: uint64_t,
@@ -2358,9 +2343,7 @@ pub unsafe extern "C" fn nvim_exec(
     mut output: Boolean,
     mut err: *mut Error,
 ) -> String_0 {
-    let mut opts: KeyDict_exec_opts = KeyDict_exec_opts {
-        output: output,
-    };
+    let mut opts: KeyDict_exec_opts = KeyDict_exec_opts { output: output };
     return exec_impl(channel_id, src, &raw mut opts, err);
 }
 #[no_mangle]
@@ -2391,10 +2374,7 @@ pub unsafe extern "C" fn nvim_execute_lua(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_buf_get_number(
-    mut buffer: Buffer,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe extern "C" fn nvim_buf_get_number(mut buffer: Buffer, mut err: *mut Error) -> Integer {
     let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
     if buf.is_null() {
         return 0 as Integer;
@@ -2448,9 +2428,7 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
         );
         return 0 as Integer;
     }
-    if !(col_start >= 0 as Integer
-        && col_start <= MAXCOL as ::core::ffi::c_int as Integer)
-    {
+    if !(col_start >= 0 as Integer && col_start <= MAXCOL as ::core::ffi::c_int as Integer) {
         api_err_invalid(
             err,
             b"column\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2471,7 +2449,7 @@ pub unsafe extern "C" fn nvim_buf_add_highlight(
     if hl_group.size > 0 as size_t {
         hl_id = syn_check_group(hl_group.data, hl_group.size);
     } else {
-        return ns_id
+        return ns_id;
     }
     let mut end_line: ::core::ffi::c_int = line as ::core::ffi::c_int;
     if col_end == MAXCOL as ::core::ffi::c_int as Integer {
@@ -2525,19 +2503,16 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return 0 as Integer;
     }
-    let mut existing: *mut DecorVirtText = decor_find_virttext(
-        buf,
-        line as ::core::ffi::c_int,
-        ns_id as uint64_t,
-    );
+    let mut existing: *mut DecorVirtText =
+        decor_find_virttext(buf, line as ::core::ffi::c_int, ns_id as uint64_t);
     if !existing.is_null() {
         clear_virttext(&raw mut (*existing).data.virt_text);
         (*existing).data.virt_text = virt_text;
         (*existing).width = width;
         return src_id;
     }
-    let mut vt: *mut DecorVirtText = xmalloc(::core::mem::size_of::<DecorVirtText>())
-        as *mut DecorVirtText;
+    let mut vt: *mut DecorVirtText =
+        xmalloc(::core::mem::size_of::<DecorVirtText>()) as *mut DecorVirtText;
     *vt = DecorVirtText {
         flags: 0 as uint8_t,
         hl_mode: kHlModeUnknown as ::core::ffi::c_int as uint8_t,
@@ -2678,7 +2653,9 @@ pub unsafe extern "C" fn buffer_get_line(
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
         && slice.size != 0
     {
-        rv = (*slice.items.offset(0 as ::core::ffi::c_int as isize)).data.string;
+        rv = (*slice.items.offset(0 as ::core::ffi::c_int as isize))
+            .data
+            .string;
     }
     return rv;
 }
@@ -2745,8 +2722,8 @@ pub unsafe extern "C" fn buffer_get_line_slice(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Array {
-    start = (convert_index(start as int64_t)
-        + !include_start as ::core::ffi::c_int as int64_t) as Integer;
+    start = (convert_index(start as int64_t) + !include_start as ::core::ffi::c_int as int64_t)
+        as Integer;
     end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
     return nvim_buf_get_lines(
         0 as uint64_t,
@@ -2770,8 +2747,8 @@ pub unsafe extern "C" fn buffer_set_line_slice(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) {
-    start = (convert_index(start as int64_t)
-        + !include_start as ::core::ffi::c_int as int64_t) as Integer;
+    start = (convert_index(start as int64_t) + !include_start as ::core::ffi::c_int as int64_t)
+        as Integer;
     end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
     nvim_buf_set_lines(
         0 as uint64_t,
@@ -2977,7 +2954,11 @@ pub unsafe extern "C" fn vim_del_var(
     );
 }
 unsafe extern "C" fn convert_index(mut index: int64_t) -> int64_t {
-    return if index < 0 as int64_t { index - 1 as int64_t } else { index };
+    return if index < 0 as int64_t {
+        index - 1 as int64_t
+    } else {
+        index
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_option_info(
@@ -3004,10 +2985,7 @@ pub unsafe extern "C" fn nvim_set_option(
     set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, err);
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_get_option(
-    mut name: String_0,
-    mut err: *mut Error,
-) -> Object {
+pub unsafe extern "C" fn nvim_get_option(mut name: String_0, mut err: *mut Error) -> Object {
     return get_option_from(NULL, kOptScopeGlobal, name, err);
 }
 #[no_mangle]
@@ -3256,15 +3234,11 @@ pub unsafe extern "C" fn nvim_call_atomic(
                         err,
                         b"name\0".as_ptr() as *const ::core::ffi::c_char,
                         api_typename(kObjectTypeString),
-                        api_typename(
-                            (*call.items.offset(0 as ::core::ffi::c_int as isize)).type_0,
-                        ),
+                        api_typename((*call.items.offset(0 as ::core::ffi::c_int as isize)).type_0),
                     );
                     break '_theend;
                 } else {
-                    let mut name: String_0 = (*call
-                        .items
-                        .offset(0 as ::core::ffi::c_int as isize))
+                    let mut name: String_0 = (*call.items.offset(0 as ::core::ffi::c_int as isize))
                         .data
                         .string;
                     if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3276,17 +3250,15 @@ pub unsafe extern "C" fn nvim_call_atomic(
                             b"call args\0".as_ptr() as *const ::core::ffi::c_char,
                             api_typename(kObjectTypeArray),
                             api_typename(
-                                (*call.items.offset(1 as ::core::ffi::c_int as isize))
-                                    .type_0,
+                                (*call.items.offset(1 as ::core::ffi::c_int as isize)).type_0,
                             ),
                         );
                         break '_theend;
                     } else {
-                        let mut args: Array = (*call
-                            .items
-                            .offset(1 as ::core::ffi::c_int as isize))
-                            .data
-                            .array;
+                        let mut args: Array =
+                            (*call.items.offset(1 as ::core::ffi::c_int as isize))
+                                .data
+                                .array;
                         let mut handler: MsgpackRpcRequestHandler = msgpack_rpc_get_handler_for(
                             name.data,
                             name.size,
@@ -3297,11 +3269,12 @@ pub unsafe extern "C" fn nvim_call_atomic(
                         {
                             break;
                         }
-                        let mut result: Object = handler
-                            .fn_0
-                            .expect(
-                                "non-null function pointer",
-                            )(channel_id, args, arena, &raw mut nested_error);
+                        let mut result: Object = handler.fn_0.expect("non-null function pointer")(
+                            channel_id,
+                            args,
+                            arena,
+                            &raw mut nested_error,
+                        );
                         if nested_error.type_0 as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
@@ -3309,10 +3282,7 @@ pub unsafe extern "C" fn nvim_call_atomic(
                         }
                         let c2rust_fresh0 = results.size;
                         results.size = results.size.wrapping_add(1);
-                        *results.items.offset(c2rust_fresh0 as isize) = copy_object(
-                            result,
-                            arena,
-                        );
+                        *results.items.offset(c2rust_fresh0 as isize) = copy_object(result, arena);
                         if handler.ret_alloc {
                             api_free_object(result);
                         }
@@ -3327,9 +3297,7 @@ pub unsafe extern "C" fn nvim_call_atomic(
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed { array: results },
         };
-        if nested_error.type_0 as ::core::ffi::c_int
-            != kErrorTypeNone as ::core::ffi::c_int
-        {
+        if nested_error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             let mut errval: Array = arena_array(arena, 3 as size_t);
             let c2rust_fresh2 = errval.size;
             errval.size = errval.size.wrapping_add(1);
@@ -3376,15 +3344,8 @@ pub unsafe extern "C" fn nvim_call_atomic(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_subscribe(mut channel_id: uint64_t, mut event: String_0) {}
 #[no_mangle]
-pub unsafe extern "C" fn nvim_unsubscribe(
-    mut channel_id: uint64_t,
-    mut event: String_0,
-) {}
-unsafe extern "C" fn write_msg(
-    mut message: String_0,
-    mut to_err: bool,
-    mut writeln: bool,
-) {
+pub unsafe extern "C" fn nvim_unsubscribe(mut channel_id: uint64_t, mut event: String_0) {}
+unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
     static mut out_line_buf: StringBuilder = StringBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -3410,8 +3371,7 @@ unsafe extern "C" fn write_msg(
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
             (*line_buf).items = xrealloc(
                 (*line_buf).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*line_buf).capacity),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*line_buf).capacity),
             ) as *mut ::core::ffi::c_char;
         }
         if *message.data.offset(i as isize) as ::core::ffi::c_int == NL {
@@ -3426,11 +3386,11 @@ unsafe extern "C" fn write_msg(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh7 = (*line_buf).size;
             (*line_buf).size = (*line_buf).size.wrapping_add(1);
-            *(*line_buf).items.offset(c2rust_fresh7 as isize) = '\0'
-                as ::core::ffi::c_char;
+            *(*line_buf).items.offset(c2rust_fresh7 as isize) = '\0' as ::core::ffi::c_char;
             if to_err {
                 emsg((*line_buf).items);
             } else {
@@ -3443,8 +3403,7 @@ unsafe extern "C" fn write_msg(
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
             (*line_buf).items = xrealloc(
                 (*line_buf).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*line_buf).capacity),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*line_buf).capacity),
             ) as *mut ::core::ffi::c_char;
         } else if *message.data.offset(i as isize) as ::core::ffi::c_int == NUL {
             if (*line_buf).size == (*line_buf).capacity {
@@ -3458,11 +3417,11 @@ unsafe extern "C" fn write_msg(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh8 = (*line_buf).size;
             (*line_buf).size = (*line_buf).size.wrapping_add(1);
-            *(*line_buf).items.offset(c2rust_fresh8 as isize) = '\n'
-                as ::core::ffi::c_char;
+            *(*line_buf).items.offset(c2rust_fresh8 as isize) = '\n' as ::core::ffi::c_char;
         } else {
             if (*line_buf).size == (*line_buf).capacity {
                 (*line_buf).capacity = (if (*line_buf).capacity != 0 {
@@ -3475,12 +3434,11 @@ unsafe extern "C" fn write_msg(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh9 = (*line_buf).size;
             (*line_buf).size = (*line_buf).size.wrapping_add(1);
-            *(*line_buf).items.offset(c2rust_fresh9 as isize) = *message
-                .data
-                .offset(i as isize);
+            *(*line_buf).items.offset(c2rust_fresh9 as isize) = *message.data.offset(i as isize);
         }
         i = i.wrapping_add(1);
     }
@@ -3489,8 +3447,7 @@ unsafe extern "C" fn write_msg(
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
             (*line_buf).items = xrealloc(
                 (*line_buf).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*line_buf).capacity),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*line_buf).capacity),
             ) as *mut ::core::ffi::c_char;
         }
         if '\n' as ::core::ffi::c_int == NL {
@@ -3505,11 +3462,11 @@ unsafe extern "C" fn write_msg(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh10 = (*line_buf).size;
             (*line_buf).size = (*line_buf).size.wrapping_add(1);
-            *(*line_buf).items.offset(c2rust_fresh10 as isize) = '\0'
-                as ::core::ffi::c_char;
+            *(*line_buf).items.offset(c2rust_fresh10 as isize) = '\0' as ::core::ffi::c_char;
             if to_err {
                 emsg((*line_buf).items);
             } else {
@@ -3522,8 +3479,7 @@ unsafe extern "C" fn write_msg(
             (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as ::core::ffi::c_int as size_t;
             (*line_buf).items = xrealloc(
                 (*line_buf).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*line_buf).capacity),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*line_buf).capacity),
             ) as *mut ::core::ffi::c_char;
         } else if '\n' as ::core::ffi::c_int == NUL {
             if (*line_buf).size == (*line_buf).capacity {
@@ -3537,11 +3493,11 @@ unsafe extern "C" fn write_msg(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh11 = (*line_buf).size;
             (*line_buf).size = (*line_buf).size.wrapping_add(1);
-            *(*line_buf).items.offset(c2rust_fresh11 as isize) = '\n'
-                as ::core::ffi::c_char;
+            *(*line_buf).items.offset(c2rust_fresh11 as isize) = '\n' as ::core::ffi::c_char;
         } else {
             if (*line_buf).size == (*line_buf).capacity {
                 (*line_buf).capacity = (if (*line_buf).capacity != 0 {
@@ -3554,11 +3510,11 @@ unsafe extern "C" fn write_msg(
                     ::core::mem::size_of::<::core::ffi::c_char>()
                         .wrapping_mul((*line_buf).capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh12 = (*line_buf).size;
             (*line_buf).size = (*line_buf).size.wrapping_add(1);
-            *(*line_buf).items.offset(c2rust_fresh12 as isize) = '\n'
-                as ::core::ffi::c_char;
+            *(*line_buf).items.offset(c2rust_fresh12 as isize) = '\n' as ::core::ffi::c_char;
         }
     }
     no_wait_return -= 1;
@@ -3605,9 +3561,7 @@ pub unsafe extern "C" fn nvim_notify(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh14 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: log_level,
-        },
+        data: C2Rust_Unnamed { integer: log_level },
     };
     let c2rust_fresh15 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -3619,8 +3573,7 @@ pub unsafe extern "C" fn nvim_notify(
         String_0 {
             data: b"return vim.notify(...)\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
-            size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>()
-                .wrapping_sub(1 as size_t),
+            size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
         },
         ::core::ptr::null::<::core::ffi::c_char>(),
         args,
@@ -3645,7 +3598,7 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int = (1 as ::core::ffi::c_int as uint16_t
-    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
+pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

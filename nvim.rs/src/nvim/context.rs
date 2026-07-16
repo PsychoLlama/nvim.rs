@@ -42,12 +42,7 @@ extern "C" {
     fn api_clear_error(value: *mut Error);
     fn copy_array(array: Array, arena: *mut Arena) -> Array;
     fn copy_object(obj: Object, arena: *mut Arena) -> Object;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn tv_clear(tv: *mut typval_T);
     fn func_tbl_get() -> *mut hashtab_T;
     fn do_cmdline_cmd(cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -822,9 +817,7 @@ pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
 pub const kShaDaMissingError: C2Rust_Unnamed_3 = 16;
 pub const kShaDaGetOldfiles: C2Rust_Unnamed_3 = 8;
 pub const kShaDaWantMarks: C2Rust_Unnamed_3 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -832,8 +825,10 @@ pub const ARRAY_DICT_INIT: Array = Array {
 };
 #[no_mangle]
 pub static mut kCtxAll: ::core::ffi::c_int = kCtxRegs as ::core::ffi::c_int
-    | kCtxJumps as ::core::ffi::c_int | kCtxBufs as ::core::ffi::c_int
-    | kCtxGVars as ::core::ffi::c_int | kCtxSFuncs as ::core::ffi::c_int
+    | kCtxJumps as ::core::ffi::c_int
+    | kCtxBufs as ::core::ffi::c_int
+    | kCtxGVars as ::core::ffi::c_int
+    | kCtxSFuncs as ::core::ffi::c_int
     | kCtxFuncs as ::core::ffi::c_int;
 static mut ctx_stack: ContextVec = ContextVec {
     size: 0 as size_t,
@@ -861,9 +856,7 @@ pub unsafe extern "C" fn ctx_get(mut index: size_t) -> *mut Context {
     if index < ctx_stack.size {
         return ctx_stack
             .items
-            .offset(
-                ctx_stack.size.wrapping_sub(index).wrapping_sub(1 as size_t) as isize,
-            );
+            .offset(ctx_stack.size.wrapping_sub(index).wrapping_sub(1 as size_t) as isize);
     }
     return ::core::ptr::null_mut::<Context>();
 }
@@ -888,7 +881,8 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
                 ctx_stack.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Context>().wrapping_mul(ctx_stack.capacity),
             ) as *mut Context;
-        } else {};
+        } else {
+        };
         let c2rust_fresh0 = ctx_stack.size;
         ctx_stack.size = ctx_stack.size.wrapping_add(1);
         *ctx_stack.items.offset(c2rust_fresh0 as isize) = Context {
@@ -914,12 +908,12 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
                 items: ::core::ptr::null_mut::<Object>(),
             },
         };
-        ctx = ctx_stack
-            .items
-            .offset(
-                ctx_stack.size.wrapping_sub(0 as size_t).wrapping_sub(1 as size_t)
-                    as isize,
-            );
+        ctx = ctx_stack.items.offset(
+            ctx_stack
+                .size
+                .wrapping_sub(0 as size_t)
+                .wrapping_sub(1 as size_t) as isize,
+        );
     }
     if flags & kCtxRegs as ::core::ffi::c_int != 0 {
         (*ctx).regs = shada_encode_regs();
@@ -940,10 +934,7 @@ pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_i
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ctx_restore(
-    mut ctx: *mut Context,
-    flags: ::core::ffi::c_int,
-) -> bool {
+pub unsafe extern "C" fn ctx_restore(mut ctx: *mut Context, flags: ::core::ffi::c_int) -> bool {
     let mut free_ctx: bool = false_0 != 0;
     if ctx.is_null() {
         if ctx_stack.size == 0 as size_t {
@@ -953,10 +944,7 @@ pub unsafe extern "C" fn ctx_restore(
         ctx = ctx_stack.items.offset(ctx_stack.size as isize);
         free_ctx = true_0 != 0;
     }
-    let mut op_shada: OptVal = get_option_value(
-        kOptShada,
-        OPT_GLOBAL as ::core::ffi::c_int,
-    );
+    let mut op_shada: OptVal = get_option_value(kOptShada, OPT_GLOBAL as ::core::ffi::c_int);
     set_option_value(
         kOptShada,
         OptVal {
@@ -1041,15 +1029,14 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                 b"<lambda>\0".as_ptr() as *const ::core::ffi::c_char,
                 8 as size_t,
             ) == 0 as ::core::ffi::c_int;
-            let mut isscript: bool = *name.offset(0 as ::core::ffi::c_int as isize)
-                as uint8_t as ::core::ffi::c_int == 0x80 as ::core::ffi::c_int;
+            let mut isscript: bool = *name.offset(0 as ::core::ffi::c_int as isize) as uint8_t
+                as ::core::ffi::c_int
+                == 0x80 as ::core::ffi::c_int;
             if !islambda && (!scriptonly || isscript as ::core::ffi::c_int != 0) {
-                let mut cmd_len: size_t = ::core::mem::size_of::<
-                    [::core::ffi::c_char; 7],
-                >()
-                    .wrapping_add(strlen(name));
-                let mut cmd: *mut ::core::ffi::c_char = xmalloc(cmd_len)
-                    as *mut ::core::ffi::c_char;
+                let mut cmd_len: size_t =
+                    ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_add(strlen(name));
+                let mut cmd: *mut ::core::ffi::c_char =
+                    xmalloc(cmd_len) as *mut ::core::ffi::c_char;
                 snprintf(
                     cmd,
                     cmd_len,
@@ -1067,9 +1054,7 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                     &raw mut err,
                 );
                 xfree(cmd as *mut ::core::ffi::c_void);
-                if !(err.type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int)
-                {
+                if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
                     if (*ctx).funcs.size == (*ctx).funcs.capacity {
                         (*ctx).funcs.capacity = (if (*ctx).funcs.capacity != 0 {
                             (*ctx).funcs.capacity << 1 as ::core::ffi::c_int
@@ -1078,17 +1063,15 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                         });
                         (*ctx).funcs.items = xrealloc(
                             (*ctx).funcs.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<Object>()
-                                .wrapping_mul((*ctx).funcs.capacity),
+                            ::core::mem::size_of::<Object>().wrapping_mul((*ctx).funcs.capacity),
                         ) as *mut Object;
-                    } else {};
+                    } else {
+                    };
                     let c2rust_fresh1 = (*ctx).funcs.size;
                     (*ctx).funcs.size = (*ctx).funcs.size.wrapping_add(1);
                     *(*ctx).funcs.items.offset(c2rust_fresh1 as isize) = object {
                         type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_0 {
-                            string: func_body,
-                        },
+                        data: C2Rust_Unnamed_0 { string: func_body },
                     };
                 }
                 api_clear_error(&raw mut err);
@@ -1127,22 +1110,18 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
     '_c2rust_label: {
         if list_tv.v_type as ::core::ffi::c_uint
             == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"list_tv.v_type == VAR_LIST\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/context.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 257 as ::core::ffi::c_uint,
-                b"String array_to_string(Array, Error *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"String array_to_string(Array, Error *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    if !encode_vim_list_to_buf(
-        list_tv.vval.v_list,
-        &raw mut sbuf.size,
-        &raw mut sbuf.data,
-    ) {
+    if !encode_vim_list_to_buf(list_tv.vval.v_list, &raw mut sbuf.size, &raw mut sbuf.data) {
         api_set_error(
             err,
             kErrorTypeException,
@@ -1155,19 +1134,16 @@ unsafe extern "C" fn array_to_string(mut array: Array, mut err: *mut Error) -> S
     return sbuf;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ctx_to_dict(
-    mut ctx: *mut Context,
-    mut arena: *mut Arena,
-) -> Dict {
+pub unsafe extern "C" fn ctx_to_dict(mut ctx: *mut Context, mut arena: *mut Arena) -> Dict {
     '_c2rust_label: {
-        if !ctx.is_null() {} else {
+        if !ctx.is_null() {
+        } else {
             __assert_fail(
                 b"ctx != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/context.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 275 as ::core::ffi::c_uint,
-                b"Dict ctx_to_dict(Context *, Arena *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Dict ctx_to_dict(Context *, Arena *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -1236,7 +1212,8 @@ pub unsafe extern "C" fn ctx_from_dict(
     mut err: *mut Error,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if !ctx.is_null() {} else {
+        if !ctx.is_null() {
+        } else {
             __assert_fail(
                 b"ctx != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/context.c\0".as_ptr()

@@ -145,9 +145,7 @@ pub struct mpack_rpc_session_t {
     pub capacity: mpack_uint32_t,
     pub slots: [mpack_rpc_slot_s; 32],
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MPACK_RPC_MAX_REQUESTS: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn mpack_rpc_session_init(
@@ -167,8 +165,7 @@ pub unsafe extern "C" fn mpack_rpc_session_init(
     memset(
         &raw mut (*session).slots as *mut mpack_rpc_slot_s as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<mpack_rpc_slot_s>()
-            .wrapping_mul((*session).capacity as size_t),
+        ::core::mem::size_of::<mpack_rpc_slot_s>().wrapping_mul((*session).capacity as size_t),
     );
 }
 #[no_mangle]
@@ -219,7 +216,8 @@ pub unsafe extern "C" fn mpack_rpc_receive_tok(
         type_0 = MPACK_RPC_NOTIFICATION as ::core::ffi::c_int;
     } else {
         '_c2rust_label: {
-            if (*session).receive.index == 2 as ::core::ffi::c_int {} else {
+            if (*session).receive.index == 2 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"session->receive.index == 2\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -239,11 +237,12 @@ pub unsafe extern "C" fn mpack_rpc_receive_tok(
         }
         (*msg).id = tok.data.value.lo;
         (*msg).data.p = NULL;
-        type_0 = (*session).receive.toks[1 as ::core::ffi::c_int as usize].data.value.lo
-            as ::core::ffi::c_int + MPACK_RPC_REQUEST as ::core::ffi::c_int;
-        if type_0 == MPACK_RPC_RESPONSE as ::core::ffi::c_int
-            && mpack_rpc_pop(session, msg) == 0
-        {
+        type_0 = (*session).receive.toks[1 as ::core::ffi::c_int as usize]
+            .data
+            .value
+            .lo as ::core::ffi::c_int
+            + MPACK_RPC_REQUEST as ::core::ffi::c_int;
+        if type_0 == MPACK_RPC_RESPONSE as ::core::ffi::c_int && mpack_rpc_pop(session, msg) == 0 {
             return MPACK_RPC_ERESPID as ::core::ffi::c_int;
         }
     }
@@ -269,10 +268,14 @@ pub unsafe extern "C" fn mpack_rpc_request_tok(
             msg.data = data;
             (*session).send = mpack_rpc_request_hdr();
             (*session).send.toks[2 as ::core::ffi::c_int as usize].type_0 = MPACK_TOKEN_UINT;
-            (*session).send.toks[2 as ::core::ffi::c_int as usize].data.value.lo = msg
-                .id;
-            (*session).send.toks[2 as ::core::ffi::c_int as usize].data.value.hi = 0
-                as mpack_uint32_t;
+            (*session).send.toks[2 as ::core::ffi::c_int as usize]
+                .data
+                .value
+                .lo = msg.id;
+            (*session).send.toks[2 as ::core::ffi::c_int as usize]
+                .data
+                .value
+                .hi = 0 as mpack_uint32_t;
             *tok = (*session).send.toks[0 as ::core::ffi::c_int as usize];
             status = mpack_rpc_put(session, msg);
             if status == -1 as ::core::ffi::c_int {
@@ -280,7 +283,8 @@ pub unsafe extern "C" fn mpack_rpc_request_tok(
             }
             (*session).request_id = ((*session).request_id as ::core::ffi::c_uint)
                 .wrapping_add(1 as ::core::ffi::c_uint)
-                .wrapping_rem(0xffffffff as ::core::ffi::c_uint) as mpack_uint32_t;
+                .wrapping_rem(0xffffffff as ::core::ffi::c_uint)
+                as mpack_uint32_t;
             if status != 0 {
                 break;
             }
@@ -294,7 +298,8 @@ pub unsafe extern "C" fn mpack_rpc_request_tok(
         return MPACK_EOF as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if (*session).send.index == 2 as ::core::ffi::c_int {} else {
+        if (*session).send.index == 2 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"session->send.index == 2\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
@@ -318,9 +323,14 @@ pub unsafe extern "C" fn mpack_rpc_reply_tok(
     if (*session).send.index == 0 as ::core::ffi::c_int {
         (*session).send = mpack_rpc_reply_hdr();
         (*session).send.toks[2 as ::core::ffi::c_int as usize].type_0 = MPACK_TOKEN_UINT;
-        (*session).send.toks[2 as ::core::ffi::c_int as usize].data.value.lo = id;
-        (*session).send.toks[2 as ::core::ffi::c_int as usize].data.value.hi = 0
-            as mpack_uint32_t;
+        (*session).send.toks[2 as ::core::ffi::c_int as usize]
+            .data
+            .value
+            .lo = id;
+        (*session).send.toks[2 as ::core::ffi::c_int as usize]
+            .data
+            .value
+            .hi = 0 as mpack_uint32_t;
         *tok = (*session).send.toks[0 as ::core::ffi::c_int as usize];
         (*session).send.index += 1;
         return MPACK_EOF as ::core::ffi::c_int;
@@ -331,7 +341,8 @@ pub unsafe extern "C" fn mpack_rpc_reply_tok(
         return MPACK_EOF as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if (*session).send.index == 2 as ::core::ffi::c_int {} else {
+        if (*session).send.index == 2 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"session->send.index == 2\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
@@ -358,14 +369,15 @@ pub unsafe extern "C" fn mpack_rpc_notify_tok(
         return MPACK_EOF as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if (*session).send.index == 1 as ::core::ffi::c_int {} else {
+        if (*session).send.index == 1 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"session->send.index == 1\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 161 as ::core::ffi::c_uint,
-                b"int mpack_rpc_notify_tok(mpack_rpc_session_t *, mpack_token_t *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"int mpack_rpc_notify_tok(mpack_rpc_session_t *, mpack_token_t *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -426,13 +438,12 @@ pub unsafe extern "C" fn mpack_rpc_request(
         if status == MPACK_NOMEM as ::core::ffi::c_int {
             break;
         }
-        write_status = mpack_write(
-            &raw mut (*session).writer,
-            buf,
-            buflen,
-            &raw mut tok,
-        );
-        status = if write_status != 0 { write_status } else { status };
+        write_status = mpack_write(&raw mut (*session).writer, buf, buflen, &raw mut tok);
+        status = if write_status != 0 {
+            write_status
+        } else {
+            status
+        };
     }
     return status;
 }
@@ -456,13 +467,12 @@ pub unsafe extern "C" fn mpack_rpc_reply(
         if (*session).writer.plen == 0 {
             status = mpack_rpc_reply_tok(session, &raw mut tok, id);
         }
-        write_status = mpack_write(
-            &raw mut (*session).writer,
-            buf,
-            buflen,
-            &raw mut tok,
-        );
-        status = if write_status != 0 { write_status } else { status };
+        write_status = mpack_write(&raw mut (*session).writer, buf, buflen, &raw mut tok);
+        status = if write_status != 0 {
+            write_status
+        } else {
+            status
+        };
     }
     return status;
 }
@@ -485,13 +495,12 @@ pub unsafe extern "C" fn mpack_rpc_notify(
         if (*session).writer.plen == 0 {
             status = mpack_rpc_notify_tok(session, &raw mut tok);
         }
-        write_status = mpack_write(
-            &raw mut (*session).writer,
-            buf,
-            buflen,
-            &raw mut tok,
-        );
-        status = if write_status != 0 { write_status } else { status };
+        write_status = mpack_write(&raw mut (*session).writer, buf, buflen, &raw mut tok);
+        status = if write_status != 0 {
+            write_status
+        } else {
+            status
+        };
     }
     return status;
 }
@@ -503,10 +512,10 @@ pub unsafe extern "C" fn mpack_rpc_session_copy(
     let mut i: mpack_uint32_t = 0;
     let mut dst_capacity: mpack_uint32_t = (*dst).capacity;
     '_c2rust_label: {
-        if (*src).capacity <= dst_capacity {} else {
+        if (*src).capacity <= dst_capacity {
+        } else {
             __assert_fail(
-                b"src->capacity <= dst_capacity\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"src->capacity <= dst_capacity\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/mpack/rpc.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 243 as ::core::ffi::c_uint,
@@ -525,8 +534,7 @@ pub unsafe extern "C" fn mpack_rpc_session_copy(
     memset(
         &raw mut (*dst).slots as *mut mpack_rpc_slot_s as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
-        ::core::mem::size_of::<mpack_rpc_slot_s>()
-            .wrapping_mul((*dst).capacity as size_t),
+        ::core::mem::size_of::<mpack_rpc_slot_s>().wrapping_mul((*dst).capacity as size_t),
     );
     i = 0 as mpack_uint32_t;
     while i < (*src).capacity {
@@ -580,8 +588,7 @@ unsafe extern "C" fn mpack_rpc_put(
         if (*session).slots[hash as usize].used == 0
             || (*session).slots[hash as usize].msg.id == msg.id
         {
-            slot = (&raw mut (*session).slots as *mut mpack_rpc_slot_s)
-                .offset(hash as isize);
+            slot = (&raw mut (*session).slots as *mut mpack_rpc_slot_s).offset(hash as isize);
             break;
         } else {
             hash = if hash > 0 as mpack_uint32_t {
@@ -614,8 +621,7 @@ unsafe extern "C" fn mpack_rpc_pop(
         if (*session).slots[hash as usize].used != 0
             && (*session).slots[hash as usize].msg.id == (*msg).id
         {
-            slot = (&raw mut (*session).slots as *mut mpack_rpc_slot_s)
-                .offset(hash as isize);
+            slot = (&raw mut (*session).slots as *mut mpack_rpc_slot_s).offset(hash as isize);
             break;
         } else {
             hash = if hash > 0 as mpack_uint32_t {

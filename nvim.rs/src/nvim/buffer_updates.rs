@@ -46,11 +46,7 @@ extern "C" {
         codepoints: *mut size_t,
         codeunits: *mut size_t,
     ) -> size_t;
-    fn rpc_send_event(
-        id: uint64_t,
-        name: *const ::core::ffi::c_char,
-        args: Array,
-    ) -> bool;
+    fn rpc_send_event(id: uint64_t, name: *const ::core::ffi::c_char, args: Array) -> bool;
 }
 pub type __time_t = ::core::ffi::c_long;
 pub type int16_t = i16;
@@ -1688,9 +1684,7 @@ pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -1726,8 +1720,7 @@ pub unsafe extern "C" fn buf_updates_register(
     }
     if channel_id == LUA_INTERNAL_CALL {
         if (*buf).update_callbacks.size == (*buf).update_callbacks.capacity {
-            (*buf).update_callbacks.capacity = (if (*buf).update_callbacks.capacity != 0
-            {
+            (*buf).update_callbacks.capacity = (if (*buf).update_callbacks.capacity != 0 {
                 (*buf).update_callbacks.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
@@ -1737,7 +1730,8 @@ pub unsafe extern "C" fn buf_updates_register(
                 ::core::mem::size_of::<BufUpdateCallbacks>()
                     .wrapping_mul((*buf).update_callbacks.capacity),
             ) as *mut BufUpdateCallbacks;
-        } else {};
+        } else {
+        };
         let c2rust_fresh0 = (*buf).update_callbacks.size;
         (*buf).update_callbacks.size = (*buf).update_callbacks.size.wrapping_add(1);
         *(*buf).update_callbacks.items.offset(c2rust_fresh0 as isize) = cb;
@@ -1762,10 +1756,10 @@ pub unsafe extern "C" fn buf_updates_register(
         });
         (*buf).update_channels.items = xrealloc(
             (*buf).update_channels.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<uint64_t>()
-                .wrapping_mul((*buf).update_channels.capacity),
+            ::core::mem::size_of::<uint64_t>().wrapping_mul((*buf).update_channels.capacity),
         ) as *mut uint64_t;
-    } else {};
+    } else {
+    };
     let c2rust_fresh1 = (*buf).update_channels.size;
     (*buf).update_channels.size = (*buf).update_channels.size.wrapping_add(1);
     *(*buf).update_channels.items.offset(c2rust_fresh1 as isize) = channel_id;
@@ -1853,10 +1847,7 @@ pub unsafe extern "C" fn buf_updates_active(mut buf: *mut buf_T) -> bool {
     return (*buf).update_channels.size != 0 || (*buf).update_callbacks.size != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn buf_updates_send_end(
-    mut buf: *mut buf_T,
-    mut channelid: uint64_t,
-) {
+pub unsafe extern "C" fn buf_updates_send_end(mut buf: *mut buf_T, mut channelid: uint64_t) {
     let mut args: Array = ARRAY_DICT_INIT;
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
@@ -1879,10 +1870,7 @@ pub unsafe extern "C" fn buf_updates_send_end(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn buf_updates_unregister(
-    mut buf: *mut buf_T,
-    mut channelid: uint64_t,
-) {
+pub unsafe extern "C" fn buf_updates_unregister(mut buf: *mut buf_T, mut channelid: uint64_t) {
     let mut size: size_t = (*buf).update_channels.size;
     if size == 0 {
         return;
@@ -1895,10 +1883,8 @@ pub unsafe extern "C" fn buf_updates_unregister(
             found = found.wrapping_add(1);
         } else {
             if i != j {
-                *(*buf).update_channels.items.offset(j as isize) = *(*buf)
-                    .update_channels
-                    .items
-                    .offset(i as isize);
+                *(*buf).update_channels.items.offset(j as isize) =
+                    *(*buf).update_channels.items.offset(i as isize);
             }
             j = j.wrapping_add(1);
         }
@@ -1954,10 +1940,7 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
     let mut j: size_t = 0 as size_t;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf)
-            .update_callbacks
-            .items
-            .offset(i_0 as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
         let mut thecb: LuaRef = LUA_NOREF;
         let mut keep: bool = false_0 != 0;
         if can_reload as ::core::ffi::c_int != 0 && cb.on_reload != LUA_NOREF {
@@ -2002,10 +1985,11 @@ pub unsafe extern "C" fn buf_updates_unload(mut buf: *mut buf_T, mut can_reload:
         if keep {
             let c2rust_fresh12 = j;
             j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.offset(c2rust_fresh12 as isize) = *(*buf)
+            *(*buf)
                 .update_callbacks
                 .items
-                .offset(i_0 as isize);
+                .offset(c2rust_fresh12 as isize) =
+                *(*buf).update_callbacks.items.offset(i_0 as isize);
         } else {
             buffer_update_callbacks_free(cb);
         }
@@ -2031,11 +2015,8 @@ pub unsafe extern "C" fn buf_updates_send_changes(
 ) {
     let mut deleted_codepoints: size_t = 0;
     let mut deleted_codeunits: size_t = 0;
-    let mut deleted_bytes: size_t = ml_flush_deleted_bytes(
-        buf,
-        &raw mut deleted_codepoints,
-        &raw mut deleted_codeunits,
-    );
+    let mut deleted_bytes: size_t =
+        ml_flush_deleted_bytes(buf, &raw mut deleted_codepoints, &raw mut deleted_codeunits);
     if !buf_updates_active(buf) {
         return;
     }
@@ -2076,9 +2057,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         };
         let c2rust_fresh14 = args.size;
         args.size = args.size.wrapping_add(1);
-        *args.items.offset(c2rust_fresh14 as isize) = if send_tick as ::core::ffi::c_int
-            != 0
-        {
+        *args.items.offset(c2rust_fresh14 as isize) = if send_tick as ::core::ffi::c_int != 0 {
             object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
@@ -2145,14 +2124,9 @@ pub unsafe extern "C" fn buf_updates_send_changes(
     let mut j: size_t = 0 as size_t;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf)
-            .update_callbacks
-            .items
-            .offset(i_0 as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
         let mut keep: bool = true_0 != 0;
-        if cb.on_lines != LUA_NOREF
-            && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview)
-        {
+        if cb.on_lines != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview) {
             let mut args_0: Array = ARRAY_DICT_INIT;
             let mut args__items_0: [Object; 8] = [Object {
                 type_0: kObjectTypeNil,
@@ -2170,8 +2144,7 @@ pub unsafe extern "C" fn buf_updates_send_changes(
             };
             let c2rust_fresh20 = args_0.size;
             args_0.size = args_0.size.wrapping_add(1);
-            *args_0.items.offset(c2rust_fresh20 as isize) = if send_tick
-                as ::core::ffi::c_int != 0
+            *args_0.items.offset(c2rust_fresh20 as isize) = if send_tick as ::core::ffi::c_int != 0
             {
                 object {
                     type_0: kObjectTypeInteger,
@@ -2262,10 +2235,11 @@ pub unsafe extern "C" fn buf_updates_send_changes(
         if keep {
             let c2rust_fresh27 = j;
             j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.offset(c2rust_fresh27 as isize) = *(*buf)
+            *(*buf)
                 .update_callbacks
                 .items
-                .offset(i_0 as isize);
+                .offset(c2rust_fresh27 as isize) =
+                *(*buf).update_callbacks.items.offset(i_0 as isize);
         }
         i_0 = i_0.wrapping_add(1);
     }
@@ -2284,21 +2258,15 @@ pub unsafe extern "C" fn buf_updates_send_splice(
     mut new_col: colnr_T,
     mut new_byte: bcount_t,
 ) {
-    if !buf_updates_active(buf) || old_byte == 0 as bcount_t && new_byte == 0 as bcount_t
-    {
+    if !buf_updates_active(buf) || old_byte == 0 as bcount_t && new_byte == 0 as bcount_t {
         return;
     }
     let mut j: size_t = 0 as size_t;
     let mut i: size_t = 0 as size_t;
     while i < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf)
-            .update_callbacks
-            .items
-            .offset(i as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i as isize);
         let mut keep: bool = true_0 != 0;
-        if cb.on_bytes != LUA_NOREF
-            && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview)
-        {
+        if cb.on_bytes != LUA_NOREF && (cb.preview as ::core::ffi::c_int != 0 || !cmdpreview) {
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 11] = [Object {
                 type_0: kObjectTypeNil,
@@ -2421,10 +2389,11 @@ pub unsafe extern "C" fn buf_updates_send_splice(
         if keep {
             let c2rust_fresh39 = j;
             j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.offset(c2rust_fresh39 as isize) = *(*buf)
+            *(*buf)
                 .update_callbacks
                 .items
-                .offset(i as isize);
+                .offset(c2rust_fresh39 as isize) =
+                *(*buf).update_callbacks.items.offset(i as isize);
         }
         i = i.wrapping_add(1);
     }
@@ -2441,10 +2410,7 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
     let mut j: size_t = 0 as size_t;
     let mut i_0: size_t = 0 as size_t;
     while i_0 < (*buf).update_callbacks.size {
-        let mut cb: BufUpdateCallbacks = *(*buf)
-            .update_callbacks
-            .items
-            .offset(i_0 as isize);
+        let mut cb: BufUpdateCallbacks = *(*buf).update_callbacks.items.offset(i_0 as isize);
         let mut keep: bool = true_0 != 0;
         if cb.on_changedtick != LUA_NOREF {
             let mut args: Array = ARRAY_DICT_INIT;
@@ -2497,10 +2463,11 @@ pub unsafe extern "C" fn buf_updates_changedtick(mut buf: *mut buf_T) {
         if keep {
             let c2rust_fresh42 = j;
             j = j.wrapping_add(1);
-            *(*buf).update_callbacks.items.offset(c2rust_fresh42 as isize) = *(*buf)
+            *(*buf)
                 .update_callbacks
                 .items
-                .offset(i_0 as isize);
+                .offset(c2rust_fresh42 as isize) =
+                *(*buf).update_callbacks.items.offset(i_0 as isize);
         }
         i_0 = i_0.wrapping_add(1);
     }

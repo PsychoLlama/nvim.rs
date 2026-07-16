@@ -31,27 +31,12 @@ extern "C" {
         argp: ::core::ffi::VaList,
     ) -> *const ::core::ffi::c_char;
     fn lua_pushcclosure(L: *mut lua_State, fn_0: lua_CFunction, n: ::core::ffi::c_int);
-    fn lua_getfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
+    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
     fn lua_newuserdata(L: *mut lua_State, sz: size_t) -> *mut ::core::ffi::c_void;
-    fn lua_setfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
+    fn lua_setfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
     fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_setmetatable(
-        L: *mut lua_State,
-        objindex: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn lua_setmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn lua_pcall(
         L: *mut lua_State,
         nargs: ::core::ffi::c_int,
@@ -61,11 +46,7 @@ extern "C" {
     fn lua_error(L: *mut lua_State) -> ::core::ffi::c_int;
     fn lua_next(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn lua_concat(L: *mut lua_State, n: ::core::ffi::c_int);
-    fn luaL_register(
-        L: *mut lua_State,
-        libname: *const ::core::ffi::c_char,
-        l: *const luaL_Reg,
-    );
+    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
     fn luaL_argerror(
         L: *mut lua_State,
         numarg: ::core::ffi::c_int,
@@ -87,11 +68,7 @@ extern "C" {
         tname: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_void;
     fn luaL_where(L: *mut lua_State, lvl: ::core::ffi::c_int);
-    fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn memset(
         __s: *mut ::core::ffi::c_void,
         __c: ::core::ffi::c_int,
@@ -134,10 +111,7 @@ extern "C" {
         newtv: *mut typval_T,
         oldtv: *mut typval_T,
     );
-    fn tv_dict_item_alloc_len(
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-    ) -> *mut dictitem_T;
+    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
     fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T);
     fn tv_dict_find(
         d: *const dict_T,
@@ -157,11 +131,7 @@ extern "C" {
         watched: bool,
         type_error: *mut bool,
     ) -> bool;
-    fn win_execute_before(
-        args: *mut win_execute_T,
-        wp: *mut win_T,
-        tp: *mut tabpage_T,
-    ) -> bool;
+    fn win_execute_before(args: *mut win_execute_T, wp: *mut win_T, tp: *mut tabpage_T) -> bool;
     fn win_execute_after(args: *mut win_execute_T);
     fn apply_cmdmod(cmod: *mut cmdmod_T);
     fn undo_cmdmod(cmod: *mut cmdmod_T);
@@ -225,16 +195,8 @@ extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
-    fn script_autoload(
-        name: *const ::core::ffi::c_char,
-        name_len: size_t,
-        reload: bool,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
+    fn script_autoload(name: *const ::core::ffi::c_char, name_len: size_t, reload: bool) -> bool;
     fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
 }
 pub type __builtin_va_list = [__va_list_tag; 1];
@@ -252,9 +214,7 @@ pub type __gnuc_va_list = __builtin_va_list;
 pub type __time_t = ::core::ffi::c_long;
 pub type va_list = __gnuc_va_list;
 pub type ssize_t = isize;
-pub type lua_CFunction = Option<
-    unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
->;
+pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
 pub type lua_Number = ::core::ffi::c_double;
 pub type lua_Integer = ptrdiff_t;
 #[derive(Copy, Clone)]
@@ -2020,12 +1980,8 @@ pub struct win_execute_T {
     pub save_sfname: *mut ::core::ffi::c_char,
     pub switchwin: switchwin_T,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_REGISTRYINDEX: ::core::ffi::c_int = -10000 as ::core::ffi::c_int;
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const LUA_TNIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2089,11 +2045,7 @@ unsafe extern "C" fn regex_match_str(mut lstate: *mut lua_State) -> ::core::ffi:
         2 as ::core::ffi::c_int,
         ::core::ptr::null_mut::<size_t>(),
     );
-    let mut nret: ::core::ffi::c_int = regex_match(
-        lstate,
-        prog,
-        str as *mut ::core::ffi::c_char,
-    );
+    let mut nret: ::core::ffi::c_int = regex_match(lstate, prog, str as *mut ::core::ffi::c_char);
     if (*prog).is_null() {
         return luaL_error(
             lstate,
@@ -2111,10 +2063,8 @@ unsafe extern "C" fn regex_match_line(mut lstate: *mut lua_State) -> ::core::ffi
             b"not enough args\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
-    let mut bufnr: handle_T = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int)
-        as handle_T;
-    let mut rownr: linenr_T = luaL_checkinteger(lstate, 3 as ::core::ffi::c_int)
-        as linenr_T;
+    let mut bufnr: handle_T = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int) as handle_T;
+    let mut rownr: linenr_T = luaL_checkinteger(lstate, 3 as ::core::ffi::c_int) as linenr_T;
     let mut start: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut end: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     if narg >= 4 as ::core::ffi::c_int {
@@ -2165,11 +2115,7 @@ unsafe extern "C" fn regex_match_line(mut lstate: *mut lua_State) -> ::core::ffi
         save = *line.offset(end as isize);
         *line.offset(end as isize) = NUL as ::core::ffi::c_char;
     }
-    let mut nret: ::core::ffi::c_int = regex_match(
-        lstate,
-        prog,
-        line.offset(start as isize),
-    );
+    let mut nret: ::core::ffi::c_int = regex_match(lstate, prog, line.offset(start as isize));
     if end >= 0 as ::core::ffi::c_int {
         *line.offset(end as isize) = save;
     }
@@ -2200,28 +2146,19 @@ unsafe extern "C" fn regex_tostring(mut lstate: *mut lua_State) -> ::core::ffi::
 static mut regex_meta: [luaL_Reg; 5] = [
     luaL_Reg {
         name: b"__gc\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            regex_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        func: Some(regex_gc as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"__tostring\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            regex_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        func: Some(regex_tostring as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"match_str\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            regex_match_str as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        func: Some(regex_match_str as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: b"match_line\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            regex_match_line
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        func: Some(regex_match_line as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2229,15 +2166,10 @@ static mut regex_meta: [luaL_Reg; 5] = [
     },
 ];
 #[no_mangle]
-pub unsafe extern "C" fn nlua_str_utfindex(
-    lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn nlua_str_utfindex(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
-    let mut s1: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut s1_len,
-    );
+    let mut s1: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 1 as ::core::ffi::c_int, &raw mut s1_len);
     let mut idx: intptr_t = 0;
     if lua_type(lstate, 2 as ::core::ffi::c_int) <= 0 as ::core::ffi::c_int {
         idx = s1_len as intptr_t;
@@ -2258,11 +2190,8 @@ pub unsafe extern "C" fn nlua_str_utfindex(
 }
 unsafe extern "C" fn nlua_str_utf_pos(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
-    let mut s1: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut s1_len,
-    );
+    let mut s1: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 1 as ::core::ffi::c_int, &raw mut s1_len);
     lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     let mut idx: size_t = 1 as size_t;
     let mut clen: size_t = 0;
@@ -2281,11 +2210,8 @@ unsafe extern "C" fn nlua_str_utf_pos(lstate: *mut lua_State) -> ::core::ffi::c_
 }
 unsafe extern "C" fn nlua_str_utf_start(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
-    let mut s1: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut s1_len,
-    );
+    let mut s1: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 1 as ::core::ffi::c_int, &raw mut s1_len);
     let mut offset: ptrdiff_t = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int);
     if offset <= 0 as ptrdiff_t || offset > s1_len as ptrdiff_t {
         return luaL_error(
@@ -2295,21 +2221,18 @@ unsafe extern "C" fn nlua_str_utf_start(lstate: *mut lua_State) -> ::core::ffi::
     }
     let off: size_t = (offset - 1 as ptrdiff_t) as size_t;
     let mut head_off: ::core::ffi::c_int = -(utf_cp_bounds_len(
-            s1,
-            s1.offset(off as isize),
-            s1_len.wrapping_sub(off) as ::core::ffi::c_int,
-        )
-        .begin_off as ::core::ffi::c_int);
+        s1,
+        s1.offset(off as isize),
+        s1_len.wrapping_sub(off) as ::core::ffi::c_int,
+    )
+    .begin_off as ::core::ffi::c_int);
     lua_pushinteger(lstate, head_off as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn nlua_str_utf_end(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
-    let mut s1: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut s1_len,
-    );
+    let mut s1: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 1 as ::core::ffi::c_int, &raw mut s1_len);
     let mut offset: ptrdiff_t = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int);
     if offset <= 0 as ptrdiff_t || offset > s1_len as ptrdiff_t {
         return luaL_error(
@@ -2319,26 +2242,21 @@ unsafe extern "C" fn nlua_str_utf_end(lstate: *mut lua_State) -> ::core::ffi::c_
     }
     let off: size_t = (offset - 1 as ptrdiff_t) as size_t;
     let mut tail_off: ::core::ffi::c_int = utf_cp_bounds_len(
-            s1,
-            s1.offset(off as isize),
-            s1_len.wrapping_sub(off) as ::core::ffi::c_int,
-        )
-        .end_off as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+        s1,
+        s1.offset(off as isize),
+        s1_len.wrapping_sub(off) as ::core::ffi::c_int,
+    )
+    .end_off as ::core::ffi::c_int
+        - 1 as ::core::ffi::c_int;
     lua_pushinteger(lstate, tail_off as lua_Integer);
     return 1 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nlua_str_byteindex(
-    lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn nlua_str_byteindex(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
-    let mut s1: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut s1_len,
-    );
-    let mut idx: intptr_t = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int)
-        as intptr_t;
+    let mut s1: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 1 as ::core::ffi::c_int, &raw mut s1_len);
+    let mut idx: intptr_t = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int) as intptr_t;
     if idx < 0 as intptr_t {
         lua_pushnil(lstate);
         return 1 as ::core::ffi::c_int;
@@ -2347,12 +2265,7 @@ pub unsafe extern "C" fn nlua_str_byteindex(
     if lua_gettop(lstate) >= 3 as ::core::ffi::c_int {
         use_utf16 = lua_toboolean(lstate, 3 as ::core::ffi::c_int) != 0;
     }
-    let mut byteidx: ssize_t = mb_utf_index_to_bytes(
-        s1,
-        s1_len,
-        idx as size_t,
-        use_utf16,
-    );
+    let mut byteidx: ssize_t = mb_utf_index_to_bytes(s1, s1_len, idx as size_t, use_utf16);
     if byteidx == -1 as ssize_t {
         lua_pushnil(lstate);
         return 1 as ::core::ffi::c_int;
@@ -2402,10 +2315,8 @@ pub unsafe extern "C" fn nlua_regex(mut lstate: *mut lua_State) -> ::core::ffi::
         );
         return lua_error(lstate);
     }
-    let mut p: *mut *mut regprog_T = lua_newuserdata(
-        lstate,
-        ::core::mem::size_of::<*mut regprog_T>(),
-    ) as *mut *mut regprog_T;
+    let mut p: *mut *mut regprog_T =
+        lua_newuserdata(lstate, ::core::mem::size_of::<*mut regprog_T>()) as *mut *mut regprog_T;
     *p = prog;
     lua_getfield(
         lstate,
@@ -2421,8 +2332,7 @@ unsafe extern "C" fn nlua_get_var_scope(mut lstate: *mut lua_State) -> *mut dict
         1 as ::core::ffi::c_int,
         ::core::ptr::null_mut::<size_t>(),
     );
-    let mut handle: handle_T = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int)
-        as handle_T;
+    let mut handle: handle_T = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int) as handle_T;
     let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
@@ -2443,15 +2353,15 @@ unsafe extern "C" fn nlua_get_var_scope(mut lstate: *mut lua_State) -> *mut dict
             dict = (*win).w_vars;
         }
     } else if strequal(scope, b"t\0".as_ptr() as *const ::core::ffi::c_char) {
-        let mut tabpage: *mut tabpage_T = find_tab_by_handle(
-            handle as Tabpage,
-            &raw mut err,
-        );
+        let mut tabpage: *mut tabpage_T = find_tab_by_handle(handle as Tabpage, &raw mut err);
         if !tabpage.is_null() {
             dict = (*tabpage).tp_vars;
         }
     } else {
-        luaL_error(lstate, b"invalid scope\0".as_ptr() as *const ::core::ffi::c_char);
+        luaL_error(
+            lstate,
+            b"invalid scope\0".as_ptr() as *const ::core::ffi::c_char,
+        );
         return ::core::ptr::null_mut::<dict_T>();
     }
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
@@ -2568,16 +2478,11 @@ pub unsafe extern "C" fn nlua_setvar(mut lstate: *mut lua_State) -> ::core::ffi:
 pub unsafe extern "C" fn nlua_getvar(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut dict: *mut dict_T = nlua_get_var_scope(lstate);
     let mut len: size_t = 0;
-    let mut name: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        3 as ::core::ffi::c_int,
-        &raw mut len,
-    );
+    let mut name: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 3 as ::core::ffi::c_int, &raw mut len);
     let mut di: *mut dictitem_T = tv_dict_find(dict, name, len as ptrdiff_t);
     if di.is_null() && dict == get_globvar_dict() {
-        if !script_autoload(name, len, false_0 != 0)
-            || aborting() as ::core::ffi::c_int != 0
-        {
+        if !script_autoload(name, len, false_0 != 0) || aborting() as ::core::ffi::c_int != 0 {
             return 0 as ::core::ffi::c_int;
         }
         di = tv_dict_find(dict, name, len as ptrdiff_t);
@@ -2591,88 +2496,71 @@ pub unsafe extern "C" fn nlua_getvar(mut lstate: *mut lua_State) -> ::core::ffi:
 unsafe extern "C" fn nlua_stricmp(lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut s1_len: size_t = 0;
     let mut s2_len: size_t = 0;
-    let mut s1: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut s1_len,
-    );
-    let mut s2: *const ::core::ffi::c_char = luaL_checklstring(
-        lstate,
-        2 as ::core::ffi::c_int,
-        &raw mut s2_len,
-    );
-    let mut nul1: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut nul2: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut s1: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 1 as ::core::ffi::c_int, &raw mut s1_len);
+    let mut s2: *const ::core::ffi::c_char =
+        luaL_checklstring(lstate, 2 as ::core::ffi::c_int, &raw mut s2_len);
+    let mut nul1: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut nul2: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut ret: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     '_c2rust_label: {
-        if *s1.offset(s1_len as isize) as ::core::ffi::c_int
-            == '\0' as ::core::ffi::c_int
-        {} else {
+        if *s1.offset(s1_len as isize) as ::core::ffi::c_int == '\0' as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"s1[s1_len] == NUL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 481 as ::core::ffi::c_uint,
-                b"int nlua_stricmp(lua_State *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int nlua_stricmp(lua_State *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     '_c2rust_label_0: {
-        if *s2.offset(s2_len as isize) as ::core::ffi::c_int
-            == '\0' as ::core::ffi::c_int
-        {} else {
+        if *s2.offset(s2_len as isize) as ::core::ffi::c_int == '\0' as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"s2[s2_len] == NUL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 482 as ::core::ffi::c_uint,
-                b"int nlua_stricmp(lua_State *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int nlua_stricmp(lua_State *const)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     loop {
-        nul1 = memchr(s1 as *const ::core::ffi::c_void, NUL, s1_len)
-            as *const ::core::ffi::c_char;
-        nul2 = memchr(s2 as *const ::core::ffi::c_void, NUL, s2_len)
-            as *const ::core::ffi::c_char;
-        ret = strcasecmp(s1 as *mut ::core::ffi::c_char, s2 as *mut ::core::ffi::c_char);
+        nul1 = memchr(s1 as *const ::core::ffi::c_void, NUL, s1_len) as *const ::core::ffi::c_char;
+        nul2 = memchr(s2 as *const ::core::ffi::c_void, NUL, s2_len) as *const ::core::ffi::c_char;
+        ret = strcasecmp(
+            s1 as *mut ::core::ffi::c_char,
+            s2 as *mut ::core::ffi::c_char,
+        );
         if ret != 0 as ::core::ffi::c_int {
             break;
         }
         if nul1.is_null() as ::core::ffi::c_int != nul2.is_null() as ::core::ffi::c_int {
-            ret = !nul1.is_null() as ::core::ffi::c_int
-                - !nul2.is_null() as ::core::ffi::c_int;
+            ret = !nul1.is_null() as ::core::ffi::c_int - !nul2.is_null() as ::core::ffi::c_int;
             break;
         } else {
             if nul1.is_null() {
                 break;
             }
             '_c2rust_label_1: {
-                if !nul2.is_null() {} else {
+                if !nul2.is_null() {
+                } else {
                     __assert_fail(
                         b"nul2 != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/stdlib.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         494 as ::core::ffi::c_uint,
                         b"int nlua_stricmp(lua_State *const)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
             };
-            s1_len = s1_len
-                .wrapping_sub(
-                    (nul1.offset_from(s1) as size_t).wrapping_add(1 as size_t),
-                );
-            s2_len = s2_len
-                .wrapping_sub(
-                    (nul2.offset_from(s2) as size_t).wrapping_add(1 as size_t),
-                );
+            s1_len =
+                s1_len.wrapping_sub((nul1.offset_from(s1) as size_t).wrapping_add(1 as size_t));
+            s2_len =
+                s2_len.wrapping_sub((nul2.offset_from(s2) as size_t).wrapping_add(1 as size_t));
             s1 = nul1.offset(1 as ::core::ffi::c_int as isize);
             s2 = nul2.offset(1 as ::core::ffi::c_int as isize);
         }
@@ -2705,29 +2593,20 @@ unsafe extern "C" fn nlua_iconv(mut lstate: *mut lua_State) -> ::core::ffi::c_in
         i += 1;
     }
     let mut str_len: size_t = 0 as size_t;
-    let mut str: *const ::core::ffi::c_char = lua_tolstring(
+    let mut str: *const ::core::ffi::c_char =
+        lua_tolstring(lstate, 1 as ::core::ffi::c_int, &raw mut str_len);
+    let mut from: *mut ::core::ffi::c_char = enc_canonize(enc_skip(lua_tolstring(
         lstate,
-        1 as ::core::ffi::c_int,
-        &raw mut str_len,
-    );
-    let mut from: *mut ::core::ffi::c_char = enc_canonize(
-        enc_skip(
-            lua_tolstring(
-                lstate,
-                2 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<size_t>(),
-            ) as *mut ::core::ffi::c_char,
-        ),
-    );
-    let mut to: *mut ::core::ffi::c_char = enc_canonize(
-        enc_skip(
-            lua_tolstring(
-                lstate,
-                3 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<size_t>(),
-            ) as *mut ::core::ffi::c_char,
-        ),
-    );
+        2 as ::core::ffi::c_int,
+        ::core::ptr::null_mut::<size_t>(),
+    )
+        as *mut ::core::ffi::c_char));
+    let mut to: *mut ::core::ffi::c_char = enc_canonize(enc_skip(lua_tolstring(
+        lstate,
+        3 as ::core::ffi::c_int,
+        ::core::ptr::null_mut::<size_t>(),
+    )
+        as *mut ::core::ffi::c_char));
     let mut vimconv: vimconv_T = vimconv_T {
         vc_type: 0,
         vc_factor: 0,
@@ -2757,28 +2636,24 @@ unsafe extern "C" fn nlua_iconv(mut lstate: *mut lua_State) -> ::core::ffi::c_in
     return 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn nlua_foldupdate(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
-    let mut window: handle_T = luaL_checkinteger(lstate, 1 as ::core::ffi::c_int)
-        as handle_T;
-    let mut win: *mut win_T = map_get_int_ptr_t(
-        &raw mut window_handles,
-        window as ::core::ffi::c_int,
-    ) as *mut win_T;
+    let mut window: handle_T = luaL_checkinteger(lstate, 1 as ::core::ffi::c_int) as handle_T;
+    let mut win: *mut win_T =
+        map_get_int_ptr_t(&raw mut window_handles, window as ::core::ffi::c_int) as *mut win_T;
     if win.is_null() {
         return luaL_error(
             lstate,
             b"invalid window\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
-    let mut top: linenr_T = luaL_checkinteger(lstate, 2 as ::core::ffi::c_int)
-        as linenr_T + 1 as linenr_T;
+    let mut top: linenr_T =
+        luaL_checkinteger(lstate, 2 as ::core::ffi::c_int) as linenr_T + 1 as linenr_T;
     if top < 1 as linenr_T {
         return luaL_error(
             lstate,
             b"invalid top\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
-    let mut bot: linenr_T = luaL_checkinteger(lstate, 3 as ::core::ffi::c_int)
-        as linenr_T;
+    let mut bot: linenr_T = luaL_checkinteger(lstate, 3 as ::core::ffi::c_int) as linenr_T;
     if top > bot {
         return luaL_error(
             lstate,
@@ -2818,65 +2693,83 @@ unsafe extern "C" fn nlua_with(mut L: *mut lua_State) -> ::core::ffi::c_int {
                     &raw mut window_handles,
                     luaL_checkinteger(L, -1 as ::core::ffi::c_int) as ::core::ffi::c_int,
                 ) as *mut win_T;
-            } else if strequal(
-                b"log_level\0".as_ptr() as *const ::core::ffi::c_char,
-                k,
-            ) {
-                log_level = luaL_checkinteger(L, -1 as ::core::ffi::c_int)
-                    as ::core::ffi::c_int;
+            } else if strequal(b"log_level\0".as_ptr() as *const ::core::ffi::c_char, k) {
+                log_level = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as ::core::ffi::c_int;
             } else {
                 if strequal(b"sandbox\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_SANDBOX as ::core::ffi::c_int;
                 }
                 if strequal(b"silent\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_SILENT as ::core::ffi::c_int;
                 }
                 if strequal(b"emsg_silent\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_ERRSILENT as ::core::ffi::c_int;
                 }
                 if strequal(b"unsilent\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_UNSILENT as ::core::ffi::c_int;
                 }
                 if strequal(b"noautocmd\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_NOAUTOCMD as ::core::ffi::c_int;
                 }
                 if strequal(b"hide\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_HIDE as ::core::ffi::c_int;
                 }
                 if strequal(b"keepalt\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_KEEPALT as ::core::ffi::c_int;
                 }
                 if strequal(b"keepmarks\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_KEEPMARKS as ::core::ffi::c_int;
                 }
                 if strequal(b"keepjumps\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_KEEPJUMPS as ::core::ffi::c_int;
                 }
                 if strequal(b"lockmarks\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_LOCKMARKS as ::core::ffi::c_int;
                 }
                 if strequal(b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char, k)
-                    as ::core::ffi::c_int != 0 && v as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
+                    && v as ::core::ffi::c_int != 0
                 {
                     flags |= CMOD_KEEPPATTERNS as ::core::ffi::c_int;
                 }
@@ -2979,7 +2872,7 @@ unsafe extern "C" fn nlua_with(mut L: *mut lua_State) -> ::core::ffi::c_int {
         g_min_log_level = save_min_log_level;
     }
     if status != 0 {
-        return lua_error(L)
+        return lua_error(L);
     } else if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         nlua_push_errstr(L, b"%s\0".as_ptr() as *const ::core::ffi::c_char, err.msg);
         api_clear_error(&raw mut err);
@@ -3010,9 +2903,7 @@ unsafe extern "C" fn nlua_state_add_internal(lstate: *mut lua_State) {
     );
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_foldupdate as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_foldupdate as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -3032,17 +2923,11 @@ unsafe extern "C" fn nlua_state_add_internal(lstate: *mut lua_State) {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn nlua_state_add_stdlib(
-    lstate: *mut lua_State,
-    mut is_thread: bool,
-) {
+pub unsafe extern "C" fn nlua_state_add_stdlib(lstate: *mut lua_State, mut is_thread: bool) {
     if !is_thread {
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_stricmp
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_stricmp as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3052,10 +2937,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_str_utfindex
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_str_utfindex as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3065,10 +2947,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_str_byteindex
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_str_byteindex as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3078,10 +2957,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_str_utf_pos
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_str_utf_pos as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3091,10 +2967,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_str_utf_start
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_str_utf_start as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3104,10 +2977,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_str_utf_end
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_str_utf_end as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3117,9 +2987,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_regex as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_regex as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3151,9 +3019,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
         );
         lua_pushcclosure(
             lstate,
-            Some(
-                nlua_iconv as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            Some(nlua_iconv as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
             0 as ::core::ffi::c_int,
         );
         lua_setfield(
@@ -3223,9 +3089,7 @@ pub unsafe extern "C" fn nlua_state_add_stdlib(
     lua_settop(lstate, -4 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     lua_pushcclosure(
         lstate,
-        Some(
-            nlua_xdl_diff as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(nlua_xdl_diff as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(

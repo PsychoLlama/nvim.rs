@@ -148,9 +148,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -177,9 +176,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -310,9 +307,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -324,9 +320,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -338,15 +333,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_5 {
@@ -486,9 +476,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -624,12 +613,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -676,12 +663,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_14 {
@@ -725,14 +710,11 @@ pub struct LibuvProc {
     pub uvstdio: [uv_stdio_container_t; 4],
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"int libuv_proc_spawn(LibuvProc *)\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"int libuv_proc_spawn(LibuvProc *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 unsafe extern "C" fn libuv_proc_stdio(
@@ -764,8 +746,7 @@ unsafe extern "C" fn libuv_proc_stdio(
     } else {
         pipe_pair[1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
     };
-    let mut parent_fd: ::core::ffi::c_int = if child_readable as ::core::ffi::c_int != 0
-    {
+    let mut parent_fd: ::core::ffi::c_int = if child_readable as ::core::ffi::c_int != 0 {
         pipe_pair[1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
     } else {
         pipe_pair[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
@@ -776,20 +757,15 @@ unsafe extern "C" fn libuv_proc_stdio(
     uv_pipe_open(parent_pipe, parent_fd as uv_file);
 }
 #[no_mangle]
-pub unsafe extern "C" fn libuv_proc_spawn(
-    mut uvproc: *mut LibuvProc,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn libuv_proc_spawn(mut uvproc: *mut LibuvProc) -> ::core::ffi::c_int {
     let mut proc: *mut Proc = uvproc as *mut Proc;
     (*uvproc).uvopts.file = proc_get_exepath(proc);
     (*uvproc).uvopts.args = (*proc).argv;
-    (*uvproc).uvopts.flags = UV_PROCESS_WINDOWS_HIDE as ::core::ffi::c_int
-        as ::core::ffi::c_uint;
-    (*uvproc).uvopts.flags
-        |= UV_PROCESS_DETACHED as ::core::ffi::c_int as ::core::ffi::c_uint;
-    (*uvproc).uvopts.exit_cb = Some(
-        exit_cb
-            as unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
-    ) as uv_exit_cb;
+    (*uvproc).uvopts.flags = UV_PROCESS_WINDOWS_HIDE as ::core::ffi::c_int as ::core::ffi::c_uint;
+    (*uvproc).uvopts.flags |= UV_PROCESS_DETACHED as ::core::ffi::c_int as ::core::ffi::c_uint;
+    (*uvproc).uvopts.exit_cb =
+        Some(exit_cb as unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ())
+            as uv_exit_cb;
     (*uvproc).uvopts.cwd = (*proc).cwd;
     (*uvproc).uvopts.stdio = &raw mut (*uvproc).uvstdio as *mut uv_stdio_container_t;
     (*uvproc).uvopts.stdio_count = 3 as ::core::ffi::c_int;
@@ -798,19 +774,19 @@ pub unsafe extern "C" fn libuv_proc_spawn(
     (*uvproc).uvstdio[2 as ::core::ffi::c_int as usize].flags = UV_IGNORE;
     if ui_client_forward_stdin {
         '_c2rust_label: {
-            if 3 as ::core::ffi::c_int == 3 as ::core::ffi::c_int {} else {
+            if 3 as ::core::ffi::c_int == 3 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"UI_CLIENT_STDIN_FD == 3\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/libuv_proc.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/event/libuv_proc.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     106 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
             }
         };
         (*uvproc).uvopts.stdio_count = 4 as ::core::ffi::c_int;
-        (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].data.fd = 0
-            as ::core::ffi::c_int;
+        (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].data.fd = 0 as ::core::ffi::c_int;
         (*uvproc).uvstdio[3 as ::core::ffi::c_int as usize].flags = UV_INHERIT_FD;
     }
     (*uvproc).uv.data = proc as *mut ::core::ffi::c_void;
@@ -902,7 +878,9 @@ pub unsafe extern "C" fn libuv_proc_close(mut uvproc: *mut LibuvProc) {
 unsafe extern "C" fn close_cb(mut handle: *mut uv_handle_t) {
     let mut proc: *mut Proc = (*handle).data as *mut Proc;
     if (*proc).internal_close_cb.is_some() {
-        (*proc).internal_close_cb.expect("non-null function pointer")(proc);
+        (*proc)
+            .internal_close_cb
+            .expect("non-null function pointer")(proc);
     }
     let mut uvproc: *mut LibuvProc = proc as *mut LibuvProc;
     if !(*uvproc).uvopts.env.is_null() {
@@ -1227,14 +1205,11 @@ unsafe extern "C" fn proc_init(
     };
 }
 #[inline]
-unsafe extern "C" fn proc_get_exepath(
-    mut proc: *mut Proc,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi::c_char {
     return if !(*proc).exepath.is_null() {
         (*proc).exepath
     } else {
-        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize)
-            as *const ::core::ffi::c_char
+        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_char
     };
 }
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

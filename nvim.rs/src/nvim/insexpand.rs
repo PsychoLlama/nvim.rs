@@ -57,10 +57,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strrchr(
         __s: *const ::core::ffi::c_char,
         __c: ::core::ffi::c_int,
@@ -74,10 +72,7 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrlcpy(
         dst: *mut ::core::ffi::c_char,
         src: *const ::core::ffi::c_char,
@@ -259,10 +254,7 @@ extern "C" {
         key: *const ::core::ffi::c_char,
         rettv: *mut typval_T,
     ) -> ::core::ffi::c_int;
-    fn tv_dict_get_number(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-    ) -> varnumber_T;
+    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
     fn tv_dict_get_string(
         d: *const dict_T,
         key: *const ::core::ffi::c_char,
@@ -341,17 +333,9 @@ extern "C" {
         op: ExtmarkOp,
     );
     fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool);
-    fn vim_fgets(
-        buf: *mut ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-        fp: *mut FILE,
-    ) -> bool;
+    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn fuzzy_match_str(
         str: *mut ::core::ffi::c_char,
@@ -434,10 +418,7 @@ extern "C" {
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_toupper(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn mb_islower(a: ::core::ffi::c_int) -> bool;
     fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -460,10 +441,7 @@ extern "C" {
     fn changed_cline_bef_curs(wp: *mut win_T);
     fn validate_cursor(wp: *mut win_T);
     fn curs_columns(wp: *mut win_T, may_scroll: ::core::ffi::c_int);
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_hrtime() -> uint64_t;
     fn os_delay(ms: uint64_t, ignoreinput: bool);
     fn os_breakcheck();
@@ -497,11 +475,7 @@ extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn valid_yank_reg(regname: ::core::ffi::c_int, writing: bool) -> bool;
     fn copy_register(name: ::core::ffi::c_int) -> *mut yankreg_T;
     fn free_register(reg: *mut yankreg_T);
@@ -650,12 +624,10 @@ pub struct Arena {
     pub pos: size_t,
     pub size: size_t,
 }
-pub type MergeSortGetFunc = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
->;
-pub type MergeSortSetFunc = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
->;
+pub type MergeSortGetFunc =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>;
+pub type MergeSortSetFunc =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>;
 pub type MergeSortCompareFunc = Option<
     unsafe extern "C" fn(
         *const ::core::ffi::c_void,
@@ -675,9 +647,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -3619,9 +3590,7 @@ pub const TAG_HELP: C2Rust_Unnamed_35 = 1;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3675,8 +3644,7 @@ unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
     }
     return (*l).lv_first;
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 static mut ctrl_x_msgs: [*mut ::core::ffi::c_char; 20] = [
     b" Keyword completion (^N^P)\0".as_ptr() as *const ::core::ffi::c_char
@@ -3723,8 +3691,7 @@ static mut ctrl_x_mode_names: [*mut ::core::ffi::c_char; 20] = [
     b"whole_line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"files\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"tags\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"path_patterns\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
+    b"path_patterns\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"path_defines\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"unknown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     b"dictionary\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -3740,24 +3707,18 @@ static mut ctrl_x_mode_names: [*mut ::core::ffi::c_char; 20] = [
     b"register\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 ];
 static mut e_hitend: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"Hit end of paragraph\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"Hit end of paragraph\0")
 };
 static mut e_compldel: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E840: Completion function deleted text\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E840: Completion function deleted text\0",
+    )
 };
 static mut compl_first_match: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
 static mut compl_curr_match: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
 static mut compl_shown_match: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
 static mut compl_old_match: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
-static mut compl_best_matches: *mut *mut compl_T = ::core::ptr::null_mut::<
-    *mut compl_T,
->();
+static mut compl_best_matches: *mut *mut compl_T = ::core::ptr::null_mut::<*mut compl_T>();
 static mut compl_num_bests: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut compl_enter_selects: bool = false_0 != 0;
 static mut compl_leader: String_0 = String_0 {
@@ -3844,8 +3805,7 @@ pub const COMPL_FUNC_TIMEOUT_MS: ::core::ffi::c_int = 300 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_NON_KW_MS: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 static mut compl_cont_status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CONT_ADDING: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const CONT_INTRPT: ::core::ffi::c_int = 2 as ::core::ffi::c_int
-    + 4 as ::core::ffi::c_int;
+pub const CONT_INTRPT: ::core::ffi::c_int = 2 as ::core::ffi::c_int + 4 as ::core::ffi::c_int;
 pub const CONT_N_ADDS: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONT_S_IPOS: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const CONT_SOL: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
@@ -3853,12 +3813,9 @@ pub const CONT_LOCAL: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 static mut compl_opt_refresh_always: bool = false_0 != 0;
 static mut spell_bad_len: size_t = 0 as size_t;
 static mut compl_selected_item: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-static mut compl_fuzzy_scores: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-    ::core::ffi::c_int,
->();
-static mut cpt_sources_array: *mut cpt_source_T = ::core::ptr::null_mut::<
-    cpt_source_T,
->();
+static mut compl_fuzzy_scores: *mut ::core::ffi::c_int =
+    ::core::ptr::null_mut::<::core::ffi::c_int>();
+static mut cpt_sources_array: *mut cpt_source_T = ::core::ptr::null_mut::<cpt_source_T>();
 static mut cpt_sources_count: ::core::ffi::c_int = 0;
 static mut cpt_sources_index: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 static mut compl_match_array: *mut pumitem_T = ::core::ptr::null_mut::<pumitem_T>();
@@ -3872,9 +3829,8 @@ pub unsafe extern "C" fn ins_ctrl_x() {
             compl_cont_status = 0 as ::core::ffi::c_int;
         }
         ctrl_x_mode = CTRL_X_NOT_DEFINED_YET as ::core::ffi::c_int;
-        edit_submode = gettext(
-            ctrl_x_msgs[(ctrl_x_mode & !(0x100 as ::core::ffi::c_int)) as usize],
-        );
+        edit_submode =
+            gettext(ctrl_x_msgs[(ctrl_x_mode & !(0x100 as ::core::ffi::c_int)) as usize]);
         edit_submode_pre = ::core::ptr::null_mut::<::core::ffi::c_char>();
         redraw_mode = true_0 != 0;
     } else {
@@ -3999,19 +3955,11 @@ pub unsafe extern "C" fn check_compl_option(mut dict_opt: bool) -> bool {
     {
         ctrl_x_mode = CTRL_X_NORMAL as ::core::ffi::c_int;
         edit_submode = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        emsg(
-            if dict_opt as ::core::ffi::c_int != 0 {
-                gettext(
-                    b"'dictionary' option is empty\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                )
-            } else {
-                gettext(
-                    b"'thesaurus' option is empty\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                )
-            },
-        );
+        emsg(if dict_opt as ::core::ffi::c_int != 0 {
+            gettext(b"'dictionary' option is empty\0".as_ptr() as *const ::core::ffi::c_char)
+        } else {
+            gettext(b"'thesaurus' option is empty\0".as_ptr() as *const ::core::ffi::c_char)
+        });
         if emsg_silent == 0 as ::core::ffi::c_int && !in_assert_fails {
             vim_beep(kOptBoFlagComplete as ::core::ffi::c_int as ::core::ffi::c_uint);
             setcursor();
@@ -4032,11 +3980,25 @@ pub unsafe extern "C" fn vim_is_ctrl_x_key(mut c: ::core::ffi::c_int) -> bool {
     match ctrl_x_mode {
         0 => return c == Ctrl_N || c == Ctrl_P || c == Ctrl_X,
         1 | 17 => {
-            return c == Ctrl_X || c == Ctrl_Y || c == Ctrl_E || c == Ctrl_L
-                || c == Ctrl_F || c == Ctrl_RSB || c == Ctrl_I || c == Ctrl_D
-                || c == Ctrl_P || c == Ctrl_N || c == Ctrl_T || c == Ctrl_V
-                || c == Ctrl_Q || c == Ctrl_U || c == Ctrl_O || c == Ctrl_S
-                || c == Ctrl_K || c == 's' as ::core::ffi::c_int || c == Ctrl_Z
+            return c == Ctrl_X
+                || c == Ctrl_Y
+                || c == Ctrl_E
+                || c == Ctrl_L
+                || c == Ctrl_F
+                || c == Ctrl_RSB
+                || c == Ctrl_I
+                || c == Ctrl_D
+                || c == Ctrl_P
+                || c == Ctrl_N
+                || c == Ctrl_T
+                || c == Ctrl_V
+                || c == Ctrl_Q
+                || c == Ctrl_U
+                || c == Ctrl_O
+                || c == Ctrl_S
+                || c == Ctrl_K
+                || c == 's' as ::core::ffi::c_int
+                || c == Ctrl_Z
                 || c == Ctrl_R;
         }
         2 => return c == Ctrl_Y || c == Ctrl_E,
@@ -4048,8 +4010,7 @@ pub unsafe extern "C" fn vim_is_ctrl_x_key(mut c: ::core::ffi::c_int) -> bool {
         262 => return c == Ctrl_P || c == Ctrl_N,
         263 => return c == Ctrl_D || c == Ctrl_P || c == Ctrl_N,
         11 => {
-            return c == Ctrl_V || c == Ctrl_Q || c == Ctrl_P || c == Ctrl_N
-                || c == Ctrl_X;
+            return c == Ctrl_V || c == Ctrl_Q || c == Ctrl_P || c == Ctrl_N || c == Ctrl_X;
         }
         12 => return c == Ctrl_U || c == Ctrl_P || c == Ctrl_N,
         13 => return c == Ctrl_O || c == Ctrl_P || c == Ctrl_N,
@@ -4090,9 +4051,7 @@ unsafe extern "C" fn do_autocmd_completedone(
     };
     let mut v_event: *mut dict_T = get_v_event(&raw mut save_v_event);
     mode = mode & !CTRL_X_WANT_IDENT;
-    let mut mode_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut mode_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !ctrl_x_mode_names[mode as usize].is_null() {
         mode_str = ctrl_x_mode_names[mode as usize];
     }
@@ -4160,9 +4119,9 @@ unsafe extern "C" fn ins_compl_infercase_gettext(
     mut tofree: *mut *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut has_lower: bool = false_0 != 0;
-    let wca: *mut ::core::ffi::c_int = xmalloc(
-        (char_len as size_t).wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-    ) as *mut ::core::ffi::c_int;
+    let wca: *mut ::core::ffi::c_int =
+        xmalloc((char_len as size_t).wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()))
+            as *mut ::core::ffi::c_int;
     let mut p: *const ::core::ffi::c_char = str;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < char_len {
@@ -4229,16 +4188,21 @@ unsafe extern "C" fn ins_compl_infercase_gettext(
     };
     let mut p_3: *mut ::core::ffi::c_char = &raw mut IObuff as *mut ::core::ffi::c_char;
     let mut i_3: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    ga_init(&raw mut gap, 1 as ::core::ffi::c_int, 500 as ::core::ffi::c_int);
+    ga_init(
+        &raw mut gap,
+        1 as ::core::ffi::c_int,
+        500 as ::core::ffi::c_int,
+    );
     while i_3 < char_len {
         if !gap.ga_data.is_null() {
             ga_grow(&raw mut gap, 10 as ::core::ffi::c_int);
             '_c2rust_label: {
-                if !gap.ga_data.is_null() {} else {
+                if !gap.ga_data.is_null() {
+                } else {
                     __assert_fail(
                         b"gap.ga_data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         771 as ::core::ffi::c_uint,
                         b"char *ins_compl_infercase_gettext(const char *, int, int, int, char **)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4249,8 +4213,8 @@ unsafe extern "C" fn ins_compl_infercase_gettext(
             let c2rust_fresh0 = i_3;
             i_3 = i_3 + 1;
             gap.ga_len += utf_char2bytes(*wca.offset(c2rust_fresh0 as isize), p_3);
-        } else if p_3.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char)
-            + 6 as isize >= IOSIZE as isize
+        } else if p_3.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char) + 6 as isize
+            >= IOSIZE as isize
         {
             ga_grow(&raw mut gap, IOSIZE);
             *p_3 = NUL as ::core::ffi::c_char;
@@ -4258,15 +4222,12 @@ unsafe extern "C" fn ins_compl_infercase_gettext(
                 gap.ga_data as *mut ::core::ffi::c_char,
                 &raw mut IObuff as *mut ::core::ffi::c_char,
             );
-            gap.ga_len = p_3.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char)
-                as ::core::ffi::c_int;
+            gap.ga_len =
+                p_3.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
         } else {
             let c2rust_fresh1 = i_3;
             i_3 = i_3 + 1;
-            p_3 = p_3
-                .offset(
-                    utf_char2bytes(*wca.offset(c2rust_fresh1 as isize), p_3) as isize,
-                );
+            p_3 = p_3.offset(utf_char2bytes(*wca.offset(c2rust_fresh1 as isize), p_3) as isize);
         }
     }
     xfree(wca as *mut ::core::ffi::c_void);
@@ -4291,9 +4252,7 @@ pub unsafe extern "C" fn ins_compl_add_infercase(
     let mut char_len: ::core::ffi::c_int = 0;
     let mut compl_char_len: ::core::ffi::c_int = 0;
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if p_ic != 0 && (*curbuf).b_p_inf != 0 && len > 0 as ::core::ffi::c_int {
         let mut p: *const ::core::ffi::c_char = str;
         char_len = 0 as ::core::ffi::c_int;
@@ -4312,13 +4271,7 @@ pub unsafe extern "C" fn ins_compl_add_infercase(
         } else {
             compl_char_len
         };
-        str = ins_compl_infercase_gettext(
-            str,
-            char_len,
-            compl_char_len,
-            min_len,
-            &raw mut tofree,
-        );
+        str = ins_compl_infercase_gettext(str, char_len, compl_char_len, min_len, &raw mut tofree);
     }
     if cont_s_ipos {
         flags |= CP_CONT_S_IPOS as ::core::ffi::c_int;
@@ -4353,14 +4306,13 @@ unsafe extern "C" fn free_cptext(cptext: *const *mut ::core::ffi::c_char) {
     }
 }
 unsafe extern "C" fn cot_fuzzy() -> bool {
-    return get_cot_flags()
-        & kOptCotFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0 as ::core::ffi::c_uint && !ctrl_x_mode_thesaurus();
+    return get_cot_flags() & kOptCotFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0 as ::core::ffi::c_uint
+        && !ctrl_x_mode_thesaurus();
 }
 unsafe extern "C" fn is_nearest_active() -> bool {
     return (compl_autocomplete as ::core::ffi::c_int != 0
-        || get_cot_flags()
-            & kOptCotFlagNearest as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
+        || get_cot_flags() & kOptCotFlagNearest as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
         && !cot_fuzzy();
 }
 #[no_mangle]
@@ -4390,9 +4342,7 @@ unsafe extern "C" fn ins_compl_add(
     score: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut match_0: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
-    let dir: Direction = (if cdir as ::core::ffi::c_int
-        == kDirectionNotSet as ::core::ffi::c_int
-    {
+    let dir: Direction = (if cdir as ::core::ffi::c_int == kDirectionNotSet as ::core::ffi::c_int {
         compl_direction as ::core::ffi::c_int
     } else {
         cdir as ::core::ffi::c_int
@@ -4417,14 +4367,13 @@ unsafe extern "C" fn ins_compl_add(
         match_0 = compl_first_match;
         loop {
             if !match_at_original_text(match_0)
-                && strncmp((*match_0).cp_str.data, str, len as size_t)
-                    == 0 as ::core::ffi::c_int
+                && strncmp((*match_0).cp_str.data, str, len as size_t) == 0 as ::core::ffi::c_int
                 && ((*match_0).cp_str.size as ::core::ffi::c_int <= len
-                    || *(*match_0).cp_str.data.offset(len as isize) as ::core::ffi::c_int
-                        == NUL)
+                    || *(*match_0).cp_str.data.offset(len as isize) as ::core::ffi::c_int == NUL)
             {
                 if is_nearest_active() as ::core::ffi::c_int != 0
-                    && score > 0 as ::core::ffi::c_int && score < (*match_0).cp_score
+                    && score > 0 as ::core::ffi::c_int
+                    && score < (*match_0).cp_score
                 {
                     (*match_0).cp_score = score;
                 }
@@ -4447,7 +4396,8 @@ unsafe extern "C" fn ins_compl_add(
         -1 as ::core::ffi::c_int
     };
     (*match_0).cp_str = cbuf_to_string(str, len as size_t);
-    if !fname.is_null() && !compl_curr_match.is_null()
+    if !fname.is_null()
+        && !compl_curr_match.is_null()
         && !(*compl_curr_match).cp_fname.is_null()
         && strcmp(fname, (*compl_curr_match).cp_fname) == 0 as ::core::ffi::c_int
     {
@@ -4476,13 +4426,12 @@ unsafe extern "C" fn ins_compl_add(
         while i < CPT_COUNT as ::core::ffi::c_int {
             if !(*cptext.offset(i as isize)).is_null() {
                 if **cptext.offset(i as isize) as ::core::ffi::c_int != NUL {
-                    (*match_0).cp_text[i as usize] = (if cptext_allocated
-                        as ::core::ffi::c_int != 0
-                    {
-                        *cptext.offset(i as isize)
-                    } else {
-                        xstrdup(*cptext.offset(i as isize))
-                    }) as *mut ::core::ffi::c_char;
+                    (*match_0).cp_text[i as usize] =
+                        (if cptext_allocated as ::core::ffi::c_int != 0 {
+                            *cptext.offset(i as isize)
+                        } else {
+                            xstrdup(*cptext.offset(i as isize))
+                        }) as *mut ::core::ffi::c_char;
                 } else if cptext_allocated {
                     xfree(*cptext.offset(i as isize) as *mut ::core::ffi::c_void);
                 }
@@ -4542,7 +4491,9 @@ unsafe extern "C" fn ins_compl_add(
     compl_curr_match = match_0;
     if compl_get_longest as ::core::ffi::c_int != 0
         && flags & CP_ORIGINAL_TEXT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-        && !cot_fuzzy() && !ins_compl_preinsert_longest() && !ctrl_x_mode_thesaurus()
+        && !cot_fuzzy()
+        && !ins_compl_preinsert_longest()
+        && !ctrl_x_mode_thesaurus()
     {
         ins_compl_longest_match(match_0);
     }
@@ -4569,7 +4520,8 @@ unsafe extern "C" fn ins_compl_insert_bytes(
         len = strlen(p) as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if len >= 0 as ::core::ffi::c_int {} else {
+        if len >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
@@ -4622,8 +4574,8 @@ pub unsafe extern "C" fn ins_compl_col_range_attr(
     {
         return -1 as ::core::ffi::c_int;
     }
-    let mut start_col: ::core::ffi::c_int = compl_col as ::core::ffi::c_int
-        + ins_compl_leader_len() as ::core::ffi::c_int;
+    let mut start_col: ::core::ffi::c_int =
+        compl_col as ::core::ffi::c_int + ins_compl_leader_len() as ::core::ffi::c_int;
     if !ins_compl_has_multiple() {
         return if col >= start_col && col < compl_ins_end_col {
             attr
@@ -4640,8 +4592,7 @@ pub unsafe extern "C" fn ins_compl_col_range_attr(
     return -1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn ins_compl_has_multiple() -> bool {
-    return !vim_strchr((*compl_shown_match).cp_str.data, '\n' as ::core::ffi::c_int)
-        .is_null();
+    return !vim_strchr((*compl_shown_match).cp_str.data, '\n' as ::core::ffi::c_int).is_null();
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_compl_lnum_in_range(mut lnum: linenr_T) -> bool {
@@ -4738,14 +4689,13 @@ unsafe extern "C" fn ins_compl_make_cyclic() -> ::core::ffi::c_int {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_compl_has_shown_match() -> bool {
-    return compl_shown_match.is_null()
-        || compl_shown_match != (*compl_shown_match).cp_next;
+    return compl_shown_match.is_null() || compl_shown_match != (*compl_shown_match).cp_next;
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_compl_long_shown_match() -> bool {
-    return !compl_shown_match.is_null() && !(*compl_shown_match).cp_str.data.is_null()
-        && (*compl_shown_match).cp_str.size as colnr_T
-            > (*curwin).w_cursor.col - compl_col;
+    return !compl_shown_match.is_null()
+        && !(*compl_shown_match).cp_str.data.is_null()
+        && (*compl_shown_match).cp_str.size as colnr_T > (*curwin).w_cursor.col - compl_col;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cot_flags() -> ::core::ffi::c_uint {
@@ -4760,8 +4710,8 @@ unsafe extern "C" fn ins_compl_del_pum() {
         return;
     }
     pum_undisplay(false_0 != 0);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_match_array
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_match_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -4769,27 +4719,27 @@ unsafe extern "C" fn ins_compl_del_pum() {
 #[no_mangle]
 pub unsafe extern "C" fn pum_wanted() -> bool {
     return get_cot_flags()
-        & (kOptCotFlagMenu as ::core::ffi::c_int
-            | kOptCotFlagMenuone as ::core::ffi::c_int) as ::core::ffi::c_uint
-        != 0 as ::core::ffi::c_uint || compl_autocomplete as ::core::ffi::c_int != 0;
+        & (kOptCotFlagMenu as ::core::ffi::c_int | kOptCotFlagMenuone as ::core::ffi::c_int)
+            as ::core::ffi::c_uint
+        != 0 as ::core::ffi::c_uint
+        || compl_autocomplete as ::core::ffi::c_int != 0;
 }
 unsafe extern "C" fn pum_enough_matches() -> bool {
     let mut comp: *mut compl_T = compl_first_match;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while !(comp.is_null()
-        || !match_at_original_text(comp)
-            && {
-                i += 1;
-                i == 2 as ::core::ffi::c_int
-            })
+        || !match_at_original_text(comp) && {
+            i += 1;
+            i == 2 as ::core::ffi::c_int
+        })
     {
         comp = (*comp).cp_next;
         if is_first_match(comp) {
             break;
         }
     }
-    if get_cot_flags() & kOptCotFlagMenuone as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0 || compl_autocomplete as ::core::ffi::c_int != 0
+    if get_cot_flags() & kOptCotFlagMenuone as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        || compl_autocomplete as ::core::ffi::c_int != 0
     {
         return i >= 1 as ::core::ffi::c_int;
     }
@@ -4807,29 +4757,25 @@ unsafe extern "C" fn ins_compl_dict_alloc(mut match_0: *mut compl_T) -> *mut dic
         dict,
         b"abbr\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_ABBR as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     tv_dict_add_str(
         dict,
         b"menu\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_MENU as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     tv_dict_add_str(
         dict,
         b"kind\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_KIND as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_KIND as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     tv_dict_add_str(
         dict,
         b"info\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_INFO as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_INFO as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     if (*match_0).cp_user_data.v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -4837,16 +4783,14 @@ unsafe extern "C" fn ins_compl_dict_alloc(mut match_0: *mut compl_T) -> *mut dic
         tv_dict_add_str(
             dict,
             b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             b"\0".as_ptr() as *const ::core::ffi::c_char,
         );
     } else {
         tv_dict_add_tv(
             dict,
             b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             &raw mut (*match_0).cp_user_data,
         );
     }
@@ -4899,9 +4843,7 @@ unsafe extern "C" fn trigger_complete_changed_event(mut cur: ::core::ffi::c_int)
     recursive = false_0 != 0;
     restore_v_event(v_event, &raw mut save_v_event);
 }
-unsafe extern "C" fn cp_get_next(
-    mut node: *mut ::core::ffi::c_void,
-) -> *mut ::core::ffi::c_void {
+unsafe extern "C" fn cp_get_next(mut node: *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void {
     return (*(node as *mut compl_T)).cp_next as *mut ::core::ffi::c_void;
 }
 unsafe extern "C" fn cp_set_next(
@@ -4910,9 +4852,7 @@ unsafe extern "C" fn cp_set_next(
 ) {
     (*(node as *mut compl_T)).cp_next = next as *mut compl_T;
 }
-unsafe extern "C" fn cp_get_prev(
-    mut node: *mut ::core::ffi::c_void,
-) -> *mut ::core::ffi::c_void {
+unsafe extern "C" fn cp_get_prev(mut node: *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void {
     return (*(node as *mut compl_T)).cp_prev as *mut ::core::ffi::c_void;
 }
 unsafe extern "C" fn cp_set_prev(
@@ -4960,11 +4900,10 @@ unsafe extern "C" fn prepend_startcol_text(
     mut startcol: ::core::ffi::c_int,
 ) {
     let mut prepend_len: ::core::ffi::c_int = compl_col as ::core::ffi::c_int - startcol;
-    let mut new_length: ::core::ffi::c_int = prepend_len
-        + (*src).size as ::core::ffi::c_int;
+    let mut new_length: ::core::ffi::c_int = prepend_len + (*src).size as ::core::ffi::c_int;
     (*dest).size = new_length as size_t;
-    (*dest).data = xmalloc((new_length as size_t).wrapping_add(1 as size_t))
-        as *mut ::core::ffi::c_char;
+    (*dest).data =
+        xmalloc((new_length as size_t).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
     let mut line: *mut ::core::ffi::c_char = ml_get((*curwin).w_cursor.lnum);
     memmove(
         (*dest).data as *mut ::core::ffi::c_void,
@@ -4989,8 +4928,8 @@ unsafe extern "C" fn get_leader_for_startcol(
         size: 0 as size_t,
     };
     if match_0.is_null() {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut adjusted_leader.data
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut adjusted_leader.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -5009,18 +4948,18 @@ unsafe extern "C" fn get_leader_for_startcol(
             }
             if compl_col > 0 as ::core::ffi::c_int {
                 if startcol >= 0 as ::core::ffi::c_int && startcol < compl_col {
-                    let mut prepend_len: ::core::ffi::c_int = compl_col
-                        as ::core::ffi::c_int - startcol;
-                    let mut new_length: ::core::ffi::c_int = prepend_len
-                        + compl_leader.size as ::core::ffi::c_int;
+                    let mut prepend_len: ::core::ffi::c_int =
+                        compl_col as ::core::ffi::c_int - startcol;
+                    let mut new_length: ::core::ffi::c_int =
+                        prepend_len + compl_leader.size as ::core::ffi::c_int;
                     if cached as ::core::ffi::c_int != 0
                         && new_length as size_t == adjusted_leader.size
                         && !adjusted_leader.data.is_null()
                     {
                         return &raw mut adjusted_leader;
                     }
-                    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut adjusted_leader
-                        .data as *mut *mut ::core::ffi::c_void;
+                    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                        &raw mut adjusted_leader.data as *mut *mut ::core::ffi::c_void;
                     xfree(*ptr__0);
                     *ptr__0 = NULL;
                     *ptr__0;
@@ -5041,11 +4980,8 @@ unsafe extern "C" fn set_fuzzy_score() {
     if compl_first_match.is_null() {
         return;
     }
-    let mut use_leader: bool = !compl_leader.data.is_null()
-        && compl_leader.size > 0 as size_t;
-    let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut use_leader: bool = !compl_leader.data.is_null() && compl_leader.size > 0 as size_t;
+    let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !use_leader {
         if compl_orig_text.data.is_null() || compl_orig_text.size == 0 as size_t {
             return;
@@ -5065,7 +5001,7 @@ unsafe extern "C" fn set_fuzzy_score() {
         if !(!comp.is_null() && !is_first_match(comp)) {
             break;
         }
-    };
+    }
 }
 unsafe extern "C" fn sort_compl_match_list(mut compare: MergeSortCompareFunc) {
     if compl_first_match.is_null()
@@ -5081,9 +5017,7 @@ unsafe extern "C" fn sort_compl_match_list(mut compare: MergeSortCompareFunc) {
             (*compl_first_match).cp_next as *mut ::core::ffi::c_void,
             Some(
                 cp_get_next
-                    as unsafe extern "C" fn(
-                        *mut ::core::ffi::c_void,
-                    ) -> *mut ::core::ffi::c_void,
+                    as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
             ),
             Some(
                 cp_set_next
@@ -5094,9 +5028,7 @@ unsafe extern "C" fn sort_compl_match_list(mut compare: MergeSortCompareFunc) {
             ),
             Some(
                 cp_get_prev
-                    as unsafe extern "C" fn(
-                        *mut ::core::ffi::c_void,
-                    ) -> *mut ::core::ffi::c_void,
+                    as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
             ),
             Some(
                 cp_set_prev
@@ -5114,9 +5046,7 @@ unsafe extern "C" fn sort_compl_match_list(mut compare: MergeSortCompareFunc) {
             compl_first_match as *mut ::core::ffi::c_void,
             Some(
                 cp_get_next
-                    as unsafe extern "C" fn(
-                        *mut ::core::ffi::c_void,
-                    ) -> *mut ::core::ffi::c_void,
+                    as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
             ),
             Some(
                 cp_set_next
@@ -5127,9 +5057,7 @@ unsafe extern "C" fn sort_compl_match_list(mut compare: MergeSortCompareFunc) {
             ),
             Some(
                 cp_get_prev
-                    as unsafe extern "C" fn(
-                        *mut ::core::ffi::c_void,
-                    ) -> *mut ::core::ffi::c_void,
+                    as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void,
             ),
             Some(
                 cp_set_prev
@@ -5152,8 +5080,8 @@ unsafe extern "C" fn sort_compl_match_list(mut compare: MergeSortCompareFunc) {
 unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
     compl_match_arraysize = 0 as ::core::ffi::c_int;
     if ins_compl_need_restart() {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_leader
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut compl_leader as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -5164,9 +5092,7 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
         || compl_autocomplete as ::core::ffi::c_int != 0 && !ins_compl_has_preinsert();
     let mut match_head: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
     let mut match_tail: *mut compl_T = ::core::ptr::null_mut::<compl_T>();
-    let mut match_count: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-        ::core::ffi::c_int,
-    >();
+    let mut match_count: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let mut is_forward: bool = compl_shows_dir_forward();
     let mut is_cpt_completion: bool = !cpt_sources_array.is_null();
     let mut shown_match_ok: bool = match_at_original_text(compl_shown_match);
@@ -5195,16 +5121,17 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
     loop {
         (*comp).cp_in_match_array = false_0 != 0;
         let mut leader: *mut String_0 = get_leader_for_startcol(comp, true_0 != 0);
-        if ctrl_x_mode_normal() as ::core::ffi::c_int != 0 && p_inf == 0
-            && !(*leader).data.is_null() && ignorecase((*leader).data) == 0
+        if ctrl_x_mode_normal() as ::core::ffi::c_int != 0
+            && p_inf == 0
+            && !(*leader).data.is_null()
+            && ignorecase((*leader).data) == 0
             && !cot_fuzzy()
         {
             (*comp).cp_flags &= !(CP_ICASE as ::core::ffi::c_int);
         }
         if !match_at_original_text(comp)
             && ((*leader).data.is_null()
-                || ins_compl_equal(comp, (*leader).data, (*leader).size)
-                    as ::core::ffi::c_int != 0
+                || ins_compl_equal(comp, (*leader).data, (*leader).size) as ::core::ffi::c_int != 0
                 || cot_fuzzy() as ::core::ffi::c_int != 0
                     && (*comp).cp_score != FUZZY_SCORE_NONE as ::core::ffi::c_int)
         {
@@ -5215,9 +5142,8 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
                 && is_cpt_completion as ::core::ffi::c_int != 0
             {
                 *match_count.offset(cur_source as isize) += 1;
-                let mut max_matches: ::core::ffi::c_int = (*cpt_sources_array
-                    .offset(cur_source as isize))
-                    .cs_max_matches;
+                let mut max_matches: ::core::ffi::c_int =
+                    (*cpt_sources_array.offset(cur_source as isize)).cs_max_matches;
                 if max_matches > 0 as ::core::ffi::c_int
                     && *match_count.offset(cur_source as isize) > max_matches
                 {
@@ -5234,8 +5160,7 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
                 }
                 match_tail = comp;
                 if !shown_match_ok && !cot_fuzzy() {
-                    if comp == compl_shown_match
-                        || did_find_shown_match as ::core::ffi::c_int != 0
+                    if comp == compl_shown_match || did_find_shown_match as ::core::ffi::c_int != 0
                     {
                         compl_shown_match = comp;
                         did_find_shown_match = true_0 != 0;
@@ -5281,7 +5206,8 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
         cur = 0 as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if compl_match_arraysize >= 0 as ::core::ffi::c_int {} else {
+        if compl_match_arraysize >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"compl_match_arraysize >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
@@ -5298,38 +5224,26 @@ unsafe extern "C" fn ins_compl_build_pum() -> ::core::ffi::c_int {
     i = 0 as ::core::ffi::c_int;
     comp = match_head;
     while !comp.is_null() {
-        (*compl_match_array.offset(i as isize)).pum_text = if !(*comp)
-            .cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-            .is_null()
-        {
-            (*comp).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-                as *mut ::core::ffi::c_char
-        } else {
-            (*comp).cp_str.data
-        };
-        (*compl_match_array.offset(i as isize)).pum_kind = (*comp)
-            .cp_text[CPT_KIND as ::core::ffi::c_int as usize]
-            as *mut ::core::ffi::c_char;
-        (*compl_match_array.offset(i as isize)).pum_info = (*comp)
-            .cp_text[CPT_INFO as ::core::ffi::c_int as usize]
-            as *mut ::core::ffi::c_char;
-        (*compl_match_array.offset(i as isize)).pum_cpt_source_idx = (*comp)
-            .cp_cpt_source_idx;
-        (*compl_match_array.offset(i as isize)).pum_user_abbr_hlattr = (*comp)
-            .cp_user_abbr_hlattr;
-        (*compl_match_array.offset(i as isize)).pum_user_kind_hlattr = (*comp)
-            .cp_user_kind_hlattr;
+        (*compl_match_array.offset(i as isize)).pum_text =
+            if !(*comp).cp_text[CPT_ABBR as ::core::ffi::c_int as usize].is_null() {
+                (*comp).cp_text[CPT_ABBR as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char
+            } else {
+                (*comp).cp_str.data
+            };
+        (*compl_match_array.offset(i as isize)).pum_kind =
+            (*comp).cp_text[CPT_KIND as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char;
+        (*compl_match_array.offset(i as isize)).pum_info =
+            (*comp).cp_text[CPT_INFO as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char;
+        (*compl_match_array.offset(i as isize)).pum_cpt_source_idx = (*comp).cp_cpt_source_idx;
+        (*compl_match_array.offset(i as isize)).pum_user_abbr_hlattr = (*comp).cp_user_abbr_hlattr;
+        (*compl_match_array.offset(i as isize)).pum_user_kind_hlattr = (*comp).cp_user_kind_hlattr;
         let c2rust_fresh2 = i;
         i = i + 1;
-        let c2rust_lvalue_ptr = &raw mut (*compl_match_array
-            .offset(c2rust_fresh2 as isize))
-            .pum_extra;
-        *c2rust_lvalue_ptr = if !(*comp)
-            .cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-            .is_null()
+        let c2rust_lvalue_ptr =
+            &raw mut (*compl_match_array.offset(c2rust_fresh2 as isize)).pum_extra;
+        *c2rust_lvalue_ptr = if !(*comp).cp_text[CPT_MENU as ::core::ffi::c_int as usize].is_null()
         {
-            (*comp).cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-                as *mut ::core::ffi::c_char
+            (*comp).cp_text[CPT_MENU as ::core::ffi::c_int as usize] as *mut ::core::ffi::c_char
         } else {
             (*comp).cp_fname
         };
@@ -5356,11 +5270,9 @@ pub unsafe extern "C" fn ins_compl_show_pum() {
     } else {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < compl_match_arraysize {
-            if (*compl_match_array.offset(i as isize)).pum_text
-                == (*compl_shown_match).cp_str.data
+            if (*compl_match_array.offset(i as isize)).pum_text == (*compl_shown_match).cp_str.data
                 || (*compl_match_array.offset(i as isize)).pum_text
-                    == (*compl_shown_match)
-                        .cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
+                    == (*compl_shown_match).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
             {
                 cur = i;
                 break;
@@ -5389,8 +5301,7 @@ pub unsafe extern "C" fn ins_compl_show_pum() {
         0 as ::core::ffi::c_int,
     );
     (*curwin).w_cursor.col = col;
-    if compl_started as ::core::ffi::c_int != 0 && compl_curr_match != compl_shown_match
-    {
+    if compl_started as ::core::ffi::c_int != 0 && compl_curr_match != compl_shown_match {
         compl_curr_match = compl_shown_match;
     }
     if has_event(EVENT_COMPLETECHANGED) {
@@ -5398,9 +5309,7 @@ pub unsafe extern "C" fn ins_compl_show_pum() {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn compl_match_curr_select(
-    mut selected: ::core::ffi::c_int,
-) -> bool {
+pub unsafe extern "C" fn compl_match_curr_select(mut selected: ::core::ffi::c_int) -> bool {
     if selected < 0 as ::core::ffi::c_int {
         return false_0 != 0;
     }
@@ -5409,8 +5318,7 @@ pub unsafe extern "C" fn compl_match_curr_select(
     let mut list_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     loop {
         if !match_at_original_text(match_0) {
-            if !compl_curr_match.is_null()
-                && (*compl_curr_match).cp_number == (*match_0).cp_number
+            if !compl_curr_match.is_null() && (*compl_curr_match).cp_number == (*match_0).cp_number
             {
                 selected_idx = list_idx;
                 break;
@@ -5434,9 +5342,7 @@ unsafe extern "C" fn ins_compl_dictionaries(
     mut thesaurus: bool,
 ) {
     let mut dict: *mut ::core::ffi::c_char = dict_start;
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut regmatch: regmatch_T = regmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
         startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
@@ -5444,22 +5350,19 @@ unsafe extern "C" fn ins_compl_dictionaries(
         rm_matchcol: 0,
         rm_ic: false,
     };
-    let mut files: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut files: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut count: ::core::ffi::c_int = 0;
     let mut dir: Direction = compl_direction;
     if *dict as ::core::ffi::c_int == NUL {
         if !thesaurus && (*curwin).w_onebuf_opt.wo_spell != 0 {
-            dict = b"spell\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            dict = b"spell\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            return
+            return;
         }
     }
-    let mut buf: *mut ::core::ffi::c_char = xmalloc(
-        LSIZE as ::core::ffi::c_int as size_t,
-    ) as *mut ::core::ffi::c_char;
+    let mut buf: *mut ::core::ffi::c_char =
+        xmalloc(LSIZE as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
     regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
     let mut save_p_scs: ::core::ffi::c_int = p_scs;
     if (*curbuf).b_p_inf != 0 {
@@ -5467,10 +5370,8 @@ unsafe extern "C" fn ins_compl_dictionaries(
     }
     '_theend: {
         if ctrl_x_mode_line_or_eval() {
-            let mut pat_esc: *mut ::core::ffi::c_char = vim_strsave_escaped(
-                pat,
-                b"\\\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            let mut pat_esc: *mut ::core::ffi::c_char =
+                vim_strsave_escaped(pat, b"\\\0".as_ptr() as *const ::core::ffi::c_char);
             let mut len: size_t = strlen(pat_esc).wrapping_add(10 as size_t);
             ptr = xmalloc(len) as *mut ::core::ffi::c_char;
             vim_snprintf(
@@ -5505,8 +5406,7 @@ unsafe extern "C" fn ins_compl_dictionaries(
                     &raw mut dict,
                     buf,
                     LSIZE as ::core::ffi::c_int as size_t,
-                    b",\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 if !thesaurus
                     && strcmp(buf, b"spell\0".as_ptr() as *const ::core::ffi::c_char)
@@ -5528,8 +5428,8 @@ unsafe extern "C" fn ins_compl_dictionaries(
             if count == -1 as ::core::ffi::c_int {
                 if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
-                    && *pat.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '<' as ::core::ffi::c_int
+                    && *pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '<' as ::core::ffi::c_int
                 {
                     ptr = pat.offset(2 as ::core::ffi::c_int as isize);
                 } else {
@@ -5580,9 +5480,7 @@ unsafe extern "C" fn thesaurus_add_words_in_line(
         let mut wstart: *mut ::core::ffi::c_char = ptr;
         while *ptr as ::core::ffi::c_int != NUL {
             let l: ::core::ffi::c_int = utfc_ptr2len(ptr);
-            if l < 2 as ::core::ffi::c_int
-                && !vim_iswordc(*ptr as uint8_t as ::core::ffi::c_int)
-            {
+            if l < 2 as ::core::ffi::c_int && !vim_iswordc(*ptr as uint8_t as ::core::ffi::c_int) {
                 break;
             }
             ptr = ptr.offset(l as isize);
@@ -5615,8 +5513,7 @@ unsafe extern "C" fn ins_compl_files(
     mut buf: *mut ::core::ffi::c_char,
     mut dir: *mut Direction,
 ) {
-    let mut leader: *mut ::core::ffi::c_char = if cot_fuzzy() as ::core::ffi::c_int != 0
-    {
+    let mut leader: *mut ::core::ffi::c_char = if cot_fuzzy() as ::core::ffi::c_int != 0 {
         ins_compl_leader()
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -5632,36 +5529,32 @@ unsafe extern "C" fn ins_compl_files(
             *files.offset(i as isize),
             b"r\0".as_ptr() as *const ::core::ffi::c_char,
         );
-        if flags != DICT_EXACT && !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
+        if flags != DICT_EXACT
+            && !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
             && !compl_autocomplete
         {
             vim_snprintf(
                 &raw mut IObuff as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
-                gettext(
-                    b"Scanning dictionary: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                gettext(b"Scanning dictionary: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 *files.offset(i as isize),
             );
             msg_progress(
                 &raw mut IObuff as *mut ::core::ffi::c_char,
-                b"completion\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                b"running\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"completion\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                b"running\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 HLF_R as ::core::ffi::c_int,
                 false_0 != 0,
                 true_0 != 0,
             );
         }
         if !fp.is_null() {
-            while !got_int && !ins_compl_interrupted()
+            while !got_int
+                && !ins_compl_interrupted()
                 && !vim_fgets(buf, LSIZE as ::core::ffi::c_int, fp)
             {
                 let mut ptr: *mut ::core::ffi::c_char = buf;
-                if cot_fuzzy() as ::core::ffi::c_int != 0
-                    && leader_len > 0 as ::core::ffi::c_int
-                {
+                if cot_fuzzy() as ::core::ffi::c_int != 0 && leader_len > 0 as ::core::ffi::c_int {
                     let mut line_end: *mut ::core::ffi::c_char = find_line_end(ptr);
                     while ptr < line_end {
                         let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5675,13 +5568,12 @@ unsafe extern "C" fn ins_compl_files(
                         ) {
                             continue;
                         }
-                        let mut end_ptr: *mut ::core::ffi::c_char = if ctrl_x_mode_line_or_eval()
-                            as ::core::ffi::c_int != 0
-                        {
-                            find_line_end(ptr)
-                        } else {
-                            find_word_end(ptr)
-                        };
+                        let mut end_ptr: *mut ::core::ffi::c_char =
+                            if ctrl_x_mode_line_or_eval() as ::core::ffi::c_int != 0 {
+                                find_line_end(ptr)
+                            } else {
+                                find_word_end(ptr)
+                            };
                         let mut add_r: ::core::ffi::c_int = ins_compl_add_infercase(
                             ptr,
                             end_ptr.offset_from(ptr) as ::core::ffi::c_int,
@@ -5713,10 +5605,8 @@ unsafe extern "C" fn ins_compl_files(
                         };
                         let mut add_r_0: ::core::ffi::c_int = ins_compl_add_infercase(
                             (*regmatch).startp[0 as ::core::ffi::c_int as usize],
-                            ptr
-                                .offset_from(
-                                    (*regmatch).startp[0 as ::core::ffi::c_int as usize],
-                                ) as ::core::ffi::c_int,
+                            ptr.offset_from((*regmatch).startp[0 as ::core::ffi::c_int as usize])
+                                as ::core::ffi::c_int,
                             p_ic != 0,
                             *files.offset(i as isize),
                             *dir,
@@ -5793,8 +5683,8 @@ pub unsafe extern "C" fn find_line_end(
     return s;
 }
 unsafe extern "C" fn ins_compl_item_free(mut match_0: *mut compl_T) {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*match_0).cp_str.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*match_0).cp_str.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -5807,14 +5697,14 @@ unsafe extern "C" fn ins_compl_item_free(mut match_0: *mut compl_T) {
     xfree(match_0 as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn ins_compl_free() {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_pattern.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_pattern.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
     compl_pattern.size = 0 as size_t;
-    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut compl_leader.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_leader.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
     *ptr__0;
@@ -5847,14 +5737,14 @@ pub unsafe extern "C" fn ins_compl_clear() {
     compl_ins_end_col = 0 as ::core::ffi::c_int as colnr_T;
     compl_curr_win = ::core::ptr::null_mut::<win_T>();
     compl_curr_buf = ::core::ptr::null_mut::<buf_T>();
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_pattern.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_pattern.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
     compl_pattern.size = 0 as size_t;
-    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut compl_leader.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_leader.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL;
     *ptr__0;
@@ -5864,8 +5754,8 @@ pub unsafe extern "C" fn ins_compl_clear() {
     compl_orig_extmarks.capacity = 0 as size_t;
     compl_orig_extmarks.size = compl_orig_extmarks.capacity;
     compl_orig_extmarks.items = ::core::ptr::null_mut::<ExtmarkUndoObject>();
-    let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut compl_orig_text.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__1: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_orig_text.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL;
     *ptr__1;
@@ -5883,7 +5773,8 @@ pub unsafe extern "C" fn ins_compl_active() -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_compl_win_active(mut wp: *mut win_T) -> bool {
-    return ins_compl_active() as ::core::ffi::c_int != 0 && wp == compl_curr_win
+    return ins_compl_active() as ::core::ffi::c_int != 0
+        && wp == compl_curr_win
         && (*wp).w_buffer == compl_curr_buf;
 }
 #[no_mangle]
@@ -5927,8 +5818,8 @@ pub unsafe extern "C" fn ins_compl_has_preinsert() -> bool {
             as ::core::ffi::c_int
     } else {
         (cur_cot_flags
-            & (kOptCotFlagPreinsert as ::core::ffi::c_int
-                | kOptCotFlagFuzzy as ::core::ffi::c_int) as ::core::ffi::c_uint
+            & (kOptCotFlagPreinsert as ::core::ffi::c_int | kOptCotFlagFuzzy as ::core::ffi::c_int)
+                as ::core::ffi::c_uint
             == kOptCotFlagPreinsert as ::core::ffi::c_int as ::core::ffi::c_uint)
             as ::core::ffi::c_int
     } != 0;
@@ -5947,15 +5838,14 @@ pub unsafe extern "C" fn ins_compl_bs() -> ::core::ffi::c_int {
     }
     let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
     let mut p: *mut ::core::ffi::c_char = line.offset((*curwin).w_cursor.col as isize);
-    p = p
-        .offset(
-            -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
-                + 1 as ::core::ffi::c_int) as isize),
-        );
+    p = p.offset(
+        -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
+            + 1 as ::core::ffi::c_int) as isize),
+    );
     let mut p_off: ptrdiff_t = p.offset_from(line);
     if p.offset_from(line) as ::core::ffi::c_int - compl_col < 0 as ::core::ffi::c_int
-        || p.offset_from(line) as ::core::ffi::c_int - compl_col
-            == 0 as ::core::ffi::c_int && !ctrl_x_mode_omni()
+        || p.offset_from(line) as ::core::ffi::c_int - compl_col == 0 as ::core::ffi::c_int
+            && !ctrl_x_mode_omni()
         || ctrl_x_mode_eval() as ::core::ffi::c_int != 0
         || !can_bs(BS_START)
             && p.offset_from(line) as ::core::ffi::c_int - compl_col - compl_length
@@ -5969,8 +5859,8 @@ pub unsafe extern "C" fn ins_compl_bs() -> ::core::ffi::c_int {
         ins_compl_restart();
     }
     line = get_cursor_line_ptr();
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_leader.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_leader.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -5979,7 +5869,8 @@ pub unsafe extern "C" fn ins_compl_bs() -> ::core::ffi::c_int {
         line.offset(compl_col as isize),
         (p_off - compl_col as ptrdiff_t) as size_t,
     );
-    if compl_autocomplete as ::core::ffi::c_int != 0 && !compl_first_match.is_null()
+    if compl_autocomplete as ::core::ffi::c_int != 0
+        && !compl_first_match.is_null()
         && !ins_compl_has_preinsert()
     {
         compl_shown_match = compl_first_match;
@@ -6010,18 +5901,14 @@ pub unsafe extern "C" fn ins_compl_has_autocomplete() -> bool {
 unsafe extern "C" fn ins_compl_fuzzy_sort() {
     let mut cur_cot_flags: ::core::ffi::c_uint = get_cot_flags();
     set_fuzzy_score();
-    if cur_cot_flags & kOptCotFlagNosort as ::core::ffi::c_int as ::core::ffi::c_uint
-        == 0
-    {
-        sort_compl_match_list(
-            Some(
-                cp_compare_fuzzy
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_void,
-                        *const ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-        );
+    if cur_cot_flags & kOptCotFlagNosort as ::core::ffi::c_int as ::core::ffi::c_uint == 0 {
+        sort_compl_match_list(Some(
+            cp_compare_fuzzy
+                as unsafe extern "C" fn(
+                    *const ::core::ffi::c_void,
+                    *const ::core::ffi::c_void,
+                ) -> ::core::ffi::c_int,
+        ));
         if cur_cot_flags
             & (kOptCotFlagNoinsert as ::core::ffi::c_int
                 | kOptCotFlagNoselect as ::core::ffi::c_int) as ::core::ffi::c_uint
@@ -6080,8 +5967,7 @@ unsafe extern "C" fn ins_compl_new_leader() {
         }
         compl_restarting = false_0 != 0;
     }
-    compl_enter_selects = !compl_used_match
-        && compl_selected_item != -1 as ::core::ffi::c_int;
+    compl_enter_selects = !compl_used_match && compl_selected_item != -1 as ::core::ffi::c_int;
     ins_compl_show_pum();
     if compl_match_array.is_null() {
         compl_enter_selects = false_0 != 0;
@@ -6091,7 +5977,8 @@ unsafe extern "C" fn ins_compl_new_leader() {
         ins_compl_insert(true_0 != 0, false_0 != 0);
     } else if compl_started as ::core::ffi::c_int != 0
         && ins_compl_preinsert_longest() as ::core::ffi::c_int != 0
-        && compl_leader.size > 0 as size_t && !ins_compl_preinsert_effect()
+        && compl_leader.size > 0 as size_t
+        && !ins_compl_preinsert_effect()
     {
         ins_compl_insert(true_0 != 0, true_0 != 0);
     }
@@ -6101,7 +5988,11 @@ unsafe extern "C" fn ins_compl_new_leader() {
 }
 unsafe extern "C" fn get_compl_len() -> ::core::ffi::c_int {
     let mut off: ::core::ffi::c_int = (*curwin).w_cursor.col - compl_col;
-    return if 0 as ::core::ffi::c_int > off { 0 as ::core::ffi::c_int } else { off };
+    return if 0 as ::core::ffi::c_int > off {
+        0 as ::core::ffi::c_int
+    } else {
+        off
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn ins_compl_addleader(mut c: ::core::ffi::c_int) {
@@ -6124,8 +6015,8 @@ pub unsafe extern "C" fn ins_compl_addleader(mut c: ::core::ffi::c_int) {
     if ins_compl_need_restart() {
         ins_compl_restart();
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_leader.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_leader.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -6153,22 +6044,18 @@ unsafe extern "C" fn ins_compl_set_original_text(
     mut len: size_t,
 ) {
     if match_at_original_text(compl_first_match) {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*compl_first_match)
-            .cp_str
-            .data as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*compl_first_match).cp_str.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
         (*compl_first_match).cp_str.size = 0 as size_t;
         (*compl_first_match).cp_str = cbuf_to_string(str, len);
     } else if !(*compl_first_match).cp_prev.is_null()
-        && match_at_original_text((*compl_first_match).cp_prev) as ::core::ffi::c_int
-            != 0
+        && match_at_original_text((*compl_first_match).cp_prev) as ::core::ffi::c_int != 0
     {
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*(*compl_first_match)
-            .cp_prev)
-            .cp_str
-            .data as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut (*(*compl_first_match).cp_prev).cp_str.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
         *ptr__0;
@@ -6180,14 +6067,14 @@ unsafe extern "C" fn ins_compl_set_original_text(
 pub unsafe extern "C" fn ins_compl_addfrommatch() {
     let mut len: ::core::ffi::c_int = (*curwin).w_cursor.col - compl_col;
     '_c2rust_label: {
-        if !compl_shown_match.is_null() {} else {
+        if !compl_shown_match.is_null() {
+        } else {
             __assert_fail(
                 b"compl_shown_match != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2421 as ::core::ffi::c_uint,
-                b"void ins_compl_addfrommatch(void)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void ins_compl_addfrommatch(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -6201,8 +6088,8 @@ pub unsafe extern "C" fn ins_compl_addfrommatch() {
         let mut cp: *mut compl_T = (*compl_shown_match).cp_next;
         while !cp.is_null() && !is_first_match(cp) {
             if compl_leader.data.is_null()
-                || ins_compl_equal(cp, compl_leader.data, compl_leader.size)
-                    as ::core::ffi::c_int != 0
+                || ins_compl_equal(cp, compl_leader.data, compl_leader.size) as ::core::ffi::c_int
+                    != 0
             {
                 p = (*cp).cp_str.data;
                 plen = (*cp).cp_str.size;
@@ -6227,13 +6114,11 @@ unsafe extern "C" fn set_ctrl_x_mode(c: ::core::ffi::c_int) -> bool {
                 ctrl_x_mode = CTRL_X_SCROLL as ::core::ffi::c_int;
                 if State & REPLACE_FLAG as ::core::ffi::c_int == 0 {
                     edit_submode = gettext(
-                        b" (insert) Scroll (^E/^Y)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b" (insert) Scroll (^E/^Y)\0".as_ptr() as *const ::core::ffi::c_char
                     );
                 } else {
                     edit_submode = gettext(
-                        b" (replace) Scroll (^E/^Y)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b" (replace) Scroll (^E/^Y)\0".as_ptr() as *const ::core::ffi::c_char
                     );
                 }
                 edit_submode_pre = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6335,18 +6220,15 @@ unsafe extern "C" fn ins_compl_stop(
         ins_compl_delete(false_0 != 0);
     }
     if !compl_curr_match.is_null() || !compl_leader.data.is_null() || c == Ctrl_E {
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
-        if !compl_curr_match.is_null() && compl_used_match as ::core::ffi::c_int != 0
-            && c != Ctrl_E
+        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        if !compl_curr_match.is_null() && compl_used_match as ::core::ffi::c_int != 0 && c != Ctrl_E
         {
             ptr = (*compl_curr_match).cp_str.data;
         }
         ins_compl_fixRedoBufForLeader(ptr);
     }
-    let mut want_cindent: bool = get_can_cindent() as ::core::ffi::c_int != 0
-        && cindent_on() as ::core::ffi::c_int != 0;
+    let mut want_cindent: bool =
+        get_can_cindent() as ::core::ffi::c_int != 0 && cindent_on() as ::core::ffi::c_int != 0;
     if compl_cont_mode == CTRL_X_WHOLE_LINE as ::core::ffi::c_int {
         if want_cindent {
             do_c_expr_indent();
@@ -6361,35 +6243,33 @@ unsafe extern "C" fn ins_compl_stop(
             insertchar(NUL, 0 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
         }
         if prev_col > 0 as ::core::ffi::c_int
-            && *get_cursor_line_ptr().offset((*curwin).w_cursor.col as isize)
-                as ::core::ffi::c_int != NUL
+            && *get_cursor_line_ptr().offset((*curwin).w_cursor.col as isize) as ::core::ffi::c_int
+                != NUL
         {
             inc_cursor();
         }
     }
-    let mut word: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut word: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if (c == Ctrl_Y
-        || compl_enter_selects as ::core::ffi::c_int != 0
-            && (c == CAR || c == K_KENTER || c == NL))
+        || compl_enter_selects as ::core::ffi::c_int != 0 && (c == CAR || c == K_KENTER || c == NL))
         && pum_visible() as ::core::ffi::c_int != 0
     {
         word = xstrdup((*compl_shown_match).cp_str.data);
         retval = true_0 != 0;
         redrawWinline(curwin, (*curwin).w_cursor.lnum);
     }
-    if word.is_null() && c != Ctrl_E && compl_used_match as ::core::ffi::c_int != 0
-        && compl_match_array.is_null() && !compl_curr_match.is_null()
+    if word.is_null()
+        && c != Ctrl_E
+        && compl_used_match as ::core::ffi::c_int != 0
+        && compl_match_array.is_null()
+        && !compl_curr_match.is_null()
         && !(*compl_curr_match).cp_str.data.is_null()
     {
         word = xstrdup((*compl_curr_match).cp_str.data);
     }
     if c == Ctrl_E {
         ins_compl_delete(false_0 != 0);
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut plen: size_t = 0 as size_t;
         if !compl_leader.data.is_null() {
             p = compl_leader.data;
@@ -6437,7 +6317,8 @@ unsafe extern "C" fn ins_compl_stop(
             KEY_COMPLETE as ::core::ffi::c_int,
             ' ' as ::core::ffi::c_int,
             inindent(0 as ::core::ffi::c_int),
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         do_c_expr_indent();
     }
@@ -6457,36 +6338,31 @@ pub unsafe extern "C" fn ins_compl_prep(mut c: ::core::ffi::c_int) -> bool {
         edit_submode_extra = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if c == K_SELECT
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
     {
         return retval;
     }
     if ctrl_x_mode == CTRL_X_CMDLINE_CTRL_X as ::core::ffi::c_int && c != Ctrl_X {
-        if c == Ctrl_V || c == Ctrl_Q || c == Ctrl_Z
-            || ins_compl_pum_key(c) as ::core::ffi::c_int != 0 || !vim_is_ctrl_x_key(c)
+        if c == Ctrl_V
+            || c == Ctrl_Q
+            || c == Ctrl_Z
+            || ins_compl_pum_key(c) as ::core::ffi::c_int != 0
+            || !vim_is_ctrl_x_key(c)
         {
             ctrl_x_mode = CTRL_X_CMDLINE as ::core::ffi::c_int;
             if c == Ctrl_Z {
@@ -6523,8 +6399,11 @@ pub unsafe extern "C" fn ins_compl_prep(mut c: ::core::ffi::c_int) -> bool {
         || ctrl_x_mode == CTRL_X_FINISHED as ::core::ffi::c_int
     {
         redraw_mode = true_0 != 0;
-        if ctrl_x_mode_normal() as ::core::ffi::c_int != 0 && c != Ctrl_N && c != Ctrl_P
-            && c != Ctrl_R && !ins_compl_pum_key(c)
+        if ctrl_x_mode_normal() as ::core::ffi::c_int != 0
+            && c != Ctrl_N
+            && c != Ctrl_P
+            && c != Ctrl_R
+            && !ins_compl_pum_key(c)
             || ctrl_x_mode == CTRL_X_FINISHED as ::core::ffi::c_int
         {
             retval = ins_compl_stop(c, prev_mode, retval);
@@ -6543,16 +6422,14 @@ pub unsafe extern "C" fn ins_compl_prep(mut c: ::core::ffi::c_int) -> bool {
     }
     return retval;
 }
-unsafe extern "C" fn ins_compl_fixRedoBufForLeader(
-    mut ptr_arg: *mut ::core::ffi::c_char,
-) {
+unsafe extern "C" fn ins_compl_fixRedoBufForLeader(mut ptr_arg: *mut ::core::ffi::c_char) {
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut ptr: *mut ::core::ffi::c_char = ptr_arg;
     if ptr.is_null() {
         if !compl_leader.data.is_null() {
             ptr = compl_leader.data;
         } else {
-            return
+            return;
         }
     }
     if !compl_orig_text.data.is_null() {
@@ -6584,11 +6461,12 @@ unsafe extern "C" fn ins_compl_next_buf(
             wp = curwin;
         }
         '_c2rust_label: {
-            if !wp.is_null() {} else {
+            if !wp.is_null() {
+            } else {
                 __assert_fail(
                     b"wp\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     2872 as ::core::ffi::c_uint,
                     b"buf_T *ins_compl_next_buf(buf_T *, int)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -6596,7 +6474,11 @@ unsafe extern "C" fn ins_compl_next_buf(
             }
         };
         loop {
-            wp = if !(*wp).w_next.is_null() { (*wp).w_next } else { firstwin };
+            wp = if !(*wp).w_next.is_null() {
+                (*wp).w_next
+            } else {
+                firstwin
+            };
             if wp == curwin
                 || !(*(*wp).w_buffer).b_scanned
                     && (*wp).w_config.focusable as ::core::ffi::c_int != 0
@@ -6607,7 +6489,11 @@ unsafe extern "C" fn ins_compl_next_buf(
         buf = (*wp).w_buffer;
     } else {
         loop {
-            buf = if !(*buf).b_next.is_null() { (*buf).b_next } else { firstbuf };
+            buf = if !(*buf).b_next.is_null() {
+                (*buf).b_next
+            } else {
+                firstbuf
+            };
             if buf == curbuf {
                 break;
             }
@@ -6686,15 +6572,9 @@ pub unsafe extern "C" fn did_set_completefunc(
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut retval: ::core::ffi::c_int = 0;
     if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
-        retval = option_set_callback_func(
-            (*args).os_newval.string.data,
-            &raw mut (*buf).b_cfu_cb,
-        );
+        retval = option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_cfu_cb);
     } else {
-        retval = option_set_callback_func(
-            (*args).os_newval.string.data,
-            &raw mut cfu_cb,
-        );
+        retval = option_set_callback_func((*args).os_newval.string.data, &raw mut cfu_cb);
         if retval == OK && (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
             set_buflocal_cfu_callback(buf);
         }
@@ -6710,21 +6590,13 @@ pub unsafe extern "C" fn set_buflocal_cfu_callback(mut buf: *mut buf_T) {
     copy_global_to_buflocal_cb(&raw mut cfu_cb, &raw mut (*buf).b_cfu_cb);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_omnifunc(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_omnifunc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut retval: ::core::ffi::c_int = 0;
     if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
-        retval = option_set_callback_func(
-            (*args).os_newval.string.data,
-            &raw mut (*buf).b_ofu_cb,
-        );
+        retval = option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_ofu_cb);
     } else {
-        retval = option_set_callback_func(
-            (*args).os_newval.string.data,
-            &raw mut ofu_cb,
-        );
+        retval = option_set_callback_func((*args).os_newval.string.data, &raw mut ofu_cb);
         if retval == OK && (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
             set_buflocal_ofu_callback(buf);
         }
@@ -6752,8 +6624,7 @@ pub unsafe extern "C" fn clear_cpt_callbacks(
         callback_free((*callbacks).offset(i as isize));
         i += 1;
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void = callbacks
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = callbacks as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -6793,11 +6664,9 @@ pub unsafe extern "C" fn set_buflocal_cpt_callbacks(mut buf: *mut buf_T) {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn set_cpt_callbacks(
-    mut args: *mut optset_T,
-) -> ::core::ffi::c_int {
-    let mut local: bool = (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int
-        != 0 as ::core::ffi::c_int;
+pub unsafe extern "C" fn set_cpt_callbacks(mut args: *mut optset_T) -> ::core::ffi::c_int {
+    let mut local: bool =
+        (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 as ::core::ffi::c_int;
     if curbuf.is_null() {
         return FAIL;
     }
@@ -6807,8 +6676,8 @@ pub unsafe extern "C" fn set_cpt_callbacks(
     if count == 0 as ::core::ffi::c_int {
         return OK;
     }
-    (*curbuf).b_p_cpt_cb = xcalloc(count as size_t, ::core::mem::size_of::<Callback>())
-        as *mut Callback;
+    (*curbuf).b_p_cpt_cb =
+        xcalloc(count as size_t, ::core::mem::size_of::<Callback>()) as *mut Callback;
     (*curbuf).b_p_cpt_count = count;
     let mut buf: [::core::ffi::c_char; 512] = [0; 512];
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6898,15 +6767,14 @@ pub unsafe extern "C" fn set_ref_in_cpt_callbacks(
                 copyID,
                 ::core::ptr::null_mut::<*mut ht_stack_T>(),
                 ::core::ptr::null_mut::<*mut list_stack_T>(),
-            ) as ::core::ffi::c_int != 0;
+            ) as ::core::ffi::c_int
+                != 0;
         i += 1;
     }
     return abort;
 }
 #[no_mangle]
-pub unsafe extern "C" fn set_ref_in_insexpand_funcs(
-    mut copyID: ::core::ffi::c_int,
-) -> bool {
+pub unsafe extern "C" fn set_ref_in_insexpand_funcs(mut copyID: ::core::ffi::c_int) -> bool {
     let mut abort: bool = set_ref_in_callback(
         &raw mut cfu_cb,
         copyID,
@@ -6919,17 +6787,18 @@ pub unsafe extern "C" fn set_ref_in_insexpand_funcs(
             copyID,
             ::core::ptr::null_mut::<*mut ht_stack_T>(),
             ::core::ptr::null_mut::<*mut list_stack_T>(),
-        ) as ::core::ffi::c_int != 0;
+        ) as ::core::ffi::c_int
+            != 0;
     abort = abort as ::core::ffi::c_int != 0
         || set_ref_in_callback(
             &raw mut tsrfu_cb,
             copyID,
             ::core::ptr::null_mut::<*mut ht_stack_T>(),
             ::core::ptr::null_mut::<*mut list_stack_T>(),
-        ) as ::core::ffi::c_int != 0;
-    abort = abort as ::core::ffi::c_int != 0
-        || set_ref_in_cpt_callbacks(cpt_cb, cpt_cb_count, copyID) as ::core::ffi::c_int
+        ) as ::core::ffi::c_int
             != 0;
+    abort = abort as ::core::ffi::c_int != 0
+        || set_ref_in_cpt_callbacks(cpt_cb, cpt_cb_count, copyID) as ::core::ffi::c_int != 0;
     return abort;
 }
 unsafe extern "C" fn get_complete_funcname(
@@ -6946,14 +6815,11 @@ unsafe extern "C" fn get_complete_funcname(
             };
         }
         _ => {
-            return b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     };
 }
-unsafe extern "C" fn get_insert_callback(
-    mut type_0: ::core::ffi::c_int,
-) -> *mut Callback {
+unsafe extern "C" fn get_insert_callback(mut type_0: ::core::ffi::c_int) -> *mut Callback {
     if type_0 == CTRL_X_FUNCTION as ::core::ffi::c_int {
         return &raw mut (*curbuf).b_cfu_cb;
     }
@@ -6980,7 +6846,8 @@ unsafe extern "C" fn expand_by_function(
     };
     let save_State: ::core::ffi::c_int = State;
     '_c2rust_label: {
-        if !curbuf.is_null() {} else {
+        if !curbuf.is_null() {
+        } else {
             __assert_fail(
                 b"curbuf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
@@ -7066,9 +6933,7 @@ unsafe extern "C" fn ins_compl_add_tv(
     dir: Direction,
     mut fast: bool,
 ) -> ::core::ffi::c_int {
-    let mut word: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut word: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut dup: bool = false_0 != 0;
     let mut empty: bool = false_0 != 0;
     let mut flags: ::core::ffi::c_int = if fast as ::core::ffi::c_int != 0 {
@@ -7076,27 +6941,20 @@ unsafe extern "C" fn ins_compl_add_tv(
     } else {
         0 as ::core::ffi::c_int
     };
-    let mut cptext: [*mut ::core::ffi::c_char; 4] = [::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >(); 4];
-    let mut user_abbr_hlname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut user_kind_hlname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut user_hl: [::core::ffi::c_int; 2] = [
-        -1 as ::core::ffi::c_int,
-        -1 as ::core::ffi::c_int,
-    ];
+    let mut cptext: [*mut ::core::ffi::c_char; 4] =
+        [::core::ptr::null_mut::<::core::ffi::c_char>(); 4];
+    let mut user_abbr_hlname: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut user_kind_hlname: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut user_hl: [::core::ffi::c_int; 2] = [-1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int];
     let mut user_data: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     };
     user_data.v_type = VAR_UNKNOWN;
-    if (*tv).v_type as ::core::ffi::c_uint
-        == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
+    if (*tv).v_type as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
         && !(*tv).vval.v_dict.is_null()
     {
         word = tv_dict_get_string(
@@ -7129,17 +6987,13 @@ unsafe extern "C" fn ins_compl_add_tv(
             b"abbr_hlgroup\0".as_ptr() as *const ::core::ffi::c_char,
             false_0 != 0,
         );
-        user_hl[0 as ::core::ffi::c_int as usize] = get_user_highlight_attr(
-            user_abbr_hlname,
-        );
+        user_hl[0 as ::core::ffi::c_int as usize] = get_user_highlight_attr(user_abbr_hlname);
         user_kind_hlname = tv_dict_get_string(
             (*tv).vval.v_dict,
             b"kind_hlgroup\0".as_ptr() as *const ::core::ffi::c_char,
             false_0 != 0,
         );
-        user_hl[1 as ::core::ffi::c_int as usize] = get_user_highlight_attr(
-            user_kind_hlname,
-        );
+        user_hl[1 as ::core::ffi::c_int as usize] = get_user_highlight_attr(user_kind_hlname);
         tv_dict_get_tv(
             (*tv).vval.v_dict,
             b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7161,11 +7015,11 @@ unsafe extern "C" fn ins_compl_add_tv(
             b"empty\0".as_ptr() as *const ::core::ffi::c_char,
         ) != 0;
         if !tv_dict_get_string(
-                (*tv).vval.v_dict,
-                b"equal\0".as_ptr() as *const ::core::ffi::c_char,
-                false_0 != 0,
-            )
-            .is_null()
+            (*tv).vval.v_dict,
+            b"equal\0".as_ptr() as *const ::core::ffi::c_char,
+            false_0 != 0,
+        )
+        .is_null()
             && tv_dict_get_number(
                 (*tv).vval.v_dict,
                 b"equal\0".as_ptr() as *const ::core::ffi::c_char,
@@ -7210,9 +7064,7 @@ unsafe extern "C" fn ins_compl_add_list(list: *mut list_T) {
     if !l_.is_null() {
         let mut li: *mut listitem_T = (*l_).lv_first;
         while !li.is_null() {
-            if ins_compl_add_tv(&raw mut (*li).li_tv, dir, true)
-                == 1 as ::core::ffi::c_int
-            {
+            if ins_compl_add_tv(&raw mut (*li).li_tv, dir, true) == 1 as ::core::ffi::c_int {
                 dir = FORWARD;
             } else if did_emsg != 0 {
                 break;
@@ -7226,8 +7078,7 @@ unsafe extern "C" fn ins_compl_add_dict(mut dict: *mut dict_T) {
     let mut di_refresh: *mut dictitem_T = tv_dict_find(
         dict,
         b"refresh\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di_refresh.is_null()
         && (*di_refresh).di_tv.v_type as ::core::ffi::c_uint
@@ -7244,8 +7095,7 @@ unsafe extern "C" fn ins_compl_add_dict(mut dict: *mut dict_T) {
     let mut di_words: *mut dictitem_T = tv_dict_find(
         dict,
         b"words\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di_words.is_null()
         && (*di_words).di_tv.v_type as ::core::ffi::c_uint
@@ -7270,9 +7120,7 @@ unsafe extern "C" fn restore_orig_extmarks() {
     let mut i: ::core::ffi::c_long = (compl_orig_extmarks.size as ::core::ffi::c_int
         - 1 as ::core::ffi::c_int) as ::core::ffi::c_long;
     while i > -1 as ::core::ffi::c_long {
-        let mut undo_info: ExtmarkUndoObject = *compl_orig_extmarks
-            .items
-            .offset(i as isize);
+        let mut undo_info: ExtmarkUndoObject = *compl_orig_extmarks.items.offset(i as isize);
         extmark_apply_undo(undo_info, true_0 != 0);
         i -= 1;
     }
@@ -7333,13 +7181,11 @@ unsafe extern "C" fn set_completion(mut startcol: colnr_T, mut list: *mut list_T
     compl_used_match = true_0 != 0;
     compl_cont_status = 0 as ::core::ffi::c_int;
     let mut save_w_wrow: ::core::ffi::c_int = (*curwin).w_wrow;
-    let mut save_w_leftcol: ::core::ffi::c_int = (*curwin).w_leftcol
-        as ::core::ffi::c_int;
+    let mut save_w_leftcol: ::core::ffi::c_int = (*curwin).w_leftcol as ::core::ffi::c_int;
     compl_curr_match = compl_first_match;
-    let mut no_select: bool = compl_no_select as ::core::ffi::c_int != 0
-        || compl_longest as ::core::ffi::c_int != 0;
-    if compl_no_insert as ::core::ffi::c_int != 0 || no_select as ::core::ffi::c_int != 0
-    {
+    let mut no_select: bool =
+        compl_no_select as ::core::ffi::c_int != 0 || compl_longest as ::core::ffi::c_int != 0;
+    if compl_no_insert as ::core::ffi::c_int != 0 || no_select as ::core::ffi::c_int != 0 {
         ins_complete(K_DOWN, false_0 != 0);
         if no_select {
             ins_complete(K_UP, false_0 != 0);
@@ -7361,12 +7207,10 @@ pub unsafe extern "C" fn f_complete(
     mut fptr: EvalFuncData,
 ) {
     if State & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        emsg(
-            gettext(
-                b"E785: complete() can only be used in Insert mode\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E785: complete() can only be used in Insert mode\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
         return;
     }
     if !undo_allowed(curbuf) {
@@ -7384,7 +7228,9 @@ pub unsafe extern "C" fn f_complete(
         if startcol > 0 as ::core::ffi::c_int {
             set_completion(
                 startcol - 1 as colnr_T,
-                (*argvars.offset(1 as ::core::ffi::c_int as isize)).vval.v_list,
+                (*argvars.offset(1 as ::core::ffi::c_int as isize))
+                    .vval
+                    .v_list,
             );
         }
     };
@@ -7437,8 +7283,7 @@ unsafe extern "C" fn ins_compl_update_sequence_numbers() {
         }
         if !match_0.is_null() {
             match_0 = (*match_0).cp_next;
-            while !match_0.is_null() && (*match_0).cp_number == -1 as ::core::ffi::c_int
-            {
+            while !match_0.is_null() && (*match_0).cp_number == -1 as ::core::ffi::c_int {
                 number += 1;
                 (*match_0).cp_number = number;
                 match_0 = (*match_0).cp_next;
@@ -7446,13 +7291,12 @@ unsafe extern "C" fn ins_compl_update_sequence_numbers() {
         }
     } else {
         '_c2rust_label: {
-            if compl_direction as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int
-            {} else {
+            if compl_direction as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
-                    b"compl_direction == BACKWARD\0".as_ptr()
+                    b"compl_direction == BACKWARD\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     3532 as ::core::ffi::c_uint,
                     b"void ins_compl_update_sequence_numbers(void)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7470,8 +7314,7 @@ unsafe extern "C" fn ins_compl_update_sequence_numbers() {
         }
         if !match_0.is_null() {
             match_0 = (*match_0).cp_prev;
-            while !match_0.is_null() && (*match_0).cp_number == -1 as ::core::ffi::c_int
-            {
+            while !match_0.is_null() && (*match_0).cp_number == -1 as ::core::ffi::c_int {
                 number += 1;
                 (*match_0).cp_number = number;
                 match_0 = (*match_0).cp_prev;
@@ -7494,29 +7337,25 @@ unsafe extern "C" fn fill_complete_info_dict(
         di,
         b"abbr\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_ABBR as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_ABBR as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     tv_dict_add_str(
         di,
         b"menu\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_MENU as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_MENU as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     tv_dict_add_str(
         di,
         b"kind\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_KIND as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_KIND as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     tv_dict_add_str(
         di,
         b"info\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (*match_0).cp_text[CPT_INFO as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
+        (*match_0).cp_text[CPT_INFO as ::core::ffi::c_int as usize] as *const ::core::ffi::c_char,
     );
     if add_match {
         tv_dict_add_bool(
@@ -7532,24 +7371,19 @@ unsafe extern "C" fn fill_complete_info_dict(
         tv_dict_add_str(
             di,
             b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             b"\0".as_ptr() as *const ::core::ffi::c_char,
         );
     } else {
         tv_dict_add_tv(
             di,
             b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             &raw mut (*match_0).cp_user_data,
         );
     };
 }
-unsafe extern "C" fn get_complete_info(
-    mut what_list: *mut list_T,
-    mut retdict: *mut dict_T,
-) {
+unsafe extern "C" fn get_complete_info(mut what_list: *mut list_T, mut retdict: *mut dict_T) {
     let mut what_flag: ::core::ffi::c_int = 0;
     if what_list.is_null() {
         what_flag = CI_WHAT_ALL & !(CI_WHAT_MATCHES | CI_WHAT_COMPLETED);
@@ -7557,9 +7391,7 @@ unsafe extern "C" fn get_complete_info(
         what_flag = 0 as ::core::ffi::c_int;
         let mut item: *mut listitem_T = tv_list_first(what_list);
         while !item.is_null() {
-            let mut what: *const ::core::ffi::c_char = tv_get_string(
-                &raw mut (*item).li_tv,
-            );
+            let mut what: *const ::core::ffi::c_char = tv_get_string(&raw mut (*item).li_tv);
             if strcmp(what, b"mode\0".as_ptr() as *const ::core::ffi::c_char)
                 == 0 as ::core::ffi::c_int
             {
@@ -7609,49 +7441,46 @@ unsafe extern "C" fn get_complete_info(
         ret = tv_dict_add_nr(
             retdict,
             b"pum_visible\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
             pum_visible() as varnumber_T,
         );
     }
     if ret == OK && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
         let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-        let mut len: ::core::ffi::c_int = compl_ins_end_col as ::core::ffi::c_int
-            - (*curwin).w_cursor.col as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int =
+            compl_ins_end_col as ::core::ffi::c_int - (*curwin).w_cursor.col as ::core::ffi::c_int;
         ret = tv_dict_add_str_len(
             retdict,
             b"preinserted_text\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 17]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
             if len > 0 as ::core::ffi::c_int {
-                line.offset((*curwin).w_cursor.col as isize)
-                    as *const ::core::ffi::c_char
+                line.offset((*curwin).w_cursor.col as isize) as *const ::core::ffi::c_char
             } else {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             },
-            if len > 0 as ::core::ffi::c_int { len } else { 0 as ::core::ffi::c_int },
+            if len > 0 as ::core::ffi::c_int {
+                len
+            } else {
+                0 as ::core::ffi::c_int
+            },
         );
     }
     if ret == OK
-        && what_flag
-            & (CI_WHAT_ITEMS | CI_WHAT_SELECTED | CI_WHAT_MATCHES | CI_WHAT_COMPLETED)
-            != 0
+        && what_flag & (CI_WHAT_ITEMS | CI_WHAT_SELECTED | CI_WHAT_MATCHES | CI_WHAT_COMPLETED) != 0
     {
         let mut li: *mut list_T = ::core::ptr::null_mut::<list_T>();
         let mut selected_idx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let mut has_items: bool = what_flag & CI_WHAT_ITEMS != 0;
         let mut has_matches: bool = what_flag & CI_WHAT_MATCHES != 0;
         let mut has_completed: bool = what_flag & CI_WHAT_COMPLETED != 0;
-        if has_items as ::core::ffi::c_int != 0 || has_matches as ::core::ffi::c_int != 0
-        {
+        if has_items as ::core::ffi::c_int != 0 || has_matches as ::core::ffi::c_int != 0 {
             li = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-            let mut key: *const ::core::ffi::c_char = if has_matches
-                as ::core::ffi::c_int != 0 && !has_items
-            {
-                b"matches\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"items\0".as_ptr() as *const ::core::ffi::c_char
-            };
+            let mut key: *const ::core::ffi::c_char =
+                if has_matches as ::core::ffi::c_int != 0 && !has_items {
+                    b"matches\0".as_ptr() as *const ::core::ffi::c_char
+                } else {
+                    b"items\0".as_ptr() as *const ::core::ffi::c_char
+                };
             ret = tv_dict_add_list(retdict, key, strlen(key), li);
         }
         if ret == OK && what_flag & CI_WHAT_SELECTED != 0 {
@@ -7684,9 +7513,7 @@ unsafe extern "C" fn get_complete_info(
                     {
                         selected_idx = list_idx;
                     }
-                    if !has_matches
-                        || (*match_0).cp_in_match_array as ::core::ffi::c_int != 0
-                    {
+                    if !has_matches || (*match_0).cp_in_match_array as ::core::ffi::c_int != 0 {
                         list_idx += 1;
                     }
                 }
@@ -7700,8 +7527,7 @@ unsafe extern "C" fn get_complete_info(
             ret = tv_dict_add_nr(
                 retdict,
                 b"selected\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
                 selected_idx as varnumber_T,
             );
             let mut wp: *mut win_T = win_float_find_preview();
@@ -7709,20 +7535,19 @@ unsafe extern "C" fn get_complete_info(
                 tv_dict_add_nr(
                     retdict,
                     b"preview_winid\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 14]>()
-                        .wrapping_sub(1 as size_t),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 14]>().wrapping_sub(1 as size_t),
                     (*wp).handle as varnumber_T,
                 );
                 tv_dict_add_nr(
                     retdict,
                     b"preview_bufnr\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 14]>()
-                        .wrapping_sub(1 as size_t),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 14]>().wrapping_sub(1 as size_t),
                     (*(*wp).w_buffer).handle as varnumber_T,
                 );
             }
         }
-        if ret == OK && selected_idx != -1 as ::core::ffi::c_int
+        if ret == OK
+            && selected_idx != -1 as ::core::ffi::c_int
             && has_completed as ::core::ffi::c_int != 0
         {
             let mut di_0: *mut dict_T = tv_dict_alloc();
@@ -7730,8 +7555,7 @@ unsafe extern "C" fn get_complete_info(
             ret = tv_dict_add_dict(
                 retdict,
                 b"completed\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
                 di_0,
             );
         }
@@ -7756,14 +7580,15 @@ pub unsafe extern "C" fn f_complete_info(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
             return;
         }
-        what_list = (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_list;
+        what_list = (*argvars.offset(0 as ::core::ffi::c_int as isize))
+            .vval
+            .v_list;
     }
     get_complete_info(what_list, (*rettv).vval.v_dict);
 }
@@ -7804,13 +7629,14 @@ unsafe extern "C" fn process_next_cpt_value(
     }
     '_done: {
         if *(*st).e_cpt as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-            && !(*curbuf).b_scanned && !skip_source && !compl_time_slice_expired
+            && !(*curbuf).b_scanned
+            && !skip_source
+            && !compl_time_slice_expired
         {
             (*st).ins_buf = curbuf;
             (*st).first_match_pos = *start_match_pos;
             if ctrl_x_mode_normal() as ::core::ffi::c_int != 0
-                && (!fuzzy_collect
-                    && dec(&raw mut (*st).first_match_pos) < 0 as ::core::ffi::c_int)
+                && (!fuzzy_collect && dec(&raw mut (*st).first_match_pos) < 0 as ::core::ffi::c_int)
             {
                 (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count;
                 (*st).first_match_pos.col = ml_get_len((*st).first_match_pos.lnum);
@@ -7818,17 +7644,16 @@ unsafe extern "C" fn process_next_cpt_value(
             (*st).last_match_pos = (*st).first_match_pos;
             compl_type = 0 as ::core::ffi::c_int;
             (*st).set_match_pos = true_0 != 0;
-        } else if !skip_source && !compl_time_slice_expired
+        } else if !skip_source
+            && !compl_time_slice_expired
             && !vim_strchr(
-                    b"buwU\0".as_ptr() as *const ::core::ffi::c_char,
-                    *(*st).e_cpt as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                b"buwU\0".as_ptr() as *const ::core::ffi::c_char,
+                *(*st).e_cpt as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
             && {
-                (*st).ins_buf = ins_compl_next_buf(
-                    (*st).ins_buf,
-                    *(*st).e_cpt as ::core::ffi::c_int,
-                );
+                (*st).ins_buf =
+                    ins_compl_next_buf((*st).ins_buf, *(*st).e_cpt as ::core::ffi::c_int);
                 (*st).ins_buf != curbuf
             }
         {
@@ -7836,8 +7661,7 @@ unsafe extern "C" fn process_next_cpt_value(
                 compl_started = true_0 != 0;
                 (*st).last_match_pos.col = 0 as ::core::ffi::c_int as colnr_T;
                 (*st).first_match_pos.col = (*st).last_match_pos.col;
-                (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count
-                    + 1 as linenr_T;
+                (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count + 1 as linenr_T;
                 (*st).last_match_pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
                 compl_type = 0 as ::core::ffi::c_int;
             } else {
@@ -7851,9 +7675,7 @@ unsafe extern "C" fn process_next_cpt_value(
                     (*st).dict_f = DICT_EXACT;
                 }
             }
-            if !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
-                && !compl_autocomplete
-            {
+            if !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int) && !compl_autocomplete {
                 vim_snprintf(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
                     IOSIZE as size_t,
@@ -7870,8 +7692,7 @@ unsafe extern "C" fn process_next_cpt_value(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
                     b"completion\0".as_ptr() as *const ::core::ffi::c_char
                         as *mut ::core::ffi::c_char,
-                    b"running\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"running\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     HLF_R as ::core::ffi::c_int,
                     false_0 != 0,
                     true_0 != 0,
@@ -7885,49 +7706,34 @@ unsafe extern "C" fn process_next_cpt_value(
                     || *(*st).e_cpt as ::core::ffi::c_int == 'o' as ::core::ffi::c_int
                 {
                     compl_type = CTRL_X_FUNCTION as ::core::ffi::c_int;
-                    (*st).func_cb = get_callback_if_cpt_func(
-                        (*st).e_cpt,
-                        cpt_sources_index,
-                    );
+                    (*st).func_cb = get_callback_if_cpt_func((*st).e_cpt, cpt_sources_index);
                     if (*st).func_cb.is_null() {
                         compl_type = -1 as ::core::ffi::c_int;
                     }
                 } else if !skip_source {
                     if *(*st).e_cpt as ::core::ffi::c_int == 'k' as ::core::ffi::c_int
-                        || *(*st).e_cpt as ::core::ffi::c_int
-                            == 's' as ::core::ffi::c_int
+                        || *(*st).e_cpt as ::core::ffi::c_int == 's' as ::core::ffi::c_int
                     {
-                        if *(*st).e_cpt as ::core::ffi::c_int
-                            == 'k' as ::core::ffi::c_int
-                        {
+                        if *(*st).e_cpt as ::core::ffi::c_int == 'k' as ::core::ffi::c_int {
                             compl_type = CTRL_X_DICTIONARY as ::core::ffi::c_int;
                         } else {
                             compl_type = CTRL_X_THESAURUS as ::core::ffi::c_int;
                         }
                         (*st).e_cpt = (*st).e_cpt.offset(1);
-                        if *(*st).e_cpt as ::core::ffi::c_int
-                            != ',' as ::core::ffi::c_int
+                        if *(*st).e_cpt as ::core::ffi::c_int != ',' as ::core::ffi::c_int
                             && *(*st).e_cpt as ::core::ffi::c_int != NUL
                         {
                             (*st).dict = (*st).e_cpt;
                             (*st).dict_f = DICT_FIRST;
                         }
-                    } else if *(*st).e_cpt as ::core::ffi::c_int
-                        == 'i' as ::core::ffi::c_int
-                    {
+                    } else if *(*st).e_cpt as ::core::ffi::c_int == 'i' as ::core::ffi::c_int {
                         compl_type = CTRL_X_PATH_PATTERNS as ::core::ffi::c_int;
-                    } else if *(*st).e_cpt as ::core::ffi::c_int
-                        == 'd' as ::core::ffi::c_int
-                    {
+                    } else if *(*st).e_cpt as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
                         compl_type = CTRL_X_PATH_DEFINES as ::core::ffi::c_int;
-                    } else if *(*st).e_cpt as ::core::ffi::c_int
-                        == 'f' as ::core::ffi::c_int
-                    {
+                    } else if *(*st).e_cpt as ::core::ffi::c_int == 'f' as ::core::ffi::c_int {
                         compl_type = CTRL_X_BUFNAMES as ::core::ffi::c_int;
-                    } else if *(*st).e_cpt as ::core::ffi::c_int
-                        == ']' as ::core::ffi::c_int
-                        || *(*st).e_cpt as ::core::ffi::c_int
-                            == 't' as ::core::ffi::c_int
+                    } else if *(*st).e_cpt as ::core::ffi::c_int == ']' as ::core::ffi::c_int
+                        || *(*st).e_cpt as ::core::ffi::c_int == 't' as ::core::ffi::c_int
                     {
                         compl_type = CTRL_X_TAGS as ::core::ffi::c_int;
                         if !shortmess(SHM_COMPLETIONSCAN as ::core::ffi::c_int)
@@ -7937,9 +7743,7 @@ unsafe extern "C" fn process_next_cpt_value(
                                 &raw mut IObuff as *mut ::core::ffi::c_char,
                                 IOSIZE as size_t,
                                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                gettext(
-                                    b"Scanning tags.\0".as_ptr() as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"Scanning tags.\0".as_ptr() as *const ::core::ffi::c_char),
                             );
                             msg_progress(
                                 &raw mut IObuff as *mut ::core::ffi::c_char,
@@ -7971,9 +7775,7 @@ unsafe extern "C" fn process_next_cpt_value(
     *compl_type_arg = compl_type;
     return status;
 }
-unsafe extern "C" fn get_next_include_file_completion(
-    mut compl_type: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn get_next_include_file_completion(mut compl_type: ::core::ffi::c_int) {
     find_pattern_in_path(
         compl_pattern.data,
         compl_direction,
@@ -8022,7 +7824,11 @@ unsafe extern "C" fn get_next_dict_tsr_completion(
                 (*curbuf).b_p_dict
             },
             compl_pattern.data,
-            if !dict.is_null() { dict_f } else { 0 as ::core::ffi::c_int },
+            if !dict.is_null() {
+                dict_f
+            } else {
+                0 as ::core::ffi::c_int
+            },
             compl_type == CTRL_X_THESAURUS as ::core::ffi::c_int,
         );
     };
@@ -8031,16 +7837,17 @@ unsafe extern "C" fn get_next_tag_completion() {
     let save_p_ic: ::core::ffi::c_int = p_ic;
     p_ic = ignorecase(compl_pattern.data);
     g_tag_at_cursor = true_0 != 0;
-    let mut matches: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut matches: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut num_matches: ::core::ffi::c_int = 0;
     if find_tags(
         compl_pattern.data,
         &raw mut num_matches,
         &raw mut matches,
-        TAG_REGEXP as ::core::ffi::c_int | TAG_NAMES as ::core::ffi::c_int
-            | TAG_NOIC as ::core::ffi::c_int | TAG_INS_COMP as ::core::ffi::c_int
+        TAG_REGEXP as ::core::ffi::c_int
+            | TAG_NAMES as ::core::ffi::c_int
+            | TAG_NOIC as ::core::ffi::c_int
+            | TAG_INS_COMP as ::core::ffi::c_int
             | (if ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 {
                 TAG_VERBOSE as ::core::ffi::c_int
             } else {
@@ -8048,7 +7855,8 @@ unsafe extern "C" fn get_next_tag_completion() {
             }),
         TAG_MANY as ::core::ffi::c_int,
         (*curbuf).b_ffname,
-    ) == OK && num_matches > 0 as ::core::ffi::c_int
+    ) == OK
+        && num_matches > 0 as ::core::ffi::c_int
     {
         ins_compl_add_matches(num_matches, matches, p_ic);
     }
@@ -8091,8 +7899,7 @@ unsafe extern "C" fn fuzzy_longest_match() {
     }
     let mut nn_compl: *mut compl_T = (*(*compl_first_match).cp_next).cp_next;
     let mut more_candidates: bool = !nn_compl.is_null() && nn_compl != compl_first_match;
-    let mut compl: *mut compl_T = if ctrl_x_mode_whole_line() as ::core::ffi::c_int != 0
-    {
+    let mut compl: *mut compl_T = if ctrl_x_mode_whole_line() as ::core::ffi::c_int != 0 {
         compl_first_match
     } else {
         (*compl_first_match).cp_next
@@ -8110,9 +7917,9 @@ unsafe extern "C" fn fuzzy_longest_match() {
     {
         return;
     }
-    compl_best_matches = xmalloc(
-        (compl_num_bests as size_t).wrapping_mul(::core::mem::size_of::<*mut compl_T>()),
-    ) as *mut *mut compl_T;
+    compl_best_matches =
+        xmalloc((compl_num_bests as size_t).wrapping_mul(::core::mem::size_of::<*mut compl_T>()))
+            as *mut *mut compl_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while !compl.is_null() && i < compl_num_bests {
         *compl_best_matches.offset(i as isize) = compl;
@@ -8121,22 +7928,21 @@ unsafe extern "C" fn fuzzy_longest_match() {
     }
     let mut prefix: *mut ::core::ffi::c_char = (**compl_best_matches
         .offset(0 as ::core::ffi::c_int as isize))
-        .cp_str
-        .data;
+    .cp_str
+    .data;
     let mut prefix_len: ::core::ffi::c_int = (**compl_best_matches
         .offset(0 as ::core::ffi::c_int as isize))
-        .cp_str
-        .size as ::core::ffi::c_int;
+    .cp_str
+    .size as ::core::ffi::c_int;
     let mut i_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while i_0 < compl_num_bests {
-        let mut match_str: *mut ::core::ffi::c_char = (**compl_best_matches
-            .offset(i_0 as isize))
-            .cp_str
-            .data;
+        let mut match_str: *mut ::core::ffi::c_char =
+            (**compl_best_matches.offset(i_0 as isize)).cp_str.data;
         let mut prefix_ptr: *mut ::core::ffi::c_char = prefix;
         let mut match_ptr: *mut ::core::ffi::c_char = match_str;
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while j < prefix_len && *match_ptr as ::core::ffi::c_int != NUL
+        while j < prefix_len
+            && *match_ptr as ::core::ffi::c_int != NUL
             && *prefix_ptr as ::core::ffi::c_int != NUL
         {
             if strncmp(prefix_ptr, match_ptr, utfc_ptr2len(prefix_ptr) as size_t)
@@ -8155,8 +7961,7 @@ unsafe extern "C" fn fuzzy_longest_match() {
     }
     let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
     let mut leader_len: size_t = ins_compl_leader_len();
-    if !(leader_len > 0 as size_t
-        && strncmp(prefix, leader, leader_len) != 0 as ::core::ffi::c_int)
+    if !(leader_len > 0 as size_t && strncmp(prefix, leader, leader_len) != 0 as ::core::ffi::c_int)
     {
         prefix = xmemdupz(prefix as *const ::core::ffi::c_void, prefix_len as size_t)
             as *mut ::core::ffi::c_char;
@@ -8168,45 +7973,36 @@ unsafe extern "C" fn fuzzy_longest_match() {
     compl_num_bests = 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn get_next_filename_completion() {
-    let mut matches: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut matches: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut num_matches: ::core::ffi::c_int = 0;
     let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
     let mut leader_len: size_t = ins_compl_leader_len();
-    let mut in_fuzzy_collect: bool = cot_fuzzy() as ::core::ffi::c_int != 0
-        && leader_len > 0 as size_t;
-    let mut need_collect_bests: bool = in_fuzzy_collect as ::core::ffi::c_int != 0
-        && compl_get_longest as ::core::ffi::c_int != 0;
+    let mut in_fuzzy_collect: bool =
+        cot_fuzzy() as ::core::ffi::c_int != 0 && leader_len > 0 as size_t;
+    let mut need_collect_bests: bool =
+        in_fuzzy_collect as ::core::ffi::c_int != 0 && compl_get_longest as ::core::ffi::c_int != 0;
     let mut max_score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut dir: Direction = compl_direction;
     let mut pathsep: ::core::ffi::c_char = PATHSEP as ::core::ffi::c_char;
     if in_fuzzy_collect {
-        let mut last_sep: *mut ::core::ffi::c_char = strrchr(
-            leader,
-            pathsep as ::core::ffi::c_int,
-        );
+        let mut last_sep: *mut ::core::ffi::c_char = strrchr(leader, pathsep as ::core::ffi::c_int);
         if last_sep.is_null() {
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_pattern.data
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut compl_pattern.data as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
             compl_pattern.size = 0 as size_t;
-            compl_pattern = cbuf_to_string(
-                b"*\0".as_ptr() as *const ::core::ffi::c_char,
-                1 as size_t,
-            );
-        } else if *last_sep.offset(1 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int == NUL
-        {
+            compl_pattern =
+                cbuf_to_string(b"*\0".as_ptr() as *const ::core::ffi::c_char, 1 as size_t);
+        } else if *last_sep.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
             in_fuzzy_collect = false_0 != 0;
         } else {
-            let mut path_len: size_t = (last_sep.offset_from(leader) as size_t)
-                .wrapping_add(1 as size_t);
-            let mut path_with_wildcard: *mut ::core::ffi::c_char = xmalloc(
-                path_len.wrapping_add(2 as size_t),
-            ) as *mut ::core::ffi::c_char;
+            let mut path_len: size_t =
+                (last_sep.offset_from(leader) as size_t).wrapping_add(1 as size_t);
+            let mut path_with_wildcard: *mut ::core::ffi::c_char =
+                xmalloc(path_len.wrapping_add(2 as size_t)) as *mut ::core::ffi::c_char;
             vim_snprintf(
                 path_with_wildcard,
                 path_len.wrapping_add(2 as size_t),
@@ -8215,8 +8011,8 @@ unsafe extern "C" fn get_next_filename_completion() {
                 path_len as ::core::ffi::c_int,
                 leader,
             );
-            let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut compl_pattern.data
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                &raw mut compl_pattern.data as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL;
             *ptr__0;
@@ -8232,8 +8028,10 @@ unsafe extern "C" fn get_next_filename_completion() {
         &raw mut compl_pattern.data,
         &raw mut num_matches,
         &raw mut matches,
-        EW_FILE as ::core::ffi::c_int | EW_DIR as ::core::ffi::c_int
-            | EW_ADDSLASH as ::core::ffi::c_int | EW_SILENT as ::core::ffi::c_int,
+        EW_FILE as ::core::ffi::c_int
+            | EW_DIR as ::core::ffi::c_int
+            | EW_ADDSLASH as ::core::ffi::c_int
+            | EW_SILENT as ::core::ffi::c_int,
     ) != OK
     {
         return;
@@ -8253,8 +8051,7 @@ unsafe extern "C" fn get_next_filename_completion() {
             10 as ::core::ffi::c_int,
         );
         compl_fuzzy_scores = xmalloc(
-            ::core::mem::size_of::<::core::ffi::c_int>()
-                .wrapping_mul(num_matches as size_t),
+            ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(num_matches as size_t),
         ) as *mut ::core::ffi::c_int;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_matches {
@@ -8270,8 +8067,8 @@ unsafe extern "C" fn get_next_filename_completion() {
             i += 1;
         }
         if fuzzy_indices.ga_len > 0 as ::core::ffi::c_int {
-            let mut fuzzy_indices_data: *mut ::core::ffi::c_int = fuzzy_indices.ga_data
-                as *mut ::core::ffi::c_int;
+            let mut fuzzy_indices_data: *mut ::core::ffi::c_int =
+                fuzzy_indices.ga_data as *mut ::core::ffi::c_int;
             qsort(
                 fuzzy_indices_data as *mut ::core::ffi::c_void,
                 fuzzy_indices.ga_len as size_t,
@@ -8286,10 +8083,10 @@ unsafe extern "C" fn get_next_filename_completion() {
             );
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i_0 < fuzzy_indices.ga_len {
-                let mut match_0: *mut ::core::ffi::c_char = *matches
-                    .offset(*fuzzy_indices_data.offset(i_0 as isize) as isize);
-                let mut current_score: ::core::ffi::c_int = *compl_fuzzy_scores
-                    .offset(*fuzzy_indices_data.offset(i_0 as isize) as isize);
+                let mut match_0: *mut ::core::ffi::c_char =
+                    *matches.offset(*fuzzy_indices_data.offset(i_0 as isize) as isize);
+                let mut current_score: ::core::ffi::c_int =
+                    *compl_fuzzy_scores.offset(*fuzzy_indices_data.offset(i_0 as isize) as isize);
                 if ins_compl_add(
                     match_0,
                     -1 as ::core::ffi::c_int,
@@ -8326,8 +8123,7 @@ unsafe extern "C" fn get_next_filename_completion() {
         }
         xfree(compl_fuzzy_scores as *mut ::core::ffi::c_void);
         ga_clear(&raw mut fuzzy_indices);
-        if compl_num_bests > 0 as ::core::ffi::c_int
-            && compl_get_longest as ::core::ffi::c_int != 0
+        if compl_num_bests > 0 as ::core::ffi::c_int && compl_get_longest as ::core::ffi::c_int != 0
         {
             fuzzy_longest_match();
         }
@@ -8342,9 +8138,8 @@ unsafe extern "C" fn get_next_filename_completion() {
     }
 }
 unsafe extern "C" fn get_next_cmdline_completion() {
-    let mut matches: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut matches: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut num_matches: ::core::ffi::c_int = 0;
     if expand_cmdline(
         &raw mut compl_xp,
@@ -8358,14 +8153,10 @@ unsafe extern "C" fn get_next_cmdline_completion() {
     }
 }
 unsafe extern "C" fn get_next_spell_completion(mut lnum: linenr_T) {
-    let mut matches: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
-    let mut num_matches: ::core::ffi::c_int = expand_spelling(
-        lnum,
-        compl_pattern.data,
-        &raw mut matches,
-    );
+    let mut matches: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
+    let mut num_matches: ::core::ffi::c_int =
+        expand_spelling(lnum, compl_pattern.data, &raw mut matches);
     if num_matches > 0 as ::core::ffi::c_int {
         ins_compl_add_matches(num_matches, matches, p_ic);
     } else {
@@ -8379,10 +8170,10 @@ unsafe extern "C" fn ins_compl_get_next_word_or_line(
     mut cont_s_ipos: *mut bool,
 ) -> *mut ::core::ffi::c_char {
     *match_len = 0 as ::core::ffi::c_int;
-    let mut ptr: *mut ::core::ffi::c_char = ml_get_buf(ins_buf, (*cur_match_pos).lnum)
-        .offset((*cur_match_pos).col as isize);
-    let mut len: ::core::ffi::c_int = ml_get_buf_len(ins_buf, (*cur_match_pos).lnum)
-        - (*cur_match_pos).col as ::core::ffi::c_int;
+    let mut ptr: *mut ::core::ffi::c_char =
+        ml_get_buf(ins_buf, (*cur_match_pos).lnum).offset((*cur_match_pos).col as isize);
+    let mut len: ::core::ffi::c_int =
+        ml_get_buf_len(ins_buf, (*cur_match_pos).lnum) - (*cur_match_pos).col as ::core::ffi::c_int;
     if ctrl_x_mode_line_or_eval() {
         if compl_status_adding() {
             if (*cur_match_pos).lnum >= (*ins_buf).b_ml.ml_line_count {
@@ -8410,7 +8201,11 @@ unsafe extern "C" fn ins_compl_get_next_word_or_line(
         len = tmp_ptr_0.offset_from(ptr) as ::core::ffi::c_int;
         if compl_status_adding() as ::core::ffi::c_int != 0 && len == compl_length {
             if (*cur_match_pos).lnum < (*ins_buf).b_ml.ml_line_count {
-                strncpy(&raw mut IObuff as *mut ::core::ffi::c_char, ptr, len as size_t);
+                strncpy(
+                    &raw mut IObuff as *mut ::core::ffi::c_char,
+                    ptr,
+                    len as size_t,
+                );
                 ptr = ml_get_buf(ins_buf, (*cur_match_pos).lnum + 1 as linenr_T);
                 ptr = skipwhite(ptr);
                 tmp_ptr_0 = ptr;
@@ -8418,11 +8213,11 @@ unsafe extern "C" fn ins_compl_get_next_word_or_line(
                 tmp_ptr_0 = find_word_end(tmp_ptr_0);
                 if tmp_ptr_0 > ptr {
                     if *ptr as ::core::ffi::c_int != ')' as ::core::ffi::c_int
-                        && IObuff[(len - 1 as ::core::ffi::c_int) as usize]
-                            as ::core::ffi::c_int != TAB
+                        && IObuff[(len - 1 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                            != TAB
                     {
-                        if IObuff[(len - 1 as ::core::ffi::c_int) as usize]
-                            as ::core::ffi::c_int != ' ' as ::core::ffi::c_int
+                        if IObuff[(len - 1 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                            != ' ' as ::core::ffi::c_int
                         {
                             let c2rust_fresh3 = len;
                             len = len + 1;
@@ -8430,11 +8225,14 @@ unsafe extern "C" fn ins_compl_get_next_word_or_line(
                         }
                         if p_js != 0
                             && (IObuff[(len - 2 as ::core::ffi::c_int) as usize]
-                                as ::core::ffi::c_int == '.' as ::core::ffi::c_int
+                                as ::core::ffi::c_int
+                                == '.' as ::core::ffi::c_int
                                 || IObuff[(len - 2 as ::core::ffi::c_int) as usize]
-                                    as ::core::ffi::c_int == '?' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == '?' as ::core::ffi::c_int
                                 || IObuff[(len - 2 as ::core::ffi::c_int) as usize]
-                                    as ::core::ffi::c_int == '!' as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    == '!' as ::core::ffi::c_int)
                         {
                             let c2rust_fresh4 = len;
                             len = len + 1;
@@ -8448,8 +8246,7 @@ unsafe extern "C" fn ins_compl_get_next_word_or_line(
                             .offset(-(1 as ::core::ffi::c_int as isize));
                     }
                     xstrlcpy(
-                        (&raw mut IObuff as *mut ::core::ffi::c_char)
-                            .offset(len as isize),
+                        (&raw mut IObuff as *mut ::core::ffi::c_char).offset(len as isize),
                         ptr,
                         (IOSIZE - len) as size_t,
                     );
@@ -8471,9 +8268,7 @@ unsafe extern "C" fn get_next_default_completion(
     mut st: *mut ins_compl_next_state_T,
     mut start_pos: *mut pos_T,
 ) -> ::core::ffi::c_int {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut in_fuzzy_collect: bool = !compl_status_adding()
         && cot_fuzzy() as ::core::ffi::c_int != 0
@@ -8483,14 +8278,15 @@ unsafe extern "C" fn get_next_default_completion(
     let in_curbuf: bool = (*st).ins_buf == curbuf;
     let save_p_scs: ::core::ffi::c_int = p_scs;
     '_c2rust_label: {
-        if !(*st).ins_buf.is_null() {} else {
+        if !(*st).ins_buf.is_null() {
+        } else {
             __assert_fail(
                 b"st->ins_buf\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4275 as ::core::ffi::c_uint,
-                b"int get_next_default_completion(ins_compl_next_state_T *, pos_T *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"int get_next_default_completion(ins_compl_next_state_T *, pos_T *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -8600,11 +8396,8 @@ unsafe extern "C" fn get_next_default_completion(
         {
             continue;
         }
-        if is_nearest_active() as ::core::ffi::c_int != 0
-            && in_curbuf as ::core::ffi::c_int != 0
-        {
-            score = ((*(*st).cur_match_pos).lnum - (*curwin).w_cursor.lnum)
-                as ::core::ffi::c_int;
+        if is_nearest_active() as ::core::ffi::c_int != 0 && in_curbuf as ::core::ffi::c_int != 0 {
+            score = ((*(*st).cur_match_pos).lnum - (*curwin).w_cursor.lnum) as ::core::ffi::c_int;
             if score < 0 as ::core::ffi::c_int {
                 score = -score;
             }
@@ -8643,9 +8436,7 @@ unsafe extern "C" fn get_register_completion() {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < NUM_REGISTERS as ::core::ffi::c_int {
         let mut regname: ::core::ffi::c_int = get_register_name(i);
-        if !(!valid_yank_reg(regname, false_0 != 0)
-            || regname == '_' as ::core::ffi::c_int)
-        {
+        if !(!valid_yank_reg(regname, false_0 != 0) || regname == '_' as ::core::ffi::c_int) {
             let mut reg: *mut yankreg_T = copy_register(regname);
             if (*reg).y_array.is_null() || (*reg).y_size == 0 as size_t {
                 free_register(reg);
@@ -8653,14 +8444,11 @@ unsafe extern "C" fn get_register_completion() {
             } else {
                 let mut j: size_t = 0 as size_t;
                 while j < (*reg).y_size {
-                    let mut str: *mut ::core::ffi::c_char = (*(*reg)
-                        .y_array
-                        .offset(j as isize))
-                        .data;
+                    let mut str: *mut ::core::ffi::c_char =
+                        (*(*reg).y_array.offset(j as isize)).data;
                     if !str.is_null() {
                         if adding_mode {
-                            let mut str_len: ::core::ffi::c_int = strlen(str)
-                                as ::core::ffi::c_int;
+                            let mut str_len: ::core::ffi::c_int = strlen(str) as ::core::ffi::c_int;
                             if str_len != 0 as ::core::ffi::c_int {
                                 if compl_orig_text.data.is_null()
                                     || (if p_ic != 0 {
@@ -8668,10 +8456,12 @@ unsafe extern "C" fn get_register_completion() {
                                             str,
                                             compl_orig_text.data,
                                             compl_orig_text.size,
-                                        ) == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                        ) == 0 as ::core::ffi::c_int)
+                                            as ::core::ffi::c_int
                                     } else {
                                         (strncmp(str, compl_orig_text.data, compl_orig_text.size)
-                                            == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                            == 0 as ::core::ffi::c_int)
+                                            as ::core::ffi::c_int
                                     }) != 0
                                 {
                                     if ins_compl_add_infercase(
@@ -8689,8 +8479,8 @@ unsafe extern "C" fn get_register_completion() {
                                 }
                             }
                         } else {
-                            let mut str_end: *mut ::core::ffi::c_char = str
-                                .offset(strlen(str) as isize);
+                            let mut str_end: *mut ::core::ffi::c_char =
+                                str.offset(strlen(str) as isize);
                             let mut p: *mut ::core::ffi::c_char = str;
                             while p < str_end && *p as ::core::ffi::c_int != NUL {
                                 let mut old_p: *mut ::core::ffi::c_char = p;
@@ -8698,25 +8488,28 @@ unsafe extern "C" fn get_register_completion() {
                                 if p >= str_end || *p as ::core::ffi::c_int == NUL {
                                     break;
                                 }
-                                let mut word_end: *mut ::core::ffi::c_char = find_word_end(
-                                    p,
-                                );
+                                let mut word_end: *mut ::core::ffi::c_char = find_word_end(p);
                                 if word_end <= p {
                                     word_end = p.offset(utfc_ptr2len(p) as isize);
                                 }
                                 if word_end > str_end {
                                     word_end = str_end;
                                 }
-                                let mut len: ::core::ffi::c_int = word_end.offset_from(p)
-                                    as ::core::ffi::c_int;
+                                let mut len: ::core::ffi::c_int =
+                                    word_end.offset_from(p) as ::core::ffi::c_int;
                                 if len > 0 as ::core::ffi::c_int
                                     && (compl_orig_text.data.is_null()
                                         || (if p_ic != 0 {
-                                            (strncasecmp(p, compl_orig_text.data, compl_orig_text.size)
-                                                == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                            (strncasecmp(
+                                                p,
+                                                compl_orig_text.data,
+                                                compl_orig_text.size,
+                                            ) == 0 as ::core::ffi::c_int)
+                                                as ::core::ffi::c_int
                                         } else {
                                             (strncmp(p, compl_orig_text.data, compl_orig_text.size)
-                                                == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                                == 0 as ::core::ffi::c_int)
+                                                as ::core::ffi::c_int
                                         }) != 0)
                                 {
                                     if ins_compl_add_infercase(
@@ -8757,19 +8550,17 @@ unsafe extern "C" fn get_callback_if_cpt_func(
     }
     if *p as ::core::ffi::c_int == 'F' as ::core::ffi::c_int {
         p = p.offset(1);
-        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-            && *p as ::core::ffi::c_int != NUL
+        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
         {
-            return if (*(*curbuf).b_p_cpt_cb.offset(idx as isize)).type_0
-                as ::core::ffi::c_uint
+            return if (*(*curbuf).b_p_cpt_cb.offset(idx as isize)).type_0 as ::core::ffi::c_uint
                 != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 (*curbuf).b_p_cpt_cb.offset(idx as isize)
             } else {
                 ::core::ptr::null_mut::<Callback>()
-            }
+            };
         } else {
-            return &raw mut (*curbuf).b_cfu_cb
+            return &raw mut (*curbuf).b_cfu_cb;
         }
     }
     return ::core::ptr::null_mut::<Callback>();
@@ -8842,8 +8633,7 @@ unsafe extern "C" fn get_next_bufname_token() {
     while !b.is_null() {
         if (*b).b_p_bl != 0 && !(*b).b_sfname.is_null() {
             let mut tail: *mut ::core::ffi::c_char = path_tail((*b).b_sfname);
-            if strncmp(tail, compl_orig_text.data, compl_orig_text.size)
-                == 0 as ::core::ffi::c_int
+            if strncmp(tail, compl_orig_text.data, compl_orig_text.size) == 0 as ::core::ffi::c_int
             {
                 ins_compl_add(
                     tail,
@@ -8919,24 +8709,18 @@ unsafe extern "C" fn prepare_cpt_compl_funcs() {
         let mut cb: *mut Callback = get_callback_if_cpt_func(p, idx);
         if !cb.is_null() {
             let mut startcol: ::core::ffi::c_int = 0;
-            if get_userdefined_compl_info((*curwin).w_cursor.col, cb, &raw mut startcol)
-                == FAIL
-            {
+            if get_userdefined_compl_info((*curwin).w_cursor.col, cb, &raw mut startcol) == FAIL {
                 if startcol == -3 as ::core::ffi::c_int {
-                    (*cpt_sources_array.offset(idx as isize)).cs_refresh_always = false_0
-                        != 0;
+                    (*cpt_sources_array.offset(idx as isize)).cs_refresh_always = false_0 != 0;
                 } else {
                     startcol = -2 as ::core::ffi::c_int;
                 }
-            } else if startcol < 0 as ::core::ffi::c_int
-                || startcol > (*curwin).w_cursor.col
-            {
+            } else if startcol < 0 as ::core::ffi::c_int || startcol > (*curwin).w_cursor.col {
                 startcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
             }
             (*cpt_sources_array.offset(idx as isize)).cs_startcol = startcol;
         } else {
-            (*cpt_sources_array.offset(idx as isize)).cs_startcol = -3
-                as ::core::ffi::c_int;
+            (*cpt_sources_array.offset(idx as isize)).cs_startcol = -3 as ::core::ffi::c_int;
         }
         copy_option_part(
             &raw mut p,
@@ -9000,14 +8784,14 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
     let mut may_advance_cpt_idx: bool = false_0 != 0;
     let mut start_pos: pos_T = *ini;
     '_c2rust_label: {
-        if !curbuf.is_null() {} else {
+        if !curbuf.is_null() {
+        } else {
             __assert_fail(
                 b"curbuf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4690 as ::core::ffi::c_uint,
-                b"int ins_compl_get_exp(pos_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int ins_compl_get_exp(pos_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9028,13 +8812,11 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
         st.found_all = false_0 != 0;
         st.ins_buf = curbuf;
         xfree(st.e_cpt_copy as *mut ::core::ffi::c_void);
-        st.e_cpt_copy = xstrdup(
-            if compl_cont_status & CONT_LOCAL != 0 {
-                b".\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                (*curbuf).b_p_cpt as *const ::core::ffi::c_char
-            },
-        );
+        st.e_cpt_copy = xstrdup(if compl_cont_status & CONT_LOCAL != 0 {
+            b".\0".as_ptr() as *const ::core::ffi::c_char
+        } else {
+            (*curbuf).b_p_cpt as *const ::core::ffi::c_char
+        });
         strip_caret_numbers_in_place(st.e_cpt_copy);
         st.e_cpt = st.e_cpt_copy;
         if compl_autocomplete as ::core::ffi::c_int != 0
@@ -9053,14 +8835,14 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
         st.ins_buf = curbuf;
     }
     '_c2rust_label_0: {
-        if !st.ins_buf.is_null() {} else {
+        if !st.ins_buf.is_null() {
+        } else {
             __assert_fail(
                 b"st.ins_buf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4718 as ::core::ffi::c_uint,
-                b"int ins_compl_get_exp(pos_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int ins_compl_get_exp(pos_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9071,7 +8853,8 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
         &raw mut st.first_match_pos
     };
     let mut normal_mode_strict: bool = ctrl_x_mode_normal() as ::core::ffi::c_int != 0
-        && !ctrl_x_mode_line_or_eval() && compl_cont_status & CONT_LOCAL == 0
+        && !ctrl_x_mode_line_or_eval()
+        && compl_cont_status & CONT_LOCAL == 0
         && !cpt_sources_array.is_null();
     if normal_mode_strict {
         cpt_sources_index = 0 as ::core::ffi::c_int;
@@ -9079,7 +8862,11 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
             compl_source_start_timer(0 as ::core::ffi::c_int);
             compl_time_slice_expired = false_0 != 0;
             compl_timeout_ms = if compl_autocomplete as ::core::ffi::c_int != 0 {
-                (if 80 as OptInt > p_act { 80 as OptInt } else { p_act }) as uint64_t
+                (if 80 as OptInt > p_act {
+                    80 as OptInt
+                } else {
+                    p_act
+                }) as uint64_t
             } else {
                 p_cto as uint64_t
             };
@@ -9125,11 +8912,8 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
                 COMPL_FUNC_TIMEOUT_MS
             }) as uint64_t;
         }
-        found_new_match = get_next_completion_match(
-            type_0,
-            &raw mut st,
-            &raw mut start_pos,
-        ) as ::core::ffi::c_int;
+        found_new_match = get_next_completion_match(type_0, &raw mut st, &raw mut start_pos)
+            as ::core::ffi::c_int;
         if compl_pattern.data.is_null() {
             break;
         }
@@ -9139,8 +8923,8 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
             }
             compl_source_start_timer(cpt_sources_index);
         }
-        if ctrl_x_mode_not_default() as ::core::ffi::c_int != 0
-            && !ctrl_x_mode_line_or_eval() || found_new_match != FAIL
+        if ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 && !ctrl_x_mode_line_or_eval()
+            || found_new_match != FAIL
         {
             if got_int {
                 break;
@@ -9148,8 +8932,7 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
             if type_0 != -1 as ::core::ffi::c_int {
                 ins_compl_check_keys(0 as ::core::ffi::c_int, false_0 != 0);
             }
-            if ctrl_x_mode_not_default() as ::core::ffi::c_int != 0
-                && !ctrl_x_mode_line_or_eval()
+            if ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 && !ctrl_x_mode_line_or_eval()
                 || compl_interrupted as ::core::ffi::c_int != 0
             {
                 break;
@@ -9161,11 +8944,12 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
                     || type_0 == CTRL_X_PATH_PATTERNS as ::core::ffi::c_int)
             {
                 '_c2rust_label_1: {
-                    if !st.ins_buf.is_null() {} else {
+                    if !st.ins_buf.is_null() {
+                    } else {
                         __assert_fail(
                             b"st.ins_buf\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             4812 as ::core::ffi::c_uint,
                             b"int ins_compl_get_exp(pos_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -9200,8 +8984,7 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
     }
     let mut match_count: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     if found_new_match == FAIL
-        || ctrl_x_mode_not_default() as ::core::ffi::c_int != 0
-            && !ctrl_x_mode_line_or_eval()
+        || ctrl_x_mode_not_default() as ::core::ffi::c_int != 0 && !ctrl_x_mode_line_or_eval()
     {
         match_count = ins_compl_make_cyclic();
     }
@@ -9224,18 +9007,15 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
     may_trigger_modechanged();
     if match_count > 0 as ::core::ffi::c_int && !ctrl_x_mode_spell() {
         if is_nearest_active() as ::core::ffi::c_int != 0 && !ins_compl_has_preinsert() {
-            sort_compl_match_list(
-                Some(
-                    cp_compare_nearest
-                        as unsafe extern "C" fn(
-                            *const ::core::ffi::c_void,
-                            *const ::core::ffi::c_void,
-                        ) -> ::core::ffi::c_int,
-                ),
-            );
+            sort_compl_match_list(Some(
+                cp_compare_nearest
+                    as unsafe extern "C" fn(
+                        *const ::core::ffi::c_void,
+                        *const ::core::ffi::c_void,
+                    ) -> ::core::ffi::c_int,
+            ));
         }
-        if cot_fuzzy() as ::core::ffi::c_int != 0 && ins_compl_leader_len() > 0 as size_t
-        {
+        if cot_fuzzy() as ::core::ffi::c_int != 0 && ins_compl_leader_len() > 0 as size_t {
             ins_compl_fuzzy_sort();
         }
     }
@@ -9243,10 +9023,7 @@ unsafe extern "C" fn ins_compl_get_exp(mut ini: *mut pos_T) -> ::core::ffi::c_in
 }
 unsafe extern "C" fn ins_compl_update_shown_match() {
     get_leader_for_startcol(::core::ptr::null_mut::<compl_T>(), true_0 != 0);
-    let mut leader: *mut String_0 = get_leader_for_startcol(
-        compl_shown_match,
-        true_0 != 0,
-    );
+    let mut leader: *mut String_0 = get_leader_for_startcol(compl_shown_match, true_0 != 0);
     while !ins_compl_equal(compl_shown_match, (*leader).data, (*leader).size)
         && !(*compl_shown_match).cp_next.is_null()
         && !is_first_match((*compl_shown_match).cp_next)
@@ -9274,9 +9051,7 @@ pub unsafe extern "C" fn ins_compl_delete(mut new_leader: bool) {
     if new_leader {
         let mut orig: *mut ::core::ffi::c_char = compl_orig_text.data;
         let mut leader: *mut ::core::ffi::c_char = ins_compl_leader();
-        while *orig as ::core::ffi::c_int != NUL
-            && utf_ptr2char(orig) == utf_ptr2char(leader)
-        {
+        while *orig as ::core::ffi::c_int != NUL && utf_ptr2char(orig) == utf_ptr2char(leader) {
             leader = leader.offset(utf_ptr2len(leader) as isize);
             orig = orig.offset(utf_ptr2len(orig) as isize);
         }
@@ -9298,10 +9073,7 @@ pub unsafe extern "C" fn ins_compl_delete(mut new_leader: bool) {
     };
     if (*curwin).w_cursor.lnum > compl_lnum {
         if (*curwin).w_cursor.col < get_cursor_line_len() {
-            remaining = cbuf_to_string(
-                get_cursor_pos_ptr(),
-                get_cursor_pos_len() as size_t,
-            );
+            remaining = cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t);
         }
         while (*curwin).w_cursor.lnum > compl_lnum {
             if ml_delete((*curwin).w_cursor.lnum) == FAIL {
@@ -9373,29 +9145,28 @@ unsafe extern "C" fn find_common_prefix(
     ) as *mut ::core::ffi::c_int;
     get_leader_for_startcol(::core::ptr::null_mut::<compl_T>(), true_0 != 0);
     let mut compl: *mut compl_T = compl_first_match;
-    let mut first: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut first: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     loop {
         let mut leader: *mut String_0 = get_leader_for_startcol(compl, true_0 != 0);
-        if ctrl_x_mode_normal() as ::core::ffi::c_int != 0 && p_inf == 0
-            && !(*leader).data.is_null() && ignorecase((*leader).data) == 0
+        if ctrl_x_mode_normal() as ::core::ffi::c_int != 0
+            && p_inf == 0
+            && !(*leader).data.is_null()
+            && ignorecase((*leader).data) == 0
         {
             (*compl).cp_flags &= !(CP_ICASE as ::core::ffi::c_int);
         }
         if !match_at_original_text(compl)
             && ((*leader).data.is_null()
-                || ins_compl_equal(compl, (*leader).data, (*leader).size)
-                    as ::core::ffi::c_int != 0)
+                || ins_compl_equal(compl, (*leader).data, (*leader).size) as ::core::ffi::c_int
+                    != 0)
         {
             let mut match_limit_exceeded: bool = false_0 != 0;
             let mut cur_source: ::core::ffi::c_int = (*compl).cp_cpt_source_idx;
             if cur_source != -1 as ::core::ffi::c_int {
                 *match_count.offset(cur_source as isize) += 1;
-                let mut max_matches: ::core::ffi::c_int = (*cpt_sources_array
-                    .offset(cur_source as isize))
-                    .cs_max_matches;
+                let mut max_matches: ::core::ffi::c_int =
+                    (*cpt_sources_array.offset(cur_source as isize)).cs_max_matches;
                 if max_matches > 0 as ::core::ffi::c_int
                     && *match_count.offset(cur_source as isize) > max_matches
                 {
@@ -9406,7 +9177,8 @@ unsafe extern "C" fn find_common_prefix(
                 && (!curbuf_only
                     || cur_source != -1 as ::core::ffi::c_int
                         && (*cpt_sources_array.offset(cur_source as isize)).cs_flag
-                            as ::core::ffi::c_int == '.' as ::core::ffi::c_int)
+                            as ::core::ffi::c_int
+                            == '.' as ::core::ffi::c_int)
             {
                 if first.is_null()
                     && strncmp(
@@ -9421,7 +9193,8 @@ unsafe extern "C" fn find_common_prefix(
                     let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     let mut s1: *mut ::core::ffi::c_char = first;
                     let mut s2: *mut ::core::ffi::c_char = (*compl).cp_str.data;
-                    while j < len && *s1 as ::core::ffi::c_int != NUL
+                    while j < len
+                        && *s1 as ::core::ffi::c_int != NUL
                         && *s2 as ::core::ffi::c_int != NUL
                     {
                         if utf8len_tab[*s1 as uint8_t as usize] as ::core::ffi::c_int
@@ -9453,11 +9226,12 @@ unsafe extern "C" fn find_common_prefix(
     xfree(match_count as *mut ::core::ffi::c_void);
     if len > ins_compl_leader_len() as ::core::ffi::c_int {
         '_c2rust_label: {
-            if !first.is_null() {} else {
+            if !first.is_null() {
+            } else {
                 __assert_fail(
                     b"first != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     5085 as ::core::ffi::c_uint,
                     b"char *find_common_prefix(size_t *, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -9466,12 +9240,10 @@ unsafe extern "C" fn find_common_prefix(
         };
         if len == strlen(first) as ::core::ffi::c_int {
             let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-            let mut p: *mut ::core::ffi::c_char = line
-                .offset((*curwin).w_cursor.col as isize);
+            let mut p: *mut ::core::ffi::c_char = line.offset((*curwin).w_cursor.col as isize);
             if !p.is_null() && !ascii_iswhite_or_nul(*p as ::core::ffi::c_int) {
                 let mut end: *mut ::core::ffi::c_char = find_word_end(p);
-                let mut text_len: ::core::ffi::c_int = end.offset_from(p)
-                    as ::core::ffi::c_int;
+                let mut text_len: ::core::ffi::c_int = end.offset_from(p) as ::core::ffi::c_int;
                 if text_len > 0 as ::core::ffi::c_int
                     && text_len < len - ins_compl_leader_len() as ::core::ffi::c_int
                     && strncmp(
@@ -9490,19 +9262,13 @@ unsafe extern "C" fn find_common_prefix(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn ins_compl_insert(
-    mut move_cursor: bool,
-    mut insert_prefix: bool,
-) {
+pub unsafe extern "C" fn ins_compl_insert(mut move_cursor: bool, mut insert_prefix: bool) {
     let mut compl_len: ::core::ffi::c_int = get_compl_len();
     let mut preinsert: bool = ins_compl_has_preinsert();
     let mut cp_str: *mut ::core::ffi::c_char = (*compl_shown_match).cp_str.data;
     let mut cp_str_len: size_t = (*compl_shown_match).cp_str.size;
     let mut leader_len: size_t = ins_compl_leader_len();
-    let mut has_multiple: *mut ::core::ffi::c_char = strchr(
-        cp_str,
-        '\n' as ::core::ffi::c_int,
-    );
+    let mut has_multiple: *mut ::core::ffi::c_char = strchr(cp_str, '\n' as ::core::ffi::c_int);
     if insert_prefix {
         cp_str = find_common_prefix(&raw mut cp_str_len, false_0 != 0);
         if cp_str.is_null() {
@@ -9515,9 +9281,8 @@ pub unsafe extern "C" fn ins_compl_insert(
     } else if !cpt_sources_array.is_null() {
         let mut cpt_idx: ::core::ffi::c_int = (*compl_shown_match).cp_cpt_source_idx;
         if cpt_idx >= 0 as ::core::ffi::c_int && compl_col >= 0 as ::core::ffi::c_int {
-            let mut startcol: ::core::ffi::c_int = (*cpt_sources_array
-                .offset(cpt_idx as isize))
-                .cs_startcol;
+            let mut startcol: ::core::ffi::c_int =
+                (*cpt_sources_array.offset(cpt_idx as isize)).cs_startcol;
             if startcol >= 0 as ::core::ffi::c_int && startcol < compl_col {
                 let mut skip: ::core::ffi::c_int = compl_col - startcol;
                 if skip as size_t <= cp_str_len {
@@ -9539,27 +9304,24 @@ pub unsafe extern "C" fn ins_compl_insert(
                     -1 as ::core::ffi::c_int
                 },
             );
-            if (preinsert as ::core::ffi::c_int != 0
-                || insert_prefix as ::core::ffi::c_int != 0)
+            if (preinsert as ::core::ffi::c_int != 0 || insert_prefix as ::core::ffi::c_int != 0)
                 && move_cursor as ::core::ffi::c_int != 0
             {
                 (*curwin).w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as colnr_T;
             }
         }
     }
-    compl_used_match = !(match_at_original_text(compl_shown_match) as ::core::ffi::c_int
-        != 0 || preinsert as ::core::ffi::c_int != 0 && !insert_prefix);
+    compl_used_match = !(match_at_original_text(compl_shown_match) as ::core::ffi::c_int != 0
+        || preinsert as ::core::ffi::c_int != 0 && !insert_prefix);
     let mut dict: *mut dict_T = ins_compl_dict_alloc(compl_shown_match);
     set_vim_var_dict(VV_COMPLETED_ITEM, dict);
-    compl_hi_on_autocompl_longest = insert_prefix as ::core::ffi::c_int != 0
-        && move_cursor as ::core::ffi::c_int != 0;
+    compl_hi_on_autocompl_longest =
+        insert_prefix as ::core::ffi::c_int != 0 && move_cursor as ::core::ffi::c_int != 0;
 }
 unsafe extern "C" fn ins_compl_show_filename() {
-    let lead: *mut ::core::ffi::c_char = gettext(
-        b"match in file\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    let mut space: ::core::ffi::c_int = sc_col - vim_strsize(lead)
-        - 2 as ::core::ffi::c_int;
+    let lead: *mut ::core::ffi::c_char =
+        gettext(b"match in file\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut space: ::core::ffi::c_int = sc_col - vim_strsize(lead) - 2 as ::core::ffi::c_int;
     if space <= 0 as ::core::ffi::c_int {
         return;
     }
@@ -9589,7 +9351,10 @@ unsafe extern "C" fn ins_compl_show_filename() {
             },
             s,
         );
-        msg(&raw mut IObuff as *mut ::core::ffi::c_char, 0 as ::core::ffi::c_int);
+        msg(
+            &raw mut IObuff as *mut ::core::ffi::c_char,
+            0 as ::core::ffi::c_int,
+        );
         msg_hist_off = false_0 != 0;
         redraw_cmdline = false_0 != 0;
     }
@@ -9603,7 +9368,8 @@ unsafe extern "C" fn find_next_match_in_menu() -> *mut compl_T {
         } else {
             (*match_0).cp_prev
         };
-        if !(!(*match_0).cp_next.is_null() && !(*match_0).cp_in_match_array
+        if !(!(*match_0).cp_next.is_null()
+            && !(*match_0).cp_in_match_array
             && !match_at_original_text(match_0))
         {
             break;
@@ -9638,8 +9404,7 @@ unsafe extern "C" fn find_next_completion_match(
                 compl_shown_match = (*compl_shown_match).cp_next;
             }
             found_end = !compl_first_match.is_null()
-                && (is_first_match((*compl_shown_match).cp_next) as ::core::ffi::c_int
-                    != 0
+                && (is_first_match((*compl_shown_match).cp_next) as ::core::ffi::c_int != 0
                     || is_first_match(compl_shown_match) as ::core::ffi::c_int != 0);
         } else if compl_shows_dir_backward() as ::core::ffi::c_int != 0
             && !(*compl_shown_match).cp_prev.is_null()
@@ -9651,7 +9416,8 @@ unsafe extern "C" fn find_next_completion_match(
                 compl_shown_match = (*compl_shown_match).cp_prev;
             }
             found_end = found_end as ::core::ffi::c_int
-                | is_first_match(compl_shown_match) as ::core::ffi::c_int != 0;
+                | is_first_match(compl_shown_match) as ::core::ffi::c_int
+                != 0;
         } else {
             if !allow_get_expansion {
                 if advance {
@@ -9672,8 +9438,7 @@ unsafe extern "C" fn find_next_completion_match(
             }
             *num_matches = ins_compl_get_exp(&raw mut compl_startpos);
             while compl_pending != 0 as ::core::ffi::c_int
-                && compl_direction as ::core::ffi::c_int
-                    == compl_shows_dir as ::core::ffi::c_int
+                && compl_direction as ::core::ffi::c_int == compl_shows_dir as ::core::ffi::c_int
                 && advance as ::core::ffi::c_int != 0
             {
                 if compl_pending > 0 as ::core::ffi::c_int
@@ -9693,15 +9458,12 @@ unsafe extern "C" fn find_next_completion_match(
             }
             found_end = false_0 != 0;
         }
-        let mut leader: *mut String_0 = get_leader_for_startcol(
-            compl_shown_match,
-            false_0 != 0,
-        );
-        if !match_at_original_text(compl_shown_match) && !(*leader).data.is_null()
+        let mut leader: *mut String_0 = get_leader_for_startcol(compl_shown_match, false_0 != 0);
+        if !match_at_original_text(compl_shown_match)
+            && !(*leader).data.is_null()
             && !ins_compl_equal(compl_shown_match, (*leader).data, (*leader).size)
             && !(cot_fuzzy() as ::core::ffi::c_int != 0
-                && (*compl_shown_match).cp_score
-                    != FUZZY_SCORE_NONE as ::core::ffi::c_int)
+                && (*compl_shown_match).cp_score != FUZZY_SCORE_NONE as ::core::ffi::c_int)
         {
             todo += 1;
         } else {
@@ -9734,14 +9496,12 @@ unsafe extern "C" fn ins_compl_next(
         != 0 as ::core::ffi::c_uint
         || compl_autocomplete as ::core::ffi::c_int != 0 && !ins_compl_has_preinsert();
     let mut compl_preinsert: bool = ins_compl_has_preinsert();
-    let mut has_autocomplete_delay: bool = compl_autocomplete as ::core::ffi::c_int != 0
-        && p_acl > 0 as OptInt;
+    let mut has_autocomplete_delay: bool =
+        compl_autocomplete as ::core::ffi::c_int != 0 && p_acl > 0 as OptInt;
     if compl_shown_match.is_null() {
         return -1 as ::core::ffi::c_int;
     }
-    if !compl_leader.data.is_null() && !match_at_original_text(compl_shown_match)
-        && !cot_fuzzy()
-    {
+    if !compl_leader.data.is_null() && !match_at_original_text(compl_shown_match) && !cot_fuzzy() {
         ins_compl_update_shown_match();
     }
     if allow_get_expansion as ::core::ffi::c_int != 0
@@ -9750,18 +9510,14 @@ unsafe extern "C" fn ins_compl_next(
     {
         ins_compl_delete(false_0 != 0);
     }
-    let mut advance: bool = count != 1 as ::core::ffi::c_int || !allow_get_expansion
-        || !compl_get_longest;
+    let mut advance: bool =
+        count != 1 as ::core::ffi::c_int || !allow_get_expansion || !compl_get_longest;
     if compl_restarting {
         advance = false_0 != 0;
         compl_restarting = false_0 != 0;
     }
-    if find_next_completion_match(
-        allow_get_expansion,
-        todo,
-        advance,
-        &raw mut num_matches,
-    ) == -1 as ::core::ffi::c_int
+    if find_next_completion_match(allow_get_expansion, todo, advance, &raw mut num_matches)
+        == -1 as ::core::ffi::c_int
     {
         return -1 as ::core::ffi::c_int;
     }
@@ -9773,8 +9529,7 @@ unsafe extern "C" fn ins_compl_next(
         if has_autocomplete_delay {
             update_screen();
         }
-    } else if compl_no_insert as ::core::ffi::c_int != 0 && !started && !compl_preinsert
-    {
+    } else if compl_no_insert as ::core::ffi::c_int != 0 && !started && !compl_preinsert {
         ins_compl_insert_bytes(
             compl_orig_text.data.offset(get_compl_len() as isize),
             -1 as ::core::ffi::c_int,
@@ -9783,8 +9538,8 @@ unsafe extern "C" fn ins_compl_next(
         restore_orig_extmarks();
     } else if insert_match {
         if !compl_get_longest || compl_used_match as ::core::ffi::c_int != 0 {
-            let mut preinsert_longest: bool = ins_compl_preinsert_longest()
-                as ::core::ffi::c_int != 0
+            let mut preinsert_longest: bool = ins_compl_preinsert_longest() as ::core::ffi::c_int
+                != 0
                 && match_at_original_text(compl_shown_match) as ::core::ffi::c_int != 0;
             ins_compl_insert(
                 compl_preinsert as ::core::ffi::c_int != 0
@@ -9793,12 +9548,12 @@ unsafe extern "C" fn ins_compl_next(
             );
         } else {
             '_c2rust_label: {
-                if !compl_leader.data.is_null() {} else {
+                if !compl_leader.data.is_null() {
+                } else {
                     __assert_fail(
-                        b"compl_leader.data != NULL\0".as_ptr()
+                        b"compl_leader.data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         5406 as ::core::ffi::c_uint,
                         b"int ins_compl_next(_Bool, int, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9823,7 +9578,8 @@ unsafe extern "C" fn ins_compl_next(
         }
         ins_compl_delete(false_0 != 0);
     }
-    if compl_no_insert as ::core::ffi::c_int != 0 && !started
+    if compl_no_insert as ::core::ffi::c_int != 0
+        && !started
         && !match_at_original_text(compl_shown_match)
     {
         compl_enter_selects = true_0 != 0;
@@ -9836,8 +9592,8 @@ unsafe extern "C" fn ins_compl_next(
     return num_matches;
 }
 unsafe extern "C" fn check_elapsed_time() {
-    let mut start_tv: uint64_t = (*cpt_sources_array.offset(cpt_sources_index as isize))
-        .compl_start_tv;
+    let mut start_tv: uint64_t =
+        (*cpt_sources_array.offset(cpt_sources_index as isize)).compl_start_tv;
     let mut elapsed_ms: uint64_t = os_hrtime()
         .wrapping_sub(start_tv)
         .wrapping_div(1000000 as uint64_t);
@@ -9864,8 +9620,7 @@ pub unsafe extern "C" fn ins_compl_check_keys(
     count = 0 as ::core::ffi::c_int;
     let mut c: ::core::ffi::c_int = vpeekc_any();
     if c != NUL && !test_disable_char_avail {
-        if vim_is_ctrl_x_key(c) as ::core::ffi::c_int != 0 && c != Ctrl_X && c != Ctrl_R
-        {
+        if vim_is_ctrl_x_key(c) as ::core::ffi::c_int != 0 && c != Ctrl_X && c != Ctrl_R {
             c = safe_vgetc();
             compl_shows_dir = ins_compl_key2dir(c) as Direction;
             ins_compl_next(
@@ -9875,9 +9630,8 @@ pub unsafe extern "C" fn ins_compl_check_keys(
             );
         } else {
             c = safe_vgetc();
-            if c
-                != -(253 as ::core::ffi::c_int
-                    + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            if c != -(253 as ::core::ffi::c_int
+                + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
             {
                 if c != Ctrl_R && KeyTyped as ::core::ffi::c_int != 0 {
                     compl_interrupted = true_0 != 0;
@@ -9886,8 +9640,9 @@ pub unsafe extern "C" fn ins_compl_check_keys(
             }
         }
     } else {
-        let mut normal_mode_strict: bool = ctrl_x_mode_normal() as ::core::ffi::c_int
-            != 0 && !ctrl_x_mode_line_or_eval() && compl_cont_status & CONT_LOCAL == 0
+        let mut normal_mode_strict: bool = ctrl_x_mode_normal() as ::core::ffi::c_int != 0
+            && !ctrl_x_mode_line_or_eval()
+            && compl_cont_status & CONT_LOCAL == 0
             && !cpt_sources_array.is_null()
             && cpt_sources_index >= 0 as ::core::ffi::c_int;
         if normal_mode_strict as ::core::ffi::c_int != 0
@@ -9896,10 +9651,12 @@ pub unsafe extern "C" fn ins_compl_check_keys(
             check_elapsed_time();
         }
     }
-    if compl_pending != 0 && !got_int
+    if compl_pending != 0
+        && !got_int
         && cot_flags
-            & (kOptCotFlagNoinsert as ::core::ffi::c_int
-                | kOptCotFlagFuzzy as ::core::ffi::c_int) as ::core::ffi::c_uint == 0
+            & (kOptCotFlagNoinsert as ::core::ffi::c_int | kOptCotFlagFuzzy as ::core::ffi::c_int)
+                as ::core::ffi::c_uint
+            == 0
         && (!compl_autocomplete || ins_compl_has_preinsert() as ::core::ffi::c_int != 0)
     {
         let mut todo: ::core::ffi::c_int = if compl_pending > 0 as ::core::ffi::c_int {
@@ -9912,15 +9669,12 @@ pub unsafe extern "C" fn ins_compl_check_keys(
     }
 }
 unsafe extern "C" fn ins_compl_key2dir(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if c
-        == -(253 as ::core::ffi::c_int
-            + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+    if c == -(253 as ::core::ffi::c_int
+        + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
     {
         return if pum_want.item < compl_selected_item {
             BACKWARD as ::core::ffi::c_int
@@ -9928,10 +9682,12 @@ unsafe extern "C" fn ins_compl_key2dir(mut c: ::core::ffi::c_int) -> ::core::ffi
             FORWARD as ::core::ffi::c_int
         };
     }
-    if c == Ctrl_P || c == Ctrl_L || c == K_PAGEUP || c == K_KPAGEUP
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_S_UP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+    if c == Ctrl_P
+        || c == Ctrl_L
+        || c == K_PAGEUP
+        || c == K_KPAGEUP
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_S_UP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
         || c == K_UP
     {
         return BACKWARD as ::core::ffi::c_int;
@@ -9940,28 +9696,24 @@ unsafe extern "C" fn ins_compl_key2dir(mut c: ::core::ffi::c_int) -> ::core::ffi
 }
 unsafe extern "C" fn ins_compl_pum_key(mut c: ::core::ffi::c_int) -> bool {
     return pum_visible() as ::core::ffi::c_int != 0
-        && (c == K_PAGEUP || c == K_KPAGEUP
-            || c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_S_UP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c == K_PAGEDOWN || c == K_KPAGEDOWN
-            || c
-                == -(253 as ::core::ffi::c_int
-                    + ((KE_S_DOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c == K_UP || c == K_DOWN);
+        && (c == K_PAGEUP
+            || c == K_KPAGEUP
+            || c == -(253 as ::core::ffi::c_int
+                + ((KE_S_UP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || c == K_PAGEDOWN
+            || c == K_KPAGEDOWN
+            || c == -(253 as ::core::ffi::c_int
+                + ((KE_S_DOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            || c == K_UP
+            || c == K_DOWN);
 }
-unsafe extern "C" fn ins_compl_key2count(
-    mut c: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if c
-        == -(253 as ::core::ffi::c_int
-            + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+unsafe extern "C" fn ins_compl_key2count(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    if c == -(253 as ::core::ffi::c_int
+        + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_COMMAND as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LUA as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
     {
         let mut offset: ::core::ffi::c_int = pum_want.item - compl_selected_item;
         return abs(offset);
@@ -9977,14 +9729,9 @@ unsafe extern "C" fn ins_compl_key2count(
 }
 unsafe extern "C" fn ins_compl_use_match(mut c: ::core::ffi::c_int) -> bool {
     match c {
-        K_UP
-        | K_DOWN
-        | K_PAGEDOWN
-        | K_KPAGEDOWN
-        | -1533
-        | K_PAGEUP
-        | K_KPAGEUP
-        | -1277 => return false_0 != 0,
+        K_UP | K_DOWN | K_PAGEDOWN | K_KPAGEDOWN | -1533 | K_PAGEUP | K_KPAGEUP | -1277 => {
+            return false_0 != 0;
+        }
         -26365 | -26877 | -26621 => {
             return pum_want.active as ::core::ffi::c_int != 0
                 && pum_want.insert as ::core::ffi::c_int != 0;
@@ -9998,16 +9745,14 @@ unsafe extern "C" fn get_normal_compl_info(
     mut startcol: ::core::ffi::c_int,
     mut curs_col: colnr_T,
 ) -> ::core::ffi::c_int {
-    if compl_cont_status & CONT_SOL != 0
-        || ctrl_x_mode_path_defines() as ::core::ffi::c_int != 0
-    {
+    if compl_cont_status & CONT_SOL != 0 || ctrl_x_mode_path_defines() as ::core::ffi::c_int != 0 {
         if !compl_status_adding() {
             loop {
                 startcol -= 1;
                 if !(startcol >= 0 as ::core::ffi::c_int
-                    && vim_isIDc(
-                        *line.offset(startcol as isize) as uint8_t as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0)
+                    && vim_isIDc(*line.offset(startcol as isize) as uint8_t as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        != 0)
                 {
                     break;
                 }
@@ -10017,32 +9762,27 @@ unsafe extern "C" fn get_normal_compl_info(
             compl_length = curs_col as ::core::ffi::c_int - startcol;
         }
         if p_ic != 0 {
-            compl_pattern = cstr_as_string(
-                str_foldcase(
-                    line.offset(compl_col as isize),
-                    compl_length,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as ::core::ffi::c_int,
-                ),
-            );
-        } else {
-            compl_pattern = cbuf_to_string(
+            compl_pattern = cstr_as_string(str_foldcase(
                 line.offset(compl_col as isize),
-                compl_length as size_t,
-            );
+                compl_length,
+                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                0 as ::core::ffi::c_int,
+            ));
+        } else {
+            compl_pattern = cbuf_to_string(line.offset(compl_col as isize), compl_length as size_t);
         }
     } else if compl_status_adding() {
-        let mut prefix: *mut ::core::ffi::c_char = b"\\<\0".as_ptr()
-            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        let mut prefixlen: size_t = ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-            .wrapping_sub(1 as size_t);
+        let mut prefix: *mut ::core::ffi::c_char =
+            b"\\<\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        let mut prefixlen: size_t =
+            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t);
         if !vim_iswordp(line.offset(compl_col as isize))
             || compl_col > 0 as ::core::ffi::c_int
                 && vim_iswordp(mb_prevptr(line, line.offset(compl_col as isize)))
-                    as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
         {
-            prefix = b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            prefix = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             prefixlen = 0 as size_t;
         }
         let mut n: size_t = (quote_meta(
@@ -10062,41 +9802,31 @@ unsafe extern "C" fn get_normal_compl_info(
     } else {
         startcol -= 1;
         if startcol < 0 as ::core::ffi::c_int
-            || !vim_iswordp(
-                mb_prevptr(
-                    line,
-                    line
-                        .offset(startcol as isize)
-                        .offset(1 as ::core::ffi::c_int as isize),
-                ),
-            )
+            || !vim_iswordp(mb_prevptr(
+                line,
+                line.offset(startcol as isize)
+                    .offset(1 as ::core::ffi::c_int as isize),
+            ))
         {
             compl_pattern = cbuf_to_string(
                 b"\\<\\k\\k\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
             );
             compl_col += curs_col;
             compl_length = 0 as ::core::ffi::c_int;
             compl_from_nonkeyword = true_0 != 0;
         } else {
             startcol -= utf_head_off(line, line.offset(startcol as isize));
-            let mut base_class: ::core::ffi::c_int = mb_get_class(
-                line.offset(startcol as isize),
-            );
+            let mut base_class: ::core::ffi::c_int = mb_get_class(line.offset(startcol as isize));
             loop {
                 startcol -= 1;
                 if startcol < 0 as ::core::ffi::c_int {
                     break;
                 }
-                let mut head_off: ::core::ffi::c_int = utf_head_off(
-                    line,
-                    line.offset(startcol as isize),
-                );
+                let mut head_off: ::core::ffi::c_int =
+                    utf_head_off(line, line.offset(startcol as isize));
                 if base_class
-                    != mb_get_class(
-                        line.offset(startcol as isize).offset(-(head_off as isize)),
-                    )
+                    != mb_get_class(line.offset(startcol as isize).offset(-(head_off as isize)))
                 {
                     break;
                 }
@@ -10109,8 +9839,7 @@ unsafe extern "C" fn get_normal_compl_info(
                 compl_pattern.data = xmalloc(7 as size_t) as *mut ::core::ffi::c_char;
                 strcpy(
                     compl_pattern.data,
-                    b"\\<\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"\\<\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 quote_meta(
                     compl_pattern.data.offset(2 as ::core::ffi::c_int as isize),
@@ -10124,16 +9853,16 @@ unsafe extern "C" fn get_normal_compl_info(
                 compl_pattern.size = strlen(compl_pattern.data);
             } else {
                 let mut n_0: size_t = quote_meta(
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        line.offset(compl_col as isize),
-                        compl_length,
-                    )
-                    .wrapping_add(2 as ::core::ffi::c_uint) as size_t;
+                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                    line.offset(compl_col as isize),
+                    compl_length,
+                )
+                .wrapping_add(2 as ::core::ffi::c_uint)
+                    as size_t;
                 compl_pattern.data = xmalloc(n_0) as *mut ::core::ffi::c_char;
                 strcpy(
                     compl_pattern.data,
-                    b"\\<\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"\\<\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
                 quote_meta(
                     compl_pattern.data.offset(2 as ::core::ffi::c_int as isize),
@@ -10144,9 +9873,7 @@ unsafe extern "C" fn get_normal_compl_info(
             }
         }
     }
-    if ctrl_x_mode_normal() as ::core::ffi::c_int != 0
-        && compl_cont_status & CONT_LOCAL == 0
-    {
+    if ctrl_x_mode_normal() as ::core::ffi::c_int != 0 && compl_cont_status & CONT_LOCAL == 0 {
         setup_cpt_sources();
         prepare_cpt_compl_funcs();
     }
@@ -10162,19 +9889,14 @@ unsafe extern "C" fn get_wholeline_compl_info(
         compl_length = 0 as ::core::ffi::c_int;
     }
     if p_ic != 0 {
-        compl_pattern = cstr_as_string(
-            str_foldcase(
-                line.offset(compl_col as isize),
-                compl_length,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                0 as ::core::ffi::c_int,
-            ),
-        );
-    } else {
-        compl_pattern = cbuf_to_string(
+        compl_pattern = cstr_as_string(str_foldcase(
             line.offset(compl_col as isize),
-            compl_length as size_t,
-        );
+            compl_length,
+            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            0 as ::core::ffi::c_int,
+        ));
+    } else {
+        compl_pattern = cbuf_to_string(line.offset(compl_col as isize), compl_length as size_t);
     }
     return OK;
 }
@@ -10185,17 +9907,15 @@ unsafe extern "C" fn get_filename_compl_info(
 ) -> ::core::ffi::c_int {
     if startcol > 0 as ::core::ffi::c_int {
         let mut p: *mut ::core::ffi::c_char = line.offset(startcol as isize);
-        p = p
-            .offset(
+        p = p.offset(
+            -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
+                + 1 as ::core::ffi::c_int) as isize),
+        );
+        while p > line && vim_isfilec(utf_ptr2char(p)) as ::core::ffi::c_int != 0 {
+            p = p.offset(
                 -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
                     + 1 as ::core::ffi::c_int) as isize),
             );
-        while p > line && vim_isfilec(utf_ptr2char(p)) as ::core::ffi::c_int != 0 {
-            p = p
-                .offset(
-                    -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
-                        + 1 as ::core::ffi::c_int) as isize),
-                );
         }
         let mut p_is_filec: bool = false_0 != 0;
         p_is_filec = p_is_filec as ::core::ffi::c_int != 0
@@ -10203,19 +9923,16 @@ unsafe extern "C" fn get_filename_compl_info(
         if p == line && p_is_filec as ::core::ffi::c_int != 0 {
             startcol = 0 as ::core::ffi::c_int;
         } else {
-            startcol = p.offset_from(line) as ::core::ffi::c_int
-                + 1 as ::core::ffi::c_int;
+            startcol = p.offset_from(line) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
         }
     }
     compl_col += startcol;
     compl_length = curs_col - startcol;
-    compl_pattern = cstr_as_string(
-        addstar(
-            line.offset(compl_col as isize),
-            compl_length as size_t,
-            EXPAND_FILES as ::core::ffi::c_int,
-        ),
-    );
+    compl_pattern = cstr_as_string(addstar(
+        line.offset(compl_col as isize),
+        compl_length as size_t,
+        EXPAND_FILES as ::core::ffi::c_int,
+    ));
     return OK;
 }
 unsafe extern "C" fn get_cmdline_compl_info(
@@ -10238,8 +9955,8 @@ unsafe extern "C" fn get_cmdline_compl_info(
     {
         compl_col = curs_col;
     } else {
-        compl_col = compl_xp.xp_pattern.offset_from(compl_pattern.data)
-            as ::core::ffi::c_int as colnr_T;
+        compl_col =
+            compl_xp.xp_pattern.offset_from(compl_pattern.data) as ::core::ffi::c_int as colnr_T;
     }
     compl_length = (curs_col - compl_col) as ::core::ffi::c_int;
     return OK;
@@ -10250,8 +9967,8 @@ unsafe extern "C" fn set_compl_globals(
     mut is_cpt_compl: bool,
 ) {
     if is_cpt_compl {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut cpt_compl_pattern.data
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut cpt_compl_pattern.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -10264,10 +9981,7 @@ unsafe extern "C" fn set_compl_globals(
             );
             return;
         } else {
-            cpt_compl_pattern = copy_string(
-                compl_orig_text,
-                ::core::ptr::null_mut::<Arena>(),
-            );
+            cpt_compl_pattern = copy_string(compl_orig_text, ::core::ptr::null_mut::<Arena>());
         }
     } else {
         if startcol < 0 as ::core::ffi::c_int || startcol > curs_col {
@@ -10311,15 +10025,12 @@ unsafe extern "C" fn get_userdefined_compl_info(
     args[1 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
     args[2 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
     args[0 as ::core::ffi::c_int as usize].vval.v_number = 1 as varnumber_T;
-    args[1 as ::core::ffi::c_int as usize].vval.v_string = b"\0".as_ptr()
-        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    args[1 as ::core::ffi::c_int as usize].vval.v_string =
+        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     let mut pos: pos_T = (*curwin).w_cursor;
     textlock += 1;
-    let mut col: colnr_T = callback_call_retnr(
-        cb,
-        2 as ::core::ffi::c_int,
-        &raw mut args as *mut typval_T,
-    ) as colnr_T;
+    let mut col: colnr_T =
+        callback_call_retnr(cb, 2 as ::core::ffi::c_int, &raw mut args as *mut typval_T) as colnr_T;
     textlock -= 1;
     State = save_State;
     (*curwin).w_cursor = pos;
@@ -10358,19 +10069,20 @@ unsafe extern "C" fn get_spell_compl_info(
 ) -> ::core::ffi::c_int {
     if spell_bad_len > 0 as size_t {
         '_c2rust_label: {
-            if spell_bad_len <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if spell_bad_len <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"spell_bad_len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/insexpand.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     5875 as ::core::ffi::c_uint,
                     b"int get_spell_compl_info(int, colnr_T)\0".as_ptr()
                         as *const ::core::ffi::c_char,
                 );
             }
         };
-        compl_col = (curs_col as ::core::ffi::c_int
-            - spell_bad_len as ::core::ffi::c_int) as colnr_T;
+        compl_col =
+            (curs_col as ::core::ffi::c_int - spell_bad_len as ::core::ffi::c_int) as colnr_T;
     } else {
         compl_col = spell_word_start(startcol) as colnr_T;
     }
@@ -10382,10 +10094,7 @@ unsafe extern "C" fn get_spell_compl_info(
         compl_length = (curs_col - compl_col) as ::core::ffi::c_int;
     }
     let mut line: *mut ::core::ffi::c_char = ml_get((*curwin).w_cursor.lnum);
-    compl_pattern = cbuf_to_string(
-        line.offset(compl_col as isize),
-        compl_length as size_t,
-    );
+    compl_pattern = cbuf_to_string(line.offset(compl_col as isize), compl_length as size_t);
     return OK;
 }
 unsafe extern "C" fn compl_get_info(
@@ -10403,11 +10112,11 @@ unsafe extern "C" fn compl_get_info(
         }
         *line_invalid = true_0 != 0;
     } else if ctrl_x_mode_line_or_eval() {
-        return get_wholeline_compl_info(line, curs_col)
+        return get_wholeline_compl_info(line, curs_col);
     } else if ctrl_x_mode_files() {
-        return get_filename_compl_info(line, startcol, curs_col)
+        return get_filename_compl_info(line, startcol, curs_col);
     } else if ctrl_x_mode == CTRL_X_CMDLINE as ::core::ffi::c_int {
-        return get_cmdline_compl_info(line, curs_col)
+        return get_cmdline_compl_info(line, curs_col);
     } else if ctrl_x_mode_function() as ::core::ffi::c_int != 0
         || ctrl_x_mode_omni() as ::core::ffi::c_int != 0
         || thesaurus_func_complete(ctrl_x_mode) as ::core::ffi::c_int != 0
@@ -10447,11 +10156,10 @@ unsafe extern "C" fn ins_compl_continue_search(mut line: *mut ::core::ffi::c_cha
             if compl_cont_status & CONT_S_IPOS != 0 {
                 compl_cont_status |= CONT_SOL;
                 compl_startpos.col = skipwhite(
-                        line
-                            .offset(compl_length as isize)
-                            .offset(compl_startpos.col as isize),
-                    )
-                    .offset_from(line) as colnr_T;
+                    line.offset(compl_length as isize)
+                        .offset(compl_startpos.col as isize),
+                )
+                .offset_from(line) as colnr_T;
             }
             compl_col = compl_startpos.col;
         }
@@ -10459,8 +10167,7 @@ unsafe extern "C" fn ins_compl_continue_search(mut line: *mut ::core::ffi::c_cha
         if compl_length > IOSIZE - MIN_SPACE {
             compl_cont_status &= !CONT_SOL;
             compl_length = IOSIZE - MIN_SPACE;
-            compl_col = ((*curwin).w_cursor.col as ::core::ffi::c_int - compl_length)
-                as colnr_T;
+            compl_col = ((*curwin).w_cursor.col as ::core::ffi::c_int - compl_length) as colnr_T;
         }
         compl_cont_status |= CONT_ADDING | CONT_N_ADDS;
         if compl_length < 1 as ::core::ffi::c_int {
@@ -10520,14 +10227,12 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
     }
     if compl_status_adding() {
         if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) {
-            edit_submode_pre = gettext(
-                b" Adding\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            edit_submode_pre = gettext(b" Adding\0".as_ptr() as *const ::core::ffi::c_char);
         }
         if ctrl_x_mode_line_or_eval() {
             let mut old: *mut ::core::ffi::c_char = (*curbuf).b_p_com;
-            (*curbuf).b_p_com = b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            (*curbuf).b_p_com =
+                b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             compl_startpos.lnum = (*curwin).w_cursor.lnum;
             compl_startpos.col = compl_col;
             ins_eol('\r' as ::core::ffi::c_int);
@@ -10542,18 +10247,15 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
     }
     if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) && !compl_autocomplete {
         if compl_cont_status & CONT_LOCAL != 0 {
-            edit_submode = gettext(
-                ctrl_x_msgs[CTRL_X_LOCAL_MSG as ::core::ffi::c_int as usize],
-            );
+            edit_submode = gettext(ctrl_x_msgs[CTRL_X_LOCAL_MSG as ::core::ffi::c_int as usize]);
         } else {
-            edit_submode = gettext(
-                ctrl_x_msgs[(ctrl_x_mode & !(0x100 as ::core::ffi::c_int)) as usize],
-            );
+            edit_submode =
+                gettext(ctrl_x_msgs[(ctrl_x_mode & !(0x100 as ::core::ffi::c_int)) as usize]);
         }
     }
     ins_compl_fixRedoBufForLeader(::core::ptr::null_mut::<::core::ffi::c_char>());
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_orig_text.data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_orig_text.data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -10562,10 +10264,7 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
     compl_orig_extmarks.capacity = 0 as size_t;
     compl_orig_extmarks.size = compl_orig_extmarks.capacity;
     compl_orig_extmarks.items = ::core::ptr::null_mut::<ExtmarkUndoObject>();
-    compl_orig_text = cbuf_to_string(
-        line.offset(compl_col as isize),
-        compl_length as size_t,
-    );
+    compl_orig_text = cbuf_to_string(line.offset(compl_col as isize), compl_length as size_t);
     save_orig_extmarks();
     let mut flags: ::core::ffi::c_int = CP_ORIGINAL_TEXT as ::core::ffi::c_int;
     if p_ic != 0 {
@@ -10585,14 +10284,14 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
         FUZZY_SCORE_NONE as ::core::ffi::c_int,
     ) != OK
     {
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut compl_pattern.data
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut compl_pattern.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL;
         *ptr__0;
         compl_pattern.size = 0 as size_t;
-        let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut compl_orig_text.data
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__1: *mut *mut ::core::ffi::c_void =
+            &raw mut compl_orig_text.data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__1);
         *ptr__1 = NULL;
         *ptr__1;
@@ -10605,9 +10304,7 @@ unsafe extern "C" fn ins_compl_start() -> ::core::ffi::c_int {
         return FAIL;
     }
     if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) && !compl_autocomplete {
-        edit_submode_extra = gettext(
-            b"-- Searching...\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        edit_submode_extra = gettext(b"-- Searching...\0".as_ptr() as *const ::core::ffi::c_char);
         edit_submode_highl = HLF_COUNT;
         showmode();
         edit_submode_extra = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -10629,19 +10326,16 @@ unsafe extern "C" fn ins_compl_show_statusmsg() {
     }
     if edit_submode_extra.is_null() {
         if match_at_original_text(compl_curr_match) {
-            edit_submode_extra = gettext(
-                b"Back at original\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            edit_submode_extra =
+                gettext(b"Back at original\0".as_ptr() as *const ::core::ffi::c_char);
             edit_submode_highl = HLF_W;
         } else if compl_cont_status & CONT_S_IPOS != 0 {
-            edit_submode_extra = gettext(
-                b"Word from other line\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            edit_submode_extra =
+                gettext(b"Word from other line\0".as_ptr() as *const ::core::ffi::c_char);
             edit_submode_highl = HLF_COUNT;
         } else if (*compl_curr_match).cp_next == (*compl_curr_match).cp_prev {
-            edit_submode_extra = gettext(
-                b"The only match\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            edit_submode_extra =
+                gettext(b"The only match\0".as_ptr() as *const ::core::ffi::c_char);
             edit_submode_highl = HLF_COUNT;
             (*compl_curr_match).cp_number = 1 as ::core::ffi::c_int;
         } else {
@@ -10654,9 +10348,7 @@ unsafe extern "C" fn ins_compl_show_statusmsg() {
                     vim_snprintf(
                         &raw mut match_ref as *mut ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 81]>(),
-                        gettext(
-                            b"match %d of %d\0".as_ptr() as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"match %d of %d\0".as_ptr() as *const ::core::ffi::c_char),
                         (*compl_curr_match).cp_number,
                         compl_matches,
                     );
@@ -10687,8 +10379,7 @@ unsafe extern "C" fn ins_compl_show_statusmsg() {
                     if (edit_submode_highl as ::core::ffi::c_uint)
                         < HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        edit_submode_highl as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int
+                        edit_submode_highl as ::core::ffi::c_int + 1 as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     },
@@ -10707,22 +10398,21 @@ pub unsafe extern "C" fn ins_complete(
 ) -> ::core::ffi::c_int {
     let disable_ac_delay: bool = compl_started as ::core::ffi::c_int != 0
         && ctrl_x_mode_normal() as ::core::ffi::c_int != 0
-        && (c == Ctrl_N || c == Ctrl_P || c == Ctrl_R
+        && (c == Ctrl_N
+            || c == Ctrl_P
+            || c == Ctrl_R
             || ins_compl_pum_key(c) as ::core::ffi::c_int != 0);
     compl_direction = ins_compl_key2dir(c) as Direction;
-    let mut insert_match: ::core::ffi::c_int = ins_compl_use_match(c)
-        as ::core::ffi::c_int;
+    let mut insert_match: ::core::ffi::c_int = ins_compl_use_match(c) as ::core::ffi::c_int;
     if !compl_started {
         if ins_compl_start() == FAIL {
             return FAIL;
         }
     } else if insert_match != 0 && stop_arrow() == FAIL {
-        return FAIL
+        return FAIL;
     }
     let mut compl_start_tv: uint64_t = 0 as uint64_t;
-    if compl_autocomplete as ::core::ffi::c_int != 0 && p_acl > 0 as OptInt
-        && !disable_ac_delay
-    {
+    if compl_autocomplete as ::core::ffi::c_int != 0 && p_acl > 0 as OptInt && !disable_ac_delay {
         compl_start_tv = os_hrtime();
     }
     compl_curr_win = curwin;
@@ -10731,13 +10421,9 @@ pub unsafe extern "C" fn ins_complete(
     compl_shows_dir = compl_direction;
     compl_num_bests = 0 as ::core::ffi::c_int;
     let mut save_w_wrow: ::core::ffi::c_int = (*curwin).w_wrow;
-    let mut save_w_leftcol: ::core::ffi::c_int = (*curwin).w_leftcol
-        as ::core::ffi::c_int;
-    let mut n: ::core::ffi::c_int = ins_compl_next(
-        true_0 != 0,
-        ins_compl_key2count(c),
-        insert_match != 0,
-    );
+    let mut save_w_leftcol: ::core::ffi::c_int = (*curwin).w_leftcol as ::core::ffi::c_int;
+    let mut n: ::core::ffi::c_int =
+        ins_compl_next(true_0 != 0, ins_compl_key2count(c), insert_match != 0);
     if compl_autocomplete {
         compl_time_slice_expired = false_0 != 0;
     }
@@ -10755,7 +10441,8 @@ pub unsafe extern "C" fn ins_complete(
         if compl_length > 1 as ::core::ffi::c_int
             || compl_status_adding() as ::core::ffi::c_int != 0
             || ctrl_x_mode_not_default() as ::core::ffi::c_int != 0
-                && !ctrl_x_mode_path_patterns() && !ctrl_x_mode_path_defines()
+                && !ctrl_x_mode_path_patterns()
+                && !ctrl_x_mode_path_defines()
         {
             compl_cont_status &= !CONT_N_ADDS;
         }
@@ -10768,9 +10455,13 @@ pub unsafe extern "C" fn ins_complete(
     if !shortmess(SHM_COMPLETIONMENU as ::core::ffi::c_int) && !compl_autocomplete {
         ins_compl_show_statusmsg();
     }
-    if compl_autocomplete as ::core::ffi::c_int != 0 && p_acl > 0 as OptInt
-        && !disable_ac_delay && !no_matches_found
-        && os_hrtime().wrapping_sub(compl_start_tv).wrapping_div(1000000 as uint64_t)
+    if compl_autocomplete as ::core::ffi::c_int != 0
+        && p_acl > 0 as OptInt
+        && !disable_ac_delay
+        && !no_matches_found
+        && os_hrtime()
+            .wrapping_sub(compl_start_tv)
+            .wrapping_div(1000000 as uint64_t)
             < p_acl as uint64_t
     {
         setcursor();
@@ -10790,7 +10481,8 @@ pub unsafe extern "C" fn ins_complete(
                 os_delay(2 as uint64_t, true_0 != 0);
                 if os_hrtime()
                     .wrapping_sub(compl_start_tv)
-                    .wrapping_div(1000000 as uint64_t) >= p_acl as uint64_t
+                    .wrapping_div(1000000 as uint64_t)
+                    >= p_acl as uint64_t
                 {
                     break;
                 }
@@ -10828,8 +10520,8 @@ unsafe extern "C" fn quote_meta(
     mut src: *mut ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
 ) -> ::core::ffi::c_uint {
-    let mut m: ::core::ffi::c_uint = (len as ::core::ffi::c_uint)
-        .wrapping_add(1 as ::core::ffi::c_uint);
+    let mut m: ::core::ffi::c_uint =
+        (len as ::core::ffi::c_uint).wrapping_add(1 as ::core::ffi::c_uint);
     loop {
         len -= 1;
         if len < 0 as ::core::ffi::c_int {
@@ -10914,8 +10606,8 @@ unsafe extern "C" fn spell_back_to_badword() {
     }
 }
 unsafe extern "C" fn cpt_sources_clear() {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut cpt_sources_array
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut cpt_sources_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -10928,8 +10620,8 @@ unsafe extern "C" fn setup_cpt_sources() {
     if count == 0 as ::core::ffi::c_int {
         return;
     }
-    cpt_sources_array = xcalloc(count as size_t, ::core::mem::size_of::<cpt_source_T>())
-        as *mut cpt_source_T;
+    cpt_sources_array =
+        xcalloc(count as size_t, ::core::mem::size_of::<cpt_source_T>()) as *mut cpt_source_T;
     let mut buf: [::core::ffi::c_char; 512] = [0; 512];
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut p: *mut ::core::ffi::c_char = (*curbuf).b_p_cpt;
@@ -10958,9 +10650,8 @@ unsafe extern "C" fn setup_cpt_sources() {
                     '^' as ::core::ffi::c_int,
                 );
                 if !caret.is_null() {
-                    (*cpt_sources_array.offset(idx as isize)).cs_max_matches = atoi(
-                        caret.offset(1 as ::core::ffi::c_int as isize),
-                    );
+                    (*cpt_sources_array.offset(idx as isize)).cs_max_matches =
+                        atoi(caret.offset(1 as ::core::ffi::c_int as isize));
                 }
             }
             idx += 1;
@@ -10988,8 +10679,7 @@ unsafe extern "C" fn ins_compl_make_linear() {
 }
 unsafe extern "C" fn remove_old_matches() {
     let mut shown_match_removed: bool = false_0 != 0;
-    let mut forward: bool = (*compl_first_match).cp_cpt_source_idx
-        < 0 as ::core::ffi::c_int;
+    let mut forward: bool = (*compl_first_match).cp_cpt_source_idx < 0 as ::core::ffi::c_int;
     if cpt_sources_index < 0 as ::core::ffi::c_int {
         return;
     }
@@ -11053,8 +10743,7 @@ unsafe extern "C" fn remove_old_matches() {
     }
 }
 unsafe extern "C" fn get_cpt_func_completion_matches(mut cb: *mut Callback) {
-    let mut cpt_src: *mut cpt_source_T = cpt_sources_array
-        .offset(cpt_sources_index as isize);
+    let mut cpt_src: *mut cpt_source_T = cpt_sources_array.offset(cpt_sources_index as isize);
     let mut startcol: ::core::ffi::c_int = (*cpt_src).cs_startcol;
     if startcol == -2 as ::core::ffi::c_int || startcol == -3 as ::core::ffi::c_int {
         return;
@@ -11090,21 +10779,16 @@ unsafe extern "C" fn cpt_compl_refresh() {
             if !cb.is_null() {
                 remove_old_matches();
                 let mut startcol: ::core::ffi::c_int = 0;
-                let mut ret: ::core::ffi::c_int = get_userdefined_compl_info(
-                    (*curwin).w_cursor.col,
-                    cb,
-                    &raw mut startcol,
-                );
+                let mut ret: ::core::ffi::c_int =
+                    get_userdefined_compl_info((*curwin).w_cursor.col, cb, &raw mut startcol);
                 if ret == FAIL {
                     if startcol == -3 as ::core::ffi::c_int {
-                        (*cpt_sources_array.offset(cpt_sources_index as isize))
-                            .cs_refresh_always = false_0 != 0;
+                        (*cpt_sources_array.offset(cpt_sources_index as isize)).cs_refresh_always =
+                            false_0 != 0;
                     } else {
                         startcol = -2 as ::core::ffi::c_int;
                     }
-                } else if startcol < 0 as ::core::ffi::c_int
-                    || startcol > (*curwin).w_cursor.col
-                {
+                } else if startcol < 0 as ::core::ffi::c_int || startcol > (*curwin).w_cursor.col {
                     startcol = (*curwin).w_cursor.col as ::core::ffi::c_int;
                 }
                 (*cpt_sources_array.offset(cpt_sources_index as isize)).cs_startcol = startcol;
@@ -11138,41 +10822,39 @@ pub unsafe extern "C" fn f_preinserted(
         (*rettv).vval.v_number = 1 as varnumber_T;
     }
 }
-pub const K_UP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_UP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_S_TAB: ::core::ffi::c_int = -17003;
-pub const K_BS: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEUP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEDOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEUP: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEDOWN: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_SELECT: ::core::ffi::c_int = -(245 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_BS: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEUP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEDOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEUP: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEDOWN: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KENTER: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_SELECT: ::core::ffi::c_int =
+    -(245 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 #[inline]
-unsafe extern "C" fn get_register_name(
-    mut num: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if num == -1 as ::core::ffi::c_int {
-        return '"' as ::core::ffi::c_int
+        return '"' as ::core::ffi::c_int;
     } else if num < 10 as ::core::ffi::c_int {
-        return num + '0' as ::core::ffi::c_int
+        return num + '0' as ::core::ffi::c_int;
     } else if num == DELETION_REGISTER as ::core::ffi::c_int {
-        return '-' as ::core::ffi::c_int
+        return '-' as ::core::ffi::c_int;
     } else if num == STAR_REGISTER as ::core::ffi::c_int {
-        return '*' as ::core::ffi::c_int
+        return '*' as ::core::ffi::c_int;
     } else if num == PLUS_REGISTER as ::core::ffi::c_int {
-        return '+' as ::core::ffi::c_int
+        return '+' as ::core::ffi::c_int;
     } else {
-        return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int
+        return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int;
     };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

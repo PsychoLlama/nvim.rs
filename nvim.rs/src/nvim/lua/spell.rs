@@ -20,27 +20,15 @@ extern "C" {
     fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
     fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
     fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
     fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn luaL_register(
-        L: *mut lua_State,
-        libname: *const ::core::ffi::c_char,
-        l: *const luaL_Reg,
-    );
+    fn luaL_register(L: *mut lua_State, libname: *const ::core::ffi::c_char, l: *const luaL_Reg);
     fn luaL_argerror(
         L: *mut lua_State,
         numarg: ::core::ffi::c_int,
         extramsg: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static e_no_spell: [::core::ffi::c_char; 0];
     static mut curwin: *mut win_T;
@@ -57,9 +45,7 @@ extern "C" {
 pub type ptrdiff_t = isize;
 pub type size_t = usize;
 pub type __time_t = ::core::ffi::c_long;
-pub type lua_CFunction = Option<
-    unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
->;
+pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
 pub type lua_Integer = ptrdiff_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1688,20 +1674,15 @@ pub const HLF_EOB: hlf_T = 2;
 pub const HLF_8: hlf_T = 1;
 pub const HLF_NONE: hlf_T = 0;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"int nlua_spell_check(lua_State *)\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"int nlua_spell_check(lua_State *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn nlua_spell_check(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn nlua_spell_check(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     if lua_gettop(lstate) < 1 as ::core::ffi::c_int {
         return luaL_error(
             lstate,
@@ -1734,9 +1715,7 @@ pub unsafe extern "C" fn nlua_spell_check(
     let mut pos: size_t = 0 as size_t;
     let mut capcol: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut no_res: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut result: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut result: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     while *str as ::core::ffi::c_int != NUL {
         attr = HLF_COUNT;
@@ -1748,19 +1727,18 @@ pub unsafe extern "C" fn nlua_spell_check(
             false_0 != 0,
         );
         '_c2rust_label: {
-            if len <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if len <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/spell.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/lua/spell.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     60 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
             }
         };
-        if attr as ::core::ffi::c_uint
-            != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if attr as ::core::ffi::c_uint != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint {
             lua_createtable(lstate, 3 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
             lua_pushlstring(lstate, str, len);
             lua_rawseti(lstate, -2 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
@@ -1784,11 +1762,12 @@ pub unsafe extern "C" fn nlua_spell_check(
                 ::core::ptr::null::<::core::ffi::c_char>()
             };
             '_c2rust_label_0: {
-                if !result.is_null() {} else {
+                if !result.is_null() {
+                } else {
                     __assert_fail(
                         b"result != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/spell.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/lua/spell.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         74 as ::core::ffi::c_uint,
                         __ASSERT_FUNCTION.as_ptr(),
                     );
@@ -1811,10 +1790,7 @@ pub unsafe extern "C" fn nlua_spell_check(
 static mut spell_functions: [luaL_Reg; 2] = [
     luaL_Reg {
         name: b"check\0".as_ptr() as *const ::core::ffi::c_char,
-        func: Some(
-            nlua_spell_check
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        func: Some(nlua_spell_check as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
     },
     luaL_Reg {
         name: ::core::ptr::null::<::core::ffi::c_char>(),

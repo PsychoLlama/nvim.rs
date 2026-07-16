@@ -39,10 +39,7 @@ extern "C" {
     static mut p_cpo: *mut ::core::ffi::c_char;
     static mut p_verbose: OptInt;
     static mut p_vfile: *mut ::core::ffi::c_char;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn concat_str(
         str1: *const ::core::ffi::c_char,
         str2: *const ::core::ffi::c_char,
@@ -94,10 +91,7 @@ extern "C" {
         eap: *mut exarg_T,
         evalarg: *mut evalarg_T,
     ) -> *mut ::core::ffi::c_void;
-    fn next_for_item(
-        fi_void: *mut ::core::ffi::c_void,
-        arg: *mut ::core::ffi::c_char,
-    ) -> bool;
+    fn next_for_item(fi_void: *mut ::core::ffi::c_void, arg: *mut ::core::ffi::c_char) -> bool;
     fn free_for_info(fi_void: *mut ::core::ffi::c_void);
     fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T);
     fn eval0(
@@ -106,11 +100,7 @@ extern "C" {
         eap: *mut exarg_T,
         evalarg: *mut evalarg_T,
     ) -> ::core::ffi::c_int;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn internal_error(where_0: *const ::core::ffi::c_char);
@@ -127,11 +117,7 @@ extern "C" {
         rettv: *mut ::core::ffi::c_void,
     ) -> bool;
     fn get_return_cmd(rettv: *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T);
     fn handle_did_throw();
     fn modifier_len(cmd: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -171,11 +157,8 @@ extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_nl(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
+        -> bool;
 }
 pub type int32_t = i32;
 pub type int64_t = i64;
@@ -1535,9 +1518,7 @@ pub const ESTACK_SCRIPT: estack_arg_T = 3;
 pub const ESTACK_STACK: estack_arg_T = 2;
 pub const ESTACK_SFILE: estack_arg_T = 1;
 pub const ESTACK_NONE: estack_arg_T = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
@@ -1553,16 +1534,10 @@ unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
     (*l).lv_refcount += 1;
 }
 static mut e_multiple_else: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E583: Multiple :else\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E583: Multiple :else\0")
 };
 static mut e_multiple_finally: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E607: Multiple :finally\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E607: Multiple :finally\0")
 };
 pub const THROW_ON_ERROR: ::core::ffi::c_int = true_0;
 unsafe extern "C" fn discard_pending_return(mut p: *mut typval_T) {
@@ -1572,7 +1547,8 @@ static mut cause_abort: bool = false_0 != 0;
 #[no_mangle]
 pub unsafe extern "C" fn aborting() -> bool {
     return did_emsg != 0 && force_abort as ::core::ffi::c_int != 0
-        || got_int as ::core::ffi::c_int != 0 || did_throw as ::core::ffi::c_int != 0;
+        || got_int as ::core::ffi::c_int != 0
+        || did_throw as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn update_force_abort() {
@@ -1605,14 +1581,11 @@ pub unsafe extern "C" fn cause_errthrow(
         cause_abort = force_abort;
         force_abort = false_0 != 0;
     }
-    if (trylevel == 0 as ::core::ffi::c_int && !cause_abort || emsg_silent != 0)
-        && !did_throw
-    {
+    if (trylevel == 0 as ::core::ffi::c_int && !cause_abort || emsg_silent != 0) && !did_throw {
         return false_0 != 0;
     }
     if mesg
-        == gettext(&raw const e_interr as *const ::core::ffi::c_char)
-            as *const ::core::ffi::c_char
+        == gettext(&raw const e_interr as *const ::core::ffi::c_char) as *const ::core::ffi::c_char
     {
         *ignore = true_0 != 0;
         return true_0 != 0;
@@ -1655,14 +1628,17 @@ pub unsafe extern "C" fn cause_errthrow(
                 5 as size_t,
             ) == 0 as ::core::ffi::c_int
                 && ascii_isdigit(
-                    *tmsg.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
+                    *tmsg.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                ) as ::core::ffi::c_int
+                    != 0
                 && ascii_isdigit(
-                    *tmsg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
+                    *tmsg.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                ) as ::core::ffi::c_int
+                    != 0
                 && ascii_isdigit(
-                    *tmsg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0
+                    *tmsg.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                ) as ::core::ffi::c_int
+                    != 0
                 && *tmsg.offset(8 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ':' as ::core::ffi::c_int
                 && *tmsg.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -1676,7 +1652,7 @@ pub unsafe extern "C" fn cause_errthrow(
         (*elem).sfile = estack_sfile(ESTACK_NONE);
         (*elem).slnum = (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_lnum;
+        .es_lnum;
     }
     return true_0 != 0;
 }
@@ -1707,8 +1683,7 @@ pub unsafe extern "C" fn do_errthrow(
     if msg_list.is_null() || (*msg_list).is_null() {
         return;
     }
-    if throw_exception(*msg_list as *mut ::core::ffi::c_void, ET_ERROR, cmdname) == FAIL
-    {
+    if throw_exception(*msg_list as *mut ::core::ffi::c_void, ET_ERROR, cmdname) == FAIL {
         free_msglist(*msg_list);
     } else if !cstack.is_null() {
         do_throw(cstack);
@@ -1731,8 +1706,7 @@ pub unsafe extern "C" fn do_intthrow(mut cstack: *mut cstack_T) -> bool {
         discard_current_exception();
     }
     if throw_exception(
-        b"Vim:Interrupt\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_void,
+        b"Vim:Interrupt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_void,
         ET_INTERRUPT,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
     ) != FAIL
@@ -1748,15 +1722,9 @@ pub unsafe extern "C" fn get_exception_string(
     mut cmdname: *mut ::core::ffi::c_char,
     mut should_free: *mut bool,
 ) -> *mut ::core::ffi::c_char {
-    let mut ret: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    if type_0 as ::core::ffi::c_uint
-        == ET_ERROR as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut val: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+    let mut ret: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    if type_0 as ::core::ffi::c_uint == ET_ERROR as ::core::ffi::c_int as ::core::ffi::c_uint {
+        let mut val: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         *should_free = true_0 != 0;
         let mut mesg: *mut ::core::ffi::c_char = (*(value as *mut msglist_T)).throw_msg;
         if !cmdname.is_null() && *cmdname as ::core::ffi::c_int != NUL {
@@ -1771,8 +1739,7 @@ pub unsafe extern "C" fn get_exception_string(
             strcpy(ret.offset(4 as ::core::ffi::c_int as isize), cmdname);
             strcpy(
                 ret.offset((4 as size_t).wrapping_add(cmdlen) as isize),
-                b"):\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"):\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             val = ret
                 .offset(4 as ::core::ffi::c_int as isize)
@@ -1790,28 +1757,30 @@ pub unsafe extern "C" fn get_exception_string(
             if *p as ::core::ffi::c_int == NUL
                 || *p as ::core::ffi::c_int == 'E' as ::core::ffi::c_int
                     && ascii_isdigit(
-                        *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                        *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    ) as ::core::ffi::c_int
+                        != 0
                     && (*p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == ':' as ::core::ffi::c_int
                         || ascii_isdigit(
-                            *p.offset(2 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int != 0
-                            && (*p.offset(3 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                                || ascii_isdigit(
-                                    *p.offset(3 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                            *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        ) as ::core::ffi::c_int
+                            != 0
+                            && (*p.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                == ':' as ::core::ffi::c_int
+                                || ascii_isdigit(*p.offset(3 as ::core::ffi::c_int as isize)
+                                    as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    != 0
                                     && *p.offset(4 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int == ':' as ::core::ffi::c_int))
+                                        as ::core::ffi::c_int
+                                        == ':' as ::core::ffi::c_int))
             {
                 if *p as ::core::ffi::c_int == NUL || p == mesg {
                     strcat(val, mesg);
                     break;
-                } else if !(*mesg.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int != '"' as ::core::ffi::c_int
+                } else if !(*mesg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    != '"' as ::core::ffi::c_int
                     || p.offset(-(2 as ::core::ffi::c_int as isize))
                         < mesg.offset(1 as ::core::ffi::c_int as isize)
                     || *p.offset(-2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -1820,16 +1789,14 @@ pub unsafe extern "C" fn get_exception_string(
                         != ' ' as ::core::ffi::c_int)
                 {
                     strcat(val, p);
-                    *p.offset(-2 as ::core::ffi::c_int as isize) = NUL
-                        as ::core::ffi::c_char;
+                    *p.offset(-2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
                     snprintf(
                         val.offset(strlen(p) as isize),
                         strlen(b" (%s)\0".as_ptr() as *const ::core::ffi::c_char),
                         b" (%s)\0".as_ptr() as *const ::core::ffi::c_char,
                         mesg.offset(1 as ::core::ffi::c_int as isize),
                     );
-                    *p.offset(-2 as ::core::ffi::c_int as isize) = '"'
-                        as ::core::ffi::c_char;
+                    *p.offset(-2 as ::core::ffi::c_int as isize) = '"' as ::core::ffi::c_char;
                     break;
                 }
             }
@@ -1849,46 +1816,35 @@ unsafe extern "C" fn throw_exception(
     let mut excp: *mut except_T = ::core::ptr::null_mut::<except_T>();
     let mut should_free: bool = false;
     '_fail: {
-        if type_0 as ::core::ffi::c_uint
-            == ET_USER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if type_0 as ::core::ffi::c_uint == ET_USER as ::core::ffi::c_int as ::core::ffi::c_uint {
             if strncmp(
                 value as *const ::core::ffi::c_char,
                 b"Vim\0".as_ptr() as *const ::core::ffi::c_char,
                 3 as size_t,
             ) == 0 as ::core::ffi::c_int
-                && (*(value as *mut ::core::ffi::c_char)
-                    .offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                && (*(value as *mut ::core::ffi::c_char).offset(3 as ::core::ffi::c_int as isize)
+                    as ::core::ffi::c_int
                     == NUL
-                    || *(value as *mut ::core::ffi::c_char)
-                        .offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    || *(value as *mut ::core::ffi::c_char).offset(3 as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         == ':' as ::core::ffi::c_int
-                    || *(value as *mut ::core::ffi::c_char)
-                        .offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    || *(value as *mut ::core::ffi::c_char).offset(3 as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         == '(' as ::core::ffi::c_int)
             {
-                emsg(
-                    gettext(
-                        b"E608: Cannot :throw exceptions with 'Vim' prefix\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    b"E608: Cannot :throw exceptions with 'Vim' prefix\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                ));
                 break '_fail;
             }
         }
         excp = xmalloc(::core::mem::size_of::<except_T>()) as *mut except_T;
-        if type_0 as ::core::ffi::c_uint
-            == ET_ERROR as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if type_0 as ::core::ffi::c_uint == ET_ERROR as ::core::ffi::c_int as ::core::ffi::c_uint {
             (*excp).messages = value as *mut msglist_T;
         }
         should_free = false;
-        (*excp).value = get_exception_string(
-            value,
-            type_0,
-            cmdname,
-            &raw mut should_free,
-        );
+        (*excp).value = get_exception_string(value, type_0, cmdname, &raw mut should_free);
         if (*excp).value.is_null() && should_free as ::core::ffi::c_int != 0 {
             xfree(excp as *mut ::core::ffi::c_void);
             suppress_errthrow = true_0 != 0;
@@ -1906,13 +1862,11 @@ unsafe extern "C" fn throw_exception(
             } else {
                 (*excp).throw_name = estack_sfile(ESTACK_NONE);
                 if (*excp).throw_name.is_null() {
-                    (*excp).throw_name = xstrdup(
-                        b"\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    (*excp).throw_name = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
                 }
                 (*excp).throw_lnum = (*(exestack.ga_data as *mut estack_T)
                     .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum;
+                .es_lnum;
             }
             (*excp).stacktrace = stacktrace_create();
             tv_list_ref((*excp).stacktrace);
@@ -1931,9 +1885,7 @@ unsafe extern "C" fn throw_exception(
                 }
                 smsg(
                     0 as ::core::ffi::c_int,
-                    gettext(
-                        b"Exception thrown: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Exception thrown: %s\0".as_ptr() as *const ::core::ffi::c_char),
                     (*excp).value,
                 );
                 msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
@@ -1966,37 +1918,28 @@ unsafe extern "C" fn discard_exception(mut excp: *mut except_T, mut was_finished
     }
     if p_verbose >= 13 as OptInt || debug_break_level > 0 as ::core::ffi::c_int {
         let mut save_msg_silent: ::core::ffi::c_int = msg_silent;
-        let mut saved_IObuff: *mut ::core::ffi::c_char = xstrdup(
-            &raw mut IObuff as *mut ::core::ffi::c_char,
-        );
+        let mut saved_IObuff: *mut ::core::ffi::c_char =
+            xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
         if debug_break_level > 0 as ::core::ffi::c_int {
             msg_silent = false_0;
         } else {
             verbose_enter();
         }
         no_wait_return += 1;
-        if debug_break_level > 0 as ::core::ffi::c_int
-            || *p_vfile as ::core::ffi::c_int == NUL
-        {
+        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
             msg_scroll = true_0;
         }
         smsg(
             0 as ::core::ffi::c_int,
             if was_finished as ::core::ffi::c_int != 0 {
-                gettext(
-                    b"Exception finished: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                )
+                gettext(b"Exception finished: %s\0".as_ptr() as *const ::core::ffi::c_char)
             } else {
-                gettext(
-                    b"Exception discarded: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                )
+                gettext(b"Exception discarded: %s\0".as_ptr() as *const ::core::ffi::c_char)
             },
             (*excp).value,
         );
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        if debug_break_level > 0 as ::core::ffi::c_int
-            || *p_vfile as ::core::ffi::c_int == NUL
-        {
+        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
             cmdline_row = msg_row;
         }
         no_wait_return -= 1;
@@ -2077,9 +2020,7 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
             verbose_enter();
         }
         no_wait_return += 1;
-        if debug_break_level > 0 as ::core::ffi::c_int
-            || *p_vfile as ::core::ffi::c_int == NUL
-        {
+        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
             msg_scroll = true_0;
         }
         smsg(
@@ -2088,9 +2029,7 @@ unsafe extern "C" fn catch_exception(mut excp: *mut except_T) {
             (*excp).value,
         );
         msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        if debug_break_level > 0 as ::core::ffi::c_int
-            || *p_vfile as ::core::ffi::c_int == NUL
-        {
+        if debug_break_level > 0 as ::core::ffi::c_int || *p_vfile as ::core::ffi::c_int == NUL {
             cmdline_row = msg_row;
         }
         no_wait_return -= 1;
@@ -2189,20 +2128,17 @@ unsafe extern "C" fn report_pending(
     mut pending: ::core::ffi::c_int,
     mut value: *mut ::core::ffi::c_void,
 ) {
-    let mut mesg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut mesg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     '_c2rust_label: {
-        if !value.is_null() || pending & CSTP_THROW as ::core::ffi::c_int == 0 {} else {
+        if !value.is_null() || pending & CSTP_THROW as ::core::ffi::c_int == 0 {
+        } else {
             __assert_fail(
-                b"value || !(pending & CSTP_THROW)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"value || !(pending & CSTP_THROW)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 723 as ::core::ffi::c_uint,
-                b"void report_pending(int, int, void *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void report_pending(int, int, void *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2220,16 +2156,13 @@ unsafe extern "C" fn report_pending(
     match pending {
         0 => return,
         16 => {
-            s = b":continue\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            s = b":continue\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         8 => {
-            s = b":break\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            s = b":break\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         32 => {
-            s = b":finish\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            s = b":finish\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         24 => {
             s = get_return_cmd(value);
@@ -2250,9 +2183,7 @@ unsafe extern "C" fn report_pending(
             } else if pending & CSTP_ERROR as ::core::ffi::c_int != 0
                 && pending & CSTP_INTERRUPT as ::core::ffi::c_int != 0
             {
-                s = gettext(
-                    b"Error and interrupt\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                s = gettext(b"Error and interrupt\0".as_ptr() as *const ::core::ffi::c_char);
             } else if pending & CSTP_ERROR as ::core::ffi::c_int != 0 {
                 s = gettext(b"Error\0".as_ptr() as *const ::core::ffi::c_char);
             } else {
@@ -2345,34 +2276,27 @@ pub unsafe extern "C" fn ex_eval(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
-        (*eap).errmsg = gettext(
-            b"E579: :if nesting too deep\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E579: :if nesting too deep\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
         (*cstack).cs_idx += 1;
         (*cstack).cs_flags[(*cstack).cs_idx as usize] = 0 as ::core::ffi::c_int;
-        let mut skip: bool = did_emsg != 0 || got_int as ::core::ffi::c_int != 0
+        let mut skip: bool = did_emsg != 0
+            || got_int as ::core::ffi::c_int != 0
             || did_throw as ::core::ffi::c_int != 0
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
-                && (*cstack)
-                    .cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
-                    & CSF_ACTIVE as ::core::ffi::c_int == 0;
+                && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
+                    & CSF_ACTIVE as ::core::ffi::c_int
+                    == 0;
         let mut error: bool = false;
-        let mut result: bool = eval_to_bool(
-            (*eap).arg,
-            &raw mut error,
-            eap,
-            skip,
-            false_0 != 0,
-        );
+        let mut result: bool = eval_to_bool((*eap).arg, &raw mut error, eap, skip, false_0 != 0);
         if !skip && !error {
             if result {
-                (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_ACTIVE
-                    as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] =
+                    CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
             }
         } else {
-            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE
-                as ::core::ffi::c_int;
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE as ::core::ffi::c_int;
         }
     };
 }
@@ -2381,15 +2305,17 @@ pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
     did_endif = true_0 != 0;
     if (*(*eap).cstack).cs_idx < 0 as ::core::ffi::c_int
         || (*(*eap).cstack).cs_flags[(*(*eap).cstack).cs_idx as usize]
-            & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int
-                | CSF_TRY as ::core::ffi::c_int) != 0
+            & (CSF_WHILE as ::core::ffi::c_int
+                | CSF_FOR as ::core::ffi::c_int
+                | CSF_TRY as ::core::ffi::c_int)
+            != 0
     {
-        (*eap).errmsg = gettext(
-            b"E580: :endif without :if\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E580: :endif without :if\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
         if (*(*eap).cstack).cs_flags[(*(*eap).cstack).cs_idx as usize]
-            & CSF_TRUE as ::core::ffi::c_int == 0
+            & CSF_TRUE as ::core::ffi::c_int
+            == 0
             && dbg_check_skipped(eap) as ::core::ffi::c_int != 0
         {
             do_intthrow((*eap).cstack);
@@ -2400,53 +2326,49 @@ pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
-    let mut skip: bool = did_emsg != 0 || got_int as ::core::ffi::c_int != 0
+    let mut skip: bool = did_emsg != 0
+        || got_int as ::core::ffi::c_int != 0
         || did_throw as ::core::ffi::c_int != 0
         || (*cstack).cs_idx > 0 as ::core::ffi::c_int
             && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
-                & CSF_ACTIVE as ::core::ffi::c_int == 0;
+                & CSF_ACTIVE as ::core::ffi::c_int
+                == 0;
     if (*cstack).cs_idx < 0 as ::core::ffi::c_int
         || (*cstack).cs_flags[(*cstack).cs_idx as usize]
-            & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int
-                | CSF_TRY as ::core::ffi::c_int) != 0
+            & (CSF_WHILE as ::core::ffi::c_int
+                | CSF_FOR as ::core::ffi::c_int
+                | CSF_TRY as ::core::ffi::c_int)
+            != 0
     {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_else as ::core::ffi::c_int {
-            (*eap).errmsg = gettext(
-                b"E581: :else without :if\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            (*eap).errmsg =
+                gettext(b"E581: :else without :if\0".as_ptr() as *const ::core::ffi::c_char);
             return;
         }
-        (*eap).errmsg = gettext(
-            b"E582: :elseif without :if\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E582: :elseif without :if\0".as_ptr() as *const ::core::ffi::c_char);
         skip = true_0 != 0;
-    } else if (*cstack).cs_flags[(*cstack).cs_idx as usize]
-        & CSF_ELSE as ::core::ffi::c_int != 0
-    {
+    } else if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ELSE as ::core::ffi::c_int != 0 {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_else as ::core::ffi::c_int {
-            (*eap).errmsg = gettext(
-                &raw const e_multiple_else as *const ::core::ffi::c_char,
-            );
+            (*eap).errmsg = gettext(&raw const e_multiple_else as *const ::core::ffi::c_char);
             return;
         }
-        (*eap).errmsg = gettext(
-            b"E584: :elseif after :else\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E584: :elseif after :else\0".as_ptr() as *const ::core::ffi::c_char);
         skip = true_0 != 0;
     }
     if skip as ::core::ffi::c_int != 0
-        || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE as ::core::ffi::c_int
-            != 0
+        || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE as ::core::ffi::c_int != 0
     {
         if (*eap).errmsg.is_null() {
-            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE
-                as ::core::ffi::c_int;
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE as ::core::ffi::c_int;
         }
         skip = true_0 != 0;
     } else {
         (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_ACTIVE as ::core::ffi::c_int;
     }
-    if !skip && dbg_check_skipped(eap) as ::core::ffi::c_int != 0
+    if !skip
+        && dbg_check_skipped(eap) as ::core::ffi::c_int != 0
         && got_int as ::core::ffi::c_int != 0
     {
         do_intthrow(cstack);
@@ -2468,14 +2390,13 @@ pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
         }
         if !skip && !error {
             if result {
-                (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_ACTIVE
-                    as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] =
+                    CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
             } else {
                 (*cstack).cs_flags[(*cstack).cs_idx as usize] = 0 as ::core::ffi::c_int;
             }
         } else if (*eap).errmsg.is_null() {
-            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE
-                as ::core::ffi::c_int;
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRUE as ::core::ffi::c_int;
         }
     } else {
         (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_ELSE as ::core::ffi::c_int;
@@ -2486,40 +2407,30 @@ pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
     let mut error: bool = false;
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
-        (*eap).errmsg = gettext(
-            b"E585: :while/:for nesting too deep\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E585: :while/:for nesting too deep\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
         let mut result: bool = false;
-        if (*cstack).cs_lflags & CSL_HAD_LOOP as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
-        {
+        if (*cstack).cs_lflags & CSL_HAD_LOOP as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
             (*cstack).cs_idx += 1;
             (*cstack).cs_looplevel += 1;
             (*cstack).cs_line[(*cstack).cs_idx as usize] = -1 as ::core::ffi::c_int;
         }
-        (*cstack).cs_flags[(*cstack).cs_idx as usize] = if (*eap).cmdidx
-            as ::core::ffi::c_int == CMD_while as ::core::ffi::c_int
-        {
-            CSF_WHILE as ::core::ffi::c_int
-        } else {
-            CSF_FOR as ::core::ffi::c_int
-        };
+        (*cstack).cs_flags[(*cstack).cs_idx as usize] =
+            if (*eap).cmdidx as ::core::ffi::c_int == CMD_while as ::core::ffi::c_int {
+                CSF_WHILE as ::core::ffi::c_int
+            } else {
+                CSF_FOR as ::core::ffi::c_int
+            };
         let mut skip: ::core::ffi::c_int = (did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0 || did_throw as ::core::ffi::c_int != 0
+            || got_int as ::core::ffi::c_int != 0
+            || did_throw as ::core::ffi::c_int != 0
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
-                && (*cstack)
-                    .cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
-                    & CSF_ACTIVE as ::core::ffi::c_int == 0) as ::core::ffi::c_int;
+                && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
+                    & CSF_ACTIVE as ::core::ffi::c_int
+                    == 0) as ::core::ffi::c_int;
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_while as ::core::ffi::c_int {
-            result = eval_to_bool(
-                (*eap).arg,
-                &raw mut error,
-                eap,
-                skip != 0,
-                false_0 != 0,
-            );
+            result = eval_to_bool((*eap).arg, &raw mut error, eap, skip != 0, false_0 != 0);
         } else {
             let mut evalarg: evalarg_T = evalarg_T {
                 eval_flags: 0,
@@ -2528,12 +2439,8 @@ pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
                 eval_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
             };
             fill_evalarg_from_eap(&raw mut evalarg, eap, skip != 0);
-            let mut fi: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-                ::core::ffi::c_void,
-            >();
-            if (*cstack).cs_lflags & CSL_HAD_LOOP as ::core::ffi::c_int
-                != 0 as ::core::ffi::c_int
-            {
+            let mut fi: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+            if (*cstack).cs_lflags & CSL_HAD_LOOP as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
                 fi = (*cstack).cs_forinfo[(*cstack).cs_idx as usize];
                 error = false_0 != 0;
             } else {
@@ -2552,14 +2459,13 @@ pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
             clear_evalarg(&raw mut evalarg, eap);
         }
         if skip == 0 && !error && result as ::core::ffi::c_int != 0 {
-            (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                |= CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] |=
+                CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
             (*cstack).cs_lflags ^= CSL_HAD_LOOP as ::core::ffi::c_int;
         } else {
             (*cstack).cs_lflags &= !(CSL_HAD_LOOP as ::core::ffi::c_int);
             if skip == 0 && !error {
-                (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                    |= CSF_TRUE as ::core::ffi::c_int;
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_TRUE as ::core::ffi::c_int;
             }
         }
     };
@@ -2571,8 +2477,7 @@ pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
         || (*cstack).cs_idx < 0 as ::core::ffi::c_int
     {
         (*eap).errmsg = gettext(
-            b"E586: :continue without :while or :for\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"E586: :continue without :while or :for\0".as_ptr() as *const ::core::ffi::c_char
         );
     } else {
         let mut idx: ::core::ffi::c_int = cleanup_conditionals(
@@ -2581,19 +2486,20 @@ pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
             false_0,
         );
         '_c2rust_label: {
-            if idx >= 0 as ::core::ffi::c_int {} else {
+            if idx >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    1069 as ::core::ffi::c_uint,
-                    b"void ex_continue(exarg_T *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    1069 as ::core::ffi::c_uint,
+                    b"void ex_continue(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
         if (*cstack).cs_flags[idx as usize]
-            & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int) != 0
+            & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int)
+            != 0
         {
             rewind_conditionals(
                 cstack,
@@ -2603,8 +2509,8 @@ pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
             );
             (*cstack).cs_lflags |= CSL_HAD_CONT as ::core::ffi::c_int;
         } else {
-            (*cstack).cs_pending[idx as usize] = CSTP_CONTINUE as ::core::ffi::c_int
-                as ::core::ffi::c_char;
+            (*cstack).cs_pending[idx as usize] =
+                CSTP_CONTINUE as ::core::ffi::c_int as ::core::ffi::c_char;
             report_make_pending(CSTP_CONTINUE as ::core::ffi::c_int, NULL);
         }
     };
@@ -2616,8 +2522,7 @@ pub unsafe extern "C" fn ex_break(mut eap: *mut exarg_T) {
         || (*cstack).cs_idx < 0 as ::core::ffi::c_int
     {
         (*eap).errmsg = gettext(
-            b"E587: :break without :while or :for\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"E587: :break without :while or :for\0".as_ptr() as *const ::core::ffi::c_char
         );
     } else {
         let mut idx: ::core::ffi::c_int = cleanup_conditionals(
@@ -2627,10 +2532,11 @@ pub unsafe extern "C" fn ex_break(mut eap: *mut exarg_T) {
         );
         if idx >= 0 as ::core::ffi::c_int
             && (*cstack).cs_flags[idx as usize]
-                & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int) == 0
+                & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int)
+                == 0
         {
-            (*cstack).cs_pending[idx as usize] = CSTP_BREAK as ::core::ffi::c_int
-                as ::core::ffi::c_char;
+            (*cstack).cs_pending[idx as usize] =
+                CSTP_BREAK as ::core::ffi::c_int as ::core::ffi::c_char;
             report_make_pending(CSTP_BREAK as ::core::ffi::c_int, NULL);
         }
     };
@@ -2656,25 +2562,19 @@ pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
         if fl & csf == 0 {
             if fl & CSF_WHILE as ::core::ffi::c_int != 0 {
                 (*eap).errmsg = gettext(
-                    b"E732: Using :endfor with :while\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"E732: Using :endfor with :while\0".as_ptr() as *const ::core::ffi::c_char
                 );
             } else if fl & CSF_FOR as ::core::ffi::c_int != 0 {
                 (*eap).errmsg = gettext(
-                    b"E733: Using :endwhile with :for\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"E733: Using :endwhile with :for\0".as_ptr() as *const ::core::ffi::c_char
                 );
             }
         }
         if fl & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int) == 0 {
             if fl & CSF_TRY as ::core::ffi::c_int == 0 {
-                (*eap).errmsg = gettext(
-                    &raw const e_endif as *const ::core::ffi::c_char,
-                );
+                (*eap).errmsg = gettext(&raw const e_endif as *const ::core::ffi::c_char);
             } else if fl & CSF_FINALLY as ::core::ffi::c_int != 0 {
-                (*eap).errmsg = gettext(
-                    &raw const e_endtry as *const ::core::ffi::c_char,
-                );
+                (*eap).errmsg = gettext(&raw const e_endtry as *const ::core::ffi::c_char);
             }
             let mut idx: ::core::ffi::c_int = 0;
             idx = (*cstack).cs_idx;
@@ -2702,10 +2602,9 @@ pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
                 CSF_TRY as ::core::ffi::c_int,
                 &raw mut (*cstack).cs_trylevel,
             );
-        } else if (*cstack).cs_flags[(*cstack).cs_idx as usize]
-            & CSF_TRUE as ::core::ffi::c_int != 0
-            && (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                & CSF_ACTIVE as ::core::ffi::c_int == 0
+        } else if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE as ::core::ffi::c_int
+            != 0
+            && (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ACTIVE as ::core::ffi::c_int == 0
             && dbg_check_skipped(eap) as ::core::ffi::c_int != 0
         {
             do_intthrow(cstack);
@@ -2716,9 +2615,7 @@ pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn ex_throw(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *arg as ::core::ffi::c_int != NUL
         && *arg as ::core::ffi::c_int != '|' as ::core::ffi::c_int
         && *arg as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
@@ -2758,8 +2655,7 @@ pub unsafe extern "C" fn do_throw(mut cstack: *mut cstack_T) {
             }
         }
         (*cstack).cs_flags[idx as usize] &= !(CSF_ACTIVE as ::core::ffi::c_int);
-        (*cstack).cs_pend.csp_ex[idx as usize] = current_exception
-            as *mut ::core::ffi::c_void;
+        (*cstack).cs_pend.csp_ex[idx as usize] = current_exception as *mut ::core::ffi::c_void;
     }
     did_throw = true_0 != 0;
 }
@@ -2767,32 +2663,31 @@ pub unsafe extern "C" fn do_throw(mut cstack: *mut cstack_T) {
 pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
-        (*eap).errmsg = gettext(
-            b"E601: :try nesting too deep\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E601: :try nesting too deep\0".as_ptr() as *const ::core::ffi::c_char);
     } else {
         (*cstack).cs_idx += 1;
         (*cstack).cs_trylevel += 1;
         (*cstack).cs_flags[(*cstack).cs_idx as usize] = CSF_TRY as ::core::ffi::c_int;
-        (*cstack).cs_pending[(*cstack).cs_idx as usize] = CSTP_NONE as ::core::ffi::c_int
-            as ::core::ffi::c_char;
+        (*cstack).cs_pending[(*cstack).cs_idx as usize] =
+            CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
         let mut skip: ::core::ffi::c_int = (did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0 || did_throw as ::core::ffi::c_int != 0
+            || got_int as ::core::ffi::c_int != 0
+            || did_throw as ::core::ffi::c_int != 0
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
-                && (*cstack)
-                    .cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
-                    & CSF_ACTIVE as ::core::ffi::c_int == 0) as ::core::ffi::c_int;
+                && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
+                    & CSF_ACTIVE as ::core::ffi::c_int
+                    == 0) as ::core::ffi::c_int;
         if skip == 0 {
-            (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                |= CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
+            (*cstack).cs_flags[(*cstack).cs_idx as usize] |=
+                CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int;
             if emsg_silent != 0 {
-                let mut elem: *mut eslist_T = xmalloc(::core::mem::size_of::<eslist_T>())
-                    as *mut eslist_T;
+                let mut elem: *mut eslist_T =
+                    xmalloc(::core::mem::size_of::<eslist_T>()) as *mut eslist_T;
                 (*elem).saved_emsg_silent = emsg_silent;
                 (*elem).next = (*cstack).cs_emsg_silent_list;
                 (*cstack).cs_emsg_silent_list = elem;
-                (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                    |= CSF_SILENT as ::core::ffi::c_int;
+                (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_SILENT as ::core::ffi::c_int;
                 emsg_silent = 0 as ::core::ffi::c_int;
             }
         }
@@ -2803,12 +2698,8 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut give_up: bool = false_0 != 0;
     let mut skip: bool = false_0 != 0;
-    let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut save_cpo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut save_cpo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut regmatch: regmatch_T = regmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
         startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
@@ -2817,20 +2708,15 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
         rm_ic: false,
     };
     let cstack: *mut cstack_T = (*eap).cstack;
-    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if (*cstack).cs_trylevel <= 0 as ::core::ffi::c_int
         || (*cstack).cs_idx < 0 as ::core::ffi::c_int
     {
-        (*eap).errmsg = gettext(
-            b"E603: :catch without :try\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg =
+            gettext(b"E603: :catch without :try\0".as_ptr() as *const ::core::ffi::c_char);
         give_up = true_0 != 0;
     } else {
-        if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int
-            == 0
-        {
+        if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int == 0 {
             (*eap).errmsg = get_end_emsg(cstack);
             skip = true_0 != 0;
         }
@@ -2842,9 +2728,8 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
             idx -= 1;
         }
         if (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int != 0 {
-            (*eap).errmsg = gettext(
-                b"E604: :catch after :finally\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            (*eap).errmsg =
+                gettext(b"E604: :catch after :finally\0".as_ptr() as *const ::core::ffi::c_char);
             give_up = true_0 != 0;
         } else {
             rewind_conditionals(
@@ -2868,19 +2753,17 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
     }
     if !give_up {
         let mut caught: bool = false_0 != 0;
-        if !did_throw
-            || (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int == 0
-        {
+        if !did_throw || (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int == 0 {
             skip = true_0 != 0;
         }
         if !skip
             && (*cstack).cs_flags[idx as usize] & CSF_THROWN as ::core::ffi::c_int != 0
             && (*cstack).cs_flags[idx as usize] & CSF_CAUGHT as ::core::ffi::c_int == 0
         {
-            if !end.is_null() && *end as ::core::ffi::c_int != NUL
+            if !end.is_null()
+                && *end as ::core::ffi::c_int != NUL
                 && ends_excmd(
-                    *skipwhite(end.offset(1 as ::core::ffi::c_int as isize))
-                        as ::core::ffi::c_int,
+                    *skipwhite(end.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                 ) == 0
             {
                 semsg(
@@ -2911,22 +2794,18 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
                         pat,
                     );
                 } else {
-                    let mut prev_got_int: ::core::ffi::c_int = got_int
-                        as ::core::ffi::c_int;
+                    let mut prev_got_int: ::core::ffi::c_int = got_int as ::core::ffi::c_int;
                     got_int = false_0 != 0;
-                    caught = vim_regexec_nl(
-                        &raw mut regmatch,
-                        (*current_exception).value,
-                        0 as colnr_T,
-                    );
+                    caught =
+                        vim_regexec_nl(&raw mut regmatch, (*current_exception).value, 0 as colnr_T);
                     got_int = got_int as ::core::ffi::c_int | prev_got_int != 0;
                     vim_regfree(regmatch.regprog);
                 }
             }
         }
         if caught {
-            (*cstack).cs_flags[idx as usize]
-                |= CSF_ACTIVE as ::core::ffi::c_int | CSF_CAUGHT as ::core::ffi::c_int;
+            (*cstack).cs_flags[idx as usize] |=
+                CSF_ACTIVE as ::core::ffi::c_int | CSF_CAUGHT as ::core::ffi::c_int;
             did_throw = false_0 != 0;
             got_int = did_throw;
             did_emsg = got_int as ::core::ffi::c_int;
@@ -2956,22 +2835,17 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
         }
         idx -= 1;
     }
-    if (*cstack).cs_trylevel <= 0 as ::core::ffi::c_int || idx < 0 as ::core::ffi::c_int
-    {
-        (*eap).errmsg = gettext(
-            b"E606: :finally without :try\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+    if (*cstack).cs_trylevel <= 0 as ::core::ffi::c_int || idx < 0 as ::core::ffi::c_int {
+        (*eap).errmsg =
+            gettext(b"E606: :finally without :try\0".as_ptr() as *const ::core::ffi::c_char);
         return;
     }
-    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int == 0
-    {
+    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int == 0 {
         (*eap).errmsg = get_end_emsg(cstack);
         pending = CSTP_ERROR as ::core::ffi::c_int;
     }
     if (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int != 0 {
-        (*eap).errmsg = gettext(
-            &raw const e_multiple_finally as *const ::core::ffi::c_char,
-        );
+        (*eap).errmsg = gettext(&raw const e_multiple_finally as *const ::core::ffi::c_char);
         return;
     }
     rewind_conditionals(
@@ -2981,14 +2855,17 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
         &raw mut (*cstack).cs_looplevel,
     );
     let mut skip: ::core::ffi::c_int = ((*cstack).cs_flags[(*cstack).cs_idx as usize]
-        & CSF_TRUE as ::core::ffi::c_int == 0) as ::core::ffi::c_int;
+        & CSF_TRUE as ::core::ffi::c_int
+        == 0) as ::core::ffi::c_int;
     if skip == 0 {
         if dbg_check_skipped(eap) {
             do_intthrow(cstack);
         }
         cleanup_conditionals(cstack, CSF_TRY as ::core::ffi::c_int, false_0);
-        if pending == CSTP_ERROR as ::core::ffi::c_int || did_emsg != 0
-            || got_int as ::core::ffi::c_int != 0 || did_throw as ::core::ffi::c_int != 0
+        if pending == CSTP_ERROR as ::core::ffi::c_int
+            || did_emsg != 0
+            || got_int as ::core::ffi::c_int != 0
+            || did_throw as ::core::ffi::c_int != 0
         {
             if (*cstack).cs_pending[(*cstack).cs_idx as usize] as ::core::ffi::c_int
                 == CSTP_RETURN as ::core::ffi::c_int
@@ -3002,49 +2879,44 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
                 );
             }
             if pending == CSTP_ERROR as ::core::ffi::c_int && did_emsg == 0 {
-                pending
-                    |= if THROW_ON_ERROR != 0 {
-                        CSTP_THROW as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                pending |= if THROW_ON_ERROR != 0 {
+                    CSTP_THROW as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                };
             } else {
-                pending
-                    |= if did_throw as ::core::ffi::c_int != 0 {
-                        CSTP_THROW as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
+                pending |= if did_throw as ::core::ffi::c_int != 0 {
+                    CSTP_THROW as ::core::ffi::c_int
+                } else {
+                    0 as ::core::ffi::c_int
+                };
             }
-            pending
-                |= if did_emsg != 0 {
-                    CSTP_ERROR as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                };
-            pending
-                |= if got_int as ::core::ffi::c_int != 0 {
-                    CSTP_INTERRUPT as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                };
+            pending |= if did_emsg != 0 {
+                CSTP_ERROR as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            };
+            pending |= if got_int as ::core::ffi::c_int != 0 {
+                CSTP_INTERRUPT as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            };
             '_c2rust_label: {
                 if pending >= -127 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                     && pending <= 127 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"pending >= CHAR_MIN && pending <= CHAR_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        1535 as ::core::ffi::c_uint,
-                        b"void ex_finally(exarg_T *)\0".as_ptr()
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_eval.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
+                        1535 as ::core::ffi::c_uint,
+                        b"void ex_finally(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
-            (*cstack).cs_pending[(*cstack).cs_idx as usize] = pending
-                as ::core::ffi::c_char;
+            (*cstack).cs_pending[(*cstack).cs_idx as usize] = pending as ::core::ffi::c_char;
             if did_throw as ::core::ffi::c_int != 0
                 && (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize]
                     != current_exception as *mut ::core::ffi::c_void
@@ -3059,8 +2931,7 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0;
     let mut rethrow: bool = false_0 != 0;
-    let mut pending: ::core::ffi::c_char = CSTP_NONE as ::core::ffi::c_int
-        as ::core::ffi::c_char;
+    let mut pending: ::core::ffi::c_char = CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
     let mut rettv: *mut ::core::ffi::c_void = NULL;
     let cstack: *mut cstack_T = (*eap).cstack;
     idx = (*cstack).cs_idx;
@@ -3070,19 +2941,16 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
         }
         idx -= 1;
     }
-    if (*cstack).cs_trylevel <= 0 as ::core::ffi::c_int || idx < 0 as ::core::ffi::c_int
-    {
-        (*eap).errmsg = gettext(
-            b"E602: :endtry without :try\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+    if (*cstack).cs_trylevel <= 0 as ::core::ffi::c_int || idx < 0 as ::core::ffi::c_int {
+        (*eap).errmsg =
+            gettext(b"E602: :endtry without :try\0".as_ptr() as *const ::core::ffi::c_char);
         return;
     }
-    let mut skip: bool = did_emsg != 0 || got_int as ::core::ffi::c_int != 0
+    let mut skip: bool = did_emsg != 0
+        || got_int as ::core::ffi::c_int != 0
         || did_throw as ::core::ffi::c_int != 0
-        || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE as ::core::ffi::c_int
-            == 0;
-    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int == 0
-    {
+        || (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRUE as ::core::ffi::c_int == 0;
+    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int == 0 {
         (*eap).errmsg = get_end_emsg(cstack);
         rewind_conditionals(
             cstack,
@@ -3115,8 +2983,7 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             do_intthrow(cstack);
             rethrow = false_0 != 0;
             if did_throw as ::core::ffi::c_int != 0
-                && (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int
-                    == 0
+                && (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int == 0
             {
                 rethrow = true_0 != 0;
             }
@@ -3124,8 +2991,7 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
     }
     if !skip {
         pending = (*cstack).cs_pending[idx as usize];
-        (*cstack).cs_pending[idx as usize] = CSTP_NONE as ::core::ffi::c_int
-            as ::core::ffi::c_char;
+        (*cstack).cs_pending[idx as usize] = CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
         if pending as ::core::ffi::c_int == CSTP_RETURN as ::core::ffi::c_int {
             rettv = (*cstack).cs_pend.csp_rv[idx as usize];
         } else if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0 {
@@ -3138,8 +3004,7 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
         true_0,
     );
     if (*cstack).cs_idx >= 0 as ::core::ffi::c_int
-        && (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int
-            != 0
+        && (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_TRY as ::core::ffi::c_int != 0
     {
         (*cstack).cs_idx -= 1;
     }
@@ -3149,9 +3014,7 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
             pending as ::core::ffi::c_int,
             if pending as ::core::ffi::c_int == CSTP_RETURN as ::core::ffi::c_int {
                 rettv
-            } else if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int
-                != 0
-            {
+            } else if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0 {
                 current_exception as *mut ::core::ffi::c_void
             } else {
                 NULL
@@ -3172,17 +3035,13 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
                 do_finish(eap, false_0 != 0);
             }
             _ => {
-                if pending as ::core::ffi::c_int & CSTP_ERROR as ::core::ffi::c_int != 0
-                {
+                if pending as ::core::ffi::c_int & CSTP_ERROR as ::core::ffi::c_int != 0 {
                     did_emsg = true_0;
                 }
-                if pending as ::core::ffi::c_int & CSTP_INTERRUPT as ::core::ffi::c_int
-                    != 0
-                {
+                if pending as ::core::ffi::c_int & CSTP_INTERRUPT as ::core::ffi::c_int != 0 {
                     got_int = true_0 != 0;
                 }
-                if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0
-                {
+                if pending as ::core::ffi::c_int & CSTP_THROW as ::core::ffi::c_int != 0 {
                     rethrow = true_0 != 0;
                 }
             }
@@ -3195,7 +3054,8 @@ pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn enter_cleanup(mut csp: *mut cleanup_T) {
     let mut pending: ::core::ffi::c_int = CSTP_NONE as ::core::ffi::c_int;
-    if did_emsg != 0 || got_int as ::core::ffi::c_int != 0
+    if did_emsg != 0
+        || got_int as ::core::ffi::c_int != 0
         || did_throw as ::core::ffi::c_int != 0
         || need_rethrow as ::core::ffi::c_int != 0
     {
@@ -3203,32 +3063,27 @@ pub unsafe extern "C" fn enter_cleanup(mut csp: *mut cleanup_T) {
             CSTP_ERROR as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        })
-            | (if got_int as ::core::ffi::c_int != 0 {
-                CSTP_INTERRUPT as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if did_throw as ::core::ffi::c_int != 0 {
-                CSTP_THROW as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if need_rethrow as ::core::ffi::c_int != 0 {
-                CSTP_THROW as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            });
-        if did_throw as ::core::ffi::c_int != 0
-            || need_rethrow as ::core::ffi::c_int != 0
-        {
+        }) | (if got_int as ::core::ffi::c_int != 0 {
+            CSTP_INTERRUPT as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        }) | (if did_throw as ::core::ffi::c_int != 0 {
+            CSTP_THROW as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        }) | (if need_rethrow as ::core::ffi::c_int != 0 {
+            CSTP_THROW as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        });
+        if did_throw as ::core::ffi::c_int != 0 || need_rethrow as ::core::ffi::c_int != 0 {
             (*csp).exception = current_exception;
             current_exception = ::core::ptr::null_mut::<except_T>();
         } else {
             (*csp).exception = ::core::ptr::null_mut::<except_T>();
             if did_emsg != 0 {
-                force_abort = force_abort as ::core::ffi::c_int
-                    | cause_abort as ::core::ffi::c_int != 0;
+                force_abort =
+                    force_abort as ::core::ffi::c_int | cause_abort as ::core::ffi::c_int != 0;
                 cause_abort = false_0 != 0;
             }
         }
@@ -3294,9 +3149,9 @@ pub unsafe extern "C" fn cleanup_conditionals(
     idx = (*cstack).cs_idx;
     while idx >= 0 as ::core::ffi::c_int {
         if (*cstack).cs_flags[idx as usize] & CSF_TRY as ::core::ffi::c_int != 0 {
-            if did_emsg != 0 || got_int as ::core::ffi::c_int != 0
-                || (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int
-                    != 0
+            if did_emsg != 0
+                || got_int as ::core::ffi::c_int != 0
+                || (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int != 0
             {
                 match (*cstack).cs_pending[idx as usize] as ::core::ffi::c_int {
                     0 => {}
@@ -3305,8 +3160,8 @@ pub unsafe extern "C" fn cleanup_conditionals(
                             (*cstack).cs_pending[idx as usize] as ::core::ffi::c_int,
                             NULL,
                         );
-                        (*cstack).cs_pending[idx as usize] = CSTP_NONE
-                            as ::core::ffi::c_int as ::core::ffi::c_char;
+                        (*cstack).cs_pending[idx as usize] =
+                            CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
                     }
                     24 => {
                         report_discard_pending(
@@ -3316,15 +3171,15 @@ pub unsafe extern "C" fn cleanup_conditionals(
                         discard_pending_return(
                             (*cstack).cs_pend.csp_rv[idx as usize] as *mut typval_T,
                         );
-                        (*cstack).cs_pending[idx as usize] = CSTP_NONE
-                            as ::core::ffi::c_int as ::core::ffi::c_char;
+                        (*cstack).cs_pending[idx as usize] =
+                            CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
                     }
                     _ => {
-                        if (*cstack).cs_flags[idx as usize]
-                            & CSF_FINALLY as ::core::ffi::c_int != 0
+                        if (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int != 0
                         {
                             if (*cstack).cs_pending[idx as usize] as ::core::ffi::c_int
-                                & CSTP_THROW as ::core::ffi::c_int != 0
+                                & CSTP_THROW as ::core::ffi::c_int
+                                != 0
                                 && !(*cstack).cs_pend.csp_ex[idx as usize].is_null()
                             {
                                 discard_exception(
@@ -3337,29 +3192,21 @@ pub unsafe extern "C" fn cleanup_conditionals(
                                     NULL,
                                 );
                             }
-                            (*cstack).cs_pending[idx as usize] = CSTP_NONE
-                                as ::core::ffi::c_int as ::core::ffi::c_char;
+                            (*cstack).cs_pending[idx as usize] =
+                                CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
                         }
                     }
                 }
             }
-            if (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int == 0
-            {
-                if (*cstack).cs_flags[idx as usize] & CSF_ACTIVE as ::core::ffi::c_int
-                    != 0
-                    && (*cstack).cs_flags[idx as usize]
-                        & CSF_CAUGHT as ::core::ffi::c_int != 0
-                    && (*cstack).cs_flags[idx as usize]
-                        & CSF_FINISHED as ::core::ffi::c_int == 0
+            if (*cstack).cs_flags[idx as usize] & CSF_FINALLY as ::core::ffi::c_int == 0 {
+                if (*cstack).cs_flags[idx as usize] & CSF_ACTIVE as ::core::ffi::c_int != 0
+                    && (*cstack).cs_flags[idx as usize] & CSF_CAUGHT as ::core::ffi::c_int != 0
+                    && (*cstack).cs_flags[idx as usize] & CSF_FINISHED as ::core::ffi::c_int == 0
                 {
-                    finish_exception(
-                        (*cstack).cs_pend.csp_ex[idx as usize] as *mut except_T,
-                    );
-                    (*cstack).cs_flags[idx as usize]
-                        |= CSF_FINISHED as ::core::ffi::c_int;
+                    finish_exception((*cstack).cs_pend.csp_ex[idx as usize] as *mut except_T);
+                    (*cstack).cs_flags[idx as usize] |= CSF_FINISHED as ::core::ffi::c_int;
                 }
-                if (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int != 0
-                {
+                if (*cstack).cs_flags[idx as usize] & CSF_TRUE as ::core::ffi::c_int != 0 {
                     if searched_cond == 0 as ::core::ffi::c_int && inclusive == 0 {
                         break;
                     }
@@ -3375,8 +3222,7 @@ pub unsafe extern "C" fn cleanup_conditionals(
         }
         (*cstack).cs_flags[idx as usize] &= !(CSF_ACTIVE as ::core::ffi::c_int);
         if stop as ::core::ffi::c_int != 0
-            && searched_cond
-                != CSF_TRY as ::core::ffi::c_int | CSF_SILENT as ::core::ffi::c_int
+            && searched_cond != CSF_TRY as ::core::ffi::c_int | CSF_SILENT as ::core::ffi::c_int
         {
             break;
         }
@@ -3397,16 +3243,11 @@ pub unsafe extern "C" fn cleanup_conditionals(
     }
     return idx;
 }
-unsafe extern "C" fn get_end_emsg(
-    mut cstack: *mut cstack_T,
-) -> *mut ::core::ffi::c_char {
-    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_WHILE as ::core::ffi::c_int
-        != 0
-    {
+unsafe extern "C" fn get_end_emsg(mut cstack: *mut cstack_T) -> *mut ::core::ffi::c_char {
+    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_WHILE as ::core::ffi::c_int != 0 {
         return gettext(&raw const e_endwhile as *const ::core::ffi::c_char);
     }
-    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_FOR as ::core::ffi::c_int != 0
-    {
+    if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_FOR as ::core::ffi::c_int != 0 {
         return gettext(&raw const e_endfor as *const ::core::ffi::c_char);
     }
     return gettext(&raw const e_endif as *const ::core::ffi::c_char);
@@ -3422,9 +3263,7 @@ pub unsafe extern "C" fn rewind_conditionals(
         if (*cstack).cs_flags[(*cstack).cs_idx as usize] & cond_type != 0 {
             *cond_level -= 1;
         }
-        if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_FOR as ::core::ffi::c_int
-            != 0
-        {
+        if (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_FOR as ::core::ffi::c_int != 0 {
             free_for_info((*cstack).cs_forinfo[(*cstack).cs_idx as usize]);
         }
         (*cstack).cs_idx -= 1;
@@ -3467,8 +3306,7 @@ pub unsafe extern "C" fn has_loop_cmd(mut p: *mut ::core::ffi::c_char) -> bool {
     }
     return false_0 != 0;
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -20,10 +20,7 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> bool;
-    fn describe_ns(
-        ns_id: NS,
-        unknown: *const ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
+    fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
     fn api_free_object(value: Object);
     fn api_free_array(value: Array);
     fn api_clear_error(value: *mut Error);
@@ -1823,9 +1820,7 @@ pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub const CB_MAX_ERROR: C2Rust_Unnamed_20 = 3;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
@@ -1860,8 +1855,7 @@ unsafe extern "C" fn decor_provider_error(
         msg,
     );
     msg_schedule_semsg_multiline(
-        b"Decoration provider \"%s\" (ns=%s):\n%s\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Decoration provider \"%s\" (ns=%s):\n%s\0".as_ptr() as *const ::core::ffi::c_char,
         name,
         ns,
         msg,
@@ -1893,16 +1887,15 @@ unsafe extern "C" fn decor_provider_invoke(
         &raw mut err,
     );
     textlock -= 1;
-    let mut provider: *mut DecorProvider = decor_providers
-        .items
-        .offset(provider_idx as isize);
+    let mut provider: *mut DecorProvider = decor_providers.items.offset(provider_idx as isize);
     if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         (*provider).error_count = 0 as uint8_t;
         if !res.is_null() {
             '_c2rust_label: {
                 if ret.type_0 as ::core::ffi::c_uint
                     == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"ret.type == kObjectTypeArray\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1922,18 +1915,15 @@ unsafe extern "C" fn decor_provider_invoke(
             default_true,
             &raw mut err,
         ) {
-            return true_0 != 0
+            return true_0 != 0;
         }
     }
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-        && ((*provider).error_count as ::core::ffi::c_int)
-            < CB_MAX_ERROR as ::core::ffi::c_int
+        && ((*provider).error_count as ::core::ffi::c_int) < CB_MAX_ERROR as ::core::ffi::c_int
     {
         decor_provider_error(provider, name, err.msg);
         (*provider).error_count = (*provider).error_count.wrapping_add(1);
-        if (*provider).error_count as ::core::ffi::c_int
-            >= CB_MAX_ERROR as ::core::ffi::c_int
-        {
+        if (*provider).error_count as ::core::ffi::c_int >= CB_MAX_ERROR as ::core::ffi::c_int {
             (*provider).state = kDecorProviderDisabled;
         }
     }
@@ -1959,9 +1949,7 @@ pub unsafe extern "C" fn decor_providers_invoke_spell(
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 6] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 6];
             args.capacity = 6 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2030,8 +2018,7 @@ pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
     mut wp: *mut win_T,
     mut row: ::core::ffi::c_int,
 ) -> bool {
-    let mut keys: size_t = (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree))
-        .n_keys;
+    let mut keys: size_t = (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree)).n_keys;
     let mut i: size_t = 0 as size_t;
     while i < decor_providers.size {
         let mut p: *mut DecorProvider = decor_providers.items.offset(i as isize);
@@ -2042,9 +2029,7 @@ pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 4] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 4];
             args.capacity = 4 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2097,9 +2082,7 @@ pub unsafe extern "C" fn decor_providers_start() {
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 2] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 2];
             args.capacity = 2 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2119,13 +2102,12 @@ pub unsafe extern "C" fn decor_providers_start() {
                 true_0 != 0,
                 ::core::ptr::null_mut::<Array>(),
             );
-            (*decor_providers.items.offset(i as isize)).state = (if active
-                as ::core::ffi::c_int != 0
-            {
-                kDecorProviderActive as ::core::ffi::c_int
-            } else {
-                kDecorProviderRedrawDisabled as ::core::ffi::c_int
-            }) as C2Rust_Unnamed_13;
+            (*decor_providers.items.offset(i as isize)).state =
+                (if active as ::core::ffi::c_int != 0 {
+                    kDecorProviderActive as ::core::ffi::c_int
+                } else {
+                    kDecorProviderRedrawDisabled as ::core::ffi::c_int
+                }) as C2Rust_Unnamed_13;
         } else if (*p).state as ::core::ffi::c_uint
             != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2138,9 +2120,9 @@ pub unsafe extern "C" fn decor_providers_start() {
 pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
     '_c2rust_label: {
         if decor_state.current_end == 0 as ::core::ffi::c_int
-            && decor_state.future_begin
-                == decor_state.ranges_i.size as ::core::ffi::c_int
-        {} else {
+            && decor_state.future_begin == decor_state.ranges_i.size as ::core::ffi::c_int
+        {
+        } else {
             __assert_fail(
                 b"decor_state.current_end == 0 && decor_state.future_begin == (int)kv_size(decor_state.ranges_i)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -2155,8 +2137,7 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
     if decor_providers.size > 0 as size_t {
         validate_botline_win(wp);
     }
-    let mut botline: linenr_T = if (*wp).w_botline < (*(*wp).w_buffer).b_ml.ml_line_count
-    {
+    let mut botline: linenr_T = if (*wp).w_botline < (*(*wp).w_buffer).b_ml.ml_line_count {
         (*wp).w_botline
     } else {
         (*(*wp).w_buffer).b_ml.ml_line_count
@@ -2178,9 +2159,7 @@ pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 4] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 4];
             args.capacity = 4 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2246,9 +2225,7 @@ pub unsafe extern "C" fn decor_providers_invoke_line(
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 3] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 3];
             args.capacity = 3 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2314,9 +2291,7 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
                 let mut args: Array = ARRAY_DICT_INIT;
                 let mut args__items: [Object; 6] = [Object {
                     type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed_12 {
-                        boolean: false,
-                    },
+                    data: C2Rust_Unnamed_12 { boolean: false },
                 }; 6];
                 args.capacity = 6 as size_t;
                 args.items = &raw mut args__items as *mut Object;
@@ -2381,29 +2356,23 @@ pub unsafe extern "C" fn decor_providers_invoke_range(
                 if !status {
                     (*p).state = kDecorProviderWinDisabled;
                 } else if res.size >= 1 as size_t {
-                    let mut first: Object = *res
-                        .items
-                        .offset(0 as ::core::ffi::c_int as isize);
+                    let mut first: Object = *res.items.offset(0 as ::core::ffi::c_int as isize);
                     if first.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeBoolean as ::core::ffi::c_int
-                            as ::core::ffi::c_uint
+                        == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         if first.data.boolean as ::core::ffi::c_int == false_0 {
                             (*p).state = kDecorProviderWinDisabled;
                         }
                     } else if first.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeInteger as ::core::ffi::c_int
-                            as ::core::ffi::c_uint
+                        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         let mut row: Integer = first.data.integer;
                         let mut col: Integer = 0 as Integer;
                         if res.size >= 2 as size_t {
-                            let mut second: Object = *res
-                                .items
-                                .offset(1 as ::core::ffi::c_int as isize);
+                            let mut second: Object =
+                                *res.items.offset(1 as ::core::ffi::c_int as isize);
                             if second.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeInteger as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 col = second.data.integer;
                             }
@@ -2432,9 +2401,7 @@ pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 2] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 2];
             args.capacity = 2 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2478,9 +2445,7 @@ pub unsafe extern "C" fn decor_providers_invoke_end() {
             let mut args: Array = ARRAY_DICT_INIT;
             let mut args__items: [Object; 1] = [Object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 {
-                    boolean: false,
-                },
+                data: C2Rust_Unnamed_12 { boolean: false },
             }; 1];
             args.capacity = 1 as size_t;
             args.items = &raw mut args__items as *mut Object;
@@ -2518,16 +2483,14 @@ pub unsafe extern "C" fn decor_provider_invalidate_hl() {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_decor_provider(
-    mut ns_id: NS,
-    mut force: bool,
-) -> *mut DecorProvider {
+pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *mut DecorProvider {
     '_c2rust_label: {
-        if ns_id > 0 as ::core::ffi::c_int {} else {
+        if ns_id > 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"ns_id > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration_provider.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/decoration_provider.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 305 as ::core::ffi::c_uint,
                 b"DecorProvider *get_decor_provider(NS, _Bool)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2559,13 +2522,13 @@ pub unsafe extern "C" fn get_decor_provider(
         decor_providers.capacity = decor_providers.capacity;
         decor_providers.items = xrealloc(
             decor_providers.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<DecorProvider>()
-                .wrapping_mul(decor_providers.capacity),
+            ::core::mem::size_of::<DecorProvider>().wrapping_mul(decor_providers.capacity),
         ) as *mut DecorProvider;
     } else {
         if decor_providers.size <= len {
             decor_providers.size = len.wrapping_add(1 as size_t);
-        } else {};
+        } else {
+        };
     };
     let mut item: *mut DecorProvider = decor_providers.items.offset(len as isize);
     *item = DecorProvider {

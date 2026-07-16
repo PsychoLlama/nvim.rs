@@ -72,11 +72,7 @@ extern "C" {
     fn api_metadata_raw() -> String_0;
     fn remote_ui_wait_for_attach();
     fn alist_init(al: *mut alist_T);
-    fn alist_add(
-        al: *mut alist_T,
-        fname: *mut ::core::ffi::c_char,
-        set_fnum: ::core::ffi::c_int,
-    );
+    fn alist_add(al: *mut alist_T, fname: *mut ::core::ffi::c_char, set_fnum: ::core::ffi::c_int);
     fn alist_name(aep: *mut aentry_T) -> *mut ::core::ffi::c_char;
     fn uv_strerror(err: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn autocmd_init();
@@ -149,21 +145,13 @@ extern "C" {
     fn wait_return(redraw: ::core::ffi::c_int);
     fn msg_putchar(c: ::core::ffi::c_int);
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn invoke_all_defer();
     fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T;
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
     fn set_vim_var_type(idx: VimVarIndex, type_0: VarType);
     fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn set_vim_var_list(idx: VimVarIndex, val: *mut list_T);
     fn set_reg_var(c: ::core::ffi::c_int);
     fn loop_init(loop_0: *mut Loop, data: *mut ::core::ffi::c_void);
@@ -172,9 +160,7 @@ extern "C" {
     fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue;
     fn multiqueue_process_events(self_0: *mut MultiQueue);
     fn os_realtime() -> int64_t;
-    fn socket_address_tcp_host_end(
-        address: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn socket_address_tcp_host_end(address: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn proc_teardown(loop_0: *mut Loop);
     fn stream_set_blocking(fd: ::core::ffi::c_int, blocking: bool) -> ::core::ffi::c_int;
     fn do_ecmd(
@@ -213,11 +199,7 @@ extern "C" {
         len: *mut size_t,
     ) -> *const ::core::ffi::c_char;
     fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_getfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
+    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
     fn get_global_lstate() -> *mut lua_State;
     fn nlua_pcall(
         lstate: *mut lua_State,
@@ -255,11 +237,7 @@ extern "C" {
         nr: ::core::ffi::c_int,
         fname_out: *mut *mut ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn ml_sync_all(
-        check_file: ::core::ffi::c_int,
-        check_char: ::core::ffi::c_int,
-        do_fsync: bool,
-    );
+    fn ml_sync_all(check_file: ::core::ffi::c_int, check_char: ::core::ffi::c_int, do_fsync: bool);
     fn update_topline(wp: *mut win_T);
     fn setmouse();
     fn server_init(listen_addr: *const ::core::ffi::c_char) -> bool;
@@ -282,21 +260,11 @@ extern "C" {
         opt_flags: ::core::ffi::c_int,
         set_sid: scid_T,
     );
-    fn set_option_value_give_err(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    );
+    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
     fn reset_modifiable();
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_exepath(
-        buffer: *mut ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_exepath(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_write(
         fd: ::core::ffi::c_int,
         buf: *const ::core::ffi::c_char,
@@ -325,9 +293,7 @@ extern "C" {
     fn get_appname(namelike: bool) -> *const ::core::ffi::c_char;
     fn appname_is_valid() -> bool;
     fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char;
-    fn stdpaths_user_conf_subpath(
-        fname: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn stdpaths_user_conf_subpath(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn signal_init();
     fn signal_teardown();
     fn signal_stop();
@@ -358,10 +324,7 @@ extern "C" {
     fn profile_dump();
     fn time_start(message: *const ::core::ffi::c_char);
     fn time_msg(mesg: *const ::core::ffi::c_char, start: *const proftime_T);
-    fn time_init(
-        fname: *const ::core::ffi::c_char,
-        proc_name: *const ::core::ffi::c_char,
-    );
+    fn time_init(fname: *const ::core::ffi::c_char, proc_name: *const ::core::ffi::c_char);
     fn time_finish();
     fn get_default_register_name() -> ::core::ffi::c_int;
     fn qf_init(
@@ -394,10 +357,7 @@ extern "C" {
         is_vimrc: ::core::ffi::c_int,
         ret_sid: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn shada_write_file(
-        file: *const ::core::ffi::c_char,
-        nomerge: bool,
-    ) -> ::core::ffi::c_int;
+    fn shada_write_file(file: *const ::core::ffi::c_char, nomerge: bool) -> ::core::ffi::c_int;
     fn shada_read_everything(
         fname: *const ::core::ffi::c_char,
         forceit: bool,
@@ -2340,9 +2300,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2369,9 +2328,7 @@ pub struct C2Rust_Unnamed_15 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_16 {
@@ -2467,12 +2424,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2525,12 +2480,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -2557,9 +2510,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2570,9 +2522,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -2597,15 +2548,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_23 {
@@ -4730,12 +4676,8 @@ pub struct C2Rust_Unnamed_46 {
 pub type C2Rust_Unnamed_47 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_48 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_49 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub static mut arena_alloc_count: size_t = 0 as size_t;
 pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4760,9 +4702,8 @@ pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[no_mangle]
 pub static mut g_min_log_level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SESSION_FILE: [::core::ffi::c_char; 12] = unsafe {
-    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Session.vim\0")
-};
+pub const SESSION_FILE: [::core::ffi::c_char; 12] =
+    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Session.vim\0") };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
@@ -5304,17 +5245,15 @@ pub static mut au_pending_free_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>(
 #[no_mangle]
 pub static mut au_pending_free_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
 #[no_mangle]
-pub static mut autocmd_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut autocmd_fname: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut autocmd_fname_full: bool = false;
 #[no_mangle]
 pub static mut autocmd_bufnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut autocmd_match: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut autocmd_match: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut did_cursorhold: bool = true;
 #[no_mangle]
@@ -5326,11 +5265,11 @@ pub static mut aucmd_win_vec: C2Rust_Unnamed_31 = C2Rust_Unnamed_31 {
 #[no_mangle]
 pub static mut deferred_events: *mut MultiQueue = ::core::ptr::null_mut::<MultiQueue>();
 #[no_mangle]
-pub static mut msg_loclist: *mut ::core::ffi::c_char = b"[Location List]\0".as_ptr()
-    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static mut msg_loclist: *mut ::core::ffi::c_char =
+    b"[Location List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
-pub static mut msg_qflist: *mut ::core::ffi::c_char = b"[Quickfix List]\0".as_ptr()
-    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static mut msg_qflist: *mut ::core::ffi::c_char =
+    b"[Quickfix List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
@@ -5376,21 +5315,19 @@ pub static mut hl_mode_str: [*const ::core::ffi::c_char; 4] = [
 ];
 #[no_mangle]
 pub static mut decor_state: DecorState = DecorState {
-    itr: [
-        MarkTreeIter {
-            pos: MTPos { row: 0 as int32_t, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_29 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
+    itr: [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
         },
-    ],
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [C2Rust_Unnamed_29 { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }],
     slots: C2Rust_Unnamed_35 {
         size: 0,
         capacity: 0,
@@ -5467,1354 +5404,1024 @@ pub static mut screen_search_hl: match_T = match_T {
 pub static mut search_hl_has_cursor_lnum: linenr_T = 0 as linenr_T;
 #[no_mangle]
 pub static mut e_abort: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"E470: Command aborted\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E470: Command aborted\0")
 };
 #[no_mangle]
 pub static mut e_afterinit: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 43],
-        [::core::ffi::c_char; 43],
-    >(*b"E905: Cannot set this option after startup\0")
+    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+        *b"E905: Cannot set this option after startup\0",
+    )
 };
 #[no_mangle]
 pub static mut e_api_spawn_failed: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E903: Could not spawn API job\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E903: Could not spawn API job\0",
+    )
 };
 #[no_mangle]
 pub static mut e_argreq: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E471: Argument required\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E471: Argument required\0")
 };
 #[no_mangle]
 pub static mut e_backslash: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E10: \\ should be followed by /, ? or &\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E10: \\ should be followed by /, ? or &\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cmdwin: [::core::ffi::c_char; 65] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 65],
-        [::core::ffi::c_char; 65],
-    >(*b"E11: Invalid in command-line window; <CR> executes, CTRL-C quits\0")
+    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
+        *b"E11: Invalid in command-line window; <CR> executes, CTRL-C quits\0",
+    )
 };
 #[no_mangle]
 pub static mut e_curdir: [::core::ffi::c_char; 69] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 69],
-        [::core::ffi::c_char; 69],
-    >(*b"E12: Command not allowed in secure mode in current dir or tag search\0")
+    ::core::mem::transmute::<[u8; 69], [::core::ffi::c_char; 69]>(
+        *b"E12: Command not allowed in secure mode in current dir or tag search\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalid_buffer_name_str: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E158: Invalid buffer name: %s\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E158: Invalid buffer name: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_command_too_recursive: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E169: Command too recursive\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E169: Command too recursive\0")
 };
 #[no_mangle]
 pub static mut e_buffer_is_not_loaded: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E681: Buffer is not loaded\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E681: Buffer is not loaded\0")
 };
 #[no_mangle]
 pub static mut e_endif: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E171: Missing :endif\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E171: Missing :endif\0")
 };
 #[no_mangle]
 pub static mut e_endtry: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"E600: Missing :endtry\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E600: Missing :endtry\0")
 };
 #[no_mangle]
 pub static mut e_endwhile: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E170: Missing :endwhile\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E170: Missing :endwhile\0")
 };
 #[no_mangle]
 pub static mut e_endfor: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"E170: Missing :endfor\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E170: Missing :endfor\0")
 };
 #[no_mangle]
 pub static mut e_while: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E588: :endwhile without :while\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E588: :endwhile without :while\0",
+    )
 };
 #[no_mangle]
 pub static mut e_for: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E588: :endfor without :for\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E588: :endfor without :for\0")
 };
 #[no_mangle]
 pub static mut e_exists: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"E13: File exists (add ! to override)\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"E13: File exists (add ! to override)\0",
+    )
 };
 #[no_mangle]
 pub static mut e_failed: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E472: Command failed\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E472: Command failed\0")
 };
 #[no_mangle]
 pub static mut e_intern2: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E685: Internal error: %s\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E685: Internal error: %s\0")
 };
 #[no_mangle]
-pub static mut e_interr: [::core::ffi::c_char; 12] = unsafe {
-    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Interrupted\0")
-};
+pub static mut e_interr: [::core::ffi::c_char; 12] =
+    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Interrupted\0") };
 #[no_mangle]
 pub static mut e_invarg: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E474: Invalid argument\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E474: Invalid argument\0")
 };
 #[no_mangle]
 pub static mut e_invarg2: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E475: Invalid argument: %s\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E475: Invalid argument: %s\0")
 };
 #[no_mangle]
 pub static mut e_invargval: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E475: Invalid value for argument %s\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E475: Invalid value for argument %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invargNval: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 40],
-        [::core::ffi::c_char; 40],
-    >(*b"E475: Invalid value for argument %s: %s\0")
+    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+        *b"E475: Invalid value for argument %s: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_duparg2: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E983: Duplicate argument: %s\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E983: Duplicate argument: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invexpr2: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E15: Invalid expression: \"%s\"\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E15: Invalid expression: \"%s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invrange: [::core::ffi::c_char; 19] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 19],
-        [::core::ffi::c_char; 19],
-    >(*b"E16: Invalid range\0")
+    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E16: Invalid range\0")
 };
 #[no_mangle]
 pub static mut e_internal_error_in_regexp: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E473: Internal error in regexp\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E473: Internal error in regexp\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invcmd: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"E476: Invalid command\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E476: Invalid command\0")
 };
 #[no_mangle]
 pub static mut e_isadir2: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E17: \"%s\" is a directory\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E17: \"%s\" is a directory\0")
 };
 #[no_mangle]
 pub static mut e_no_spell: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"E756: Spell checking is not possible\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"E756: Spell checking is not possible\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invchan: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E900: Invalid channel id\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E900: Invalid channel id\0")
 };
 #[no_mangle]
 pub static mut e_invchanjob: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E900: Invalid channel id: not a job\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E900: Invalid channel id: not a job\0",
+    )
 };
 #[no_mangle]
 pub static mut e_jobtblfull: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E901: Job table is full\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E901: Job table is full\0")
 };
 #[no_mangle]
 pub static mut e_jobspawn: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 40],
-        [::core::ffi::c_char; 40],
-    >(*b"E903: Process failed to start: %s: \"%s\"\0")
+    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+        *b"E903: Process failed to start: %s: \"%s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_channotpty: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E904: channel is not a pty\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E904: channel is not a pty\0")
 };
 #[no_mangle]
 pub static mut e_stdiochan2: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 38],
-        [::core::ffi::c_char; 38],
-    >(*b"E905: Couldn't open stdio channel: %s\0")
+    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+        *b"E905: Couldn't open stdio channel: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invstream: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 33],
-        [::core::ffi::c_char; 33],
-    >(*b"E906: invalid stream for channel\0")
+    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+        *b"E906: invalid stream for channel\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invstreamrpc: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 48],
-        [::core::ffi::c_char; 48],
-    >(*b"E906: invalid stream for rpc channel, use 'rpc'\0")
+    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+        *b"E906: invalid stream for rpc channel, use 'rpc'\0",
+    )
 };
 #[no_mangle]
 pub static mut e_streamkey: [::core::ffi::c_char; 68] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 68],
-        [::core::ffi::c_char; 68],
-    >(*b"E5210: dict key '%s' already set for buffered stream in channel %lu\0")
+    ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
+        *b"E5210: dict key '%s' already set for buffered stream in channel %lu\0",
+    )
 };
 #[no_mangle]
 pub static mut e_libcall: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"E364: Library call failed for \"%s()\"\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"E364: Library call failed for \"%s()\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_fsync: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E667: Fsync failed: %s\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E667: Fsync failed: %s\0")
 };
 #[no_mangle]
 pub static mut e_mkdir: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"E739: Cannot create directory %s: %s\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"E739: Cannot create directory %s: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_markinval: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E19: Mark has invalid line number\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E19: Mark has invalid line number\0",
+    )
 };
 #[no_mangle]
 pub static mut e_marknotset: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 18],
-        [::core::ffi::c_char; 18],
-    >(*b"E20: Mark not set\0")
+    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E20: Mark not set\0")
 };
 #[no_mangle]
 pub static mut e_modifiable: [::core::ffi::c_char; 46] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 46],
-        [::core::ffi::c_char; 46],
-    >(*b"E21: Cannot make changes, 'modifiable' is off\0")
+    ::core::mem::transmute::<[u8; 46], [::core::ffi::c_char; 46]>(
+        *b"E21: Cannot make changes, 'modifiable' is off\0",
+    )
 };
 #[no_mangle]
 pub static mut e_nesting: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E22: Scripts nested too deep\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E22: Scripts nested too deep\0",
+    )
 };
 #[no_mangle]
 pub static mut e_noalt: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E23: No alternate file\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E23: No alternate file\0")
 };
 #[no_mangle]
 pub static mut e_noabbr: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E24: No such abbreviation\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E24: No such abbreviation\0")
 };
 #[no_mangle]
 pub static mut e_nobang: [::core::ffi::c_char; 19] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 19],
-        [::core::ffi::c_char; 19],
-    >(*b"E477: No ! allowed\0")
+    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E477: No ! allowed\0")
 };
 #[no_mangle]
 pub static mut e_nogroup: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 38],
-        [::core::ffi::c_char; 38],
-    >(*b"E28: No such highlight group name: %s\0")
+    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+        *b"E28: No such highlight group name: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_noinstext: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E29: No inserted text yet\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E29: No inserted text yet\0")
 };
 #[no_mangle]
 pub static mut e_nolastcmd: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E30: No previous command line\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E30: No previous command line\0",
+    )
 };
 #[no_mangle]
 pub static mut e_nomap: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E31: No such mapping\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E31: No such mapping\0")
 };
 #[no_mangle]
 pub static mut e_noident: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 33],
-        [::core::ffi::c_char; 33],
-    >(*b"E349: No identifier under cursor\0")
+    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+        *b"E349: No identifier under cursor\0",
+    )
 };
 #[no_mangle]
-pub static mut e_nomatch: [::core::ffi::c_char; 15] = unsafe {
-    ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E479: No match\0")
-};
+pub static mut e_nomatch: [::core::ffi::c_char; 15] =
+    unsafe { ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E479: No match\0") };
 #[no_mangle]
 pub static mut e_nomatch2: [::core::ffi::c_char; 19] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 19],
-        [::core::ffi::c_char; 19],
-    >(*b"E480: No match: %s\0")
+    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E480: No match: %s\0")
 };
 #[no_mangle]
 pub static mut e_noname: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 18],
-        [::core::ffi::c_char; 18],
-    >(*b"E32: No file name\0")
+    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E32: No file name\0")
 };
 #[no_mangle]
 pub static mut e_nopresub: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 47],
-        [::core::ffi::c_char; 47],
-    >(*b"E33: No previous substitute regular expression\0")
+    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+        *b"E33: No previous substitute regular expression\0",
+    )
 };
 #[no_mangle]
 pub static mut e_noprev: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E34: No previous command\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E34: No previous command\0")
 };
 #[no_mangle]
 pub static mut e_noprevre: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E35: No previous regular expression\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E35: No previous regular expression\0",
+    )
 };
 #[no_mangle]
 pub static mut e_norange: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E481: No range allowed\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E481: No range allowed\0")
 };
 #[no_mangle]
 pub static mut e_noroom: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E36: Not enough room\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E36: Not enough room\0")
 };
 #[no_mangle]
 pub static mut e_notmp: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E483: Can't get temp file name\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E483: Can't get temp file name\0",
+    )
 };
 #[no_mangle]
 pub static mut e_notopen: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E484: Can't open file %s\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E484: Can't open file %s\0")
 };
 #[no_mangle]
 pub static mut e_notopen_2: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E484: Can't open file %s: %s\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E484: Can't open file %s: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cant_read_file_str: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E485: Can't read file %s\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E485: Can't read file %s\0")
 };
 #[no_mangle]
 pub static mut e_null: [::core::ffi::c_char; 19] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 19],
-        [::core::ffi::c_char; 19],
-    >(*b"E38: Null argument\0")
+    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E38: Null argument\0")
 };
 #[no_mangle]
 pub static mut e_number_exp: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E39: Number expected\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E39: Number expected\0")
 };
 #[no_mangle]
 pub static mut e_openerrf: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E40: Can't open errorfile %s\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E40: Can't open errorfile %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_outofmem: [::core::ffi::c_char; 20] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 20],
-        [::core::ffi::c_char; 20],
-    >(*b"E41: Out of memory!\0")
+    ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E41: Out of memory!\0")
 };
 #[no_mangle]
 pub static mut e_patnotf: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 18],
-        [::core::ffi::c_char; 18],
-    >(*b"Pattern not found\0")
+    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"Pattern not found\0")
 };
 #[no_mangle]
 pub static mut e_patnotf2: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E486: Pattern not found: %s\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E486: Pattern not found: %s\0")
 };
 #[no_mangle]
 pub static mut e_positive: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E487: Argument must be positive\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E487: Argument must be positive\0",
+    )
 };
 #[no_mangle]
 pub static mut e_prev_dir: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 43],
-        [::core::ffi::c_char; 43],
-    >(*b"E459: Cannot go back to previous directory\0")
+    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+        *b"E459: Cannot go back to previous directory\0",
+    )
 };
 #[no_mangle]
-pub static mut e_no_errors: [::core::ffi::c_char; 15] = unsafe {
-    ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E42: No Errors\0")
-};
+pub static mut e_no_errors: [::core::ffi::c_char; 15] =
+    unsafe { ::core::mem::transmute::<[u8; 15], [::core::ffi::c_char; 15]>(*b"E42: No Errors\0") };
 #[no_mangle]
 pub static mut e_loclist: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E776: No location list\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E776: No location list\0")
 };
 #[no_mangle]
 pub static mut e_re_damg: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E43: Damaged match string\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E43: Damaged match string\0")
 };
 #[no_mangle]
 pub static mut e_re_corr: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E44: Corrupted regexp program\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E44: Corrupted regexp program\0",
+    )
 };
 #[no_mangle]
 pub static mut e_readonly: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 50],
-        [::core::ffi::c_char; 50],
-    >(*b"E45: 'readonly' option is set (add ! to override)\0")
+    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+        *b"E45: 'readonly' option is set (add ! to override)\0",
+    )
 };
 #[no_mangle]
 pub static mut e_letwrong: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E734: Wrong variable type for %s=\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E734: Wrong variable type for %s=\0",
+    )
 };
 #[no_mangle]
 pub static mut e_illvar: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E461: Illegal variable name: %s\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E461: Illegal variable name: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_mod: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 38],
-        [::core::ffi::c_char; 38],
-    >(*b"E995: Cannot modify existing variable\0")
+    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+        *b"E995: Cannot modify existing variable\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_change_readonly_variable_str: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"E46: Cannot change read-only variable \"%.*s\"\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"E46: Cannot change read-only variable \"%.*s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_dictreq: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E715: Dictionary required\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E715: Dictionary required\0")
 };
 #[no_mangle]
 pub static mut e_blobidx: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E979: Blob index out of range: %ld\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E979: Blob index out of range: %ld\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalblob: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 33],
-        [::core::ffi::c_char; 33],
-    >(*b"E978: Invalid operation for Blob\0")
+    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+        *b"E978: Invalid operation for Blob\0",
+    )
 };
 #[no_mangle]
 pub static mut e_toomanyarg: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E118: Too many arguments for function: %s\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E118: Too many arguments for function: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_toofewarg: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E119: Not enough arguments for function: %s\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E119: Not enough arguments for function: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_dictkey: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E716: Key not present in Dictionary: \"%s\"\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E716: Key not present in Dictionary: \"%s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_dictkey_len: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E716: Key not present in Dictionary: \"%.*s\"\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E716: Key not present in Dictionary: \"%.*s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_listreq: [::core::ffi::c_char; 20] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 20],
-        [::core::ffi::c_char; 20],
-    >(*b"E714: List required\0")
+    ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E714: List required\0")
 };
 #[no_mangle]
 pub static mut e_listblobreq: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E897: List or Blob required\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E897: List or Blob required\0")
 };
 #[no_mangle]
 pub static mut e_listblobarg: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E899: Argument of %s must be a List or Blob\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E899: Argument of %s must be a List or Blob\0",
+    )
 };
 #[no_mangle]
 pub static mut e_listdictarg: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 50],
-        [::core::ffi::c_char; 50],
-    >(*b"E712: Argument of %s must be a List or Dictionary\0")
+    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+        *b"E712: Argument of %s must be a List or Dictionary\0",
+    )
 };
 #[no_mangle]
 pub static mut e_listdictblobarg: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 56],
-        [::core::ffi::c_char; 56],
-    >(*b"E896: Argument of %s must be a List, Dictionary or Blob\0")
+    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+        *b"E896: Argument of %s must be a List, Dictionary or Blob\0",
+    )
 };
 #[no_mangle]
 pub static mut e_readerrf: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E47: Error while reading errorfile\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E47: Error while reading errorfile\0",
+    )
 };
 #[no_mangle]
 pub static mut e_sandbox: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E48: Not allowed in sandbox\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E48: Not allowed in sandbox\0")
 };
 #[no_mangle]
 pub static mut e_secure: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E523: Not allowed here\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E523: Not allowed here\0")
 };
 #[no_mangle]
 pub static mut e_textlock: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 50],
-        [::core::ffi::c_char; 50],
-    >(*b"E565: Not allowed to change text or change window\0")
+    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+        *b"E565: Not allowed to change text or change window\0",
+    )
 };
 #[no_mangle]
 pub static mut e_screenmode: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 40],
-        [::core::ffi::c_char; 40],
-    >(*b"E359: Screen mode setting not supported\0")
+    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+        *b"E359: Screen mode setting not supported\0",
+    )
 };
 #[no_mangle]
 pub static mut e_scroll: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E49: Invalid scroll size\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E49: Invalid scroll size\0")
 };
 #[no_mangle]
 pub static mut e_shellempty: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E91: 'shell' option is empty\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E91: 'shell' option is empty\0",
+    )
 };
 #[no_mangle]
 pub static mut e_signdata: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E255: Couldn't read in sign data!\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E255: Couldn't read in sign data!\0",
+    )
 };
 #[no_mangle]
 pub static mut e_swapclose: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E72: Close error on swap file\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E72: Close error on swap file\0",
+    )
 };
 #[no_mangle]
 pub static mut e_toocompl: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E74: Command too complex\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E74: Command too complex\0")
 };
 #[no_mangle]
 pub static mut e_longname: [::core::ffi::c_char; 19] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 19],
-        [::core::ffi::c_char; 19],
-    >(*b"E75: Name too long\0")
+    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E75: Name too long\0")
 };
 #[no_mangle]
-pub static mut e_toomsbra: [::core::ffi::c_char; 16] = unsafe {
-    ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"E76: Too many [\0")
-};
+pub static mut e_toomsbra: [::core::ffi::c_char; 16] =
+    unsafe { ::core::mem::transmute::<[u8; 16], [::core::ffi::c_char; 16]>(*b"E76: Too many [\0") };
 #[no_mangle]
 pub static mut e_toomany: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E77: Too many file names\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E77: Too many file names\0")
 };
 #[no_mangle]
 pub static mut e_trailing: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E488: Trailing characters\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E488: Trailing characters\0")
 };
 #[no_mangle]
 pub static mut e_trailing_arg: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E488: Trailing characters: %s\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E488: Trailing characters: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_umark: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 18],
-        [::core::ffi::c_char; 18],
-    >(*b"E78: Unknown mark\0")
+    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E78: Unknown mark\0")
 };
 #[no_mangle]
 pub static mut e_wildexpand: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E79: Cannot expand wildcards\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E79: Cannot expand wildcards\0",
+    )
 };
 #[no_mangle]
 pub static mut e_winheight: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 56],
-        [::core::ffi::c_char; 56],
-    >(*b"E591: 'winheight' cannot be smaller than 'winminheight'\0")
+    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+        *b"E591: 'winheight' cannot be smaller than 'winminheight'\0",
+    )
 };
 #[no_mangle]
 pub static mut e_winwidth: [::core::ffi::c_char; 54] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 54],
-        [::core::ffi::c_char; 54],
-    >(*b"E592: 'winwidth' cannot be smaller than 'winminwidth'\0")
+    ::core::mem::transmute::<[u8; 54], [::core::ffi::c_char; 54]>(
+        *b"E592: 'winwidth' cannot be smaller than 'winminwidth'\0",
+    )
 };
 #[no_mangle]
 pub static mut e_write: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E80: Error while writing\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E80: Error while writing\0")
 };
 #[no_mangle]
 pub static mut e_zerocount: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E939: Positive count required\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E939: Positive count required\0",
+    )
 };
 #[no_mangle]
 pub static mut e_usingsid: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 41],
-        [::core::ffi::c_char; 41],
-    >(*b"E81: Using <SID> not in a script context\0")
+    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+        *b"E81: Using <SID> not in a script context\0",
+    )
 };
 #[no_mangle]
 pub static mut e_missingparen: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E107: Missing parentheses: %s\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E107: Missing parentheses: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_empty_buffer: [::core::ffi::c_char; 19] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 19],
-        [::core::ffi::c_char; 19],
-    >(*b"E749: Empty buffer\0")
+    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E749: Empty buffer\0")
 };
 #[no_mangle]
 pub static mut e_nobufnr: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E86: Buffer %ld does not exist\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E86: Buffer %ld does not exist\0",
+    )
 };
 #[no_mangle]
 pub static mut e_no_write_since_last_change: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E37: No write since last change\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E37: No write since last change\0",
+    )
 };
 #[no_mangle]
 pub static mut e_no_write_since_last_change_add_bang_to_override: [::core::ffi::c_char; 52] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 52],
-        [::core::ffi::c_char; 52],
-    >(*b"E37: No write since last change (add ! to override)\0")
+    ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
+        *b"E37: No write since last change (add ! to override)\0",
+    )
 };
 #[no_mangle]
-pub static mut e_no_write_since_last_change_for_buffer_nr_add_bang_to_override: [::core::ffi::c_char; 66] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 66],
-        [::core::ffi::c_char; 66],
-    >(*b"E89: No write since last change for buffer %d (add ! to override)\0")
+pub static mut e_no_write_since_last_change_for_buffer_nr_add_bang_to_override:
+    [::core::ffi::c_char; 66] = unsafe {
+    ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
+        *b"E89: No write since last change for buffer %d (add ! to override)\0",
+    )
 };
 #[no_mangle]
 pub static mut e_buffer_nr_not_found: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E92: Buffer %d not found\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E92: Buffer %d not found\0")
 };
 #[no_mangle]
 pub static mut e_unknown_function_str: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E117: Unknown function: %s\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E117: Unknown function: %s\0")
 };
 #[no_mangle]
 pub static mut e_str_not_inside_function: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E193: %s not inside a function\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E193: %s not inside a function\0",
+    )
 };
 #[no_mangle]
 pub static mut e_job_still_running: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E948: Job still running\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E948: Job still running\0")
 };
 #[no_mangle]
 pub static mut e_job_still_running_add_bang_to_end_the_job: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 47],
-        [::core::ffi::c_char; 47],
-    >(*b"E948: Job still running (add ! to end the job)\0")
+    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+        *b"E948: Job still running (add ! to end the job)\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalpat: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E682: Invalid search pattern or delimiter\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E682: Invalid search pattern or delimiter\0",
+    )
 };
 #[no_mangle]
 pub static mut e_bufloaded: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E139: File is loaded in another buffer\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E139: File is loaded in another buffer\0",
+    )
 };
 #[no_mangle]
 pub static mut e_notset: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E764: Option '%s' is not set\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E764: Option '%s' is not set\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalidreg: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E850: Invalid register name\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E850: Invalid register name\0")
 };
 #[no_mangle]
 pub static mut e_dirnotf: [::core::ffi::c_char; 40] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 40],
-        [::core::ffi::c_char; 40],
-    >(*b"E919: Directory not found in '%s': \"%s\"\0")
+    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
+        *b"E919: Directory not found in '%s': \"%s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_au_recursive: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E952: Autocommand caused recursive behavior\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E952: Autocommand caused recursive behavior\0",
+    )
 };
 #[no_mangle]
 pub static mut e_menu_only_exists_in_another_mode: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E328: Menu only exists in another mode\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E328: Menu only exists in another mode\0",
+    )
 };
 #[no_mangle]
 pub static mut e_autocmd_close: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E813: Cannot close autocmd window\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E813: Cannot close autocmd window\0",
+    )
 };
 #[no_mangle]
 pub static mut e_list_index_out_of_range_nr: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E684: List index out of range: %ld\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E684: List index out of range: %ld\0",
+    )
 };
 #[no_mangle]
 pub static mut e_listarg: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E686: Argument of %s must be a List\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E686: Argument of %s must be a List\0",
+    )
 };
 #[no_mangle]
 pub static mut e_unsupportedoption: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E519: Option not supported\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E519: Option not supported\0")
 };
 #[no_mangle]
 pub static mut e_fnametoolong: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E856: Filename too long\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E856: Filename too long\0")
 };
 #[no_mangle]
 pub static mut e_using_float_as_string: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E806: Using a Float as a String\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E806: Using a Float as a String\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_edit_other_buf: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"E788: Not allowed to edit another buffer now\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"E788: Not allowed to edit another buffer now\0",
+    )
 };
 #[no_mangle]
 pub static mut e_using_number_as_bool_nr: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E1023: Using a Number as a Bool: %d\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E1023: Using a Number as a Bool: %d\0",
+    )
 };
 #[no_mangle]
 pub static mut e_not_callable_type_str: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E1085: Not a callable type: %s\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E1085: Not a callable type: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_auabort: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 43],
-        [::core::ffi::c_char; 43],
-    >(*b"E855: Autocommands caused command to abort\0")
+    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+        *b"E855: Autocommands caused command to abort\0",
+    )
 };
 #[no_mangle]
 pub static mut e_api_error: [::core::ffi::c_char; 20] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 20],
-        [::core::ffi::c_char; 20],
-    >(*b"E5555: API call: %s\0")
+    ::core::mem::transmute::<[u8; 20], [::core::ffi::c_char; 20]>(*b"E5555: API call: %s\0")
 };
 #[no_mangle]
 pub static mut e_fast_api_disabled: [::core::ffi::c_char; 53] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 53],
-        [::core::ffi::c_char; 53],
-    >(*b"E5560: %s must not be called in a fast event context\0")
+    ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
+        *b"E5560: %s must not be called in a fast event context\0",
+    )
 };
 #[no_mangle]
 pub static mut e_floatonly: [::core::ffi::c_char; 62] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 62],
-        [::core::ffi::c_char; 62],
-    >(*b"E5601: Cannot close window, only floating window would remain\0")
+    ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
+        *b"E5601: Cannot close window, only floating window would remain\0",
+    )
 };
 #[no_mangle]
 pub static mut e_floatexchange: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E5602: Cannot exchange or rotate float\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E5602: Cannot exchange or rotate float\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cant_find_directory_str_in_cdpath: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E344: Can't find directory \"%s\" in cdpath\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E344: Can't find directory \"%s\" in cdpath\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cant_find_file_str_in_path: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E345: Can't find file \"%s\" in path\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E345: Can't find file \"%s\" in path\0",
+    )
 };
 #[no_mangle]
 pub static mut e_no_more_directory_str_found_in_cdpath: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"E346: No more directory \"%s\" found in cdpath\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"E346: No more directory \"%s\" found in cdpath\0",
+    )
 };
 #[no_mangle]
 pub static mut e_no_more_file_str_found_in_path: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 38],
-        [::core::ffi::c_char; 38],
-    >(*b"E347: No more file \"%s\" found in path\0")
+    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+        *b"E347: No more file \"%s\" found in path\0",
+    )
 };
 #[no_mangle]
 pub static mut e_value_is_locked: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"E741: Value is locked\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E741: Value is locked\0")
 };
 #[no_mangle]
 pub static mut e_value_is_locked_str: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E741: Value is locked: %.*s\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E741: Value is locked: %.*s\0")
 };
 #[no_mangle]
 pub static mut e_cannot_change_value: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E742: Cannot change value\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E742: Cannot change value\0")
 };
 #[no_mangle]
 pub static mut e_cannot_change_value_of_str: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E742: Cannot change value of %.*s\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E742: Cannot change value of %.*s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_set_variable_in_sandbox_str: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 49],
-        [::core::ffi::c_char; 49],
-    >(*b"E794: Cannot set variable in the sandbox: \"%.*s\"\0")
+    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+        *b"E794: Cannot set variable in the sandbox: \"%.*s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_delete_variable_str: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"E795: Cannot delete variable %.*s\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"E795: Cannot delete variable %.*s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalwindow: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E957: Invalid window number\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E957: Invalid window number\0")
 };
 #[no_mangle]
 pub static mut e_problem_creating_internal_diff: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 41],
-        [::core::ffi::c_char; 41],
-    >(*b"E960: Problem creating the internal diff\0")
+    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+        *b"E960: Problem creating the internal diff\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_define_autocommands_for_all_events: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 49],
-        [::core::ffi::c_char; 49],
-    >(*b"E1155: Cannot define autocommands for ALL events\0")
+    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+        *b"E1155: Cannot define autocommands for ALL events\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_change_arglist_recursively: [::core::ffi::c_char; 51] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 51],
-        [::core::ffi::c_char; 51],
-    >(*b"E1156: Cannot change the argument list recursively\0")
+    ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
+        *b"E1156: Cannot change the argument list recursively\0",
+    )
 };
 #[no_mangle]
 pub static mut e_resulting_text_too_long: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E1240: Resulting text too long\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E1240: Resulting text too long\0",
+    )
 };
 #[no_mangle]
 pub static mut e_line_number_out_of_range: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E1247: Line number out of range\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E1247: Line number out of range\0",
+    )
 };
 #[no_mangle]
 pub static mut e_highlight_group_name_invalid_char: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E5248: Invalid character in group name\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E5248: Invalid character in group name\0",
+    )
 };
 #[no_mangle]
 pub static mut e_highlight_group_name_too_long: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"E1249: Highlight group name too long\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"E1249: Highlight group name too long\0",
+    )
 };
 #[no_mangle]
 pub static mut e_string_required: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"E928: String required\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"E928: String required\0")
 };
 #[no_mangle]
 pub static mut e_invalid_column_number_nr: [::core::ffi::c_char; 33] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 33],
-        [::core::ffi::c_char; 33],
-    >(*b"E964: Invalid column number: %ld\0")
+    ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
+        *b"E964: Invalid column number: %ld\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalid_line_number_nr: [::core::ffi::c_char; 31] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 31],
-        [::core::ffi::c_char; 31],
-    >(*b"E966: Invalid line number: %ld\0")
+    ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
+        *b"E966: Invalid line number: %ld\0",
+    )
 };
 #[no_mangle]
 pub static mut e_reduce_of_an_empty_str_with_no_initial_value: [::core::ffi::c_char; 50] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 50],
-        [::core::ffi::c_char; 50],
-    >(*b"E998: Reduce of an empty %s with no initial value\0")
+    ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
+        *b"E998: Reduce of an empty %s with no initial value\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalid_value_for_blob_nr: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E1239: Invalid value for blob: 0xlX\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E1239: Invalid value for blob: 0xlX\0",
+    )
 };
 #[no_mangle]
 pub static mut e_stray_closing_curly_str: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E1278: Stray '}' without a matching '{': %s\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E1278: Stray '}' without a matching '{': %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_missing_close_curly_str: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"E1279: Missing '}': %s\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E1279: Missing '}': %s\0")
 };
 #[no_mangle]
 pub static mut e_cannot_change_menus_while_listing: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 41],
-        [::core::ffi::c_char; 41],
-    >(*b"E1310: Cannot change menus while listing\0")
+    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+        *b"E1310: Cannot change menus while listing\0",
+    )
 };
 #[no_mangle]
 pub static mut e_not_allowed_to_change_window_layout_in_this_autocmd: [::core::ffi::c_char; 63] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 63],
-        [::core::ffi::c_char; 63],
-    >(*b"E1312: Not allowed to change the window layout in this autocmd\0")
+    ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
+        *b"E1312: Not allowed to change the window layout in this autocmd\0",
+    )
 };
 #[no_mangle]
 pub static mut e_val_too_large: [::core::ffi::c_char; 27] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 27],
-        [::core::ffi::c_char; 27],
-    >(*b"E1510: Value too large: %s\0")
+    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E1510: Value too large: %s\0")
 };
 #[no_mangle]
 pub static mut e_val_too_large_len: [::core::ffi::c_char; 29] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 29],
-        [::core::ffi::c_char; 29],
-    >(*b"E1510: Value too large: %.*s\0")
+    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
+        *b"E1510: Value too large: %.*s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_undobang_cannot_redo_or_move_branch: [::core::ffi::c_char; 68] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 68],
-        [::core::ffi::c_char; 68],
-    >(*b"E5767: Cannot use :undo! to redo or move to a different undo branch\0")
+    ::core::mem::transmute::<[u8; 68], [::core::ffi::c_char; 68]>(
+        *b"E5767: Cannot use :undo! to redo or move to a different undo branch\0",
+    )
 };
 #[no_mangle]
 pub static mut e_winfixbuf_cannot_go_to_buffer: [::core::ffi::c_char; 52] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 52],
-        [::core::ffi::c_char; 52],
-    >(*b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0")
+    ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
+        *b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalid_return_type_from_findfunc: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"E1514: 'findfunc' did not return a List type\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"E1514: 'findfunc' did not return a List type\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_switch_to_a_closing_buffer: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 41],
-        [::core::ffi::c_char; 41],
-    >(*b"E1546: Cannot switch to a closing buffer\0")
+    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+        *b"E1546: Cannot switch to a closing buffer\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_have_more_than_nr_diff_anchors: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"E1549: Cannot have more than %d diff anchors\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"E1549: Cannot have more than %d diff anchors\0",
+    )
 };
 #[no_mangle]
 pub static mut e_failed_to_find_all_diff_anchors: [::core::ffi::c_char; 39] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 39],
-        [::core::ffi::c_char; 39],
-    >(*b"E1550: Failed to find all diff anchors\0")
+    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
+        *b"E1550: Failed to find all diff anchors\0",
+    )
 };
 #[no_mangle]
 pub static mut e_diff_anchors_with_hidden_windows: [::core::ffi::c_char; 60] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 60],
-        [::core::ffi::c_char; 60],
-    >(*b"E1562: Diff anchors cannot be used with hidden diff windows\0")
+    ::core::mem::transmute::<[u8; 60], [::core::ffi::c_char; 60]>(
+        *b"E1562: Diff anchors cannot be used with hidden diff windows\0",
+    )
 };
 #[no_mangle]
 pub static mut e_leadtab_requires_tab: [::core::ffi::c_char; 66] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 66],
-        [::core::ffi::c_char; 66],
-    >(*b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0")
+    ::core::mem::transmute::<[u8; 66], [::core::ffi::c_char; 66]>(
+        *b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0",
+    )
 };
 #[no_mangle]
 pub static mut e_invalid_format_string_single_percent_s: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 55],
-        [::core::ffi::c_char; 55],
-    >(*b"E1577: Invalid format string, only one \"%s\" is allowed\0")
+    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
+        *b"E1577: Invalid format string, only one \"%s\" is allowed\0",
+    )
 };
 #[no_mangle]
 pub static mut e_trustfile: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"E5570: Cannot update trust file: %s\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"E5570: Cannot update trust file: %s\0",
+    )
 };
 #[no_mangle]
 pub static mut e_cannot_read_from_str_2: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E282: Cannot read from \"%s\"\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(
+        *b"E282: Cannot read from \"%s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_conflicting_configs: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 38],
-        [::core::ffi::c_char; 38],
-    >(*b"E5422: Conflicting configs: \"%s\" \"%s\"\0")
+    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+        *b"E5422: Conflicting configs: \"%s\" \"%s\"\0",
+    )
 };
 #[no_mangle]
 pub static mut e_unknown_option2: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"E355: Unknown option: %s\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E355: Unknown option: %s\0")
 };
 #[no_mangle]
 pub static mut top_bot_msg: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"search hit TOP, continuing at BOTTOM\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"search hit TOP, continuing at BOTTOM\0",
+    )
 };
 #[no_mangle]
 pub static mut bot_top_msg: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 37],
-        [::core::ffi::c_char; 37],
-    >(*b"search hit BOTTOM, continuing at TOP\0")
+    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
+        *b"search hit BOTTOM, continuing at TOP\0",
+    )
 };
 #[no_mangle]
-pub static mut line_msg: [::core::ffi::c_char; 7] = unsafe {
-    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b" line \0")
-};
+pub static mut line_msg: [::core::ffi::c_char; 7] =
+    unsafe { ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b" line \0") };
 #[no_mangle]
 pub static mut EVALARG_EVALUATE: evalarg_T = evalarg_T {
     eval_flags: EVAL_EVALUATE as ::core::ffi::c_int,
@@ -6871,16 +6478,16 @@ pub static mut msg_listdo_overwrite: ::core::ffi::c_int = 0 as ::core::ffi::c_in
 unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     if l.is_null() {
         '_c2rust_label: {
-            if lock as ::core::ffi::c_uint
-                == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {} else {
+            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+            } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -6896,14 +6503,12 @@ pub static mut kTVTranslate: size_t = 18446744073709551615 as size_t;
 pub static mut disable_fold_update: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
 pub static mut test_disable_char_avail: bool = false;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"$VIM/sysinit.vim\0")
 };
-pub const VIMRC_FILE: [::core::ffi::c_char; 8] = unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".nvimrc\0")
-};
+pub const VIMRC_FILE: [::core::ffi::c_char; 8] =
+    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b".nvimrc\0") };
 #[no_mangle]
 pub static mut g_stats: nvim_stats_s = nvim_stats_s {
     fsync: 0 as int64_t,
@@ -6942,17 +6547,14 @@ pub static mut exec_from_reg: bool = false;
 #[no_mangle]
 pub static mut dollar_vcol: colnr_T = -1 as colnr_T;
 #[no_mangle]
-pub static mut edit_submode: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut edit_submode: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut edit_submode_pre: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut edit_submode_pre: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut edit_submode_extra: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut edit_submode_extra: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut edit_submode_highl: hlf_T = HLF_NONE;
 #[no_mangle]
@@ -6968,9 +6570,7 @@ pub static mut msg_scrolled_ign: bool = false;
 #[no_mangle]
 pub static mut msg_did_scroll: bool = false;
 #[no_mangle]
-pub static mut keep_msg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut keep_msg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut keep_msg_hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
@@ -6996,15 +6596,13 @@ pub static mut emsg_skip: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
 pub static mut emsg_severe: bool = false;
 #[no_mangle]
-pub static mut emsg_assert_fails_msg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut emsg_assert_fails_msg: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut emsg_assert_fails_lnum: ::core::ffi::c_long = 0 as ::core::ffi::c_long;
 #[no_mangle]
-pub static mut emsg_assert_fails_context: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut emsg_assert_fails_context: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut did_endif: bool = false;
 #[no_mangle]
@@ -7304,9 +6902,8 @@ pub static mut vr_lines_changed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
 pub static mut inhibit_delete_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut fenc_default: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut fenc_default: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut State: ::core::ffi::c_int = MODE_NORMAL as ::core::ffi::c_int;
 #[no_mangle]
@@ -7459,13 +7056,9 @@ pub static mut searchcmdlen: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut reg_do_extmatch: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut re_extmatch_in: *mut reg_extmatch_T = ::core::ptr::null_mut::<
-    reg_extmatch_T,
->();
+pub static mut re_extmatch_in: *mut reg_extmatch_T = ::core::ptr::null_mut::<reg_extmatch_T>();
 #[no_mangle]
-pub static mut re_extmatch_out: *mut reg_extmatch_T = ::core::ptr::null_mut::<
-    reg_extmatch_T,
->();
+pub static mut re_extmatch_out: *mut reg_extmatch_T = ::core::ptr::null_mut::<reg_extmatch_T>();
 #[no_mangle]
 pub static mut did_outofmem_msg: bool = false;
 #[no_mangle]
@@ -7477,21 +7070,17 @@ pub static mut listcmd_busy: bool = false;
 #[no_mangle]
 pub static mut need_start_insertmode: bool = false;
 #[no_mangle]
-pub static mut last_mode: [::core::ffi::c_char; 4] = unsafe {
-    ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"n\0\0\0")
-};
+pub static mut last_mode: [::core::ffi::c_char; 4] =
+    unsafe { ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"n\0\0\0") };
 #[no_mangle]
-pub static mut last_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut last_cmdline: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut repeat_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut repeat_cmdline: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut new_last_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut new_last_cmdline: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut postponed_split: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
@@ -7505,8 +7094,8 @@ pub static mut g_tag_at_cursor: bool = false;
 #[no_mangle]
 pub static mut replace_offset: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut escape_chars: *mut ::core::ffi::c_char = b" \t\\\"|\0".as_ptr()
-    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+pub static mut escape_chars: *mut ::core::ffi::c_char =
+    b" \t\\\"|\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
 #[no_mangle]
 pub static mut keep_help_flag: bool = false;
 #[no_mangle]
@@ -7528,13 +7117,10 @@ pub static mut save_p_wmh: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 #[no_mangle]
 pub static mut wild_menu_showing: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut globaldir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut globaldir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut last_chdir_reason: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut last_chdir_reason: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut km_stopsel: bool = false;
 #[no_mangle]
@@ -7555,10 +7141,7 @@ pub static mut cmdwin_old_curwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
 pub static mut cmdline_win: *mut win_T = ::core::ptr::null_mut::<win_T>();
 #[no_mangle]
 pub static mut no_lines_msg: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b"--No lines in buffer--\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"--No lines in buffer--\0")
 };
 #[no_mangle]
 pub static mut sub_nsubs: ::core::ffi::c_int = 0;
@@ -7657,9 +7240,8 @@ pub static mut linebuf_attr: *mut sattr_T = ::core::ptr::null_mut::<sattr_T>();
 #[no_mangle]
 pub static mut linebuf_vcol: *mut colnr_T = ::core::ptr::null_mut::<colnr_T>();
 #[no_mangle]
-pub static mut linebuf_scratch: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut linebuf_scratch: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut opt_ambw_values: [*const ::core::ffi::c_char; 3] = [
     b"single\0".as_ptr() as *const ::core::ffi::c_char,
@@ -8192,13 +7774,10 @@ pub static mut opt_winborder_values: [*const ::core::ffi::c_char; 9] = [
     ::core::ptr::null::<::core::ffi::c_char>(),
 ];
 #[no_mangle]
-pub static mut empty_string_option: [::core::ffi::c_char; 1] = unsafe {
-    ::core::mem::transmute::<[u8; 1], [::core::ffi::c_char; 1]>(*b"\0")
-};
+pub static mut empty_string_option: [::core::ffi::c_char; 1] =
+    unsafe { ::core::mem::transmute::<[u8; 1], [::core::ffi::c_char; 1]>(*b"\0") };
 #[no_mangle]
-pub static mut p_ambw: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ambw: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_acd: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8214,29 +7793,17 @@ pub static mut p_cin: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_channel: OptInt = 0;
 #[no_mangle]
-pub static mut p_cink: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cink: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cinsd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cinsd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cinw: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cinw: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_ofu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ofu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_tsrfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tsrfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_ci: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8246,83 +7813,51 @@ pub static mut p_aw: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_awa: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_bs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_bg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_bk: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_bkc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bkc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut bkc_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_bdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_bex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_bo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut breakat_flags: [::core::ffi::c_char; 256] = [0; 256];
 #[no_mangle]
 pub static mut bo_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_bsk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bsk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_breakat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_breakat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_bh: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bh: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_bt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_bt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_busy: OptInt = 0;
 #[no_mangle]
-pub static mut p_cmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut cmp_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_enc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_enc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_deco: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ccv: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ccv: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cino: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cino: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cedit: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cedit: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut cb_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
@@ -8330,13 +7865,9 @@ pub static mut p_cwh: OptInt = 0;
 #[no_mangle]
 pub static mut p_ch: OptInt = 0;
 #[no_mangle]
-pub static mut p_cms: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cms: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cpt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cpt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_cto: OptInt = 0;
 #[no_mangle]
@@ -8344,15 +7875,11 @@ pub static mut p_columns: OptInt = 0;
 #[no_mangle]
 pub static mut p_confirm: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_cia: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cia: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut cia_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_cot: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cot: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut cot_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
@@ -8362,9 +7889,8 @@ pub static mut p_act: OptInt = 0;
 #[no_mangle]
 pub static mut p_acl: OptInt = 0;
 #[no_mangle]
-pub static mut p_pumborder: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_pumborder: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_pb: OptInt = 0;
 #[no_mangle]
@@ -8374,187 +7900,115 @@ pub static mut p_pw: OptInt = 0;
 #[no_mangle]
 pub static mut p_pmw: OptInt = 0;
 #[no_mangle]
-pub static mut p_com: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_com: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cpo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cpo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_debug: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_debug: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_def: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_def: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_inc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_inc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_dia: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_dia: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_dip: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_dip: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_dex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_dex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_dict: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_dict: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_dg: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_dy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_dy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut dy_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_ead: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ead: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_emoji: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_ea: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ep: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ep: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_eb: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ef: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ef: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_gefm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_gefm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_gp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_gp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_eof: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_eol: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ei: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ei: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_et: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_exrc: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_fenc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fenc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_fencs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fencs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_ff: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ff: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_ffs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ffs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_fic: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ft: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ft: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_fcs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fcs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_ffu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ffu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_fixeol: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_fcl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fcl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_fdls: OptInt = 0;
 #[no_mangle]
-pub static mut p_fdo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fdo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut fdo_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_fex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_flp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_flp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_fo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_fp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_fp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_fs: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_gd: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_guicursor: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_guicursor: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_guifont: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_guifont: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_guifontwide: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_guifontwide: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_hf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_hf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_hh: OptInt = 0;
 #[no_mangle]
-pub static mut p_hlg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_hlg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_hid: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_hl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_hl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_hls: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8564,9 +8018,8 @@ pub static mut p_arshape: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_icon: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_iconstring: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_iconstring: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_ic: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8576,71 +8029,43 @@ pub static mut p_imsearch: OptInt = 0;
 #[no_mangle]
 pub static mut p_inf: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_inex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_inex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_is: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_inde: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_inde: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_indk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_indk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_icm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_icm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_isf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_isf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_isi: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_isi: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_isp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_isp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_js: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_jop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_jop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut jop_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_keymap: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_keymap: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_kp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_kp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_km: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_km: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_langmap: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_langmap: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_lnr: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_lrm: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_lm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_lm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_lines: OptInt = 0;
 #[no_mangle]
@@ -8648,21 +8073,16 @@ pub static mut p_linespace: OptInt = 0;
 #[no_mangle]
 pub static mut p_lisp: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_lop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_lop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_lispwords: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_lispwords: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_ls: OptInt = 0;
 #[no_mangle]
 pub static mut p_stal: OptInt = 0;
 #[no_mangle]
-pub static mut p_lcs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_lcs: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_lz: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8670,21 +8090,13 @@ pub static mut p_lpl: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_magic: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_menc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_menc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_mef: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mef: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_mp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_mps: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mps: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_mat: OptInt = 0;
 #[no_mangle]
@@ -8698,15 +8110,11 @@ pub static mut p_mmp: OptInt = 0;
 #[no_mangle]
 pub static mut p_mis: OptInt = 0;
 #[no_mangle]
-pub static mut p_mopt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mopt: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_msc: OptInt = 0;
 #[no_mangle]
-pub static mut p_msm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_msm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_ml: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8718,13 +8126,9 @@ pub static mut p_ma: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_mod: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_mouse: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mouse: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_mousem: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mousem: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_mousemev: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8732,9 +8136,8 @@ pub static mut p_mousef: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_mh: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_mousescroll: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_mousescroll: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_mousescroll_vert: OptInt = 3 as OptInt;
 #[no_mangle]
@@ -8744,49 +8147,31 @@ pub static mut p_mouset: OptInt = 0;
 #[no_mangle]
 pub static mut p_more: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_nf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_nf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_opfunc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_opfunc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_para: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_para: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_paste: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_pex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_pex: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_pm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_pm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_cdpath: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_cdpath: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_pi: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_pyx: OptInt = 0;
 #[no_mangle]
-pub static mut p_qe: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_qe: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_ro: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_rdb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_rdb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut rdb_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
@@ -8806,21 +8191,13 @@ pub static mut p_ri: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_ru: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ruf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ruf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_pp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_pp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_qftf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_qftf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_rtp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_rtp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_scbk: OptInt = 0;
 #[no_mangle]
@@ -8828,85 +8205,52 @@ pub static mut p_sj: OptInt = 0;
 #[no_mangle]
 pub static mut p_so: OptInt = 0;
 #[no_mangle]
-pub static mut p_sbo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sbo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_sections: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sections: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_secure: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_sel: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sel: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_slm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_slm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_ssop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ssop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut ssop_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_sh: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sh: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_shcf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_shcf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_sp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_shq: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_shq: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_sxq: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sxq: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_sxe: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sxe: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_srr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_srr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_stmp: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_stl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_stl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_wbr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_wbr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_sr: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_sw: OptInt = 0;
 #[no_mangle]
-pub static mut p_shm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_shm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_sbr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sbr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_sc: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_sloc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sloc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_sft: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8928,9 +8272,7 @@ pub static mut p_sts: OptInt = 0;
 #[no_mangle]
 pub static mut p_sb: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_sua: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sua: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_swf: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -8938,67 +8280,41 @@ pub static mut p_smc: OptInt = 0;
 #[no_mangle]
 pub static mut p_tpm: OptInt = 0;
 #[no_mangle]
-pub static mut p_tal: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tal: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_tpf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tpf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut tpf_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_tfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tfu: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_spc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_spc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_spf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_spl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_spl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_spo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_spo: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut spo_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_sps: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_sps: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_spr: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_sol: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_su: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_su: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_swb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_swb: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut swb_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
-pub static mut p_spk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_spk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_syn: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_syn: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_tcl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tcl: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut tcl_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
@@ -9006,9 +8322,7 @@ pub static mut p_ts: OptInt = 0;
 #[no_mangle]
 pub static mut p_tbs: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_tc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut tc_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
@@ -9016,9 +8330,7 @@ pub static mut p_tl: OptInt = 0;
 #[no_mangle]
 pub static mut p_tr: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_tags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tags: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_tgst: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -9036,17 +8348,13 @@ pub static mut p_title: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub static mut p_titlelen: OptInt = 0;
 #[no_mangle]
-pub static mut p_titleold: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_titleold: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_titlestring: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_titlestring: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_tsr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_tsr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_tgc: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -9056,9 +8364,7 @@ pub static mut p_ttm: OptInt = 0;
 #[no_mangle]
 pub static mut p_tf: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_udir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_udir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_udf: ::core::ffi::c_int = 0;
 #[no_mangle]
@@ -9070,39 +8376,26 @@ pub static mut p_uc: OptInt = 0;
 #[no_mangle]
 pub static mut p_ut: OptInt = 0;
 #[no_mangle]
-pub static mut p_shada: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_shada: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_shadafile: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_shadafile: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_termsync: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_vsts: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_vsts: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_vts: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_vts: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_vdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_vdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_vop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_vop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut vop_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
 pub static mut p_vb: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_ve: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ve: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut ve_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
@@ -9110,25 +8403,17 @@ pub static mut p_verbose: OptInt = 0;
 #[no_mangle]
 pub static mut p_warn: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_wop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_wop: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut wop_flags: ::core::ffi::c_uint = 0;
 #[no_mangle]
 pub static mut p_window: OptInt = 0;
 #[no_mangle]
-pub static mut p_wak: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_wak: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_wig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_wig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
-pub static mut p_ww: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_ww: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_wc: OptInt = 0;
 #[no_mangle]
@@ -9136,15 +8421,12 @@ pub static mut p_wcm: OptInt = 0;
 #[no_mangle]
 pub static mut p_wic: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_wim: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_wim: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_wmnu: ::core::ffi::c_int = 0;
 #[no_mangle]
-pub static mut p_winborder: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+pub static mut p_winborder: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 #[no_mangle]
 pub static mut p_wh: OptInt = 0;
 #[no_mangle]
@@ -9273,16 +8555,14 @@ pub static mut ns_hl_fast: NS = -1 as NS;
 #[no_mangle]
 pub static mut ns_hl_active: NS = 0 as NS;
 #[no_mangle]
-pub static mut hl_attr_active: *mut ::core::ffi::c_int = unsafe {
-    &raw const highlight_attr as *mut ::core::ffi::c_int
-};
+pub static mut hl_attr_active: *mut ::core::ffi::c_int =
+    unsafe { &raw const highlight_attr as *mut ::core::ffi::c_int };
 #[no_mangle]
 pub static mut curbuf_splice_pending: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 #[no_mangle]
-pub static mut nlua_global_refs: *mut nlua_ref_state_t = ::core::ptr::null_mut::<
-    nlua_ref_state_t,
->();
+pub static mut nlua_global_refs: *mut nlua_ref_state_t =
+    ::core::ptr::null_mut::<nlua_ref_state_t>();
 #[no_mangle]
 pub static mut nlua_disable_preload: bool = false;
 #[no_mangle]
@@ -9593,19 +8873,18 @@ pub static mut main_loop: Loop = Loop {
     recursive: 0,
     closing: false,
 };
-static mut argv0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
-static mut err_arg_missing: *const ::core::ffi::c_char = b"Argument missing after\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut err_opt_garbage: *const ::core::ffi::c_char = b"Garbage after option argument\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut err_opt_unknown: *const ::core::ffi::c_char = b"Unknown option argument\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut err_too_many_args: *const ::core::ffi::c_char = b"Too many edit arguments\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut err_extra_cmd: *const ::core::ffi::c_char = b"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments\0"
-    .as_ptr() as *const ::core::ffi::c_char;
+static mut argv0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static mut err_arg_missing: *const ::core::ffi::c_char =
+    b"Argument missing after\0".as_ptr() as *const ::core::ffi::c_char;
+static mut err_opt_garbage: *const ::core::ffi::c_char =
+    b"Garbage after option argument\0".as_ptr() as *const ::core::ffi::c_char;
+static mut err_opt_unknown: *const ::core::ffi::c_char =
+    b"Unknown option argument\0".as_ptr() as *const ::core::ffi::c_char;
+static mut err_too_many_args: *const ::core::ffi::c_char =
+    b"Too many edit arguments\0".as_ptr() as *const ::core::ffi::c_char;
+static mut err_extra_cmd: *const ::core::ffi::c_char =
+    b"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments\0".as_ptr()
+        as *const ::core::ffi::c_char;
 #[no_mangle]
 pub unsafe extern "C" fn event_init() {
     loop_init(&raw mut main_loop, NULL_0);
@@ -9646,13 +8925,11 @@ pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
     cmdline_init();
     eval_init();
     set_vim_var_nr(VV_STARTTIME, os_realtime());
-    init_path(
-        if !argv0.is_null() {
-            argv0 as *const ::core::ffi::c_char
-        } else {
-            b"nvim\0".as_ptr() as *const ::core::ffi::c_char
-        },
-    );
+    init_path(if !argv0.is_null() {
+        argv0 as *const ::core::ffi::c_char
+    } else {
+        b"nvim\0".as_ptr() as *const ::core::ffi::c_char
+    });
     init_normal_cmds();
     runtime_init();
     highlight_init();
@@ -9675,8 +8952,11 @@ pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
     global_alist.id = 0 as ::core::ffi::c_int;
     init_homedir();
     set_init_1(
-        if !paramp.is_null() { (*paramp).clean as ::core::ffi::c_int } else { false_0 }
-            != 0,
+        if !paramp.is_null() {
+            (*paramp).clean as ::core::ffi::c_int
+        } else {
+            false_0
+        } != 0,
     );
     log_init();
     if !time_fd.is_null() {
@@ -9717,9 +8997,7 @@ unsafe fn main_0(
         }
         nlua_run_script(argv, argc, 3 as ::core::ffi::c_int);
     }
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut params: mparm_T = mparm_T {
         argc: 0,
         argv: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
@@ -9755,8 +9033,7 @@ unsafe fn main_0(
     while i < params.argc {
         if strcasecmp(
             *params.argv.offset(i as isize),
-            b"--clean\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"--clean\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
         {
             params.clean = true_0 != 0;
@@ -9779,9 +9056,7 @@ unsafe fn main_0(
         );
     }
     if embedded_mode {
-        let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         if channel_from_stdio(
             true_0 != 0,
             CallbackReader {
@@ -9813,8 +9088,8 @@ unsafe fn main_0(
     let mut has_term: bool = stdin_isatty as ::core::ffi::c_int != 0
         || stdout_isatty as ::core::ffi::c_int != 0
         || stderr_isatty as ::core::ffi::c_int != 0;
-    let mut use_builtin_ui: bool = has_term as ::core::ffi::c_int != 0 && !headless_mode
-        && !embedded_mode && !silent_mode;
+    let mut use_builtin_ui: bool =
+        has_term as ::core::ffi::c_int != 0 && !headless_mode && !embedded_mode && !silent_mode;
     if params.remote != 0 {
         remote_request(
             &raw mut params,
@@ -9836,8 +9111,7 @@ unsafe fn main_0(
         if rv == 0 {
             fprintf(
                 stderr,
-                b"Failed to start Nvim server!\n\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Failed to start Nvim server!\n\0".as_ptr() as *const ::core::ffi::c_char,
             );
             os_exit(1 as ::core::ffi::c_int);
         }
@@ -9847,7 +9121,8 @@ unsafe fn main_0(
         ui_client_run();
     }
     '_c2rust_label: {
-        if ui_client_channel_id == 0 && !use_builtin_ui {} else {
+        if ui_client_channel_id == 0 && !use_builtin_ui {
+        } else {
             __assert_fail(
                 b"!ui_client_channel_id && !use_builtin_ui\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9882,9 +9157,11 @@ unsafe fn main_0(
         diff_win_options(firstwin, false_0 != 0);
     }
     '_c2rust_label_0: {
-        if p_ch >= 0 as OptInt && Rows as OptInt >= p_ch
+        if p_ch >= 0 as OptInt
+            && Rows as OptInt >= p_ch
             && Rows as OptInt - p_ch <= 2147483647 as OptInt
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"p_ch >= 0 && Rows >= p_ch && Rows - p_ch <= INT_MAX\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9916,13 +9193,14 @@ unsafe fn main_0(
         );
     }
     debug_break_level = params.use_debug_break_level;
-    if !stdin_isatty && !params.input_istext && silent_mode as ::core::ffi::c_int != 0
+    if !stdin_isatty
+        && !params.input_istext
+        && silent_mode as ::core::ffi::c_int != 0
         && exmode_active as ::core::ffi::c_int != 0
     {
         input_start();
     }
-    let mut use_remote_ui: bool = embedded_mode as ::core::ffi::c_int != 0
-        && !headless_mode;
+    let mut use_remote_ui: bool = embedded_mode as ::core::ffi::c_int != 0 && !headless_mode;
     if use_remote_ui {
         if !time_fd.is_null() {
             time_msg(
@@ -9969,8 +9247,7 @@ unsafe fn main_0(
             fprintf(
                 stderr,
                 gettext(
-                    b"Cannot open for script output: \"\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Cannot open for script output: \"\0".as_ptr() as *const ::core::ffi::c_char
                 ),
             );
             fprintf(
@@ -9984,8 +9261,7 @@ unsafe fn main_0(
     nlua_init_defaults();
     if !time_fd.is_null() {
         time_msg(
-            b"init default mappings & autocommands\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"init default mappings & autocommands\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::ptr::null::<proftime_T>(),
         );
     }
@@ -10169,8 +9445,9 @@ unsafe fn main_0(
         );
     }
     if cb_flags
-        & (kOptCbFlagUnnamed as ::core::ffi::c_int
-            | kOptCbFlagUnnamedplus as ::core::ffi::c_int) as ::core::ffi::c_uint != 0
+        & (kOptCbFlagUnnamed as ::core::ffi::c_int | kOptCbFlagUnnamedplus as ::core::ffi::c_int)
+            as ::core::ffi::c_uint
+        != 0
     {
         eval_has_provider(
             b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10198,13 +9475,11 @@ unsafe fn main_0(
             msg_putchar('\n' as ::core::ffi::c_int);
             msg_didout = false_0 != 0;
         }
-        getout(
-            if lua_ok as ::core::ffi::c_int != 0 {
-                0 as ::core::ffi::c_int
-            } else {
-                1 as ::core::ffi::c_int
-            },
-        );
+        getout(if lua_ok as ::core::ffi::c_int != 0 {
+            0 as ::core::ffi::c_int
+        } else {
+            1 as ::core::ffi::c_int
+        });
     }
     if !time_fd.is_null() {
         time_msg(
@@ -10265,7 +9540,8 @@ pub unsafe extern "C" fn os_exit(mut r: ::core::ffi::c_int) -> ! {
 #[no_mangle]
 pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
     '_c2rust_label: {
-        if ui_client_channel_id == 0 {} else {
+        if ui_client_channel_id == 0 {
+        } else {
             __assert_fail(
                 b"!ui_client_channel_id\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/main.c\0".as_ptr()
@@ -10441,8 +9717,7 @@ pub unsafe extern "C" fn preserve_exit(mut errmsg: *const ::core::ffi::c_char) -
             if !errmsg.is_null() {
                 fprintf(
                     stderr,
-                    b"Nvim: preserving files...\n\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Nvim: preserving files...\n\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
             ml_sync_all(false_0, false_0, true_0 != 0);
@@ -10453,7 +9728,10 @@ pub unsafe extern "C" fn preserve_exit(mut errmsg: *const ::core::ffi::c_char) -
     }
     ml_close_all(false_0 != 0);
     if !errmsg.is_null() {
-        fprintf(stderr, b"Nvim: Finished.\n\0".as_ptr() as *const ::core::ffi::c_char);
+        fprintf(
+            stderr,
+            b"Nvim: Finished.\n\0".as_ptr() as *const ::core::ffi::c_char,
+        );
     }
     getout(1 as ::core::ffi::c_int);
 }
@@ -10492,9 +9770,7 @@ unsafe extern "C" fn server_connect(
         fwd_err: false_0 != 0,
         type_0: ::core::ptr::null::<::core::ffi::c_char>(),
     };
-    let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut is_tcp: bool = !socket_address_tcp_host_end(server_addr).is_null();
     let mut chan: uint64_t = channel_connect(
         is_tcp,
@@ -10525,9 +9801,7 @@ unsafe extern "C" fn remote_request(
     if ui_only as ::core::ffi::c_int != 0 && !is_ui {
         return;
     }
-    let mut connect_error: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut connect_error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut chan: uint64_t = server_connect(server_addr, &raw mut connect_error);
     let mut rvobj: Object = object {
         type_0: kObjectTypeNil,
@@ -10537,8 +9811,7 @@ unsafe extern "C" fn remote_request(
         if chan == 0 {
             fprintf(
                 stderr,
-                b"Remote ui failed to start: %s\n\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Remote ui failed to start: %s\n\0".as_ptr() as *const ::core::ffi::c_char,
                 connect_error,
             );
             os_exit(1 as ::core::ffi::c_int);
@@ -10555,8 +9828,7 @@ unsafe extern "C" fn remote_request(
             fprintf(
                 stderr,
                 b"%s\n\0".as_ptr() as *const ::core::ffi::c_char,
-                b"(Unset $NVIM to skip this check)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"(Unset $NVIM to skip this check)\0".as_ptr() as *const ::core::ffi::c_char,
             );
             os_exit(1 as ::core::ffi::c_int);
         }
@@ -10625,8 +9897,7 @@ unsafe extern "C" fn remote_request(
     let mut s: String_0 = String_0 {
         data: b"return vim._cs_remote(...)\0".as_ptr() as *const ::core::ffi::c_char
             as *mut ::core::ffi::c_char,
-        size: ::core::mem::size_of::<[::core::ffi::c_char; 27]>()
-            .wrapping_sub(1 as size_t),
+        size: ::core::mem::size_of::<[::core::ffi::c_char; 27]>().wrapping_sub(1 as size_t),
     };
     let mut o: Object = nlua_exec(
         s,
@@ -10641,7 +9912,11 @@ unsafe extern "C" fn remote_request(
     args.size = args.capacity;
     args.items = ::core::ptr::null_mut::<Object>();
     if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        fprintf(stderr, b"%s\n\0".as_ptr() as *const ::core::ffi::c_char, err.msg);
+        fprintf(
+            stderr,
+            b"%s\n\0".as_ptr() as *const ::core::ffi::c_char,
+            err.msg,
+        );
         os_exit(2 as ::core::ffi::c_int);
     }
     if o.type_0 as ::core::ffi::c_uint
@@ -10651,8 +9926,7 @@ unsafe extern "C" fn remote_request(
     } else {
         fprintf(
             stderr,
-            b"vim._cs_remote returned unexpected value\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"vim._cs_remote returned unexpected value\n\0".as_ptr() as *const ::core::ffi::c_char,
         );
         os_exit(2 as ::core::ffi::c_int);
     }
@@ -10664,59 +9938,67 @@ unsafe extern "C" fn remote_request(
             (*rvobj.data.dict.items.offset(i as isize)).key.data,
             b"errmsg\0".as_ptr() as *const ::core::ffi::c_char,
         ) {
-            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0
-                as ::core::ffi::c_uint
+            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0 as ::core::ffi::c_uint
                 != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 fprintf(
                     stderr,
-                    b"vim._cs_remote returned an unexpected type for 'errmsg'\n\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"vim._cs_remote returned an unexpected type for 'errmsg'\n\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
                 os_exit(2 as ::core::ffi::c_int);
             }
             fprintf(
                 stderr,
                 b"%s\n\0".as_ptr() as *const ::core::ffi::c_char,
-                (*rvobj.data.dict.items.offset(i as isize)).value.data.string.data,
+                (*rvobj.data.dict.items.offset(i as isize))
+                    .value
+                    .data
+                    .string
+                    .data,
             );
             os_exit(2 as ::core::ffi::c_int);
         } else if strequal(
             (*rvobj.data.dict.items.offset(i as isize)).key.data,
             b"result\0".as_ptr() as *const ::core::ffi::c_char,
         ) {
-            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0
-                as ::core::ffi::c_uint
+            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0 as ::core::ffi::c_uint
                 != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 fprintf(
                     stderr,
-                    b"vim._cs_remote returned an unexpected type for 'result'\n\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"vim._cs_remote returned an unexpected type for 'result'\n\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
                 os_exit(2 as ::core::ffi::c_int);
             }
             printf(
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                (*rvobj.data.dict.items.offset(i as isize)).value.data.string.data,
+                (*rvobj.data.dict.items.offset(i as isize))
+                    .value
+                    .data
+                    .string
+                    .data,
             );
         } else if strequal(
             (*rvobj.data.dict.items.offset(i as isize)).key.data,
             b"tabbed\0".as_ptr() as *const ::core::ffi::c_char,
         ) {
-            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0
-                as ::core::ffi::c_uint
+            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0 as ::core::ffi::c_uint
                 != kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 fprintf(
                     stderr,
-                    b"vim._cs_remote returned an unexpected type for 'tabbed'\n\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"vim._cs_remote returned an unexpected type for 'tabbed'\n\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
                 os_exit(2 as ::core::ffi::c_int);
             }
-            tabbed = (if (*rvobj.data.dict.items.offset(i as isize)).value.data.boolean
-                as ::core::ffi::c_int != 0
+            tabbed = (if (*rvobj.data.dict.items.offset(i as isize))
+                .value
+                .data
+                .boolean as ::core::ffi::c_int
+                != 0
             {
                 kTrue as ::core::ffi::c_int
             } else {
@@ -10726,21 +10008,21 @@ unsafe extern "C" fn remote_request(
             (*rvobj.data.dict.items.offset(i as isize)).key.data,
             b"should_exit\0".as_ptr() as *const ::core::ffi::c_char,
         ) {
-            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0
-                as ::core::ffi::c_uint
+            if (*rvobj.data.dict.items.offset(i as isize)).value.type_0 as ::core::ffi::c_uint
                 != kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 fprintf(
                     stderr,
-                    b"vim._cs_remote returned an unexpected type for 'should_exit'\n\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"vim._cs_remote returned an unexpected type for 'should_exit'\n\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
                 os_exit(2 as ::core::ffi::c_int);
             }
             should_exit = (if (*rvobj.data.dict.items.offset(i as isize))
                 .value
                 .data
-                .boolean as ::core::ffi::c_int != 0
+                .boolean as ::core::ffi::c_int
+                != 0
             {
                 kTrue as ::core::ffi::c_int
             } else {
@@ -10754,8 +10036,8 @@ unsafe extern "C" fn remote_request(
     {
         fprintf(
             stderr,
-            b"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
+            b"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n\0".as_ptr()
+                as *const ::core::ffi::c_char,
         );
         os_exit(2 as ::core::ffi::c_int);
     }
@@ -10770,10 +10052,10 @@ unsafe extern "C" fn remote_request(
 }
 unsafe extern "C" fn edit_stdin(mut parmp: *mut mparm_T) -> bool {
     let mut implicit: bool = !headless_mode
-        && !(embedded_mode as ::core::ffi::c_int != 0
-            && stdin_fd <= 0 as ::core::ffi::c_int)
+        && !(embedded_mode as ::core::ffi::c_int != 0 && stdin_fd <= 0 as ::core::ffi::c_int)
         && (!exmode_active || (*parmp).input_istext as ::core::ffi::c_int != 0)
-        && !stdin_isatty && (*parmp).edit_type <= EDIT_STDIN as ::core::ffi::c_int
+        && !stdin_isatty
+        && (*parmp).edit_type <= EDIT_STDIN as ::core::ffi::c_int
         && (*parmp).scriptin.is_null();
     return (*parmp).had_stdin_file as ::core::ffi::c_int != 0
         || implicit as ::core::ffi::c_int != 0;
@@ -10791,7 +10073,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
     while argc > 0 as ::core::ffi::c_int {
         if *(*argv.offset(0 as ::core::ffi::c_int as isize))
             .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '+' as ::core::ffi::c_int && !had_minmin
+            == '+' as ::core::ffi::c_int
+            && !had_minmin
         {
             if (*parmp).n_commands >= MAX_ARG_CMDS {
                 mainerr(
@@ -10802,32 +10085,31 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
             }
             argv_idx = -1 as ::core::ffi::c_int;
             if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+                .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                == NUL
             {
                 let c2rust_fresh6 = (*parmp).n_commands;
                 (*parmp).n_commands = (*parmp).n_commands + 1;
-                let c2rust_lvalue_ptr = &raw mut (*parmp)
-                    .commands[c2rust_fresh6 as usize];
-                *c2rust_lvalue_ptr = b"$\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                let c2rust_lvalue_ptr = &raw mut (*parmp).commands[c2rust_fresh6 as usize];
+                *c2rust_lvalue_ptr =
+                    b"$\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 let c2rust_fresh7 = (*parmp).n_commands;
                 (*parmp).n_commands = (*parmp).n_commands + 1;
-                let c2rust_lvalue_ptr_0 = &raw mut (*parmp)
-                    .commands[c2rust_fresh7 as usize];
+                let c2rust_lvalue_ptr_0 = &raw mut (*parmp).commands[c2rust_fresh7 as usize];
                 *c2rust_lvalue_ptr_0 = (*argv.offset(0 as ::core::ffi::c_int as isize))
                     .offset(1 as ::core::ffi::c_int as isize);
             }
         } else if *(*argv.offset(0 as ::core::ffi::c_int as isize))
             .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '-' as ::core::ffi::c_int && !had_minmin
+            == '-' as ::core::ffi::c_int
+            && !had_minmin
         {
             want_argument = false_0 != 0;
             let c2rust_fresh8 = argv_idx;
             argv_idx = argv_idx + 1;
-            let mut c: ::core::ffi::c_char = *(*argv
-                .offset(0 as ::core::ffi::c_int as isize))
-                .offset(c2rust_fresh8 as isize);
+            let mut c: ::core::ffi::c_char =
+                *(*argv.offset(0 as ::core::ffi::c_int as isize)).offset(c2rust_fresh8 as isize);
             's_747: {
                 'c_49604: {
                     match c as ::core::ffi::c_int {
@@ -10876,18 +10158,12 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             ) == 0 as ::core::ffi::c_int
                             {
                                 let mut data: String_0 = api_metadata_raw();
-                                let written_bytes: ptrdiff_t = os_write(
-                                    STDOUT_FILENO,
-                                    data.data,
-                                    data.size,
-                                    false_0 != 0,
-                                );
+                                let written_bytes: ptrdiff_t =
+                                    os_write(STDOUT_FILENO, data.data, data.size, false_0 != 0);
                                 if written_bytes < 0 as ptrdiff_t {
                                     semsg(
-                                        gettext(
-                                            b"E5420: Failed to write to file: %s\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                        ),
+                                        gettext(b"E5420: Failed to write to file: %s\0".as_ptr()
+                                            as *const ::core::ffi::c_char),
                                         uv_strerror(written_bytes as ::core::ffi::c_int),
                                     );
                                 }
@@ -10983,7 +10259,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                 ) == 0 as ::core::ffi::c_int
                                 {
                                     (*parmp).use_vimrc = b"NONE\0".as_ptr()
-                                        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                                        as *const ::core::ffi::c_char
+                                        as *mut ::core::ffi::c_char;
                                     (*parmp).clean = true_0 != 0;
                                     set_option_value_give_err(
                                         kOptShadafile,
@@ -10991,10 +10268,14 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                             type_0: kOptValTypeString,
                                             data: OptValData {
                                                 string: String_0 {
-                                                    data: b"NONE\0".as_ptr() as *const ::core::ffi::c_char
+                                                    data: b"NONE\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                         as *mut ::core::ffi::c_char,
-                                                    size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                                                        .wrapping_sub(1 as size_t),
+                                                    size: ::core::mem::size_of::<
+                                                        [::core::ffi::c_char; 5],
+                                                    >(
+                                                    )
+                                                    .wrapping_sub(1 as size_t),
                                                 },
                                             },
                                         },
@@ -11011,7 +10292,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     nlua_disable_preload = true_0 != 0;
                                 } else {
                                     if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                                        .offset(argv_idx as isize) != 0
+                                        .offset(argv_idx as isize)
+                                        != 0
                                     {
                                         mainerr(
                                             err_opt_unknown,
@@ -11077,8 +10359,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                         string: String_0 {
                                             data: b"hebrew\0".as_ptr() as *const ::core::ffi::c_char
                                                 as *mut ::core::ffi::c_char,
-                                            size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                                .wrapping_sub(1 as size_t),
+                                            size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>(
+                                            )
+                                            .wrapping_sub(1 as size_t),
                                         },
                                     },
                                 },
@@ -11142,10 +10425,10 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             }
                             (*parmp).edit_type = EDIT_QF as ::core::ffi::c_int;
                             if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                                .offset(argv_idx as isize) != 0
+                                .offset(argv_idx as isize)
+                                != 0
                             {
-                                (*parmp).use_ef = (*argv
-                                    .offset(0 as ::core::ffi::c_int as isize))
+                                (*parmp).use_ef = (*argv.offset(0 as ::core::ffi::c_int as isize))
                                     .offset(argv_idx as isize);
                                 argv_idx = -1 as ::core::ffi::c_int;
                             } else if argc > 1 as ::core::ffi::c_int {
@@ -11176,10 +10459,14 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                             type_0: kOptValTypeString,
                                             data: OptValData {
                                                 string: String_0 {
-                                                    data: b"NONE\0".as_ptr() as *const ::core::ffi::c_char
+                                                    data: b"NONE\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                         as *mut ::core::ffi::c_char,
-                                                    size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                                                        .wrapping_sub(1 as size_t),
+                                                    size: ::core::mem::size_of::<
+                                                        [::core::ffi::c_char; 5],
+                                                    >(
+                                                    )
+                                                    .wrapping_sub(1 as size_t),
                                                 },
                                             },
                                         },
@@ -11201,10 +10488,10 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             }
                             (*parmp).edit_type = EDIT_TAG as ::core::ffi::c_int;
                             if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                                .offset(argv_idx as isize) != 0
+                                .offset(argv_idx as isize)
+                                != 0
                             {
-                                (*parmp).tagname = (*argv
-                                    .offset(0 as ::core::ffi::c_int as isize))
+                                (*parmp).tagname = (*argv.offset(0 as ::core::ffi::c_int as isize))
                                     .offset(argv_idx as isize);
                                 argv_idx = -1 as ::core::ffi::c_int;
                             } else {
@@ -11223,7 +10510,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                 10 as ::core::ffi::c_int,
                             ) as OptInt;
                             if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                                .offset(argv_idx as isize) as ::core::ffi::c_int != NUL
+                                .offset(argv_idx as isize)
+                                as ::core::ffi::c_int
+                                != NUL
                             {
                                 set_option_value_give_err(
                                     kOptVerbosefile,
@@ -11238,16 +10527,16 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     },
                                     0 as ::core::ffi::c_int,
                                 );
-                                argv_idx = strlen(
-                                    *argv.offset(0 as ::core::ffi::c_int as isize),
-                                ) as ::core::ffi::c_int;
+                                argv_idx = strlen(*argv.offset(0 as ::core::ffi::c_int as isize))
+                                    as ::core::ffi::c_int;
                             }
                             break 's_747;
                         }
                         119 => {
                             if ascii_isdigit(
                                 *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                                    .offset(argv_idx as isize) as ::core::ffi::c_int,
+                                    .offset(argv_idx as isize)
+                                    as ::core::ffi::c_int,
                             ) {
                                 n = get_number_arg(
                                     *argv.offset(0 as ::core::ffi::c_int as isize),
@@ -11258,7 +10547,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     kOptWindow,
                                     OptVal {
                                         type_0: kOptValTypeNumber,
-                                        data: OptValData { number: n as OptInt },
+                                        data: OptValData {
+                                            number: n as OptInt,
+                                        },
                                     },
                                     0 as ::core::ffi::c_int,
                                 );
@@ -11270,7 +10561,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                         }
                         99 => {
                             if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                                .offset(argv_idx as isize) as ::core::ffi::c_int != NUL
+                                .offset(argv_idx as isize)
+                                as ::core::ffi::c_int
+                                != NUL
                             {
                                 if (*parmp).n_commands >= MAX_ARG_CMDS {
                                     mainerr(
@@ -11281,11 +10574,11 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                 }
                                 let c2rust_fresh9 = (*parmp).n_commands;
                                 (*parmp).n_commands = (*parmp).n_commands + 1;
-                                let c2rust_lvalue_ptr_1 = &raw mut (*parmp)
-                                    .commands[c2rust_fresh9 as usize];
+                                let c2rust_lvalue_ptr_1 =
+                                    &raw mut (*parmp).commands[c2rust_fresh9 as usize];
                                 *c2rust_lvalue_ptr_1 = (*argv
                                     .offset(0 as ::core::ffi::c_int as isize))
-                                    .offset(argv_idx as isize);
+                                .offset(argv_idx as isize);
                                 argv_idx = -1 as ::core::ffi::c_int;
                                 break 's_747;
                             } else {
@@ -11309,8 +10602,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                 want_argument = true_0 != 0;
             }
             if want_argument {
-                if *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                    .offset(argv_idx as isize) as ::core::ffi::c_int != NUL
+                if *(*argv.offset(0 as ::core::ffi::c_int as isize)).offset(argv_idx as isize)
+                    as ::core::ffi::c_int
+                    != NUL
                 {
                     mainerr(
                         err_opt_garbage,
@@ -11343,14 +10637,14 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                         );
                                     }
                                     if c as ::core::ffi::c_int == 'S' as ::core::ffi::c_int {
-                                        let mut a: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                                            ::core::ffi::c_char,
-                                        >();
+                                        let mut a: *mut ::core::ffi::c_char =
+                                            ::core::ptr::null_mut::<::core::ffi::c_char>();
                                         if argc < 1 as ::core::ffi::c_int {
                                             a = SESSION_FILE.as_ptr() as *mut ::core::ffi::c_char;
                                         } else if *(*argv.offset(0 as ::core::ffi::c_int as isize))
                                             .offset(0 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int == '-' as ::core::ffi::c_int
+                                            as ::core::ffi::c_int
+                                            == '-' as ::core::ffi::c_int
                                         {
                                             a = SESSION_FILE.as_ptr() as *mut ::core::ffi::c_char;
                                             argc += 1;
@@ -11358,30 +10652,30 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                         } else {
                                             a = *argv.offset(0 as ::core::ffi::c_int as isize);
                                         }
-                                        let mut s_size: size_t = strlen(a)
-                                            .wrapping_add(9 as size_t);
-                                        let mut s: *mut ::core::ffi::c_char = xmalloc(s_size)
-                                            as *mut ::core::ffi::c_char;
+                                        let mut s_size: size_t =
+                                            strlen(a).wrapping_add(9 as size_t);
+                                        let mut s: *mut ::core::ffi::c_char =
+                                            xmalloc(s_size) as *mut ::core::ffi::c_char;
                                         snprintf(
                                             s,
                                             s_size,
                                             b"so %s\0".as_ptr() as *const ::core::ffi::c_char,
                                             a,
                                         );
-                                        (*parmp).cmds_tofree[(*parmp).n_commands as usize] = true_0
-                                            as ::core::ffi::c_char;
+                                        (*parmp).cmds_tofree[(*parmp).n_commands as usize] =
+                                            true_0 as ::core::ffi::c_char;
                                         let c2rust_fresh10 = (*parmp).n_commands;
                                         (*parmp).n_commands = (*parmp).n_commands + 1;
-                                        let c2rust_lvalue_ptr_2 = &raw mut (*parmp)
-                                            .commands[c2rust_fresh10 as usize];
+                                        let c2rust_lvalue_ptr_2 =
+                                            &raw mut (*parmp).commands[c2rust_fresh10 as usize];
                                         *c2rust_lvalue_ptr_2 = s;
                                     } else {
                                         let c2rust_fresh11 = (*parmp).n_commands;
                                         (*parmp).n_commands = (*parmp).n_commands + 1;
-                                        let c2rust_lvalue_ptr_3 = &raw mut (*parmp)
-                                            .commands[c2rust_fresh11 as usize];
-                                        *c2rust_lvalue_ptr_3 = *argv
-                                            .offset(0 as ::core::ffi::c_int as isize);
+                                        let c2rust_lvalue_ptr_3 =
+                                            &raw mut (*parmp).commands[c2rust_fresh11 as usize];
+                                        *c2rust_lvalue_ptr_3 =
+                                            *argv.offset(0 as ::core::ffi::c_int as isize);
                                     }
                                     break 's_1075;
                                 }
@@ -11399,28 +10693,28 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                         }
                                         let c2rust_fresh12 = (*parmp).n_pre_commands;
                                         (*parmp).n_pre_commands = (*parmp).n_pre_commands + 1;
-                                        let c2rust_lvalue_ptr_4 = &raw mut (*parmp)
-                                            .pre_commands[c2rust_fresh12 as usize];
-                                        *c2rust_lvalue_ptr_4 = *argv
-                                            .offset(0 as ::core::ffi::c_int as isize);
+                                        let c2rust_lvalue_ptr_4 =
+                                            &raw mut (*parmp).pre_commands[c2rust_fresh12 as usize];
+                                        *c2rust_lvalue_ptr_4 =
+                                            *argv.offset(0 as ::core::ffi::c_int as isize);
                                     } else if strequal(
                                         *argv.offset(-1 as ::core::ffi::c_int as isize),
                                         b"--listen\0".as_ptr() as *const ::core::ffi::c_char,
                                     ) {
-                                        (*parmp).listen_addr = *argv
-                                            .offset(0 as ::core::ffi::c_int as isize);
+                                        (*parmp).listen_addr =
+                                            *argv.offset(0 as ::core::ffi::c_int as isize);
                                     } else if strequal(
                                         *argv.offset(-1 as ::core::ffi::c_int as isize),
                                         b"--server\0".as_ptr() as *const ::core::ffi::c_char,
                                     ) {
-                                        (*parmp).server_addr = *argv
-                                            .offset(0 as ::core::ffi::c_int as isize);
+                                        (*parmp).server_addr =
+                                            *argv.offset(0 as ::core::ffi::c_int as isize);
                                     }
                                     break 's_1075;
                                 }
                                 113 => {
-                                    (*parmp).use_ef = *argv
-                                        .offset(0 as ::core::ffi::c_int as isize);
+                                    (*parmp).use_ef =
+                                        *argv.offset(0 as ::core::ffi::c_int as isize);
                                     break 's_1075;
                                 }
                                 105 => {
@@ -11447,7 +10741,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                         (*parmp).use_vimrc as *const ::core::ffi::c_char
                                     } else {
                                         b"NONE\0".as_ptr() as *const ::core::ffi::c_char
-                                    }) as *mut ::core::ffi::c_char;
+                                    })
+                                        as *mut ::core::ffi::c_char;
                                     if p_shadafile.is_null()
                                         || *p_shadafile as ::core::ffi::c_int == NUL
                                     {
@@ -11457,18 +10752,21 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                                 type_0: kOptValTypeString,
                                                 data: OptValData {
                                                     string: String_0 {
-                                                        data: b"NONE\0".as_ptr() as *const ::core::ffi::c_char
+                                                        data: b"NONE\0".as_ptr()
+                                                            as *const ::core::ffi::c_char
                                                             as *mut ::core::ffi::c_char,
-                                                        size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                                                            .wrapping_sub(1 as size_t),
+                                                        size: ::core::mem::size_of::<
+                                                            [::core::ffi::c_char; 5],
+                                                        >(
+                                                        )
+                                                        .wrapping_sub(1 as size_t),
                                                     },
                                                 },
                                             },
                                             0 as ::core::ffi::c_int,
                                         );
                                     }
-                                    (*parmp).luaf = *argv
-                                        .offset(0 as ::core::ffi::c_int as isize);
+                                    (*parmp).luaf = *argv.offset(0 as ::core::ffi::c_int as isize);
                                     argc -= 1;
                                     if argc >= 0 as ::core::ffi::c_int {
                                         (*parmp).lua_arg0 = (*parmp).argc - argc;
@@ -11480,19 +10778,19 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                     if !(*parmp).scriptin.is_null() {
                                         break '_scripterror;
                                     } else {
-                                        (*parmp).scriptin = *argv
-                                            .offset(0 as ::core::ffi::c_int as isize);
+                                        (*parmp).scriptin =
+                                            *argv.offset(0 as ::core::ffi::c_int as isize);
                                         break 's_1075;
                                     }
                                 }
                                 116 => {
-                                    (*parmp).tagname = *argv
-                                        .offset(0 as ::core::ffi::c_int as isize);
+                                    (*parmp).tagname =
+                                        *argv.offset(0 as ::core::ffi::c_int as isize);
                                     break 's_1075;
                                 }
                                 117 => {
-                                    (*parmp).use_vimrc = *argv
-                                        .offset(0 as ::core::ffi::c_int as isize);
+                                    (*parmp).use_vimrc =
+                                        *argv.offset(0 as ::core::ffi::c_int as isize);
                                     break 's_1075;
                                 }
                                 119 => {
@@ -11510,7 +10808,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                             kOptWindow,
                                             OptVal {
                                                 type_0: kOptValTypeNumber,
-                                                data: OptValData { number: n as OptInt },
+                                                data: OptValData {
+                                                    number: n as OptInt,
+                                                },
                                             },
                                             0 as ::core::ffi::c_int,
                                         );
@@ -11526,10 +10826,9 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                             if !(*parmp).scriptout.is_null() {
                                 break '_scripterror;
                             } else {
-                                (*parmp).scriptout = *argv
-                                    .offset(0 as ::core::ffi::c_int as isize);
-                                (*parmp).scriptout_append = c as ::core::ffi::c_int
-                                    == 'w' as ::core::ffi::c_int;
+                                (*parmp).scriptout = *argv.offset(0 as ::core::ffi::c_int as isize);
+                                (*parmp).scriptout_append =
+                                    c as ::core::ffi::c_int == 'w' as ::core::ffi::c_int;
                             }
                         }
                         break 's_1076;
@@ -11537,10 +10836,8 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                     vim_snprintf(
                         &raw mut IObuff as *mut ::core::ffi::c_char,
                         IOSIZE as size_t,
-                        gettext(
-                            b"Attempt to open script file again: \"%s %s\"\n\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Attempt to open script file again: \"%s %s\"\n\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         *argv.offset(-1 as ::core::ffi::c_int as isize),
                         *argv.offset(0 as ::core::ffi::c_int as isize),
                     );
@@ -11563,43 +10860,39 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
             }
             (*parmp).edit_type = EDIT_FILE as ::core::ffi::c_int;
             ga_grow(&raw mut global_alist.al_ga, 1 as ::core::ffi::c_int);
-            let mut p: *mut ::core::ffi::c_char = xstrdup(
-                *argv.offset(0 as ::core::ffi::c_int as isize),
-            );
-            if (*parmp).diff_mode != 0 && os_isdir(p) as ::core::ffi::c_int != 0
+            let mut p: *mut ::core::ffi::c_char =
+                xstrdup(*argv.offset(0 as ::core::ffi::c_int as isize));
+            if (*parmp).diff_mode != 0
+                && os_isdir(p) as ::core::ffi::c_int != 0
                 && global_alist.al_ga.ga_len > 0 as ::core::ffi::c_int
-                && !os_isdir(
-                    alist_name(
-                        (global_alist.al_ga.ga_data as *mut aentry_T)
-                            .offset(0 as ::core::ffi::c_int as isize),
-                    ),
-                )
+                && !os_isdir(alist_name(
+                    (global_alist.al_ga.ga_data as *mut aentry_T)
+                        .offset(0 as ::core::ffi::c_int as isize),
+                ))
             {
                 let mut r: *mut ::core::ffi::c_char = concat_fnames(
                     p,
-                    path_tail(
-                        alist_name(
-                            (global_alist.al_ga.ga_data as *mut aentry_T)
-                                .offset(0 as ::core::ffi::c_int as isize),
-                        ),
-                    ),
+                    path_tail(alist_name(
+                        (global_alist.al_ga.ga_data as *mut aentry_T)
+                            .offset(0 as ::core::ffi::c_int as isize),
+                    )),
                     true_0 != 0,
                 );
                 xfree(p as *mut ::core::ffi::c_void);
                 p = r;
             }
-            let mut alist_fnum_flag: ::core::ffi::c_int = if edit_stdin(parmp)
-                as ::core::ffi::c_int != 0
-            {
-                1 as ::core::ffi::c_int
-            } else {
-                2 as ::core::ffi::c_int
-            };
+            let mut alist_fnum_flag: ::core::ffi::c_int =
+                if edit_stdin(parmp) as ::core::ffi::c_int != 0 {
+                    1 as ::core::ffi::c_int
+                } else {
+                    2 as ::core::ffi::c_int
+                };
             alist_add(&raw mut global_alist, p, alist_fnum_flag);
         }
         if argv_idx <= 0 as ::core::ffi::c_int
-            || *(*argv.offset(0 as ::core::ffi::c_int as isize))
-                .offset(argv_idx as isize) as ::core::ffi::c_int == NUL
+            || *(*argv.offset(0 as ::core::ffi::c_int as isize)).offset(argv_idx as isize)
+                as ::core::ffi::c_int
+                == NUL
         {
             argc -= 1;
             argv = argv.offset(1);
@@ -11610,22 +10903,16 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
         && (silent_mode as ::core::ffi::c_int != 0 || !(*parmp).luaf.is_null())
     {
         mainerr(
-            gettext(
-                b"--embed conflicts with -es/-Es/-l\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"--embed conflicts with -es/-Es/-l\0".as_ptr() as *const ::core::ffi::c_char),
             ::core::ptr::null::<::core::ffi::c_char>(),
             ::core::ptr::null::<::core::ffi::c_char>(),
         );
     }
     if (*parmp).n_commands > 0 as ::core::ffi::c_int {
-        let swcmd_len: size_t = strlen(
-                (*parmp).commands[0 as ::core::ffi::c_int as usize],
-            )
-            .wrapping_add(2 as size_t);
-        let swcmd: *mut ::core::ffi::c_char = xmalloc(
-            swcmd_len.wrapping_add(1 as size_t),
-        ) as *mut ::core::ffi::c_char;
+        let swcmd_len: size_t =
+            strlen((*parmp).commands[0 as ::core::ffi::c_int as usize]).wrapping_add(2 as size_t);
+        let swcmd: *mut ::core::ffi::c_char =
+            xmalloc(swcmd_len.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
         snprintf(
             swcmd,
             swcmd_len.wrapping_add(1 as size_t),
@@ -11643,14 +10930,11 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
     }
 }
 unsafe extern "C" fn set_argf_var() {
-    let mut list: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
+    let mut list: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < global_alist.al_ga.ga_len {
-        let mut fname: *mut ::core::ffi::c_char = alist_name(
-            (global_alist.al_ga.ga_data as *mut aentry_T).offset(i as isize),
-        );
+        let mut fname: *mut ::core::ffi::c_char =
+            alist_name((global_alist.al_ga.ga_data as *mut aentry_T).offset(i as isize));
         if !fname.is_null() {
             vim_FullName(
                 fname,
@@ -11695,8 +10979,7 @@ unsafe extern "C" fn init_startuptime(mut paramp: *mut mparm_T) {
     while i < (*paramp).argc - 1 as ::core::ffi::c_int {
         if strcasecmp(
             *(*paramp).argv.offset(i as isize),
-            b"--embed\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"--embed\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
         {
             is_embed = true_0 != 0;
@@ -11709,21 +10992,20 @@ unsafe extern "C" fn init_startuptime(mut paramp: *mut mparm_T) {
     while i_0 < (*paramp).argc - 1 as ::core::ffi::c_int {
         if strcasecmp(
             *(*paramp).argv.offset(i_0 as isize),
-            b"--startuptime\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"--startuptime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ) == 0 as ::core::ffi::c_int
         {
             time_init(
-                *(*paramp).argv.offset((i_0 + 1 as ::core::ffi::c_int) as isize),
+                *(*paramp)
+                    .argv
+                    .offset((i_0 + 1 as ::core::ffi::c_int) as isize),
                 if is_embed as ::core::ffi::c_int != 0 {
                     b"Embedded\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"Primary (or UI client)\0".as_ptr() as *const ::core::ffi::c_char
                 },
             );
-            time_start(
-                b"--- NVIM STARTING ---\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            time_start(b"--- NVIM STARTING ---\0".as_ptr() as *const ::core::ffi::c_char);
             break;
         } else {
             i_0 += 1;
@@ -15841,8 +15123,10 @@ unsafe extern "C" fn init_path(mut exename: *const ::core::ffi::c_char) {
         0,
     ];
     let mut exepathlen: size_t = MAXPATHL as size_t;
-    if os_exepath(&raw mut exepath as *mut ::core::ffi::c_char, &raw mut exepathlen)
-        != 0 as ::core::ffi::c_int
+    if os_exepath(
+        &raw mut exepath as *mut ::core::ffi::c_char,
+        &raw mut exepathlen,
+    ) != 0 as ::core::ffi::c_int
     {
         path_guess_exepath(
             exename,
@@ -15859,8 +15143,7 @@ unsafe extern "C" fn init_path(mut exename: *const ::core::ffi::c_char) {
 }
 unsafe extern "C" fn get_fname(mut parmp: *mut mparm_T) -> *mut ::core::ffi::c_char {
     return alist_name(
-        (global_alist.al_ga.ga_data as *mut aentry_T)
-            .offset(0 as ::core::ffi::c_int as isize),
+        (global_alist.al_ga.ga_data as *mut aentry_T).offset(0 as ::core::ffi::c_int as isize),
     );
 }
 unsafe extern "C" fn set_window_layout(mut paramp: *mut mparm_T) {
@@ -15947,10 +15230,7 @@ unsafe extern "C" fn read_stdin() {
             BLN_LISTED as ::core::ffi::c_int,
         );
         if stdin_buf.is_null() {
-            semsg(
-                b"Failed to create buffer for stdin\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            semsg(b"Failed to create buffer for stdin\0".as_ptr() as *const ::core::ffi::c_char);
             return;
         }
         let mut initial_buf_handle: handle_T = (*curbuf).handle;
@@ -15991,12 +15271,9 @@ unsafe extern "C" fn read_stdin() {
             ::core::ptr::null_mut::<exarg_T>(),
             0 as ::core::ffi::c_int,
         );
-        if buf_is_empty(curbuf) as ::core::ffi::c_int != 0 && !(*curbuf).b_next.is_null()
-        {
+        if buf_is_empty(curbuf) as ::core::ffi::c_int != 0 && !(*curbuf).b_next.is_null() {
             do_cmdline_cmd(b"silent! bnext\0".as_ptr() as *const ::core::ffi::c_char);
-            do_cmdline_cmd(
-                b"silent! bwipeout 1\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            do_cmdline_cmd(b"silent! bwipeout 1\0".as_ptr() as *const ::core::ffi::c_char);
         }
     }
     no_wait_return = false_0;
@@ -16137,9 +15414,7 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
     let mut arg_idx: ::core::ffi::c_int = 0;
     let mut advance: bool = true_0 != 0;
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut p_shm_save: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut p_shm_save: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     autocmd_no_enter += 1;
     autocmd_no_leave += 1;
     if (*curwin).w_arg_idx == -1 as ::core::ffi::c_int {
@@ -16197,8 +15472,7 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
                     0 as ::core::ffi::c_int,
                     if arg_idx < global_alist.al_ga.ga_len {
                         alist_name(
-                            (global_alist.al_ga.ga_data as *mut aentry_T)
-                                .offset(arg_idx as isize),
+                            (global_alist.al_ga.ga_data as *mut aentry_T).offset(arg_idx as isize),
                         )
                     } else {
                         ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -16274,8 +15548,8 @@ unsafe extern "C" fn edit_buffers(mut parmp: *mut mparm_T) {
     }
 }
 unsafe extern "C" fn exe_pre_commands(mut parmp: *mut mparm_T) {
-    let mut cmds: *mut *mut ::core::ffi::c_char = &raw mut (*parmp).pre_commands
-        as *mut *mut ::core::ffi::c_char;
+    let mut cmds: *mut *mut ::core::ffi::c_char =
+        &raw mut (*parmp).pre_commands as *mut *mut ::core::ffi::c_char;
     let mut cnt: ::core::ffi::c_int = (*parmp).n_pre_commands;
     if cnt <= 0 as ::core::ffi::c_int {
         return;
@@ -16308,8 +15582,7 @@ unsafe extern "C" fn exe_commands(mut parmp: *mut mparm_T) {
     }
     estack_push(
         ETYPE_ARGS,
-        b"command line\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"command line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         0 as linenr_T,
     );
     current_sctx.sc_sid = SID_CARG as scid_T;
@@ -16348,9 +15621,7 @@ unsafe extern "C" fn exe_commands(mut parmp: *mut mparm_T) {
 unsafe extern "C" fn do_system_initialization() {
     let config_dirs: *mut ::core::ffi::c_char = stdpaths_get_xdg_var(kXDGConfigDirs);
     if !config_dirs.is_null() {
-        let mut iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-            ::core::ffi::c_void,
-        >();
+        let mut iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
         let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
         let mut appname_len: size_t = strlen(appname);
         let sysinit_suffix: [::core::ffi::c_char; 13] = [
@@ -16369,9 +15640,7 @@ unsafe extern "C" fn do_system_initialization() {
             NUL as ::core::ffi::c_char,
         ];
         loop {
-            let mut dir: *const ::core::ffi::c_char = ::core::ptr::null::<
-                ::core::ffi::c_char,
-            >();
+            let mut dir: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
             let mut dir_len: size_t = 0;
             iter = vim_env_iter(
                 ':' as ::core::ffi::c_char,
@@ -16387,15 +15656,14 @@ unsafe extern "C" fn do_system_initialization() {
                 .wrapping_add(1 as size_t)
                 .wrapping_add(appname_len)
                 .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 13]>());
-            let mut vimrc: *mut ::core::ffi::c_char = xmalloc(path_len)
-                as *mut ::core::ffi::c_char;
+            let mut vimrc: *mut ::core::ffi::c_char = xmalloc(path_len) as *mut ::core::ffi::c_char;
             memcpy(
                 vimrc as *mut ::core::ffi::c_void,
                 dir as *const ::core::ffi::c_void,
                 dir_len,
             );
-            if *vimrc.offset(dir_len.wrapping_sub(1 as size_t) as isize)
-                as ::core::ffi::c_int != PATHSEP
+            if *vimrc.offset(dir_len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                != PATHSEP
             {
                 *vimrc.offset(dir_len as isize) = PATHSEP as ::core::ffi::c_char;
                 dir_len = dir_len.wrapping_add(1 as size_t);
@@ -16439,19 +15707,16 @@ unsafe extern "C" fn do_system_initialization() {
 }
 unsafe extern "C" fn do_user_initialization() -> bool {
     let mut do_exrc: bool = p_exrc != 0;
-    if execute_env(
-        b"VIMINIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ) == OK
+    if execute_env(b"VIMINIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char)
+        == OK
     {
         do_exrc = p_exrc != 0;
         return do_exrc;
     }
-    let mut init_lua_path: *mut ::core::ffi::c_char = stdpaths_user_conf_subpath(
-        b"init.lua\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    let mut user_vimrc: *mut ::core::ffi::c_char = stdpaths_user_conf_subpath(
-        b"init.vim\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut init_lua_path: *mut ::core::ffi::c_char =
+        stdpaths_user_conf_subpath(b"init.lua\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut user_vimrc: *mut ::core::ffi::c_char =
+        stdpaths_user_conf_subpath(b"init.vim\0".as_ptr() as *const ::core::ffi::c_char);
     if os_path_exists(init_lua_path) as ::core::ffi::c_int != 0
         && do_source(
             init_lua_path,
@@ -16498,13 +15763,9 @@ unsafe extern "C" fn do_user_initialization() -> bool {
     if !config_dirs.is_null() {
         let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
         let mut appname_len: size_t = strlen(appname);
-        let mut iter: *const ::core::ffi::c_void = ::core::ptr::null::<
-            ::core::ffi::c_void,
-        >();
+        let mut iter: *const ::core::ffi::c_void = ::core::ptr::null::<::core::ffi::c_void>();
         loop {
-            let mut dir: *const ::core::ffi::c_char = ::core::ptr::null::<
-                ::core::ffi::c_char,
-            >();
+            let mut dir: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
             let mut dir_len: size_t = 0;
             iter = vim_env_iter(
                 ':' as ::core::ffi::c_char,
@@ -16532,8 +15793,8 @@ unsafe extern "C" fn do_user_initialization() -> bool {
                 .wrapping_add(1 as size_t)
                 .wrapping_add(appname_len)
                 .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 10]>());
-            let mut init_lua: *mut ::core::ffi::c_char = xmalloc(init_lua_len)
-                as *mut ::core::ffi::c_char;
+            let mut init_lua: *mut ::core::ffi::c_char =
+                xmalloc(init_lua_len) as *mut ::core::ffi::c_char;
             memcpy(
                 init_lua as *mut ::core::ffi::c_void,
                 dir as *const ::core::ffi::c_void,
@@ -16573,8 +15834,8 @@ unsafe extern "C" fn do_user_initialization() -> bool {
                 .wrapping_add(1 as size_t)
                 .wrapping_add(appname_len)
                 .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 10]>());
-            let mut init_vim: *mut ::core::ffi::c_char = xmalloc(init_vim_len)
-                as *mut ::core::ffi::c_char;
+            let mut init_vim: *mut ::core::ffi::c_char =
+                xmalloc(init_vim_len) as *mut ::core::ffi::c_char;
             memcpy(
                 init_vim as *mut ::core::ffi::c_void,
                 dir as *const ::core::ffi::c_void,
@@ -16648,9 +15909,8 @@ unsafe extern "C" fn do_user_initialization() -> bool {
         }
         xfree(config_dirs as *mut ::core::ffi::c_void);
     }
-    if execute_env(
-        b"EXINIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ) == OK
+    if execute_env(b"EXINIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char)
+        == OK
     {
         do_exrc = p_exrc != 0;
         return do_exrc;
@@ -16660,14 +15920,14 @@ unsafe extern "C" fn do_user_initialization() -> bool {
 unsafe extern "C" fn do_exrc_initialization() {
     let L: *mut lua_State = get_global_lstate();
     '_c2rust_label: {
-        if !L.is_null() {} else {
+        if !L.is_null() {
+        } else {
             __assert_fail(
                 b"L\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/main.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2207 as ::core::ffi::c_uint,
-                b"void do_exrc_initialization(void)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void do_exrc_initialization(void)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -16676,12 +15936,19 @@ unsafe extern "C" fn do_exrc_initialization() {
         LUA_GLOBALSINDEX,
         b"require\0".as_ptr() as *const ::core::ffi::c_char,
     );
-    lua_pushstring(L, b"vim._core.exrc\0".as_ptr() as *const ::core::ffi::c_char);
+    lua_pushstring(
+        L,
+        b"vim._core.exrc\0".as_ptr() as *const ::core::ffi::c_char,
+    );
     if nlua_pcall(L, 1 as ::core::ffi::c_int, 0 as ::core::ffi::c_int) != 0 {
         fprintf(
             stderr,
             b"%s\n\0".as_ptr() as *const ::core::ffi::c_char,
-            lua_tolstring(L, -1 as ::core::ffi::c_int, ::core::ptr::null_mut::<size_t>()),
+            lua_tolstring(
+                L,
+                -1 as ::core::ffi::c_int,
+                ::core::ptr::null_mut::<size_t>(),
+            ),
         );
     }
 }
@@ -16690,11 +15957,13 @@ unsafe extern "C" fn source_startup_scripts(parmp: *const mparm_T) {
         if !(strequal(
             (*parmp).use_vimrc,
             b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
             || strequal(
                 (*parmp).use_vimrc,
                 b"NORC\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as ::core::ffi::c_int != 0)
+            ) as ::core::ffi::c_int
+                != 0)
         {
             if do_source(
                 (*parmp).use_vimrc,
@@ -16704,9 +15973,7 @@ unsafe extern "C" fn source_startup_scripts(parmp: *const mparm_T) {
             ) != OK
             {
                 semsg(
-                    gettext(
-                        &raw const e_cannot_read_from_str_2 as *const ::core::ffi::c_char,
-                    ),
+                    gettext(&raw const e_cannot_read_from_str_2 as *const ::core::ffi::c_char),
                     (*parmp).use_vimrc,
                 );
             }
@@ -16724,9 +15991,7 @@ unsafe extern "C" fn source_startup_scripts(parmp: *const mparm_T) {
         );
     }
 }
-unsafe extern "C" fn execute_env(
-    mut env: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn execute_env(mut env: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut initstr: *mut ::core::ffi::c_char = os_getenv(env);
     if initstr.is_null() {
         return FAIL;
@@ -16764,16 +16029,28 @@ unsafe extern "C" fn print_mainerr(
         gettext(msg1),
     );
     if !msg2.is_null() {
-        fprintf(stderr, b": \"%s\"\0".as_ptr() as *const ::core::ffi::c_char, msg2);
+        fprintf(
+            stderr,
+            b": \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
+            msg2,
+        );
     }
     if !msg3.is_null() {
-        fprintf(stderr, b": \"%s\"\0".as_ptr() as *const ::core::ffi::c_char, msg3);
+        fprintf(
+            stderr,
+            b": \"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
+            msg3,
+        );
     }
     fprintf(
         stderr,
         gettext(b"\nMore info with \"\0".as_ptr() as *const ::core::ffi::c_char),
     );
-    fprintf(stderr, b"%s -h\"\n\0".as_ptr() as *const ::core::ffi::c_char, prgname);
+    fprintf(
+        stderr,
+        b"%s -h\"\n\0".as_ptr() as *const ::core::ffi::c_char,
+        prgname,
+    );
 }
 unsafe extern "C" fn version() {
     nlua_init(
@@ -16789,176 +16066,116 @@ unsafe extern "C" fn version() {
 unsafe extern "C" fn usage() {
     signal_stop();
     printf(gettext(b"Usage:\n\0".as_ptr() as *const ::core::ffi::c_char));
-    printf(
-        gettext(
-            b"  nvim [options] [file ...]\n\0".as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(gettext(b"\nOptions:\n\0".as_ptr() as *const ::core::ffi::c_char));
-    printf(
-        gettext(
-            b"  --cmd <cmd>           Execute <cmd> before any config\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  +<cmd>, -c <cmd>      Execute <cmd> after config and first file\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -l <script> [args...] Execute Lua <script> (with optional args)\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -S <session>          Source <session> after loading the first file\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -s <scriptin>         Read Normal mode commands from <scriptin>\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -u <config>           Use this config file\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
+    printf(gettext(
+        b"  nvim [options] [file ...]\n\0".as_ptr() as *const ::core::ffi::c_char
+    ));
+    printf(gettext(
+        b"\nOptions:\n\0".as_ptr() as *const ::core::ffi::c_char
+    ));
+    printf(gettext(
+        b"  --cmd <cmd>           Execute <cmd> before any config\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  +<cmd>, -c <cmd>      Execute <cmd> after config and first file\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -l <script> [args...] Execute Lua <script> (with optional args)\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -S <session>          Source <session> after loading the first file\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -s <scriptin>         Read Normal mode commands from <scriptin>\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -u <config>           Use this config file\n\0".as_ptr() as *const ::core::ffi::c_char,
+    ));
     printf(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-    printf(
-        gettext(
-            b"  -d                    Diff mode\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -es, -Es              Silent (batch) mode\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -h, --help            Print this help message\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -i <shada>            Use this shada file\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -n                    No swap file, use memory only\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -o[N]                 Open N windows (default: one per file)\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -O[N]                 Open N vertical windows (default: one per file)\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -p[N]                 Open N tab pages (default: one per file)\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -R                    Read-only (view) mode\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -v, --version         Print version information\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  -V[N][file]           Verbose [level][file]\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
+    printf(gettext(
+        b"  -d                    Diff mode\n\0".as_ptr() as *const ::core::ffi::c_char
+    ));
+    printf(gettext(
+        b"  -es, -Es              Silent (batch) mode\n\0".as_ptr() as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -h, --help            Print this help message\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -i <shada>            Use this shada file\n\0".as_ptr() as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -n                    No swap file, use memory only\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -o[N]                 Open N windows (default: one per file)\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -O[N]                 Open N vertical windows (default: one per file)\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -p[N]                 Open N tab pages (default: one per file)\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -R                    Read-only (view) mode\n\0".as_ptr() as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -v, --version         Print version information\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  -V[N][file]           Verbose [level][file]\n\0".as_ptr() as *const ::core::ffi::c_char,
+    ));
     printf(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-    printf(
-        gettext(
-            b"  --                    Only file names after this\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --api-info            Write msgpack-encoded API metadata to stdout\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --clean               \"Factory defaults\" (skip user config and plugins, shada)\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --embed               Use stdin/stdout as a msgpack-rpc channel\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --headless            Don't start a user interface\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --listen <address>    Serve RPC API from this address\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --remote[-subcommand] Execute commands remotely on a server\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --server <address>    Connect to this Nvim server\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"  --startuptime <file>  Write startup timing messages to <file>\n\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        ),
-    );
-    printf(
-        gettext(
-            b"\nSee \":help startup-options\" for all options.\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ),
-    );
+    printf(gettext(
+        b"  --                    Only file names after this\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --api-info            Write msgpack-encoded API metadata to stdout\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --clean               \"Factory defaults\" (skip user config and plugins, shada)\n\0"
+            .as_ptr() as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --embed               Use stdin/stdout as a msgpack-rpc channel\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --headless            Don't start a user interface\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --listen <address>    Serve RPC API from this address\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --remote[-subcommand] Execute commands remotely on a server\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --server <address>    Connect to this Nvim server\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"  --startuptime <file>  Write startup timing messages to <file>\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
+    printf(gettext(
+        b"\nSee \":help startup-options\" for all options.\n\0".as_ptr()
+            as *const ::core::ffi::c_char,
+    ));
 }
 unsafe extern "C" fn check_swap_exists_action() {
     if swap_exists_action == SEA_QUIT {
@@ -17586,9 +16803,7 @@ pub static mut namedfm: [xfmark_T; 36] = [
     },
 ];
 #[no_mangle]
-pub static mut ch_before_blocking_events: *mut MultiQueue = ::core::ptr::null_mut::<
-    MultiQueue,
->();
+pub static mut ch_before_blocking_events: *mut MultiQueue = ::core::ptr::null_mut::<MultiQueue>();
 #[no_mangle]
 pub static mut showcmd_buf: [::core::ffi::c_char; 41] = [0; 41];
 #[no_mangle]
@@ -17628,9 +16843,8 @@ pub static mut pum_want: C2Rust_Unnamed_46 = C2Rust_Unnamed_46 {
     finish: false,
 };
 #[no_mangle]
-pub static mut tab_page_click_defs: *mut StlClickDefinition = ::core::ptr::null_mut::<
-    StlClickDefinition,
->();
+pub static mut tab_page_click_defs: *mut StlClickDefinition =
+    ::core::ptr::null_mut::<StlClickDefinition>();
 #[no_mangle]
 pub static mut tab_page_click_defs_size: size_t = 0 as size_t;
 #[no_mangle]
@@ -17672,12 +16886,10 @@ pub static mut float_anchor_str: [*const ::core::ffi::c_char; 4] = [
 ];
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const WRITEBIN: [::core::ffi::c_char; 3] = unsafe {
-    ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"wb\0")
-};
-pub const APPENDBIN: [::core::ffi::c_char; 3] = unsafe {
-    ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"ab\0")
-};
+pub const WRITEBIN: [::core::ffi::c_char; 3] =
+    unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"wb\0") };
+pub const APPENDBIN: [::core::ffi::c_char; 3] =
+    unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"ab\0") };
 pub fn main() {
     let mut args_strings: Vec<Vec<u8>> = ::std::env::args()
         .map(|arg| {
@@ -17692,12 +16904,10 @@ pub fn main() {
         .chain(::core::iter::once(::core::ptr::null_mut()))
         .collect();
     unsafe {
-        ::std::process::exit(
-            main_0(
-                (args_ptrs.len() - 1) as ::core::ffi::c_int,
-                args_ptrs.as_mut_ptr() as *mut *mut ::core::ffi::c_char,
-            ) as i32,
-        )
+        ::std::process::exit(main_0(
+            (args_ptrs.len() - 1) as ::core::ffi::c_int,
+            args_ptrs.as_mut_ptr() as *mut *mut ::core::ffi::c_char,
+        ) as i32)
     }
 }
 unsafe extern "C" fn c2rust_run_static_initializers() {

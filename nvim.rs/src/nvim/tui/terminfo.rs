@@ -24,39 +24,24 @@ extern "C" {
     fn unibi_destroy(_: *mut unibi_term);
     fn unibi_get_bool(_: *const unibi_term, _: unibi_boolean) -> ::core::ffi::c_int;
     fn unibi_get_num(_: *const unibi_term, _: unibi_numeric) -> ::core::ffi::c_int;
-    fn unibi_get_str(
-        _: *const unibi_term,
-        _: unibi_string,
-    ) -> *const ::core::ffi::c_char;
+    fn unibi_get_str(_: *const unibi_term, _: unibi_string) -> *const ::core::ffi::c_char;
     fn unibi_from_term(_: *const ::core::ffi::c_char) -> *mut unibi_term;
     fn unibi_count_ext_bool(_: *const unibi_term) -> size_t;
     fn unibi_count_ext_str(_: *const unibi_term) -> size_t;
     fn unibi_get_ext_str(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
-    fn unibi_get_ext_bool_name(
-        _: *const unibi_term,
-        _: size_t,
-    ) -> *const ::core::ffi::c_char;
-    fn unibi_get_ext_str_name(
-        _: *const unibi_term,
-        _: size_t,
-    ) -> *const ::core::ffi::c_char;
+    fn unibi_get_ext_bool_name(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
+    fn unibi_get_ext_str_name(_: *const unibi_term, _: size_t) -> *const ::core::ffi::c_char;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn arena_strdup(
-        arena: *mut Arena,
-        str: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn arena_strdup(arena: *mut Arena, str: *const ::core::ffi::c_char)
+        -> *mut ::core::ffi::c_char;
     fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;
     fn kv_do_printf(
         str: *mut StringBuilder,
         fmt_0: *const ::core::ffi::c_char,
         ...
     ) -> ::core::ffi::c_int;
-    fn kv_transstr(
-        str: *mut StringBuilder,
-        s: *const ::core::ffi::c_char,
-        untab: bool,
-    ) -> size_t;
+    fn kv_transstr(str: *mut StringBuilder, s: *const ::core::ffi::c_char, untab: bool) -> size_t;
 }
 pub type size_t = usize;
 pub type ssize_t = isize;
@@ -676,9 +661,7 @@ pub struct TPSTACK {
     pub strings: [*mut ::core::ffi::c_char; 20],
     pub offset: size_t,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -703,15 +686,11 @@ pub unsafe extern "C" fn terminfo_is_term_family(
                 flen,
             )
         && (NUL == *term.offset(flen as isize) as ::core::ffi::c_int
-            || '-' as ::core::ffi::c_int
-                == *term.offset(flen as isize) as ::core::ffi::c_int
-            || '.' as ::core::ffi::c_int
-                == *term.offset(flen as isize) as ::core::ffi::c_int);
+            || '-' as ::core::ffi::c_int == *term.offset(flen as isize) as ::core::ffi::c_int
+            || '.' as ::core::ffi::c_int == *term.offset(flen as isize) as ::core::ffi::c_int);
 }
 #[no_mangle]
-pub unsafe extern "C" fn terminfo_is_bsd_console(
-    mut term: *const ::core::ffi::c_char,
-) -> bool {
+pub unsafe extern "C" fn terminfo_is_bsd_console(mut term: *const ::core::ffi::c_char) -> bool {
     return false_0 != 0;
 }
 #[no_mangle]
@@ -719,131 +698,79 @@ pub unsafe extern "C" fn terminfo_from_builtin(
     mut term: *const ::core::ffi::c_char,
     mut termname: *mut *mut ::core::ffi::c_char,
 ) -> *const TerminfoEntry {
-    if strequal(term, b"ghostty\0".as_ptr() as *const ::core::ffi::c_char)
-        as ::core::ffi::c_int != 0
-        || strequal(term, b"xterm-ghostty\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
+    if strequal(term, b"ghostty\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+        != 0
+        || strequal(
+            term,
+            b"xterm-ghostty\0".as_ptr() as *const ::core::ffi::c_char,
+        ) as ::core::ffi::c_int
+            != 0
     {
-        *termname = b"ghostty\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        *termname = b"ghostty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const ghostty_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"xterm\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"xterm\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"xterm\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"xterm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const xterm_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"screen\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"screen\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"screen\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"screen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const screen_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"tmux\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"tmux\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"tmux\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"tmux\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const tmux_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"rxvt\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"rxvt\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"rxvt\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"rxvt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const rxvt_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"putty\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"putty\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"putty\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"putty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const putty_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"linux\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"linux\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"linux\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"linux\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const linux_16colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"interix\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"interix\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"interix\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"interix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const interix_8colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"iterm\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(
-            term,
-            b"iterm2\0".as_ptr() as *const ::core::ffi::c_char,
-        ) as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(
-            term,
-            b"iTerm.app\0".as_ptr() as *const ::core::ffi::c_char,
-        ) as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(
-            term,
-            b"iTerm2.app\0".as_ptr() as *const ::core::ffi::c_char,
-        ) as ::core::ffi::c_int != 0
+    } else if terminfo_is_term_family(term, b"iterm\0".as_ptr() as *const ::core::ffi::c_char)
+        as ::core::ffi::c_int
+        != 0
+        || terminfo_is_term_family(term, b"iterm2\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int
+            != 0
+        || terminfo_is_term_family(term, b"iTerm.app\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int
+            != 0
+        || terminfo_is_term_family(term, b"iTerm2.app\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int
+            != 0
     {
-        *termname = b"iterm\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        *termname = b"iterm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const iterm_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"st\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"st\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"st\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"st\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const st_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"gnome\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int != 0
+    } else if terminfo_is_term_family(term, b"gnome\0".as_ptr() as *const ::core::ffi::c_char)
+        as ::core::ffi::c_int
+        != 0
         || terminfo_is_term_family(term, b"vte\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
-        *termname = b"vte\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        *termname = b"vte\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const vte_256colour_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"cygwin\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"cygwin\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"cygwin\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"cygwin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const cygwin_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"win32con\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"win32con\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"win32con\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname =
+            b"win32con\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const win32con_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"conemu\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"conemu\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"conemu\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"conemu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const conemu_terminfo;
-    } else if terminfo_is_term_family(
-        term,
-        b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        *termname = b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+    } else if terminfo_is_term_family(term, b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char) {
+        *termname = b"vtpcon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const vtpcon_terminfo;
     } else {
-        *termname = b"ansi\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        *termname = b"ansi\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         return &raw const ansi_terminfo;
     };
 }
@@ -871,9 +798,7 @@ pub unsafe extern "C" fn terminfo_from_database(
                 || strcmp(n, b"RGB\0".as_ptr() as *const ::core::ffi::c_char) == 0)
         {
             (*ti).has_Tc_or_RGB = true_0 != 0;
-        } else if !n.is_null()
-            && strcmp(n, b"Su\0".as_ptr() as *const ::core::ffi::c_char) == 0
-        {
+        } else if !n.is_null() && strcmp(n, b"Su\0".as_ptr() as *const ::core::ffi::c_char) == 0 {
             (*ti).Su = true_0 != 0;
         }
         i = i.wrapping_add(1);
@@ -927,14 +852,11 @@ pub unsafe extern "C" fn terminfo_from_database(
             .wrapping_div(::core::mem::size_of::<unibi_string>())
             .wrapping_div(
                 (::core::mem::size_of::<[unibi_string; 41]>()
-                    .wrapping_rem(::core::mem::size_of::<unibi_string>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<unibi_string>())
+                    == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut val: *const ::core::ffi::c_char = unibi_get_str(
-            ut,
-            uni_ids[i_0 as usize],
-        );
+        let mut val: *const ::core::ffi::c_char = unibi_get_str(ut, uni_ids[i_0 as usize]);
         (*ti).defs[i_0 as usize] = if !val.is_null() {
             arena_strdup(arena, val)
         } else {
@@ -969,8 +891,7 @@ pub unsafe extern "C" fn terminfo_from_database(
             let mut n_0: *const ::core::ffi::c_char = unibi_get_ext_str_name(ut, val_0);
             if !n_0.is_null() && strequal(n_0, name) as ::core::ffi::c_int != 0 {
                 let mut data: *const ::core::ffi::c_char = unibi_get_ext_str(ut, val_0);
-                (*ti)
-                    .defs[(kTerm_reset_cursor_style as ::core::ffi::c_int as size_t)
+                (*ti).defs[(kTerm_reset_cursor_style as ::core::ffi::c_int as size_t)
                     .wrapping_add(i_1) as usize] = if !data.is_null() {
                     arena_strdup(arena, data)
                 } else {
@@ -1007,30 +928,20 @@ pub unsafe extern "C" fn terminfo_from_database(
             .wrapping_div(::core::mem::size_of::<[unibi_string; 2]>())
             .wrapping_div(
                 (::core::mem::size_of::<[[unibi_string; 2]; 16]>()
-                    .wrapping_rem(::core::mem::size_of::<[unibi_string; 2]>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<[unibi_string; 2]>())
+                    == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut val_1: *const ::core::ffi::c_char = unibi_get_str(
-            ut,
-            uni_keys[i_2 as usize][0 as ::core::ffi::c_int as usize],
-        );
+        let mut val_1: *const ::core::ffi::c_char =
+            unibi_get_str(ut, uni_keys[i_2 as usize][0 as ::core::ffi::c_int as usize]);
         if !val_1.is_null() {
-            (*ti).keys[i_2 as usize][0 as ::core::ffi::c_int as usize] = arena_strdup(
-                arena,
-                val_1,
-            );
-            if uni_keys[i_2 as usize][1 as ::core::ffi::c_int as usize]
-                as ::core::ffi::c_uint
+            (*ti).keys[i_2 as usize][0 as ::core::ffi::c_int as usize] = arena_strdup(arena, val_1);
+            if uni_keys[i_2 as usize][1 as ::core::ffi::c_int as usize] as ::core::ffi::c_uint
                 != unibi_string_begin_ as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut sval: *const ::core::ffi::c_char = unibi_get_str(
-                    ut,
-                    uni_keys[i_2 as usize][1 as ::core::ffi::c_int as usize],
-                );
-                (*ti).keys[i_2 as usize][1 as ::core::ffi::c_int as usize] = if !sval
-                    .is_null()
-                {
+                let mut sval: *const ::core::ffi::c_char =
+                    unibi_get_str(ut, uni_keys[i_2 as usize][1 as ::core::ffi::c_int as usize]);
+                (*ti).keys[i_2 as usize][1 as ::core::ffi::c_int as usize] = if !sval.is_null() {
                     arena_strdup(arena, sval)
                 } else {
                     ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -1110,14 +1021,11 @@ pub unsafe extern "C" fn terminfo_from_database(
             .wrapping_div(::core::mem::size_of::<unibi_string>())
             .wrapping_div(
                 (::core::mem::size_of::<[unibi_string; 63]>()
-                    .wrapping_rem(::core::mem::size_of::<unibi_string>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<unibi_string>())
+                    == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut val_2: *const ::core::ffi::c_char = unibi_get_str(
-            ut,
-            uni_fkeys[i_3 as usize],
-        );
+        let mut val_2: *const ::core::ffi::c_char = unibi_get_str(ut, uni_fkeys[i_3 as usize]);
         (*ti).f_keys[i_3 as usize] = if !val_2.is_null() {
             arena_strdup(arena, val_2)
         } else {
@@ -1158,7 +1066,10 @@ pub unsafe extern "C" fn terminfo_info_msg(
             b"using builtin terminfo\n\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
-    kv_do_printf(&raw mut data, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
+    kv_do_printf(
+        &raw mut data,
+        b"\n\0".as_ptr() as *const ::core::ffi::c_char,
+    );
     kv_do_printf(
         &raw mut data,
         b"Boolean capabilities:\n\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1178,11 +1089,13 @@ pub unsafe extern "C" fn terminfo_info_msg(
         b"  extended underline ('Su'): %s\n\0".as_ptr() as *const ::core::ffi::c_char,
         fmt((*ti).Su),
     );
-    kv_do_printf(&raw mut data, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
     kv_do_printf(
         &raw mut data,
-        b"Numeric capabilities: (-1 for unknown)\n\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"\n\0".as_ptr() as *const ::core::ffi::c_char,
+    );
+    kv_do_printf(
+        &raw mut data,
+        b"Numeric capabilities: (-1 for unknown)\n\0".as_ptr() as *const ::core::ffi::c_char,
     );
     kv_do_printf(
         &raw mut data,
@@ -1199,7 +1112,10 @@ pub unsafe extern "C" fn terminfo_info_msg(
         b"  max_colors: %d\n\0".as_ptr() as *const ::core::ffi::c_char,
         (*ti).columns,
     );
-    kv_do_printf(&raw mut data, b"\n\0".as_ptr() as *const ::core::ffi::c_char);
+    kv_do_printf(
+        &raw mut data,
+        b"\n\0".as_ptr() as *const ::core::ffi::c_char,
+    );
     kv_do_printf(
         &raw mut data,
         b"String capabilities:\n\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1256,14 +1172,13 @@ pub unsafe extern "C" fn terminfo_info_msg(
         b"set_underline_style (Smulx)\0".as_ptr() as *const ::core::ffi::c_char,
     ];
     let mut i: size_t = 0 as size_t;
-    while i
-        < ::core::mem::size_of::<[*const ::core::ffi::c_char; 49]>()
-            .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
-            .wrapping_div(
-                (::core::mem::size_of::<[*const ::core::ffi::c_char; 49]>()
-                    .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
+    while i < ::core::mem::size_of::<[*const ::core::ffi::c_char; 49]>()
+        .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
+        .wrapping_div(
+            (::core::mem::size_of::<[*const ::core::ffi::c_char; 49]>()
+                .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
+                == 0) as ::core::ffi::c_int as usize,
+        )
     {
         let mut s: *const ::core::ffi::c_char = (*ti).defs[i as usize];
         if !s.is_null() {
@@ -1281,10 +1196,10 @@ pub unsafe extern "C" fn terminfo_info_msg(
                 });
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(data.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh0 = data.size;
             data.size = data.size.wrapping_add(1);
             *data.items.offset(c2rust_fresh0 as isize) = '\n' as ::core::ffi::c_char;
@@ -1319,8 +1234,8 @@ pub unsafe extern "C" fn terminfo_info_msg(
                     == 0) as ::core::ffi::c_int as usize,
             )
     {
-        let mut s_0: *const ::core::ffi::c_char = (*ti)
-            .keys[i_0 as usize][0 as ::core::ffi::c_int as usize];
+        let mut s_0: *const ::core::ffi::c_char =
+            (*ti).keys[i_0 as usize][0 as ::core::ffi::c_int as usize];
         if !s_0.is_null() {
             kv_do_printf(
                 &raw mut data,
@@ -1328,8 +1243,8 @@ pub unsafe extern "C" fn terminfo_info_msg(
                 key_names[i_0 as usize],
             );
             kv_transstr(&raw mut data, s_0, false_0 != 0);
-            let mut ss: *const ::core::ffi::c_char = (*ti)
-                .keys[i_0 as usize][1 as ::core::ffi::c_int as usize];
+            let mut ss: *const ::core::ffi::c_char =
+                (*ti).keys[i_0 as usize][1 as ::core::ffi::c_int as usize];
             if !ss.is_null() {
                 kv_do_printf(
                     &raw mut data,
@@ -1346,10 +1261,10 @@ pub unsafe extern "C" fn terminfo_info_msg(
                 });
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(data.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh1 = data.size;
             data.size = data.size.wrapping_add(1);
             *data.items.offset(c2rust_fresh1 as isize) = '\n' as ::core::ffi::c_char;
@@ -1447,10 +1362,10 @@ pub unsafe extern "C" fn terminfo_info_msg(
                 });
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul(data.capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
                 ) as *mut ::core::ffi::c_char;
-            } else {};
+            } else {
+            };
             let c2rust_fresh2 = data.size;
             data.size = data.size.wrapping_add(1);
             *data.items.offset(c2rust_fresh2 as isize) = '\n' as ::core::ffi::c_char;
@@ -1467,7 +1382,8 @@ pub unsafe extern "C" fn terminfo_info_msg(
             data.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
         ) as *mut ::core::ffi::c_char;
-    } else {};
+    } else {
+    };
     let c2rust_fresh3 = data.size;
     data.size = data.size.wrapping_add(1);
     *data.items.offset(c2rust_fresh3 as isize) = '\0' as ::core::ffi::c_char;
@@ -1486,8 +1402,8 @@ unsafe extern "C" fn push(
             .wrapping_div(::core::mem::size_of::<::core::ffi::c_long>())
             .wrapping_div(
                 (::core::mem::size_of::<[::core::ffi::c_long; 20]>()
-                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_long>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_long>())
+                    == 0) as ::core::ffi::c_int as usize,
             )
     {
         return -1 as ::core::ffi::c_int;
@@ -1544,16 +1460,15 @@ unsafe extern "C" fn onum(
     mut len: size_t,
 ) -> bool {
     let LONG_STR_MAX: size_t = 21 as size_t;
-    len = if len > LONG_STR_MAX { len } else { LONG_STR_MAX };
+    len = if len > LONG_STR_MAX {
+        len
+    } else {
+        LONG_STR_MAX
+    };
     if buf_end.offset_from(*buf) < len.wrapping_add(2 as size_t) as isize {
         return false;
     }
-    let mut l: ::core::ffi::c_int = snprintf(
-        *buf,
-        len.wrapping_add(2 as size_t),
-        fmt_0,
-        num,
-    );
+    let mut l: ::core::ffi::c_int = snprintf(*buf, len.wrapping_add(2 as size_t), fmt_0, num);
     if l == -1 as ::core::ffi::c_int {
         return false;
     }
@@ -1569,12 +1484,8 @@ pub unsafe extern "C" fn terminfo_fmt(
 ) -> size_t {
     let mut c: ::core::ffi::c_char = 0;
     let mut fmt_0: [::core::ffi::c_char; 64] = [0; 64];
-    let mut fp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut ostr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut ostr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut val: ::core::ffi::c_long = 0;
     let mut val2: ::core::ffi::c_long = 0;
     let mut dnums: [::core::ffi::c_long; 26] = [0; 26];
@@ -1614,14 +1525,12 @@ pub unsafe extern "C" fn terminfo_fmt(
         if c as ::core::ffi::c_int == '\0' as ::core::ffi::c_int {
             break;
         }
-        if c as ::core::ffi::c_int != '%' as ::core::ffi::c_int
-            || {
-                let c2rust_fresh5 = str;
-                str = str.offset(1);
-                c = *c2rust_fresh5;
-                c as ::core::ffi::c_int == '%' as ::core::ffi::c_int
-            }
-        {
+        if c as ::core::ffi::c_int != '%' as ::core::ffi::c_int || {
+            let c2rust_fresh5 = str;
+            str = str.offset(1);
+            c = *c2rust_fresh5;
+            c as ::core::ffi::c_int == '%' as ::core::ffi::c_int
+        } {
             if c as ::core::ffi::c_int == '\0' as ::core::ffi::c_int {
                 break;
             }
@@ -1690,11 +1599,11 @@ pub unsafe extern "C" fn terminfo_fmt(
                     }
                     _ => {
                         if *(*__ctype_b_loc())
-                            .offset(
-                                c as ::core::ffi::c_uchar as ::core::ffi::c_int as isize,
-                            ) as ::core::ffi::c_int
+                            .offset(c as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
+                            as ::core::ffi::c_int
                             & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                                as ::core::ffi::c_int != 0
+                                as ::core::ffi::c_int
+                            != 0
                         {
                             val = val * 10 as ::core::ffi::c_long
                                 + (c as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
@@ -1760,9 +1669,7 @@ pub unsafe extern "C" fn terminfo_fmt(
                         if l < olen {
                             l = olen;
                         }
-                        if (buf_end.offset_from(buf) as size_t)
-                            < l.wrapping_add(1 as size_t)
-                        {
+                        if (buf_end.offset_from(buf) as size_t) < l.wrapping_add(1 as size_t) {
                             return false_0 as size_t;
                         }
                         r = snprintf(
@@ -1805,7 +1712,8 @@ pub unsafe extern "C" fn terminfo_fmt(
                         &raw mut fmt_0 as *mut ::core::ffi::c_char,
                         val as ::core::ffi::c_int,
                         olen,
-                    ) as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                    ) as ::core::ffi::c_int
+                        == 0 as ::core::ffi::c_int
                     {
                         return 0 as size_t;
                     }
@@ -1816,8 +1724,8 @@ pub unsafe extern "C" fn terminfo_fmt(
                     {
                         let c2rust_fresh16 = str;
                         str = str.offset(1);
-                        l = (*c2rust_fresh16 as ::core::ffi::c_int
-                            - '1' as ::core::ffi::c_int) as size_t;
+                        l = (*c2rust_fresh16 as ::core::ffi::c_int - '1' as ::core::ffi::c_int)
+                            as size_t;
                         if push(
                             (*params.offset(l as isize)).num,
                             (*params.offset(l as isize)).string,
@@ -1837,13 +1745,13 @@ pub unsafe extern "C" fn terminfo_fmt(
                     if *str as ::core::ffi::c_int >= 'a' as ::core::ffi::c_int
                         && *str as ::core::ffi::c_int <= 'z' as ::core::ffi::c_int
                     {
-                        dnums[(*str as ::core::ffi::c_int - 'a' as ::core::ffi::c_int)
-                            as usize] = val;
+                        dnums[(*str as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize] =
+                            val;
                     } else if *str as ::core::ffi::c_int >= 'A' as ::core::ffi::c_int
                         && *str as ::core::ffi::c_int <= 'Z' as ::core::ffi::c_int
                     {
-                        snums[(*str as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                            as usize] = val;
+                        snums[(*str as ::core::ffi::c_int - 'A' as ::core::ffi::c_int) as usize] =
+                            val;
                     }
                 }
                 103 => {
@@ -1851,8 +1759,8 @@ pub unsafe extern "C" fn terminfo_fmt(
                         && *str as ::core::ffi::c_int <= 'z' as ::core::ffi::c_int
                     {
                         if push(
-                            dnums[(*str as ::core::ffi::c_int
-                                - 'a' as ::core::ffi::c_int) as usize],
+                            dnums
+                                [(*str as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize],
                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
                             &raw mut stack,
                         ) != 0
@@ -1863,8 +1771,8 @@ pub unsafe extern "C" fn terminfo_fmt(
                         && *str as ::core::ffi::c_int <= 'Z' as ::core::ffi::c_int
                     {
                         if push(
-                            snums[(*str as ::core::ffi::c_int
-                                - 'A' as ::core::ffi::c_int) as usize],
+                            snums
+                                [(*str as ::core::ffi::c_int - 'A' as ::core::ffi::c_int) as usize],
                             ::core::ptr::null_mut::<::core::ffi::c_char>(),
                             &raw mut stack,
                         ) != 0
@@ -1900,11 +1808,11 @@ pub unsafe extern "C" fn terminfo_fmt(
                 123 => {
                     val = 0 as ::core::ffi::c_long;
                     while *(*__ctype_b_loc())
-                        .offset(
-                            *str as ::core::ffi::c_uchar as ::core::ffi::c_int as isize,
-                        ) as ::core::ffi::c_int
+                        .offset(*str as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int != 0
+                            as ::core::ffi::c_int
+                        != 0
                     {
                         val = val * 10 as ::core::ffi::c_long
                             + (*str as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
@@ -1981,16 +1889,13 @@ pub unsafe extern "C" fn terminfo_fmt(
                             val = val ^ val2;
                         }
                         61 => {
-                            val = (val == val2) as ::core::ffi::c_int
-                                as ::core::ffi::c_long;
+                            val = (val == val2) as ::core::ffi::c_int as ::core::ffi::c_long;
                         }
                         60 => {
-                            val = (val2 < val) as ::core::ffi::c_int
-                                as ::core::ffi::c_long;
+                            val = (val2 < val) as ::core::ffi::c_int as ::core::ffi::c_long;
                         }
                         62 => {
-                            val = (val2 > val) as ::core::ffi::c_int
-                                as ::core::ffi::c_long;
+                            val = (val2 > val) as ::core::ffi::c_int as ::core::ffi::c_long;
                         }
                         _ => {}
                     }
@@ -2011,8 +1916,7 @@ pub unsafe extern "C" fn terminfo_fmt(
                     );
                     match c as ::core::ffi::c_int {
                         33 => {
-                            val = (val == 0) as ::core::ffi::c_int
-                                as ::core::ffi::c_long;
+                            val = (val == 0) as ::core::ffi::c_int as ::core::ffi::c_long;
                         }
                         126 => {
                             val = !val;
@@ -2042,17 +1946,15 @@ pub unsafe extern "C" fn terminfo_fmt(
                                 str = str.offset(1);
                                 if *str as ::core::ffi::c_int == '?' as ::core::ffi::c_int {
                                     l = l.wrapping_add(1);
-                                } else if *str as ::core::ffi::c_int
-                                    == ';' as ::core::ffi::c_int
-                                {
+                                } else if *str as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                                     if l > 0 as size_t {
                                         l = l.wrapping_sub(1);
                                     } else {
                                         str = str.offset(1);
                                         break;
                                     }
-                                } else if *str as ::core::ffi::c_int
-                                    == 'e' as ::core::ffi::c_int && l == 0 as size_t
+                                } else if *str as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
+                                    && l == 0 as size_t
                                 {
                                     str = str.offset(1);
                                     break;
@@ -2069,9 +1971,7 @@ pub unsafe extern "C" fn terminfo_fmt(
                             str = str.offset(1);
                             if *str as ::core::ffi::c_int == '?' as ::core::ffi::c_int {
                                 l = l.wrapping_add(1);
-                            } else if *str as ::core::ffi::c_int
-                                == ';' as ::core::ffi::c_int
-                            {
+                            } else if *str as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
                                 if l > 0 as size_t {
                                     l = l.wrapping_sub(1);
                                 } else {
@@ -3095,8 +2995,8 @@ static mut putty_256colour_terminfo: TerminfoEntry = TerminfoEntry {
             as *const ::core::ffi::c_char,
         b"\x1B[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m\0".as_ptr()
             as *const ::core::ffi::c_char,
-        b"\x1B[0%?%p1%p6%|%t;1%;%?%p2%t;4%;%?%p1%p3%|%t;7%;%?%p4%t;5%;m%?%p9%t^N%e\x0F%;\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b"\x1B[0%?%p1%p6%|%t;1%;%?%p2%t;4%;%?%p1%p3%|%t;7%;%?%p4%t;5%;m%?%p9%t^N%e\x0F%;\0".as_ptr()
+            as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"\x1B]0;\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -3288,8 +3188,8 @@ static mut rxvt_256colour_terminfo: TerminfoEntry = TerminfoEntry {
             as *const ::core::ffi::c_char,
         b"\x1B[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m\0".as_ptr()
             as *const ::core::ffi::c_char,
-        b"\x1B[0%?%p6%t;1%;%?%p2%t;4%;%?%p1%p3%|%t;7%;%?%p4%t;5%;m%?%p9%t^N%e\x0F%;\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b"\x1B[0%?%p6%t;1%;%?%p2%t;4%;%?%p1%p3%|%t;7%;%?%p4%t;5%;m%?%p9%t^N%e\x0F%;\0".as_ptr()
+            as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -4444,8 +4344,8 @@ static mut cygwin_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[%p1%dA\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[4%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[3%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
-        b"\x1B[0;10%?%p1%t;7%;%?%p2%t;4%;%?%p3%t;7%;%?%p6%t;1%;%?%p7%t;8%;%?%p9%t;11%;m\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b"\x1B[0;10%?%p1%t;7%;%?%p2%t;4%;%?%p3%t;7%;%?%p6%t;1%;%?%p7%t;8%;%?%p9%t;11%;m\0".as_ptr()
+            as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"\x1B];\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -4635,8 +4535,7 @@ static mut win32con_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[%p1%dA\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[4%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[3%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
-        b"\x1B[0%?%p1%t;7%;%?%p3%t;7%;%?%p6%t;1%;m\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"\x1B[0%?%p1%t;7%;%?%p3%t;7%;%?%p6%t;1%;m\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"\x1B[0 q\0".as_ptr() as *const ::core::ffi::c_char,
@@ -4826,8 +4725,7 @@ static mut conemu_terminfo: TerminfoEntry = TerminfoEntry {
         b"\x1B[%p1%dA\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[48;5;%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
         b"\x1B[38;5;%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
-        b"\x1B[0%?%p1%p3%|%t;7%;%?%p2%t;4%;%?%p6%t;1%;m\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"\x1B[0%?%p1%p3%|%t;7%;%?%p2%t;4%;%?%p6%t;1%;m\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::ptr::null::<::core::ffi::c_char>(),
         ::core::ptr::null::<::core::ffi::c_char>(),
         b"\x1B[2 q\0".as_ptr() as *const ::core::ffi::c_char,

@@ -10,16 +10,9 @@ extern "C" {
         __c: ::core::ffi::c_int,
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     static mut IObuff: [::core::ffi::c_char; 1025];
 }
@@ -96,9 +89,7 @@ pub const kObjectTypeFloat: ObjectType = 3;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub unsafe extern "C" fn api_err_invalid(
     mut err: *mut Error,
@@ -108,10 +99,7 @@ pub unsafe extern "C" fn api_err_invalid(
     mut quote_val: bool,
 ) {
     let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space: *const ::core::ffi::c_char = strchr(
-        name,
-        ' ' as ::core::ffi::c_int,
-    );
+    let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
     if !val_s.is_null()
         && *val_s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
@@ -175,10 +163,7 @@ pub unsafe extern "C" fn api_err_exp(
     mut actual: *const ::core::ffi::c_char,
 ) {
     let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space: *const ::core::ffi::c_char = strchr(
-        name,
-        ' ' as ::core::ffi::c_int,
-    );
+    let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
     if actual.is_null() {
         api_set_error(
             err,
@@ -212,10 +197,7 @@ pub unsafe extern "C" fn api_err_required(
     mut name: *const ::core::ffi::c_char,
 ) {
     let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space: *const ::core::ffi::c_char = strchr(
-        name,
-        ' ' as ::core::ffi::c_int,
-    );
+    let mut has_space: *const ::core::ffi::c_char = strchr(name, ' ' as ::core::ffi::c_int);
     api_set_error(
         err,
         errtype,
@@ -234,19 +216,14 @@ pub unsafe extern "C" fn api_err_conflict(
     mut name2: *const ::core::ffi::c_char,
 ) {
     let mut errtype: ErrorType = kErrorTypeValidation;
-    let mut has_space2: *const ::core::ffi::c_char = strchr(
-        name2,
-        ' ' as ::core::ffi::c_int,
-    );
+    let mut has_space2: *const ::core::ffi::c_char = strchr(name2, ' ' as ::core::ffi::c_int);
     api_set_error(
         err,
         errtype,
         if !has_space2.is_null() {
-            b"Conflict: '%s' not allowed with %s\0".as_ptr()
-                as *const ::core::ffi::c_char
+            b"Conflict: '%s' not allowed with %s\0".as_ptr() as *const ::core::ffi::c_char
         } else {
-            b"Conflict: '%s' not allowed with '%s'\0".as_ptr()
-                as *const ::core::ffi::c_char
+            b"Conflict: '%s' not allowed with '%s'\0".as_ptr() as *const ::core::ffi::c_char
         },
         name,
         name2,
@@ -281,17 +258,16 @@ pub unsafe extern "C" fn check_string_array(
         if disallow_nl {
             let l: String_0 = (*arr.items.offset(i as isize)).data.string;
             if !memchr(
-                    l.data as *const ::core::ffi::c_void,
-                    '\n' as ::core::ffi::c_int,
-                    l.size,
-                )
-                .is_null()
+                l.data as *const ::core::ffi::c_void,
+                '\n' as ::core::ffi::c_int,
+                l.size,
+            )
+            .is_null()
             {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"'%s' item contains newlines\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"'%s' item contains newlines\0".as_ptr() as *const ::core::ffi::c_char,
                     name,
                 );
                 return false;

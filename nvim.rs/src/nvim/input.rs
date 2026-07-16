@@ -30,10 +30,7 @@ extern "C" {
         c_arg: ::core::ffi::c_int,
         modifiers: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn fix_input_buffer(
-        buf: *mut uint8_t,
-        len: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn fix_input_buffer(buf: *mut uint8_t, len: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static mut mod_mask: ::core::ffi::c_int;
     static mut cmdline_row: ::core::ffi::c_int;
@@ -577,18 +574,13 @@ pub const KE_S_F2: key_extra = 7;
 pub const KE_S_F1: key_extra = 6;
 pub const KE_S_DOWN: key_extra = 5;
 pub const KE_S_UP: key_extra = 4;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn ask_yesno(
-    str: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let save_State: ::core::ffi::c_int = State;
     no_wait_return += 1;
     snprintf(
@@ -597,9 +589,7 @@ pub unsafe extern "C" fn ask_yesno(
         gettext(b"%s (y/n)?\0".as_ptr() as *const ::core::ffi::c_char),
         str,
     );
-    let mut prompt: *mut ::core::ffi::c_char = xstrdup(
-        &raw mut IObuff as *mut ::core::ffi::c_char,
-    );
+    let mut prompt: *mut ::core::ffi::c_char = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
     let mut r: ::core::ffi::c_int = ' ' as ::core::ffi::c_int;
     while r != 'y' as ::core::ffi::c_int && r != 'n' as ::core::ffi::c_int {
         r = prompt_for_input(
@@ -623,9 +613,7 @@ pub unsafe extern "C" fn ask_yesno(
     return r;
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_keystroke(
-    mut events: *mut MultiQueue,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn get_keystroke(mut events: *mut MultiQueue) -> ::core::ffi::c_int {
     let mut buf: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
     let mut buflen: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -635,14 +623,13 @@ pub unsafe extern "C" fn get_keystroke(
     mapped_ctrl_c = 0 as ::core::ffi::c_int;
     loop {
         ui_flush();
-        let mut maxlen: ::core::ffi::c_int = (buflen - 6 as ::core::ffi::c_int - len)
-            / 3 as ::core::ffi::c_int;
+        let mut maxlen: ::core::ffi::c_int =
+            (buflen - 6 as ::core::ffi::c_int - len) / 3 as ::core::ffi::c_int;
         if buf.is_null() {
             buf = xmalloc(buflen as size_t) as *mut uint8_t;
         } else if maxlen < 10 as ::core::ffi::c_int {
             buflen += 100 as ::core::ffi::c_int;
-            buf = xrealloc(buf as *mut ::core::ffi::c_void, buflen as size_t)
-                as *mut uint8_t;
+            buf = xrealloc(buf as *mut ::core::ffi::c_void, buflen as size_t) as *mut uint8_t;
             maxlen = (buflen - 6 as ::core::ffi::c_int - len) / 3 as ::core::ffi::c_int;
         }
         n = input_get(
@@ -668,44 +655,34 @@ pub unsafe extern "C" fn get_keystroke(
         }
         n = *buf.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
         if n == K_SPECIAL {
-            n = if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KS_SPECIAL
+            n = if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KS_SPECIAL
             {
                 K_SPECIAL
-            } else if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KS_ZERO
+            } else if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KS_ZERO
             {
                 K_ZERO
             } else {
                 -(*buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ((*buf.offset(2 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+                    + ((*buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                        << 8 as ::core::ffi::c_int))
             };
-            if !(*buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KS_MODIFIER
-                || n
-                    == -(253 as ::core::ffi::c_int
-                        + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+            if !(*buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KS_MODIFIER
+                || n == -(253 as ::core::ffi::c_int
+                    + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
                 || is_mouse_key(n) as ::core::ffi::c_int != 0
-                    && n
-                        != -(253 as ::core::ffi::c_int
-                            + ((KE_LEFTMOUSE as ::core::ffi::c_int)
-                                << 8 as ::core::ffi::c_int)))
+                    && n != -(253 as ::core::ffi::c_int
+                        + ((KE_LEFTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)))
             {
                 break;
             }
-            if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == KS_MODIFIER
-            {
-                mod_mask = *buf.offset(2 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int;
+            if *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == KS_MODIFIER {
+                mod_mask = *buf.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
             }
             len -= 3 as ::core::ffi::c_int;
             if len > 0 as ::core::ffi::c_int {
                 memmove(
                     buf as *mut ::core::ffi::c_void,
-                    buf.offset(3 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
+                    buf.offset(3 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
                     len as size_t,
                 );
             }
@@ -713,11 +690,13 @@ pub unsafe extern "C" fn get_keystroke(
             if utf8len_tab[n as usize] as ::core::ffi::c_int > len {
                 continue;
             }
-            *buf
-                .offset(
-                    (if len >= buflen { buflen - 1 as ::core::ffi::c_int } else { len })
-                        as isize,
-                ) = NUL as uint8_t;
+            *buf.offset(
+                (if len >= buflen {
+                    buflen - 1 as ::core::ffi::c_int
+                } else {
+                    len
+                }) as isize,
+            ) = NUL as uint8_t;
             n = utf_ptr2char(buf as *mut ::core::ffi::c_char);
             break;
         }
@@ -746,14 +725,12 @@ pub unsafe extern "C" fn prompt_for_input(
     if prompt.is_null() {
         if !mouse_used.is_null() {
             prompt = gettext(
-                b"Type number and <Enter> or click with the mouse (q or empty cancels): \0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        } else {
-            prompt = gettext(
-                b"Type number and <Enter> (q or empty cancels): \0".as_ptr()
+                b"Type number and <Enter> or click with the mouse (q or empty cancels): \0".as_ptr()
                     as *const ::core::ffi::c_char,
             );
+        } else {
+            prompt = gettext(b"Type number and <Enter> (q or empty cancels): \0".as_ptr()
+                as *const ::core::ffi::c_char);
         }
     }
     cmdline_row = msg_row;
@@ -795,6 +772,6 @@ pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

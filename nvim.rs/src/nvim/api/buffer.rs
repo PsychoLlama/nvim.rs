@@ -4,43 +4,26 @@ extern "C" {
     pub type regprog;
     pub type qf_info_S;
     fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
     fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
     fn memcpy(
         __dest: *mut ::core::ffi::c_void,
         __src: *const ::core::ffi::c_void,
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strchrsub(
-        str: *mut ::core::ffi::c_char,
-        c: ::core::ffi::c_char,
-        x: ::core::ffi::c_char,
-    );
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
+    fn strchrsub(str: *mut ::core::ffi::c_char, c: ::core::ffi::c_char, x: ::core::ffi::c_char);
     fn memchrsub(
         data: *mut ::core::ffi::c_void,
         c: ::core::ffi::c_char,
         x: ::core::ffi::c_char,
         len: size_t,
     );
-    fn arena_alloc(
-        arena: *mut Arena,
-        size: size_t,
-        align: bool,
-    ) -> *mut ::core::ffi::c_void;
+    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_allocz(arena: *mut Arena, size: size_t) -> *mut ::core::ffi::c_char;
     fn arena_memdupz(
         arena: *mut Arena,
@@ -96,12 +79,7 @@ extern "C" {
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn set_mark(
         buf: *mut buf_T,
         name: String_0,
@@ -212,11 +190,7 @@ extern "C" {
         copy: bool,
         noalloc: bool,
     ) -> ::core::ffi::c_int;
-    fn ml_delete_buf(
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        message: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> ::core::ffi::c_int;
     fn ml_find_line_or_offset(
         buf: *mut buf_T,
         lnum: linenr_T,
@@ -2113,9 +2087,7 @@ pub const MODE_CMDLINE: C2Rust_Unnamed_17 = 8;
 pub const MODE_OP_PENDING: C2Rust_Unnamed_17 = 4;
 pub const MODE_VISUAL: C2Rust_Unnamed_17 = 2;
 pub const MODE_NORMAL: C2Rust_Unnamed_17 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
     << ::core::mem::size_of::<uint64_t>()
@@ -2123,16 +2095,11 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_sub(1 as usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-pub const KEYSET_OPTIDX_buf_attach__on_bytes: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_buf_attach__on_lines: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_buf_attach__on_detach: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_buf_attach__on_reload: ::core::ffi::c_int = 6
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_buf_attach__on_changedtick: ::core::ffi::c_int = 7
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_buf_attach__on_bytes: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_buf_attach__on_lines: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_buf_attach__on_detach: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_buf_attach__on_reload: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_buf_attach__on_changedtick: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -2158,10 +2125,7 @@ pub const BUF_UPDATE_CALLBACKS_INIT: BufUpdateCallbacks = BufUpdateCallbacks {
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn api_buf_ensure_loaded(
-    mut buf: Buffer,
-    mut err: *mut Error,
-) -> *mut buf_T {
+pub unsafe extern "C" fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     if b.is_null() {
         return ::core::ptr::null_mut::<buf_T>();
@@ -2177,10 +2141,7 @@ pub unsafe extern "C" fn api_buf_ensure_loaded(
     return b;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_buf_line_count(
-    mut buf: Buffer,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe extern "C" fn nvim_buf_line_count(mut buf: Buffer, mut err: *mut Error) -> Integer {
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     if b.is_null() {
         return 0 as Integer;
@@ -2348,8 +2309,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
     let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     if !check_string_array(
         replacement,
-        b"replacement string\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"replacement string\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         disallow_nl,
         err,
     ) {
@@ -2402,8 +2362,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to save undo information\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Failed to save undo information\0".as_ptr() as *const ::core::ffi::c_char,
             );
         } else {
             let mut deleted_bytes: bcount_t = get_region_bytecount(
@@ -2420,8 +2379,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
             };
             let mut i_0: size_t = 0 as size_t;
             while i_0 < to_delete {
-                if ml_delete_buf(b, start as linenr_T, false) == 0 as ::core::ffi::c_int
-                {
+                if ml_delete_buf(b, start as linenr_T, false) == 0 as ::core::ffi::c_int {
                     api_set_error(
                         err,
                         kErrorTypeException,
@@ -2435,11 +2393,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
             if to_delete > 0 as size_t {
                 extra -= to_delete as ptrdiff_t;
             }
-            let mut to_replace: size_t = if old_len < new_len {
-                old_len
-            } else {
-                new_len
-            };
+            let mut to_replace: size_t = if old_len < new_len { old_len } else { new_len };
             let mut inserted_bytes: bcount_t = 0 as bcount_t;
             let mut i_1: size_t = 0 as size_t;
             while i_1 < to_replace {
@@ -2463,21 +2417,18 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Failed to replace line\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"Failed to replace line\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break 's_382;
                 } else {
-                    inserted_bytes
-                        += strlen(*lines.offset(i_1 as isize)) as bcount_t
-                            + 1 as bcount_t;
+                    inserted_bytes +=
+                        strlen(*lines.offset(i_1 as isize)) as bcount_t + 1 as bcount_t;
                     i_1 = i_1.wrapping_add(1);
                 }
             }
             let mut i_2: size_t = to_replace;
             while i_2 < new_len {
-                let mut lnum_0: int64_t = start as int64_t + i_2 as int64_t
-                    - 1 as int64_t;
+                let mut lnum_0: int64_t = start as int64_t + i_2 as int64_t - 1 as int64_t;
                 if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     api_set_error(
                         err,
@@ -2501,9 +2452,8 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                     );
                     break 's_382;
                 } else {
-                    inserted_bytes
-                        += strlen(*lines.offset(i_2 as isize)) as bcount_t
-                            + 1 as bcount_t;
+                    inserted_bytes +=
+                        strlen(*lines.offset(i_2 as isize)) as bcount_t + 1 as bcount_t;
                     extra += 1;
                     i_2 = i_2.wrapping_add(1);
                 }
@@ -2523,7 +2473,8 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                 kMarkAdjustApi,
                 kExtmarkNOOP,
             );
-            if VIsual_active as ::core::ffi::c_int != 0 && b == curbuf
+            if VIsual_active as ::core::ffi::c_int != 0
+                && b == curbuf
                 && VIsual.lnum >= start as linenr_T
             {
                 if VIsual.lnum >= end as linenr_T {
@@ -2560,12 +2511,7 @@ pub unsafe extern "C" fn nvim_buf_set_lines(
                 };
                 while !win.is_null() {
                     if (*win).w_buffer == b {
-                        fix_cursor(
-                            win,
-                            start as linenr_T,
-                            end as linenr_T,
-                            extra as linenr_T,
-                        );
+                        fix_cursor(win, start as linenr_T, end as linenr_T, extra as linenr_T);
                     }
                     win = (*win).w_next;
                 }
@@ -2605,8 +2551,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed {
                 string: String_0 {
-                    data: b"\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    data: b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
                         .wrapping_sub(1 as size_t),
                 },
@@ -2619,8 +2564,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         return;
     }
     let mut oob: bool = false_0 != 0;
-    start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob)
-        as Integer;
+    start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
     if oob {
         api_err_invalid(
             err,
@@ -2631,8 +2575,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         );
         return;
     }
-    end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob)
-        as Integer;
+    end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
     if oob {
         api_err_invalid(
             err,
@@ -2643,10 +2586,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         );
         return;
     }
-    let mut str_at_start: *mut ::core::ffi::c_char = ml_get_buf(
-        b,
-        start_row as linenr_T,
-    );
+    let mut str_at_start: *mut ::core::ffi::c_char = ml_get_buf(b, start_row as linenr_T);
     let mut len_at_start: colnr_T = ml_get_buf_len(b, start_row as linenr_T);
     str_at_start = arena_memdupz(arena, str_at_start, len_at_start as size_t);
     start_col = if start_col < 0 as Integer {
@@ -2694,8 +2634,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
     let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     if !check_string_array(
         replacement,
-        b"replacement string\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"replacement string\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         disallow_nl,
         err,
     ) {
@@ -2708,37 +2647,31 @@ pub unsafe extern "C" fn nvim_buf_set_text(
         old_byte = end_col as bcount_t - start_col as bcount_t;
     } else {
         old_byte = (old_byte as ::core::ffi::c_long
-            + (len_at_start as Integer - start_col) as ::core::ffi::c_long) as bcount_t;
+            + (len_at_start as Integer - start_col) as ::core::ffi::c_long)
+            as bcount_t;
         let mut i: int64_t = 1 as int64_t;
         while i < end_row - start_row {
             let mut lnum: int64_t = start_row as int64_t + i;
-            old_byte
-                += (ml_get_buf_len(b, lnum as linenr_T) + 1 as ::core::ffi::c_int)
-                    as bcount_t;
+            old_byte += (ml_get_buf_len(b, lnum as linenr_T) + 1 as ::core::ffi::c_int) as bcount_t;
             i += 1;
         }
         old_byte += end_col as bcount_t + 1 as bcount_t;
     }
-    let mut first_item: String_0 = (*replacement
-        .items
-        .offset(0 as ::core::ffi::c_int as isize))
+    let mut first_item: String_0 = (*replacement.items.offset(0 as ::core::ffi::c_int as isize))
         .data
         .string;
     let mut last_item: String_0 = (*replacement
         .items
         .offset(replacement.size.wrapping_sub(1 as size_t) as isize))
-        .data
-        .string;
+    .data
+    .string;
     let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.size);
-    let mut last_part_len: size_t = (len_at_end as size_t)
-        .wrapping_sub(end_col as size_t);
+    let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
     if replacement.size == 1 as size_t {
         firstlen = firstlen.wrapping_add(last_part_len);
     }
     let mut first: *mut ::core::ffi::c_char = arena_allocz(arena, firstlen);
-    let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     memcpy(
         first as *mut ::core::ffi::c_void,
         str_at_start as *const ::core::ffi::c_void,
@@ -2757,8 +2690,9 @@ pub unsafe extern "C" fn nvim_buf_set_text(
     );
     if replacement.size == 1 as size_t {
         memcpy(
-            first.offset(start_col as isize).offset(first_item.size as isize)
-                as *mut ::core::ffi::c_void,
+            first
+                .offset(start_col as isize)
+                .offset(first_item.size as isize) as *mut ::core::ffi::c_void,
             str_at_end.offset(end_col as isize) as *const ::core::ffi::c_void,
             last_part_len,
         );
@@ -2831,8 +2765,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Failed to save undo information\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Failed to save undo information\0".as_ptr() as *const ::core::ffi::c_char,
             );
         } else {
             let mut extra: ptrdiff_t = 0 as ptrdiff_t;
@@ -2844,9 +2777,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             };
             let mut i_1: size_t = 0 as size_t;
             while i_1 < to_delete {
-                if ml_delete_buf(b, start_row as linenr_T, false)
-                    == 0 as ::core::ffi::c_int
-                {
+                if ml_delete_buf(b, start_row as linenr_T, false) == 0 as ::core::ffi::c_int {
                     api_set_error(
                         err,
                         kErrorTypeException,
@@ -2860,11 +2791,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             if to_delete > 0 as size_t {
                 extra -= to_delete as ptrdiff_t;
             }
-            let mut to_replace: size_t = if old_len < new_len {
-                old_len
-            } else {
-                new_len
-            };
+            let mut to_replace: size_t = if old_len < new_len { old_len } else { new_len };
             let mut i_2: size_t = 0 as size_t;
             while i_2 < to_replace {
                 let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
@@ -2887,8 +2814,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                     api_set_error(
                         err,
                         kErrorTypeException,
-                        b"Failed to replace line\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"Failed to replace line\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break 's_652;
                 } else {
@@ -2897,8 +2823,7 @@ pub unsafe extern "C" fn nvim_buf_set_text(
             }
             let mut i_3: size_t = to_replace;
             while i_3 < new_len {
-                let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t
-                    - 1 as int64_t;
+                let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
                 if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     api_set_error(
                         err,
@@ -2927,8 +2852,11 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 }
             }
             let mut col_extent: colnr_T = (end_col
-                - (if end_row == start_row { start_col } else { 0 as Integer }))
-                as colnr_T;
+                - (if end_row == start_row {
+                    start_col
+                } else {
+                    0 as Integer
+                })) as colnr_T;
             let mut adjust: linenr_T = if end_row >= start_row {
                 MAXLNUM as ::core::ffi::c_int as linenr_T
             } else {
@@ -2944,7 +2872,8 @@ pub unsafe extern "C" fn nvim_buf_set_text(
                 kMarkAdjustApi,
                 kExtmarkNOOP,
             );
-            if VIsual_active as ::core::ffi::c_int != 0 && b == curbuf
+            if VIsual_active as ::core::ffi::c_int != 0
+                && b == curbuf
                 && VIsual_mode != 22 as ::core::ffi::c_int
             {
                 fix_pos_col(
@@ -3048,10 +2977,8 @@ pub unsafe extern "C" fn nvim_buf_get_text(
         return rv;
     }
     let mut oob: bool = false_0 != 0;
-    start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob)
-        as Integer;
-    end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob)
-        as Integer;
+    start_row = normalize_index(b, start_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
+    end_row = normalize_index(b, end_row as int64_t, false_0 != 0, &raw mut oob) as Integer;
     if oob {
         api_set_error(
             err,
@@ -3123,16 +3050,8 @@ pub unsafe extern "C" fn nvim_buf_get_text(
                     arena,
                 );
             }
-            str = buf_get_text(
-                b,
-                end_row as int64_t,
-                0 as int64_t,
-                end_col as int64_t,
-                err,
-            );
-            if (*err).type_0 as ::core::ffi::c_int
-                == kErrorTypeNone as ::core::ffi::c_int
-            {
+            str = buf_get_text(b, end_row as int64_t, 0 as int64_t, end_col as int64_t, err);
+            if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                 push_linestr(
                     lstate,
                     &raw mut rv,
@@ -3200,10 +3119,7 @@ pub unsafe extern "C" fn nvim_buf_get_var(
     return dict_get_value((*b).b_vars, name, arena, err);
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_buf_get_changedtick(
-    mut buf: Buffer,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe extern "C" fn nvim_buf_get_changedtick(mut buf: Buffer, mut err: *mut Error) -> Integer {
     let b: *const buf_T = find_buffer_by_handle(buf, err);
     if b.is_null() {
         return -1 as Integer;
@@ -3307,10 +3223,7 @@ pub unsafe extern "C" fn nvim_buf_del_var(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_buf_get_name(
-    mut buf: Buffer,
-    mut err: *mut Error,
-) -> String_0 {
+pub unsafe extern "C" fn nvim_buf_get_name(mut buf: Buffer, mut err: *mut Error) -> String_0 {
     let mut rv: String_0 = String_0 {
         data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0 as size_t,
@@ -3448,8 +3361,7 @@ pub unsafe extern "C" fn nvim_buf_del_mark(
     if !(name.size == 1 as size_t) {
         api_err_invalid(
             err,
-            b"mark name (must be a single char)\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
             name.data,
             0 as int64_t,
             true_0 != 0,
@@ -3495,8 +3407,7 @@ pub unsafe extern "C" fn nvim_buf_set_mark(
     if !(name.size == 1 as size_t) {
         api_err_invalid(
             err,
-            b"mark name (must be a single char)\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
             name.data,
             0 as int64_t,
             true_0 != 0,
@@ -3525,8 +3436,7 @@ pub unsafe extern "C" fn nvim_buf_get_mark(
     if !(name.size == 1 as size_t) {
         api_err_invalid(
             err,
-            b"mark name (must be a single char)\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"mark name (must be a single char)\0".as_ptr() as *const ::core::ffi::c_char,
             name.data,
             0 as int64_t,
             true_0 != 0,
@@ -3733,9 +3643,7 @@ pub unsafe extern "C" fn nvim__buf_stats(
         let c2rust_fresh10 = rv.size;
         rv.size = rv.size.wrapping_add(1);
         *rv.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-            key: cstr_as_string(
-                b"uhp_extmark_size\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            key: cstr_as_string(b"uhp_extmark_size\0".as_ptr() as *const ::core::ffi::c_char),
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
@@ -3808,7 +3716,8 @@ unsafe extern "C" fn fix_pos_col(
             (*pos).col = len;
         }
     }
-    if (*pos).lnum == new_end_row && (*pos).col > end_row_change_end
+    if (*pos).lnum == new_end_row
+        && (*pos).col > end_row_change_end
         && old_coladd == 0 as ::core::ffi::c_int
     {
         (*pos).col = end_row_change_end;
@@ -3826,13 +3735,12 @@ unsafe extern "C" fn fix_cursor_cols(
     mut new_rows: linenr_T,
     mut new_cols_at_end_row: colnr_T,
 ) {
-    let mut mode_col_adj: colnr_T = if win == curwin
-        && State & MODE_INSERT as ::core::ffi::c_int != 0
-    {
-        0 as colnr_T
-    } else {
-        1 as colnr_T
-    };
+    let mut mode_col_adj: colnr_T =
+        if win == curwin && State & MODE_INSERT as ::core::ffi::c_int != 0 {
+            0 as colnr_T
+        } else {
+            1 as colnr_T
+        };
     fix_pos_col(
         (*win).w_buffer,
         &raw mut (*win).w_cursor,
@@ -3871,20 +3779,23 @@ unsafe extern "C" fn push_linestr(
     mut arena: *mut Arena,
 ) {
     if !lstate.is_null() {
-        if !s.is_null() && replace_nl as ::core::ffi::c_int != 0
+        if !s.is_null()
+            && replace_nl as ::core::ffi::c_int != 0
             && !strchr(s, '\n' as ::core::ffi::c_int).is_null()
         {
-            let mut tmp: *mut ::core::ffi::c_char = xmemdupz(
-                s as *const ::core::ffi::c_void,
-                len,
-            ) as *mut ::core::ffi::c_char;
+            let mut tmp: *mut ::core::ffi::c_char =
+                xmemdupz(s as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
             strchrsub(tmp, '\n' as ::core::ffi::c_char, NUL as ::core::ffi::c_char);
             lua_pushlstring(lstate, tmp, len);
             xfree(tmp as *mut ::core::ffi::c_void);
         } else {
             lua_pushlstring(lstate, s, len);
         }
-        lua_rawseti(lstate, -2 as ::core::ffi::c_int, idx + 1 as ::core::ffi::c_int);
+        lua_rawseti(
+            lstate,
+            -2 as ::core::ffi::c_int,
+            idx + 1 as ::core::ffi::c_int,
+        );
     } else {
         let mut str: String_0 = String_0 {
             data: ::core::ptr::null_mut::<::core::ffi::c_char>(),

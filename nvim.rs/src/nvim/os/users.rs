@@ -28,11 +28,7 @@ extern "C" {
         dsize: size_t,
     ) -> size_t;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn os_getenv_noalloc(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
 }
@@ -114,9 +110,7 @@ pub struct expand_T {
     pub xp_search_dir: Direction,
     pub xp_pre_incsearch_pos: pos_T,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
@@ -133,13 +127,12 @@ unsafe extern "C" fn add_user(
     mut user: *mut ::core::ffi::c_char,
     mut need_copy: bool,
 ) {
-    let mut user_copy: *mut ::core::ffi::c_char = if !user.is_null()
-        && need_copy as ::core::ffi::c_int != 0
-    {
-        xstrdup(user)
-    } else {
-        user
-    };
+    let mut user_copy: *mut ::core::ffi::c_char =
+        if !user.is_null() && need_copy as ::core::ffi::c_int != 0 {
+            xstrdup(user)
+        } else {
+            user
+        };
     if user_copy.is_null() || *user_copy as ::core::ffi::c_int == NUL {
         if need_copy {
             xfree(user_copy as *mut ::core::ffi::c_void);
@@ -147,14 +140,12 @@ unsafe extern "C" fn add_user(
         return;
     }
     ga_grow(users, 1 as ::core::ffi::c_int);
-    *((*users).ga_data as *mut *mut ::core::ffi::c_char)
-        .offset((*users).ga_len as isize) = user_copy;
+    *((*users).ga_data as *mut *mut ::core::ffi::c_char).offset((*users).ga_len as isize) =
+        user_copy;
     (*users).ga_len += 1;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_get_usernames(
-    mut users: *mut garray_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn os_get_usernames(mut users: *mut garray_T) -> ::core::ffi::c_int {
     if users.is_null() {
         return FAIL;
     }
@@ -173,16 +164,14 @@ pub unsafe extern "C" fn os_get_usernames(
         add_user(users, (*pw).pw_name, true_0 != 0);
     }
     endpwent();
-    let mut user_env: *mut ::core::ffi::c_char = os_getenv_noalloc(
-        b"USER\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut user_env: *mut ::core::ffi::c_char =
+        os_getenv_noalloc(b"USER\0".as_ptr() as *const ::core::ffi::c_char);
     if !user_env.is_null() && *user_env as ::core::ffi::c_int != NUL {
         let mut i: ::core::ffi::c_int = 0;
         i = 0 as ::core::ffi::c_int;
         while i < (*users).ga_len {
-            let mut local_user: *mut ::core::ffi::c_char = *((*users).ga_data
-                as *mut *mut ::core::ffi::c_char)
-                .offset(i as isize);
+            let mut local_user: *mut ::core::ffi::c_char =
+                *((*users).ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize);
             if strcmp(local_user, user_env) == 0 as ::core::ffi::c_int {
                 break;
             }
@@ -212,9 +201,7 @@ pub unsafe extern "C" fn os_get_uname(
 ) -> ::core::ffi::c_int {
     let mut pw: *mut passwd = ::core::ptr::null_mut::<passwd>();
     pw = getpwuid(uid as __uid_t);
-    if !pw.is_null() && !(*pw).pw_name.is_null()
-        && *(*pw).pw_name as ::core::ffi::c_int != NUL
-    {
+    if !pw.is_null() && !(*pw).pw_name.is_null() && *(*pw).pw_name as ::core::ffi::c_int != NUL {
         xstrlcpy(s, (*pw).pw_name, len);
         return OK;
     }
@@ -259,9 +246,7 @@ pub unsafe extern "C" fn get_users(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn match_user(
-    mut name: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn match_user(mut name: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut n: ::core::ffi::c_int = strlen(name) as ::core::ffi::c_int;
     let mut result: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     init_users();

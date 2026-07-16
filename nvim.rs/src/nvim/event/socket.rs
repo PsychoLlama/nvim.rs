@@ -24,15 +24,9 @@ extern "C" {
         backlog: ::core::ffi::c_int,
         cb: uv_connection_cb,
     ) -> ::core::ffi::c_int;
-    fn uv_accept(
-        server: *mut uv_stream_t,
-        client: *mut uv_stream_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_accept(server: *mut uv_stream_t, client: *mut uv_stream_t) -> ::core::ffi::c_int;
     fn uv_tcp_init(_: *mut uv_loop_t, handle: *mut uv_tcp_t) -> ::core::ffi::c_int;
-    fn uv_tcp_nodelay(
-        handle: *mut uv_tcp_t,
-        enable: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn uv_tcp_nodelay(handle: *mut uv_tcp_t, enable: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn uv_tcp_bind(
         handle: *mut uv_tcp_t,
         addr: *const sockaddr,
@@ -54,10 +48,8 @@ extern "C" {
         handle: *mut uv_pipe_t,
         ipc: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn uv_pipe_bind(
-        handle: *mut uv_pipe_t,
-        name: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn uv_pipe_bind(handle: *mut uv_pipe_t, name: *const ::core::ffi::c_char)
+        -> ::core::ffi::c_int;
     fn uv_pipe_connect(
         req: *mut uv_connect_t,
         handle: *mut uv_pipe_t,
@@ -306,9 +298,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -335,9 +326,7 @@ pub struct C2Rust_Unnamed_0 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -553,9 +542,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -567,9 +555,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -581,15 +568,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_7 {
@@ -728,9 +710,8 @@ pub struct uv_getaddrinfo_s {
     pub addrinfo: *mut addrinfo,
     pub retcode: ::core::ffi::c_int,
 }
-pub type uv_getaddrinfo_cb = Option<
-    unsafe extern "C" fn(*mut uv_getaddrinfo_t, ::core::ffi::c_int, *mut addrinfo) -> (),
->;
+pub type uv_getaddrinfo_cb =
+    Option<unsafe extern "C" fn(*mut uv_getaddrinfo_t, ::core::ffi::c_int, *mut addrinfo) -> ()>;
 pub type uv_getaddrinfo_t = uv_getaddrinfo_s;
 pub type LuaRef = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
@@ -789,12 +770,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -841,12 +820,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_14 {
@@ -906,9 +883,7 @@ pub type Loop = loop_0;
 pub type ProcType = ::core::ffi::c_uint;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -926,16 +901,11 @@ pub struct socket_watcher {
     pub close_cb: socket_close_cb,
     pub events: *mut MultiQueue,
 }
-pub type socket_close_cb = Option<
-    unsafe extern "C" fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> (),
->;
+pub type socket_close_cb =
+    Option<unsafe extern "C" fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
 pub type SocketWatcher = socket_watcher;
 pub type socket_cb = Option<
-    unsafe extern "C" fn(
-        *mut SocketWatcher,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> (),
+    unsafe extern "C" fn(*mut SocketWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
 >;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -955,15 +925,12 @@ pub struct C2Rust_Unnamed_17 {
     pub addrinfo: *mut addrinfo,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 58] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 58],
-        [::core::ffi::c_char; 58],
-    >(*b"int socket_watcher_start(SocketWatcher *, int, socket_cb)\0")
+    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
+        *b"int socket_watcher_start(SocketWatcher *, int, socket_cb)\0",
+    )
 };
 pub const UINT16_MAX: ::core::ffi::c_int = 65535 as ::core::ffi::c_int;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const PF_UNSPEC: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const PF_INET: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AF_UNSPEC: ::core::ffi::c_int = PF_UNSPEC;
@@ -977,14 +944,14 @@ pub unsafe extern "C" fn socket_address_tcp_host_end(
     if address.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if (*address.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-        as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && *address.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-            as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || *address.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-            as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-            && *address.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
+    if (*address.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_uint
+        >= 'A' as ::core::ffi::c_uint
+        && *address.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_uint
+            <= 'Z' as ::core::ffi::c_uint
+        || *address.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_uint
+            >= 'a' as ::core::ffi::c_uint
+            && *address.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_uint
+                <= 'z' as ::core::ffi::c_uint)
         && *address.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == ':' as ::core::ffi::c_int
         && (*address.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -994,10 +961,7 @@ pub unsafe extern "C" fn socket_address_tcp_host_end(
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut colon: *mut ::core::ffi::c_char = strrchr(
-        address,
-        ':' as ::core::ffi::c_int,
-    );
+    let mut colon: *mut ::core::ffi::c_char = strrchr(address, ':' as ::core::ffi::c_int);
     return if !colon.is_null() && colon != address {
         colon
     } else {
@@ -1015,19 +979,15 @@ pub unsafe extern "C" fn socket_watcher_init(
         endpoint,
         ::core::mem::size_of::<[::core::ffi::c_char; 256]>(),
     );
-    let mut addr: *mut ::core::ffi::c_char = &raw mut (*watcher).addr
-        as *mut ::core::ffi::c_char;
+    let mut addr: *mut ::core::ffi::c_char = &raw mut (*watcher).addr as *mut ::core::ffi::c_char;
     let mut host_end: *mut ::core::ffi::c_char = socket_address_tcp_host_end(addr);
     if !host_end.is_null() {
         *host_end = NUL as ::core::ffi::c_char;
-        let mut port: *mut ::core::ffi::c_char = host_end
-            .offset(1 as ::core::ffi::c_int as isize);
+        let mut port: *mut ::core::ffi::c_char = host_end.offset(1 as ::core::ffi::c_int as isize);
         let mut iport: intmax_t = 0;
         let mut c2rust_lvalue: *mut ::core::ffi::c_char = port;
-        let mut ok: ::core::ffi::c_int = try_getdigits(
-            &raw mut c2rust_lvalue,
-            &raw mut iport,
-        ) as ::core::ffi::c_int;
+        let mut ok: ::core::ffi::c_int =
+            try_getdigits(&raw mut c2rust_lvalue, &raw mut iport) as ::core::ffi::c_int;
         if ok == 0 || iport < 0 as intmax_t || iport > UINT16_MAX as intmax_t {
             logmsg(
                 LOGLVL_ERR,
@@ -1113,10 +1073,7 @@ pub unsafe extern "C" fn socket_watcher_init(
     (*watcher).data = NULL;
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn connect_close_cb(
-    mut stream: *mut Stream,
-    mut data: *mut ::core::ffi::c_void,
-) {
+unsafe extern "C" fn connect_close_cb(mut stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
     let mut closed: *mut bool = data as *mut bool;
     *closed = true_0 != 0;
 }
@@ -1204,9 +1161,7 @@ unsafe extern "C" fn socket_alive(
         read_cb: None,
         num_bytes: 0,
     };
-    let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut connected: bool = socket_connect(
         loop_0,
         &raw mut stream,
@@ -1219,10 +1174,9 @@ unsafe extern "C" fn socket_alive(
         return false_0 != 0;
     }
     let mut closed: bool = false_0 != 0;
-    stream.s.internal_close_cb = Some(
-        connect_close_cb
-            as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-    ) as stream_close_cb;
+    stream.s.internal_close_cb =
+        Some(connect_close_cb as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ())
+            as stream_close_cb;
     stream.s.internal_data = &raw mut closed as *mut ::core::ffi::c_void;
     stream_may_close(&raw mut stream.s);
     let mut remaining: int64_t = -1 as int64_t;
@@ -1246,8 +1200,7 @@ unsafe extern "C" fn socket_alive(
             continue;
         }
         let mut now: uint64_t = os_hrtime();
-        remaining
-            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
+        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
         before = now;
         if remaining <= 0 as int64_t {
             break;
@@ -1283,10 +1236,7 @@ pub unsafe extern "C" fn socket_watcher_start(
                     backlog,
                     Some(
                         connection_cb
-                            as unsafe extern "C" fn(
-                                *mut uv_stream_t,
-                                ::core::ffi::c_int,
-                            ) -> (),
+                            as unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
                     ),
                 );
                 if result == 0 as ::core::ffi::c_int {
@@ -1295,31 +1245,23 @@ pub unsafe extern "C" fn socket_watcher_start(
                         __ss_padding: [0; 118],
                         __ss_align: 0,
                     };
-                    let mut c2rust_lvalue: ::core::ffi::c_int = ::core::mem::size_of::<
-                        sockaddr_storage,
-                    >() as ::core::ffi::c_int;
+                    let mut c2rust_lvalue: ::core::ffi::c_int =
+                        ::core::mem::size_of::<sockaddr_storage>() as ::core::ffi::c_int;
                     uv_tcp_getsockname(
                         &raw mut (*watcher).uv.tcp.handle,
                         &raw mut sas as *mut sockaddr,
                         &raw mut c2rust_lvalue,
                     );
-                    let mut port: uint16_t = (if sas.ss_family as ::core::ffi::c_int
-                        == AF_INET
-                    {
-                        (*(&raw mut sas as *mut sockaddr_in)).sin_port
-                            as ::core::ffi::c_int
+                    let mut port: uint16_t = (if sas.ss_family as ::core::ffi::c_int == AF_INET {
+                        (*(&raw mut sas as *mut sockaddr_in)).sin_port as ::core::ffi::c_int
                     } else {
-                        (*(&raw mut sas as *mut sockaddr_in6)).sin6_port
-                            as ::core::ffi::c_int
+                        (*(&raw mut sas as *mut sockaddr_in6)).sin6_port as ::core::ffi::c_int
                     }) as uint16_t;
-                    let mut len: size_t = strlen(
-                        &raw mut (*watcher).addr as *mut ::core::ffi::c_char,
-                    );
+                    let mut len: size_t =
+                        strlen(&raw mut (*watcher).addr as *mut ::core::ffi::c_char);
                     snprintf(
-                        (&raw mut (*watcher).addr as *mut ::core::ffi::c_char)
-                            .offset(len as isize),
-                        ::core::mem::size_of::<[::core::ffi::c_char; 256]>()
-                            .wrapping_sub(len),
+                        (&raw mut (*watcher).addr as *mut ::core::ffi::c_char).offset(len as isize),
+                        ::core::mem::size_of::<[::core::ffi::c_char; 256]>().wrapping_sub(len),
                         b":%u\0".as_ptr() as *const ::core::ffi::c_char,
                         ntohs(port) as ::core::ffi::c_int,
                     );
@@ -1338,23 +1280,18 @@ pub unsafe extern "C" fn socket_watcher_start(
             || result == UV_EADDRINUSE as ::core::ffi::c_int
         {
             let mut loop_0: *mut Loop = (*(*(*watcher).stream).loop_0).data as *mut Loop;
-            if !socket_alive(
-                loop_0,
-                &raw mut (*watcher).addr as *mut ::core::ffi::c_char,
-            ) {
+            if !socket_alive(loop_0, &raw mut (*watcher).addr as *mut ::core::ffi::c_char) {
                 logmsg(
                     LOGLVL_INF,
                     ::core::ptr::null::<::core::ffi::c_char>(),
                     b"socket_watcher_start\0".as_ptr() as *const ::core::ffi::c_char,
                     180 as ::core::ffi::c_int,
                     true_0 != 0,
-                    b"Removing stale socket: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Removing stale socket: %s\0".as_ptr() as *const ::core::ffi::c_char,
                     &raw mut (*watcher).addr as *mut ::core::ffi::c_char,
                 );
-                let mut rm_result: ::core::ffi::c_int = os_remove(
-                    &raw mut (*watcher).addr as *mut ::core::ffi::c_char,
-                );
+                let mut rm_result: ::core::ffi::c_int =
+                    os_remove(&raw mut (*watcher).addr as *mut ::core::ffi::c_char);
                 if rm_result != 0 as ::core::ffi::c_int {
                     logmsg(
                         LOGLVL_WRN,
@@ -1370,14 +1307,10 @@ pub unsafe extern "C" fn socket_watcher_start(
                 } else {
                     let mut uv_loop: *mut uv_loop_t = (*watcher).uv.pipe.handle.loop_0;
                     let mut closed: bool = false_0 != 0;
-                    (*watcher).uv.pipe.handle.data = &raw mut closed
-                        as *mut ::core::ffi::c_void;
+                    (*watcher).uv.pipe.handle.data = &raw mut closed as *mut ::core::ffi::c_void;
                     uv_close(
                         &raw mut (*watcher).uv.pipe.handle as *mut uv_handle_t,
-                        Some(
-                            early_server_close_cb
-                                as unsafe extern "C" fn(*mut uv_handle_t) -> (),
-                        ),
+                        Some(early_server_close_cb as unsafe extern "C" fn(*mut uv_handle_t) -> ()),
                     );
                     let mut remaining: int64_t = -1 as int64_t;
                     let mut before: uint64_t = if remaining > 0 as int64_t {
@@ -1389,9 +1322,7 @@ pub unsafe extern "C" fn socket_watcher_start(
                         if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
                             && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
                         {
-                            multiqueue_process_events(
-                                ::core::ptr::null_mut::<MultiQueue>(),
-                            );
+                            multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
                         } else {
                             loop_poll_events(&raw mut main_loop, remaining);
                         }
@@ -1402,9 +1333,8 @@ pub unsafe extern "C" fn socket_watcher_start(
                             continue;
                         }
                         let mut now: uint64_t = os_hrtime();
-                        remaining
-                            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t)
-                                as int64_t;
+                        remaining -=
+                            now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
                         before = now;
                         if remaining <= 0 as int64_t {
                             break;
@@ -1415,8 +1345,7 @@ pub unsafe extern "C" fn socket_watcher_start(
                         &raw mut (*watcher).uv.pipe.handle,
                         0 as ::core::ffi::c_int,
                     );
-                    (*watcher).stream = &raw mut (*watcher).uv.pipe.handle
-                        as *mut uv_stream_t;
+                    (*watcher).stream = &raw mut (*watcher).uv.pipe.handle as *mut uv_stream_t;
                     (*(*watcher).stream).data = watcher as *mut ::core::ffi::c_void;
                     result = uv_pipe_bind(
                         &raw mut (*watcher).uv.pipe.handle,
@@ -1442,20 +1371,18 @@ pub unsafe extern "C" fn socket_watcher_start(
                 backlog,
                 Some(
                     connection_cb
-                        as unsafe extern "C" fn(
-                            *mut uv_stream_t,
-                            ::core::ffi::c_int,
-                        ) -> (),
+                        as unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
                 ),
             );
         }
     }
     '_c2rust_label: {
-        if result <= 0 as ::core::ffi::c_int {} else {
+        if result <= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"result <= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/event/socket.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/event/socket.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 212 as ::core::ffi::c_uint,
                 __ASSERT_FUNCTION.as_ptr(),
             );
@@ -1463,8 +1390,8 @@ pub unsafe extern "C" fn socket_watcher_start(
     };
     if result < 0 as ::core::ffi::c_int {
         if result == UV_EACCES as ::core::ffi::c_int {
-            *path_tail(&raw mut (*watcher).addr as *mut ::core::ffi::c_char) = NUL
-                as ::core::ffi::c_char;
+            *path_tail(&raw mut (*watcher).addr as *mut ::core::ffi::c_char) =
+                NUL as ::core::ffi::c_char;
             if !os_path_exists(&raw mut (*watcher).addr as *mut ::core::ffi::c_char) {
                 result = UV_ENOENT as ::core::ffi::c_int;
             }
@@ -1518,30 +1445,26 @@ pub unsafe extern "C" fn socket_watcher_close(
     );
 }
 unsafe extern "C" fn connection_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut watcher: *mut SocketWatcher = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut SocketWatcher;
+    let mut watcher: *mut SocketWatcher =
+        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut SocketWatcher;
     let mut status: ::core::ffi::c_int = (*argv.offset(1 as ::core::ffi::c_int as isize))
         .expose_addr() as uintptr_t as ::core::ffi::c_int;
     (*watcher).cb.expect("non-null function pointer")(watcher, status, (*watcher).data);
 }
-unsafe extern "C" fn connection_cb(
-    mut handle: *mut uv_stream_t,
-    mut status: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn connection_cb(mut handle: *mut uv_stream_t, mut status: ::core::ffi::c_int) {
     let mut watcher: *mut SocketWatcher = (*handle).data as *mut SocketWatcher;
     if !(*watcher).events.is_null() {
         multiqueue_put_event(
             (*watcher).events,
             Event {
                 handler: Some(
-                    connection_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    connection_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     watcher as *mut ::core::ffi::c_void,
-                    ::core::ptr::from_exposed_addr_mut::<
-                        ::core::ffi::c_void,
-                    >(status as uintptr_t as usize),
+                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        status as uintptr_t as usize,
+                    ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -1556,9 +1479,7 @@ unsafe extern "C" fn connection_cb(
     } else {
         let mut argv: [*mut ::core::ffi::c_void; 2] = [
             watcher as *mut ::core::ffi::c_void,
-            ::core::ptr::from_exposed_addr_mut::<
-                ::core::ffi::c_void,
-            >(status as uintptr_t as usize),
+            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(status as uintptr_t as usize),
         ];
         connection_event(&raw mut argv as *mut *mut ::core::ffi::c_void);
     };
@@ -1566,15 +1487,10 @@ unsafe extern "C" fn connection_cb(
 unsafe extern "C" fn close_cb(mut handle: *mut uv_handle_t) {
     let mut watcher: *mut SocketWatcher = (*handle).data as *mut SocketWatcher;
     if (*watcher).close_cb.is_some() {
-        (*watcher)
-            .close_cb
-            .expect("non-null function pointer")(watcher, (*watcher).data);
+        (*watcher).close_cb.expect("non-null function pointer")(watcher, (*watcher).data);
     }
 }
-unsafe extern "C" fn connect_cb(
-    mut req: *mut uv_connect_t,
-    mut status: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn connect_cb(mut req: *mut uv_connect_t, mut status: ::core::ffi::c_int) {
     let mut ret_status: *mut ::core::ffi::c_int = (*req).data as *mut ::core::ffi::c_int;
     *ret_status = status;
     let mut handle: *mut uv_handle_t = (*req).handle as *mut uv_handle_t;
@@ -1591,9 +1507,7 @@ pub unsafe extern "C" fn socket_connect(
     mut timeout: ::core::ffi::c_int,
     mut error: *mut *const ::core::ffi::c_char,
 ) -> bool {
-    let mut host_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut host_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut hints: addrinfo = addrinfo {
         ai_flags: 0,
         ai_family: 0,
@@ -1646,16 +1560,13 @@ pub unsafe extern "C" fn socket_connect(
     };
     addr_req.addrinfo = ::core::ptr::null_mut::<addrinfo>();
     let mut addrinfo: *const addrinfo = ::core::ptr::null::<addrinfo>();
-    let mut addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if is_tcp {
         addr = xstrdup(address);
         host_end = strrchr(addr, ':' as ::core::ffi::c_int);
         if host_end.is_null() {
-            *error = gettext(
-                b"tcp address must be host:port\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            *error =
+                gettext(b"tcp address must be host:port\0".as_ptr() as *const ::core::ffi::c_char);
             c2rust_current_block = 8695800224913848308;
         } else {
             *host_end = NUL as ::core::ffi::c_char;
@@ -1679,8 +1590,7 @@ pub unsafe extern "C" fn socket_connect(
             );
             if retval != 0 as ::core::ffi::c_int {
                 *error = gettext(
-                    b"failed to lookup host or port\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"failed to lookup host or port\0".as_ptr() as *const ::core::ffi::c_char
                 );
                 c2rust_current_block = 8695800224913848308;
             } else {
@@ -1695,10 +1605,7 @@ pub unsafe extern "C" fn socket_connect(
             &raw mut req,
             pipe,
             address,
-            Some(
-                connect_cb
-                    as unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
-            ),
+            Some(connect_cb as unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()),
         );
         uv_stream = pipe as *mut uv_stream_t;
         c2rust_current_block = 2370887241019905314;
@@ -1714,10 +1621,7 @@ pub unsafe extern "C" fn socket_connect(
                     (*addrinfo).ai_addr,
                     Some(
                         connect_cb
-                            as unsafe extern "C" fn(
-                                *mut uv_connect_t,
-                                ::core::ffi::c_int,
-                            ) -> (),
+                            as unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
                     ),
                 );
                 uv_stream = tcp as *mut uv_stream_t;
@@ -1736,10 +1640,7 @@ pub unsafe extern "C" fn socket_connect(
                 );
                 (*stream).s.internal_close_cb = Some(
                     connect_close_cb
-                        as unsafe extern "C" fn(
-                            *mut Stream,
-                            *mut ::core::ffi::c_void,
-                        ) -> (),
+                        as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
                 ) as stream_close_cb;
                 (*stream).s.internal_data = &raw mut closed as *mut ::core::ffi::c_void;
                 closed = false_0 != 0;
@@ -1765,9 +1666,8 @@ pub unsafe extern "C" fn socket_connect(
                         continue;
                     }
                     let mut now: uint64_t = os_hrtime();
-                    remaining
-                        -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t)
-                            as int64_t;
+                    remaining -=
+                        now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
                     before = now;
                     if remaining <= 0 as int64_t {
                         break;
@@ -1788,9 +1688,7 @@ pub unsafe extern "C" fn socket_connect(
                         if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
                             && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
                         {
-                            multiqueue_process_events(
-                                ::core::ptr::null_mut::<MultiQueue>(),
-                            );
+                            multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
                         } else {
                             loop_poll_events(&raw mut main_loop, remaining_0);
                         }
@@ -1801,25 +1699,21 @@ pub unsafe extern "C" fn socket_connect(
                             continue;
                         }
                         let mut now_0: uint64_t = os_hrtime();
-                        remaining_0
-                            -= now_0
-                                .wrapping_sub(before_0)
-                                .wrapping_div(1000000 as uint64_t) as int64_t;
+                        remaining_0 -= now_0
+                            .wrapping_sub(before_0)
+                            .wrapping_div(1000000 as uint64_t)
+                            as int64_t;
                         before_0 = now_0;
                         if remaining_0 <= 0 as int64_t {
                             break;
                         }
                     }
-                    if is_tcp as ::core::ffi::c_int != 0
-                        && !(*addrinfo).ai_next.is_null()
-                    {
+                    if is_tcp as ::core::ffi::c_int != 0 && !(*addrinfo).ai_next.is_null() {
                         addrinfo = (*addrinfo).ai_next;
                         c2rust_current_block = 2648362272183767480;
                     } else {
-                        *error = gettext(
-                            b"connection refused\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        );
+                        *error =
+                            gettext(b"connection refused\0".as_ptr() as *const ::core::ffi::c_char);
                         c2rust_current_block = 8695800224913848308;
                     }
                 }

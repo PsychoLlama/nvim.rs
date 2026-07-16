@@ -14,11 +14,7 @@ extern "C" {
     fn lua_objlen(L: *mut lua_State, idx: ::core::ffi::c_int) -> size_t;
     fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
     fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
     fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
     fn lua_pcall(
         L: *mut lua_State,
@@ -34,11 +30,7 @@ extern "C" {
         extramsg: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
     fn luaL_where(L: *mut lua_State, lvl: ::core::ffi::c_int);
-    fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn luaL_buffinit(L: *mut lua_State, B: *mut luaL_Buffer);
     fn luaL_prepbuffer(B: *mut luaL_Buffer) -> *mut ::core::ffi::c_char;
     fn luaL_pushresult(B: *mut luaL_Buffer);
@@ -54,18 +46,10 @@ extern "C" {
     ) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn KeyDict_xdl_diff_get_field(
-        str: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut KeySetLink;
+    fn KeyDict_xdl_diff_get_field(str: *const ::core::ffi::c_char, len: size_t) -> *mut KeySetLink;
     fn api_free_string(value: String_0);
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn xdl_diff(
         mf1: *mut mmfile_t,
         mf2: *mut mmfile_t,
@@ -196,9 +180,8 @@ pub struct KeySetLink {
     pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
-pub type FieldHashfn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
->;
+pub type FieldHashfn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_xdl_diff {
@@ -305,9 +288,7 @@ pub struct hunkpriv_t {
     pub linematch: int64_t,
     pub iwhite: bool,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const BUFSIZ: ::core::ffi::c_int = 8192 as ::core::ffi::c_int;
 pub const LUA_TSTRING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const LUA_TTABLE: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
@@ -315,14 +296,10 @@ pub const LUA_TFUNCTION: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const KEYSET_OPTIDX_xdl_diff__ctxlen: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_xdl_diff__on_hunk: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_xdl_diff__algorithm: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_xdl_diff__linematch: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_xdl_diff__result_type: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_xdl_diff__interhunkctxlen: ::core::ffi::c_int = 6
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_xdl_diff__algorithm: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_xdl_diff__linematch: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_xdl_diff__result_type: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_xdl_diff__interhunkctxlen: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const KEYDICT_INIT: KeyDict_xdl_diff = KeyDict_xdl_diff {
     is_set__xdl_diff_: 0 as OptionalKeys,
     on_hunk: 0,
@@ -347,28 +324,28 @@ pub const KEYDICT_INIT: KeyDict_xdl_diff = KeyDict_xdl_diff {
     ignore_blank_lines: false,
     indent_heuristic: false,
 };
-pub const XDF_NEED_MINIMAL: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 0 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 1 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_CHANGE: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 2 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_AT_EOL: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 3 as ::core::ffi::c_int;
-pub const XDF_IGNORE_CR_AT_EOL: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 4 as ::core::ffi::c_int;
-pub const XDF_IGNORE_BLANK_LINES: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 7 as ::core::ffi::c_int;
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 15 as ::core::ffi::c_int;
-pub const XDF_INDENT_HEURISTIC: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 23 as ::core::ffi::c_int;
-pub const COMPARED_BUFFER0: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 0 as ::core::ffi::c_int;
-pub const COMPARED_BUFFER1: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 1 as ::core::ffi::c_int;
+pub const XDF_NEED_MINIMAL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
+pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
+pub const XDF_IGNORE_WHITESPACE_CHANGE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
+pub const XDF_IGNORE_WHITESPACE_AT_EOL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 3 as ::core::ffi::c_int;
+pub const XDF_IGNORE_CR_AT_EOL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
+pub const XDF_IGNORE_BLANK_LINES: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
+pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
+pub const XDF_INDENT_HEURISTIC: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 23 as ::core::ffi::c_int;
+pub const COMPARED_BUFFER0: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 0 as ::core::ffi::c_int;
+pub const COMPARED_BUFFER1: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
 unsafe extern "C" fn lua_pushhunk(
     mut lstate: *mut lua_State,
     mut start_a: ::core::ffi::c_long,
@@ -408,22 +385,14 @@ unsafe extern "C" fn get_linematch_results(
     mut count_b: ::core::ffi::c_int,
     mut iwhite: bool,
 ) {
-    let mut ma0: mmfile_t = fastforward_buf_to_lnum(
-        *ma,
-        start_a as linenr_T + 1 as linenr_T,
-    );
-    let mut mb0: mmfile_t = fastforward_buf_to_lnum(
-        *mb,
-        start_b as linenr_T + 1 as linenr_T,
-    );
+    let mut ma0: mmfile_t = fastforward_buf_to_lnum(*ma, start_a as linenr_T + 1 as linenr_T);
+    let mut mb0: mmfile_t = fastforward_buf_to_lnum(*mb, start_b as linenr_T + 1 as linenr_T);
     let mut diff_begin: [*const mmfile_t; 2] = [
         &raw mut ma0 as *const mmfile_t,
         &raw mut mb0 as *const mmfile_t,
     ];
     let mut diff_length: [::core::ffi::c_int; 2] = [count_a, count_b];
-    let mut decisions: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-        ::core::ffi::c_int,
-    >();
+    let mut decisions: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let mut decisions_length: size_t = linematch_nbuffers(
         &raw mut diff_begin as *mut *const mmfile_t,
         &raw mut diff_length as *mut ::core::ffi::c_int,
@@ -490,8 +459,7 @@ unsafe extern "C" fn write_string(
                     8192 as ::core::ffi::c_int
                 } else {
                     8192 as ::core::ffi::c_int
-                })
-            {
+                }) {
                 size - total
             } else if 8192 as ::core::ffi::c_int > 16384 as ::core::ffi::c_int {
                 8192 as ::core::ffi::c_int
@@ -504,8 +472,7 @@ unsafe extern "C" fn write_string(
             }
             memcpy(
                 p as *mut ::core::ffi::c_void,
-                (*mb.offset(i as isize)).ptr.offset(total as isize)
-                    as *const ::core::ffi::c_void,
+                (*mb.offset(i as isize)).ptr.offset(total as isize) as *const ::core::ffi::c_void,
                 tocopy as ::core::ffi::c_uint as size_t,
             );
             (*buf).p = (*buf).p.offset(tocopy as ::core::ffi::c_uint as isize);
@@ -524,9 +491,7 @@ unsafe extern "C" fn hunk_locations_cb(
 ) -> ::core::ffi::c_int {
     let mut priv_0: *mut hunkpriv_t = cb_data as *mut hunkpriv_t;
     let mut lstate: *mut lua_State = (*priv_0).lstate;
-    if (*priv_0).linematch > 0 as int64_t
-        && (count_a + count_b) as int64_t <= (*priv_0).linematch
-    {
+    if (*priv_0).linematch > 0 as int64_t && (count_a + count_b) as int64_t <= (*priv_0).linematch {
         get_linematch_results(
             lstate,
             (*priv_0).ma,
@@ -632,18 +597,13 @@ unsafe extern "C" fn process_xdl_diff_opts(
     mut err: *mut Error,
 ) -> NluaXdiffMode {
     let mut opts: KeyDict_xdl_diff = KEYDICT_INIT;
-    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut err_param: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     nlua_pop_keydict(
         lstate,
         &raw mut opts as *mut ::core::ffi::c_void,
         Some(
             KeyDict_xdl_diff_get_field
-                as unsafe extern "C" fn(
-                    *const ::core::ffi::c_char,
-                    size_t,
-                ) -> *mut KeySetLink,
+                as unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
         ),
         &raw mut err_param,
         ::core::ptr::null_mut::<Arena>(),
@@ -669,8 +629,7 @@ unsafe extern "C" fn process_xdl_diff_opts(
                     api_set_error(
                         err,
                         kErrorTypeValidation,
-                        b"not a valid result_type\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"not a valid result_type\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_exit_1;
                 }
@@ -747,42 +706,36 @@ unsafe extern "C" fn process_xdl_diff_opts(
                 break '_exit_1;
             }
         }
-        (*params).flags
-            |= (if opts.ignore_whitespace as ::core::ffi::c_int != 0 {
-                XDF_IGNORE_WHITESPACE
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_ulong;
-        (*params).flags
-            |= (if opts.ignore_whitespace_change as ::core::ffi::c_int != 0 {
-                XDF_IGNORE_WHITESPACE_CHANGE
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_ulong;
-        (*params).flags
-            |= (if opts.ignore_whitespace_change_at_eol as ::core::ffi::c_int != 0 {
-                XDF_IGNORE_WHITESPACE_AT_EOL
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_ulong;
-        (*params).flags
-            |= (if opts.ignore_cr_at_eol as ::core::ffi::c_int != 0 {
-                XDF_IGNORE_CR_AT_EOL
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_ulong;
-        (*params).flags
-            |= (if opts.ignore_blank_lines as ::core::ffi::c_int != 0 {
-                XDF_IGNORE_BLANK_LINES
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_ulong;
-        (*params).flags
-            |= (if opts.indent_heuristic as ::core::ffi::c_int != 0 {
-                XDF_INDENT_HEURISTIC
-            } else {
-                0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_ulong;
+        (*params).flags |= (if opts.ignore_whitespace as ::core::ffi::c_int != 0 {
+            XDF_IGNORE_WHITESPACE
+        } else {
+            0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_ulong;
+        (*params).flags |= (if opts.ignore_whitespace_change as ::core::ffi::c_int != 0 {
+            XDF_IGNORE_WHITESPACE_CHANGE
+        } else {
+            0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_ulong;
+        (*params).flags |= (if opts.ignore_whitespace_change_at_eol as ::core::ffi::c_int != 0 {
+            XDF_IGNORE_WHITESPACE_AT_EOL
+        } else {
+            0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_ulong;
+        (*params).flags |= (if opts.ignore_cr_at_eol as ::core::ffi::c_int != 0 {
+            XDF_IGNORE_CR_AT_EOL
+        } else {
+            0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_ulong;
+        (*params).flags |= (if opts.ignore_blank_lines as ::core::ffi::c_int != 0 {
+            XDF_IGNORE_BLANK_LINES
+        } else {
+            0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_ulong;
+        (*params).flags |= (if opts.indent_heuristic as ::core::ffi::c_int != 0 {
+            XDF_INDENT_HEURISTIC
+        } else {
+            0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_ulong;
         if opts.is_set__xdl_diff_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_xdl_diff__on_hunk
             != 0 as ::core::ffi::c_ulonglong
@@ -806,9 +759,7 @@ unsafe extern "C" fn process_xdl_diff_opts(
     return mode;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nlua_xdl_diff(
-    mut lstate: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn nlua_xdl_diff(mut lstate: *mut lua_State) -> ::core::ffi::c_int {
     let mut buf: luaL_Buffer = luaL_Buffer {
         p: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         lvl: 0,
@@ -966,11 +917,7 @@ pub unsafe extern "C" fn nlua_xdl_diff(
                         > 0 as ::core::ffi::c_ulong,
                 };
                 ecb.priv_0 = &raw mut priv_0 as *mut ::core::ffi::c_void;
-                lua_createtable(
-                    lstate,
-                    0 as ::core::ffi::c_int,
-                    0 as ::core::ffi::c_int,
-                );
+                lua_createtable(lstate, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
             }
             _ => {}
         }
@@ -982,9 +929,7 @@ pub unsafe extern "C" fn nlua_xdl_diff(
             &raw mut ecb,
         ) == -1 as ::core::ffi::c_int
         {
-            if !(err.type_0 as ::core::ffi::c_int
-                != kErrorTypeNone as ::core::ffi::c_int)
-            {
+            if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
                 api_set_error(
                     &raw mut err,
                     kErrorTypeException,
@@ -1007,7 +952,7 @@ pub unsafe extern "C" fn nlua_xdl_diff(
     } else if mode as ::core::ffi::c_uint
         == kNluaXdiffModeLocations as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return 1 as ::core::ffi::c_int
+        return 1 as ::core::ffi::c_int;
     }
     return 0 as ::core::ffi::c_int;
 }

@@ -58,17 +58,8 @@ extern "C" {
     fn api_free_dict(value: Dict);
     fn api_clear_error(value: *mut Error);
     fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
-    fn remote_ui_disconnect(
-        channel_id: uint64_t,
-        err: *mut Error,
-        send_error_exit: bool,
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
+    fn remote_ui_disconnect(channel_id: uint64_t, err: *mut Error, send_error_exit: bool);
     fn remote_ui_flush_pending_data(ui: *mut RemoteUI);
     static mut channels: Map_uint64_t_ptr_t;
     fn channel_close(
@@ -95,11 +86,7 @@ extern "C" {
         cb: wbuffer_data_finalizer,
     ) -> *mut WBuffer;
     fn wstream_release_wbuffer(buffer: *mut WBuffer);
-    fn rstream_start(
-        stream: *mut RStream,
-        cb: stream_read_cb,
-        data: *mut ::core::ffi::c_void,
-    );
+    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
     static mut main_loop: Loop;
     static mut ch_before_blocking_events: *mut MultiQueue;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
@@ -202,9 +189,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -683,9 +669,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -712,9 +697,7 @@ pub struct C2Rust_Unnamed_3 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_4 {
@@ -810,12 +793,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -868,12 +849,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -900,9 +879,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -913,9 +891,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -940,15 +917,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_11 {
@@ -1174,9 +1146,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1276,9 +1247,7 @@ pub struct UIClientHandler {
     pub name: *const ::core::ffi::c_char,
     pub fn_0: Option<unsafe extern "C" fn(Array) -> ()>,
 }
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -1293,9 +1262,7 @@ pub struct wbuffer {
     pub data: *mut ::core::ffi::c_char,
     pub cb: wbuffer_data_finalizer,
 }
-pub type wbuffer_data_finalizer = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
+pub type wbuffer_data_finalizer = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
 pub type WBuffer = wbuffer;
 pub type ChannelStreamType = ::core::ffi::c_uint;
 pub const kChannelStreamInternal: ChannelStreamType = 4;
@@ -1544,12 +1511,8 @@ pub struct C2Rust_Unnamed_22 {
     pub init_array: [*mut Channel; 4],
 }
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -1603,24 +1566,18 @@ unsafe extern "C" fn channel_outstream(mut chan: *mut Channel) -> *mut RStream {
     }
     abort();
 }
-pub const REQ: [::core::ffi::c_char; 12] = unsafe {
-    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[request]  \0")
-};
-pub const RES: [::core::ffi::c_char; 12] = unsafe {
-    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[response] \0")
-};
-pub const NOT: [::core::ffi::c_char; 12] = unsafe {
-    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[notify]   \0")
-};
-pub const ERR: [::core::ffi::c_char; 12] = unsafe {
-    ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[error]    \0")
-};
-pub const SEND: [::core::ffi::c_char; 3] = unsafe {
-    ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"->\0")
-};
-pub const RECV: [::core::ffi::c_char; 3] = unsafe {
-    ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"<-\0")
-};
+pub const REQ: [::core::ffi::c_char; 12] =
+    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[request]  \0") };
+pub const RES: [::core::ffi::c_char; 12] =
+    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[response] \0") };
+pub const NOT: [::core::ffi::c_char; 12] =
+    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[notify]   \0") };
+pub const ERR: [::core::ffi::c_char; 12] =
+    unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"[error]    \0") };
+pub const SEND: [::core::ffi::c_char; 3] =
+    unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"->\0") };
+pub const RECV: [::core::ffi::c_char; 3] =
+    unsafe { ::core::mem::transmute::<[u8; 3], [::core::ffi::c_char; 3]>(*b"<-\0") };
 unsafe extern "C" fn log_request(
     mut dir: *mut ::core::ffi::c_char,
     mut channel_id: uint64_t,
@@ -1688,8 +1645,7 @@ pub unsafe extern "C" fn rpc_start(mut channel: *mut Channel) {
     (*channel).is_rpc = true_0 != 0;
     let mut rpc: *mut RpcState = &raw mut (*channel).rpc;
     (*rpc).closed = false_0 != 0;
-    (*rpc).unpacker = xcalloc(1 as size_t, ::core::mem::size_of::<Unpacker>())
-        as *mut Unpacker;
+    (*rpc).unpacker = xcalloc(1 as size_t, ::core::mem::size_of::<Unpacker>()) as *mut Unpacker;
     unpacker_init((*rpc).unpacker);
     (*rpc).next_request_id = 1 as uint32_t;
     (*rpc).info = Dict {
@@ -1711,8 +1667,7 @@ pub unsafe extern "C" fn rpc_start(mut channel: *mut Channel) {
             b"rpc_start\0".as_ptr() as *const ::core::ffi::c_char,
             93 as ::core::ffi::c_int,
             true_0 != 0,
-            b"rpc ch %lu in-stream=%p out-stream=%p\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"rpc ch %lu in-stream=%p out-stream=%p\0".as_ptr() as *const ::core::ffi::c_char,
             (*channel).id,
             in_0 as *mut ::core::ffi::c_void,
             out as *mut ::core::ffi::c_void,
@@ -1735,8 +1690,7 @@ pub unsafe extern "C" fn rpc_start(mut channel: *mut Channel) {
 }
 unsafe extern "C" fn find_rpc_channel(mut id: uint64_t) -> *mut Channel {
     let mut chan: *mut Channel = find_channel(id);
-    if chan.is_null() || !(*chan).is_rpc || (*chan).rpc.closed as ::core::ffi::c_int != 0
-    {
+    if chan.is_null() || !(*chan).is_rpc || (*chan).rpc.closed as ::core::ffi::c_int != 0 {
         return ::core::ptr::null_mut::<Channel>();
     }
     return chan;
@@ -1748,17 +1702,19 @@ pub unsafe extern "C" fn rpc_send_event(
     mut args: Array,
 ) -> bool {
     let mut channel: *mut Channel = ::core::ptr::null_mut::<Channel>();
-    if id != 0
-        && {
-            channel = find_rpc_channel(id);
-            channel.is_null()
-        }
-    {
+    if id != 0 && {
+        channel = find_rpc_channel(id);
+        channel.is_null()
+    } {
         return false_0 != 0;
     }
     log_notify(
         SEND.as_ptr() as *mut ::core::ffi::c_char,
-        if !channel.is_null() { (*channel).id } else { 0 as uint64_t },
+        if !channel.is_null() {
+            (*channel).id
+        } else {
+            0 as uint64_t
+        },
         name,
     );
     if !channel.is_null() {
@@ -1823,13 +1779,11 @@ pub unsafe extern "C" fn rpc_send_call(
             ::core::mem::size_of::<*mut ChannelCallFrame>()
                 .wrapping_mul((*rpc).call_stack.capacity),
         ) as *mut *mut ChannelCallFrame;
-    } else {};
+    } else {
+    };
     let c2rust_fresh22 = (*rpc).call_stack.size;
     (*rpc).call_stack.size = (*rpc).call_stack.size.wrapping_add(1);
-    let c2rust_lvalue_ptr = &raw mut *(*rpc)
-        .call_stack
-        .items
-        .offset(c2rust_fresh22 as isize);
+    let c2rust_lvalue_ptr = &raw mut *(*rpc).call_stack.items.offset(c2rust_fresh22 as isize);
     *c2rust_lvalue_ptr = &raw mut frame;
     let mut remaining: int64_t = -1 as int64_t;
     let mut before: uint64_t = if remaining > 0 as int64_t {
@@ -1837,9 +1791,7 @@ pub unsafe extern "C" fn rpc_send_call(
     } else {
         0 as uint64_t
     };
-    while !(frame.returned as ::core::ffi::c_int != 0
-        || (*rpc).closed as ::core::ffi::c_int != 0)
-    {
+    while !(frame.returned as ::core::ffi::c_int != 0 || (*rpc).closed as ::core::ffi::c_int != 0) {
         if !(*channel).events.is_null() && !multiqueue_empty((*channel).events) {
             multiqueue_process_events((*channel).events);
         } else {
@@ -1852,8 +1804,7 @@ pub unsafe extern "C" fn rpc_send_call(
             continue;
         }
         let mut now: uint64_t = os_hrtime();
-        remaining
-            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
+        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
         before = now;
         if remaining <= 0 as int64_t {
             break;
@@ -1891,7 +1842,9 @@ pub unsafe extern "C" fn rpc_send_call(
                 && (*array.items.offset(0 as ::core::ffi::c_int as isize)).type_0
                     as ::core::ffi::c_uint
                     == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && ((*array.items.offset(0 as ::core::ffi::c_int as isize)).data.integer
+                && ((*array.items.offset(0 as ::core::ffi::c_int as isize))
+                    .data
+                    .integer
                     == kErrorTypeException as ::core::ffi::c_int as Integer
                     || (*array.items.offset(0 as ::core::ffi::c_int as isize))
                         .data
@@ -1903,8 +1856,9 @@ pub unsafe extern "C" fn rpc_send_call(
             {
                 api_set_error(
                     err,
-                    (*array.items.offset(0 as ::core::ffi::c_int as isize)).data.integer
-                        as ErrorType,
+                    (*array.items.offset(0 as ::core::ffi::c_int as isize))
+                        .data
+                        .integer as ErrorType,
                     b"%s\0".as_ptr() as *const ::core::ffi::c_char,
                     (*array.items.offset(1 as ::core::ffi::c_int as isize))
                         .data
@@ -1980,7 +1934,11 @@ unsafe extern "C" fn receive_msgpack(
             b"ch %lu was closed by the peer\0".as_ptr() as *const ::core::ffi::c_char,
             (*channel).id,
         );
-        chan_close_on_err(channel, &raw mut buf as *mut ::core::ffi::c_char, LOGLVL_INF);
+        chan_close_on_err(
+            channel,
+            &raw mut buf as *mut ::core::ffi::c_char,
+            LOGLVL_INF,
+        );
     }
     channel_decref(channel);
     return consumed;
@@ -1991,12 +1949,13 @@ unsafe extern "C" fn find_call_frame(
 ) -> *mut ChannelCallFrame {
     let mut i: size_t = 0 as size_t;
     while i < (*rpc).call_stack.size {
-        let mut frame: *mut ChannelCallFrame = *(*rpc)
-            .call_stack
-            .items
-            .offset(
-                (*rpc).call_stack.size.wrapping_sub(i).wrapping_sub(1 as size_t) as isize,
-            );
+        let mut frame: *mut ChannelCallFrame = *(*rpc).call_stack.items.offset(
+            (*rpc)
+                .call_stack
+                .size
+                .wrapping_sub(i)
+                .wrapping_sub(1 as size_t) as isize,
+        );
         if (*frame).request_id == request_id {
             return frame;
         }
@@ -2007,9 +1966,7 @@ unsafe extern "C" fn find_call_frame(
 unsafe extern "C" fn parse_msgpack(mut channel: *mut Channel) {
     let mut p: *mut Unpacker = (*channel).rpc.unpacker;
     while unpacker_advance(p) {
-        if (*p).type_0 as ::core::ffi::c_int
-            == kMessageTypeRedrawEvent as ::core::ffi::c_int
-        {
+        if (*p).type_0 as ::core::ffi::c_int == kMessageTypeRedrawEvent as ::core::ffi::c_int {
             if ui_client_attached {
                 if (*p).has_grid_line_event {
                     ui_client_event_raw_line(&raw mut (*p).grid_line_event);
@@ -2018,33 +1975,27 @@ unsafe extern "C" fn parse_msgpack(mut channel: *mut Channel) {
                     && (*p).result.type_0 as ::core::ffi::c_uint
                         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    (*p)
-                        .ui_handler
-                        .fn_0
-                        .expect("non-null function pointer")((*p).result.data.array);
+                    (*p).ui_handler.fn_0.expect("non-null function pointer")(
+                        (*p).result.data.array,
+                    );
                 }
             }
             arena_mem_free(arena_finish(&raw mut (*p).arena));
-        } else if (*p).type_0 as ::core::ffi::c_int
-            == kMessageTypeResponse as ::core::ffi::c_int
-        {
+        } else if (*p).type_0 as ::core::ffi::c_int == kMessageTypeResponse as ::core::ffi::c_int {
             let mut frame: *mut ChannelCallFrame = if (*channel).rpc.client_type
-                as ::core::ffi::c_int == kClientTypeMsgpackRpc as ::core::ffi::c_int
+                as ::core::ffi::c_int
+                == kClientTypeMsgpackRpc as ::core::ffi::c_int
             {
                 find_call_frame(&raw mut (*channel).rpc, (*p).request_id)
             } else {
-                *(*channel)
-                    .rpc
-                    .call_stack
-                    .items
-                    .offset(
-                        (*channel)
-                            .rpc
-                            .call_stack
-                            .size
-                            .wrapping_sub(0 as size_t)
-                            .wrapping_sub(1 as size_t) as isize,
-                    )
+                *(*channel).rpc.call_stack.items.offset(
+                    (*channel)
+                        .rpc
+                        .call_stack
+                        .size
+                        .wrapping_sub(0 as size_t)
+                        .wrapping_sub(1 as size_t) as isize,
+                )
             };
             if frame.is_null() || (*p).request_id != (*frame).request_id {
                 let mut buf: [::core::ffi::c_char; 256] = [0; 256];
@@ -2084,9 +2035,7 @@ unsafe extern "C" fn parse_msgpack(mut channel: *mut Channel) {
                 (*p).request_id,
             );
         } else {
-            if (*p).type_0 as ::core::ffi::c_int
-                == kMessageTypeNotification as ::core::ffi::c_int
-            {
+            if (*p).type_0 as ::core::ffi::c_int == kMessageTypeNotification as ::core::ffi::c_int {
                 log_notify(
                     RECV.as_ptr() as *mut ::core::ffi::c_char,
                     (*channel).id,
@@ -2107,7 +2056,8 @@ unsafe extern "C" fn parse_msgpack(mut channel: *mut Channel) {
                 chan_close_on_err(
                     channel,
                     b"msgpack-rpc request args must be an array\0".as_ptr()
-                        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                        as *const ::core::ffi::c_char
+                        as *mut ::core::ffi::c_char,
                     LOGLVL_ERR,
                 );
                 return;
@@ -2128,14 +2078,14 @@ unsafe extern "C" fn handle_request(
 ) {
     '_c2rust_label: {
         if (*p).type_0 as ::core::ffi::c_int == kMessageTypeRequest as ::core::ffi::c_int
-            || (*p).type_0 as ::core::ffi::c_int
-                == kMessageTypeNotification as ::core::ffi::c_int
-        {} else {
+            || (*p).type_0 as ::core::ffi::c_int == kMessageTypeNotification as ::core::ffi::c_int
+        {
+        } else {
             __assert_fail(
-                b"p->type == kMessageTypeRequest || p->type == kMessageTypeNotification\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/channel.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"p->type == kMessageTypeRequest || p->type == kMessageTypeNotification\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/channel.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 311 as ::core::ffi::c_uint,
                 b"void handle_request(Channel *, Unpacker *, Array)\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -2154,8 +2104,8 @@ unsafe extern "C" fn handle_request(
         arena_mem_free(arena_finish(&raw mut (*p).arena));
         return;
     }
-    let mut evdata: *mut RequestEvent = xmalloc(::core::mem::size_of::<RequestEvent>())
-        as *mut RequestEvent;
+    let mut evdata: *mut RequestEvent =
+        xmalloc(::core::mem::size_of::<RequestEvent>()) as *mut RequestEvent;
     (*evdata).type_0 = (*p).type_0;
     (*evdata).channel = channel;
     (*evdata).handler = (*p).handler;
@@ -2168,20 +2118,14 @@ unsafe extern "C" fn handle_request(
         let mut is_get_mode: bool = (*p).handler.fn_0
             == Some(
                 handle_nvim_get_mode
-                    as unsafe extern "C" fn(
-                        uint64_t,
-                        Array,
-                        *mut Arena,
-                        *mut Error,
-                    ) -> Object,
+                    as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
             );
         if is_get_mode as ::core::ffi::c_int != 0 && !input_blocking() {
             multiqueue_put_event(
                 ch_before_blocking_events,
                 Event {
                     handler: Some(
-                        request_event
-                            as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                        request_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                     ),
                     argv: [
                         evdata as *mut ::core::ffi::c_void,
@@ -2204,19 +2148,13 @@ unsafe extern "C" fn handle_request(
         let mut is_resize: bool = (*p).handler.fn_0
             == Some(
                 handle_nvim_ui_try_resize
-                    as unsafe extern "C" fn(
-                        uint64_t,
-                        Array,
-                        *mut Arena,
-                        *mut Error,
-                    ) -> Object,
+                    as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
             );
         if is_resize {
             let mut ev: Event = event_create_oneshot(
                 Event {
                     handler: Some(
-                        request_event
-                            as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                        request_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                     ),
                     argv: [
                         evdata as *mut ::core::ffi::c_void,
@@ -2240,8 +2178,7 @@ unsafe extern "C" fn handle_request(
                 (*channel).events,
                 Event {
                     handler: Some(
-                        request_event
-                            as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                        request_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                     ),
                     argv: [
                         evdata as *mut ::core::ffi::c_void,
@@ -2275,8 +2212,8 @@ unsafe extern "C" fn request_event(mut argv: *mut *mut ::core::ffi::c_void) {
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    let mut e: *mut RequestEvent = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut RequestEvent;
+    let mut e: *mut RequestEvent =
+        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut RequestEvent;
     let mut channel: *mut Channel = (*e).channel;
     let mut handler: MsgpackRpcRequestHandler = (*e).handler;
     let mut error: Error = Error {
@@ -2284,11 +2221,12 @@ unsafe extern "C" fn request_event(mut argv: *mut *mut ::core::ffi::c_void) {
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     if !(*channel).rpc.closed {
-        result = handler
-            .fn_0
-            .expect(
-                "non-null function pointer",
-            )((*channel).id, (*e).args, &raw mut (*e).used_mem, &raw mut error);
+        result = handler.fn_0.expect("non-null function pointer")(
+            (*channel).id,
+            (*e).args,
+            &raw mut (*e).used_mem,
+            &raw mut error,
+        );
         if (*e).type_0 as ::core::ffi::c_int == kMessageTypeRequest as ::core::ffi::c_int
             || error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
         {
@@ -2311,10 +2249,7 @@ unsafe extern "C" fn request_event(mut argv: *mut *mut ::core::ffi::c_void) {
     api_clear_error(&raw mut error);
 }
 #[no_mangle]
-pub unsafe extern "C" fn rpc_write_raw(
-    mut id: uint64_t,
-    mut buffer: *mut WBuffer,
-) -> bool {
+pub unsafe extern "C" fn rpc_write_raw(mut id: uint64_t, mut buffer: *mut WBuffer) -> bool {
     let mut channel: *mut Channel = find_rpc_channel(id);
     if channel.is_null() {
         wstream_release_wbuffer(buffer);
@@ -2322,10 +2257,7 @@ pub unsafe extern "C" fn rpc_write_raw(
     }
     return channel_write(channel, buffer);
 }
-unsafe extern "C" fn channel_write(
-    mut channel: *mut Channel,
-    mut buffer: *mut WBuffer,
-) -> bool {
+unsafe extern "C" fn channel_write(mut channel: *mut Channel, mut buffer: *mut WBuffer) -> bool {
     let mut err: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if (*channel).rpc.closed {
         wstream_release_wbuffer(buffer);
@@ -2381,16 +2313,18 @@ unsafe extern "C" fn channel_write(
         chan_close_on_err(
             channel,
             &raw mut buf as *mut ::core::ffi::c_char,
-            if err == UV_EPIPE as ::core::ffi::c_int { LOGLVL_INF } else { LOGLVL_ERR },
+            if err == UV_EPIPE as ::core::ffi::c_int {
+                LOGLVL_INF
+            } else {
+                LOGLVL_ERR
+            },
         );
     }
     return err == 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn internal_read_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut channel: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Channel;
-    let mut buffer: *mut WBuffer = *argv.offset(1 as ::core::ffi::c_int as isize)
-        as *mut WBuffer;
+    let mut channel: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
+    let mut buffer: *mut WBuffer = *argv.offset(1 as ::core::ffi::c_int as isize) as *mut WBuffer;
     let mut p: *mut Unpacker = (*channel).rpc.unpacker;
     (*p).read_ptr = (*buffer).data;
     (*p).read_size = (*buffer).size;
@@ -2399,8 +2333,8 @@ unsafe extern "C" fn internal_read_event(mut argv: *mut *mut ::core::ffi::c_void
         if !(*channel).rpc.closed {
             chan_close_on_err(
                 channel,
-                b"internal channel: internal error\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                b"internal channel: internal error\0".as_ptr() as *const ::core::ffi::c_char
+                    as *mut ::core::ffi::c_char,
                 LOGLVL_ERR,
             );
         }
@@ -2429,13 +2363,17 @@ unsafe extern "C" fn send_error(
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    serialize_response(chan, handler, type_0, id, &raw mut e, &raw mut c2rust_lvalue);
+    serialize_response(
+        chan,
+        handler,
+        type_0,
+        id,
+        &raw mut e,
+        &raw mut c2rust_lvalue,
+    );
     api_clear_error(&raw mut e);
 }
-unsafe extern "C" fn broadcast_event(
-    mut name: *const ::core::ffi::c_char,
-    mut args: Array,
-) {
+unsafe extern "C" fn broadcast_event(mut name: *const ::core::ffi::c_char, mut args: Array) {
     let mut chans: C2Rust_Unnamed_22 = C2Rust_Unnamed_22 {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -2446,8 +2384,8 @@ unsafe extern "C" fn broadcast_event(
         .wrapping_div(::core::mem::size_of::<*mut Channel>())
         .wrapping_div(
             (::core::mem::size_of::<[*mut Channel; 4]>()
-                .wrapping_rem(::core::mem::size_of::<*mut Channel>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<*mut Channel>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     chans.size = 0 as size_t;
     chans.items = &raw mut chans.init_array as *mut *mut Channel;
@@ -2467,12 +2405,11 @@ unsafe extern "C" fn broadcast_event(
                     chans.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<*mut Channel>().wrapping_mul(chans.capacity),
                 ) as *mut *mut Channel;
-            } else {};
+            } else {
+            };
             let c2rust_fresh20 = chans.size;
             chans.size = chans.size.wrapping_add(1);
-            let c2rust_lvalue_ptr = &raw mut *chans
-                .items
-                .offset(c2rust_fresh20 as isize);
+            let c2rust_lvalue_ptr = &raw mut *chans.items.offset(c2rust_fresh20 as isize);
             *c2rust_lvalue_ptr = channel;
         }
         __i = __i.wrapping_add(1);
@@ -2481,8 +2418,8 @@ unsafe extern "C" fn broadcast_event(
         serialize_request(chans.items, chans.size, 0 as uint32_t, name, args);
     }
     if chans.items != &raw mut chans.init_array as *mut *mut Channel {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut chans.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut chans.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -2498,8 +2435,7 @@ pub unsafe extern "C" fn rpc_close(mut channel: *mut Channel) {
         main_loop.fast_events,
         Event {
             handler: Some(
-                rpc_close_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                rpc_close_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 channel as *mut ::core::ffi::c_void,
@@ -2517,23 +2453,26 @@ pub unsafe extern "C" fn rpc_close(mut channel: *mut Channel) {
     );
 }
 unsafe extern "C" fn rpc_close_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut channel: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Channel;
+    let mut channel: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
     '_c2rust_label: {
-        if !channel.is_null() {} else {
+        if !channel.is_null() {
+        } else {
             __assert_fail(
                 b"channel\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/channel.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/channel.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 493 as ::core::ffi::c_uint,
                 b"void rpc_close_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     channel_decref(channel);
-    remote_ui_disconnect((*channel).id, ::core::ptr::null_mut::<Error>(), false_0 != 0);
-    let mut is_ui_client: bool = ui_client_channel_id != 0
-        && (*channel).id == ui_client_channel_id;
+    remote_ui_disconnect(
+        (*channel).id,
+        ::core::ptr::null_mut::<Error>(),
+        false_0 != 0,
+    );
+    let mut is_ui_client: bool = ui_client_channel_id != 0 && (*channel).id == ui_client_channel_id;
     if is_ui_client {
         ui_client_attach_to_restarted_server();
         if ui_client_channel_id != (*channel).id {
@@ -2570,11 +2509,7 @@ unsafe extern "C" fn chan_close_on_err(
 ) {
     let mut i: size_t = 0 as size_t;
     while i < (*channel).rpc.call_stack.size {
-        let mut frame: *mut ChannelCallFrame = *(*channel)
-            .rpc
-            .call_stack
-            .items
-            .offset(i as isize);
+        let mut frame: *mut ChannelCallFrame = *(*channel).rpc.call_stack.items.offset(i as isize);
         if !(*frame).returned {
             (*frame).returned = true_0 != 0;
             (*frame).errored = true_0 != 0;
@@ -2587,9 +2522,7 @@ unsafe extern "C" fn chan_close_on_err(
                     ),
                 },
             };
-            (*frame).result_mem = arena_finish(
-                &raw mut (*(*channel).rpc.unpacker).arena,
-            );
+            (*frame).result_mem = arena_finish(&raw mut (*(*channel).rpc.unpacker).arena);
         }
         i = i.wrapping_add(1);
     }
@@ -2626,8 +2559,11 @@ unsafe extern "C" fn serialize_request(
     packer_buffer_init_channels(chans, nchans, &raw mut packer);
     mpack_array(
         &raw mut packer.ptr,
-        (if request_id != 0 { 4 as ::core::ffi::c_int } else { 3 as ::core::ffi::c_int })
-            as uint32_t,
+        (if request_id != 0 {
+            4 as ::core::ffi::c_int
+        } else {
+            3 as ::core::ffi::c_int
+        }) as uint32_t,
     );
     let c2rust_fresh19 = packer.ptr;
     packer.ptr = packer.ptr.offset(1);
@@ -2658,15 +2594,13 @@ pub unsafe extern "C" fn serialize_response(
         if handler.fn_0
             == Some(
                 handle_nvim_paste
-                    as unsafe extern "C" fn(
-                        uint64_t,
-                        Array,
-                        *mut Arena,
-                        *mut Error,
-                    ) -> Object,
+                    as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
             )
         {
-            semsg(b"paste: %s\0".as_ptr() as *const ::core::ffi::c_char, (*err).msg);
+            semsg(
+                b"paste: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                (*err).msg,
+            );
             api_clear_error(err);
         } else {
             let mut args: Array = Array {
@@ -2763,9 +2697,9 @@ unsafe extern "C" fn packer_buffer_init_channels(
     (*packer).startptr = alloc_block() as *mut ::core::ffi::c_char;
     (*packer).ptr = (*packer).startptr;
     (*packer).endptr = (*packer).startptr.offset(ARENA_BLOCK_SIZE as isize);
-    (*packer).packer_flush = Some(
-        channel_flush_callback as unsafe extern "C" fn(*mut PackerBuffer) -> (),
-    ) as PackerBufferFlush;
+    (*packer).packer_flush =
+        Some(channel_flush_callback as unsafe extern "C" fn(*mut PackerBuffer) -> ())
+            as PackerBufferFlush;
     (*packer).anydata = chans as *mut ::core::ffi::c_void;
     (*packer).anyint = nchans as int64_t;
 }
@@ -2804,16 +2738,18 @@ pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
     }
     api_free_dict((*chan).rpc.info);
     (*chan).rpc.info = info;
-    let mut type_0: *const ::core::ffi::c_char = get_client_info(
-        chan,
-        b"type\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut type_0: *const ::core::ffi::c_char =
+        get_client_info(chan, b"type\0".as_ptr() as *const ::core::ffi::c_char);
     if type_0.is_null()
         || strequal(type_0, b"remote\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         (*chan).rpc.client_type = kClientTypeRemote;
-    } else if strequal(type_0, b"msgpack-rpc\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if strequal(
+        type_0,
+        b"msgpack-rpc\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         (*chan).rpc.client_type = kClientTypeMsgpackRpc;
     } else if strequal(type_0, b"ui\0".as_ptr() as *const ::core::ffi::c_char) {
         (*chan).rpc.client_type = kClientTypeUi;
@@ -2843,8 +2779,7 @@ pub unsafe extern "C" fn get_client_info(
     let mut info: Dict = (*chan).rpc.info;
     let mut i: size_t = 0 as size_t;
     while i < info.size {
-        if strequal(key, (*info.items.offset(i as isize)).key.data) as ::core::ffi::c_int
-            != 0
+        if strequal(key, (*info.items.offset(i as isize)).key.data) as ::core::ffi::c_int != 0
             && (*info.items.offset(i as isize)).value.type_0 as ::core::ffi::c_uint
                 == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2858,8 +2793,7 @@ pub unsafe extern "C" fn get_client_info(
 unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh12 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh12 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh12 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh13 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh13 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
@@ -2868,25 +2802,19 @@ unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint3
 unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh8 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh8 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh8 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh9 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh9 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh9 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh10 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh10 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh10 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh11 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh11 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_uint(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut val: uint32_t,
-) {
+unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
     if val > 0xffff as uint32_t {
         let c2rust_fresh14 = *buf;
         *buf = (*buf).offset(1);
@@ -2911,10 +2839,7 @@ unsafe extern "C" fn mpack_uint(
     };
 }
 #[inline]
-unsafe extern "C" fn mpack_array(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut len: uint32_t,
-) {
+unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
     if len < 0x10 as uint32_t {
         let c2rust_fresh5 = *buf;
         *buf = (*buf).offset(1);

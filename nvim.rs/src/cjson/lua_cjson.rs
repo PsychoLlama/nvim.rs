@@ -38,10 +38,7 @@ extern "C" {
     fn lua_insert(L: *mut lua_State, idx: ::core::ffi::c_int);
     fn lua_checkstack(L: *mut lua_State, sz: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn lua_typename(
-        L: *mut lua_State,
-        tp: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
+    fn lua_typename(L: *mut lua_State, tp: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn lua_rawequal(
         L: *mut lua_State,
         idx1: ::core::ffi::c_int,
@@ -56,10 +53,7 @@ extern "C" {
         len: *mut size_t,
     ) -> *const ::core::ffi::c_char;
     fn lua_objlen(L: *mut lua_State, idx: ::core::ffi::c_int) -> size_t;
-    fn lua_touserdata(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_void;
+    fn lua_touserdata(L: *mut lua_State, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_void;
     fn lua_pushnil(L: *mut lua_State);
     fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
     fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
@@ -69,39 +63,17 @@ extern "C" {
     fn lua_pushboolean(L: *mut lua_State, b: ::core::ffi::c_int);
     fn lua_pushlightuserdata(L: *mut lua_State, p: *mut ::core::ffi::c_void);
     fn lua_gettable(L: *mut lua_State, idx: ::core::ffi::c_int);
-    fn lua_getfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
+    fn lua_getfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
     fn lua_rawget(L: *mut lua_State, idx: ::core::ffi::c_int);
     fn lua_rawgeti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_createtable(
-        L: *mut lua_State,
-        narr: ::core::ffi::c_int,
-        nrec: ::core::ffi::c_int,
-    );
+    fn lua_createtable(L: *mut lua_State, narr: ::core::ffi::c_int, nrec: ::core::ffi::c_int);
     fn lua_newuserdata(L: *mut lua_State, sz: size_t) -> *mut ::core::ffi::c_void;
-    fn lua_getmetatable(
-        L: *mut lua_State,
-        objindex: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_setfield(
-        L: *mut lua_State,
-        idx: ::core::ffi::c_int,
-        k: *const ::core::ffi::c_char,
-    );
+    fn lua_getmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
+    fn lua_setfield(L: *mut lua_State, idx: ::core::ffi::c_int, k: *const ::core::ffi::c_char);
     fn lua_rawset(L: *mut lua_State, idx: ::core::ffi::c_int);
     fn lua_rawseti(L: *mut lua_State, idx: ::core::ffi::c_int, n: ::core::ffi::c_int);
-    fn lua_setmetatable(
-        L: *mut lua_State,
-        objindex: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
-    fn lua_call(
-        L: *mut lua_State,
-        nargs: ::core::ffi::c_int,
-        nresults: ::core::ffi::c_int,
-    );
+    fn lua_setmetatable(L: *mut lua_State, objindex: ::core::ffi::c_int) -> ::core::ffi::c_int;
+    fn lua_call(L: *mut lua_State, nargs: ::core::ffi::c_int, nresults: ::core::ffi::c_int);
     fn lua_pcall(
         L: *mut lua_State,
         nargs: ::core::ffi::c_int,
@@ -124,31 +96,16 @@ extern "C" {
         numArg: ::core::ffi::c_int,
         l: *mut size_t,
     ) -> *const ::core::ffi::c_char;
-    fn luaL_checkstack(
-        L: *mut lua_State,
-        sz: ::core::ffi::c_int,
-        msg: *const ::core::ffi::c_char,
-    );
-    fn luaL_checktype(
-        L: *mut lua_State,
-        narg: ::core::ffi::c_int,
-        t: ::core::ffi::c_int,
-    );
-    fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn luaL_checkstack(L: *mut lua_State, sz: ::core::ffi::c_int, msg: *const ::core::ffi::c_char);
+    fn luaL_checktype(L: *mut lua_State, narg: ::core::ffi::c_int, t: ::core::ffi::c_int);
+    fn luaL_error(L: *mut lua_State, fmt: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn strtoll(
         __nptr: *const ::core::ffi::c_char,
         __endptr: *mut *mut ::core::ffi::c_char,
         __base: ::core::ffi::c_int,
     ) -> ::core::ffi::c_longlong;
     fn malloc(__size: size_t) -> *mut ::core::ffi::c_void;
-    fn realloc(
-        __ptr: *mut ::core::ffi::c_void,
-        __size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn realloc(__ptr: *mut ::core::ffi::c_void, __size: size_t) -> *mut ::core::ffi::c_void;
     fn free(__ptr: *mut ::core::ffi::c_void);
     fn abort() -> !;
     fn qsort(
@@ -179,9 +136,7 @@ extern "C" {
 pub type uintptr_t = usize;
 pub type size_t = usize;
 pub type ptrdiff_t = isize;
-pub type lua_CFunction = Option<
-    unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
->;
+pub type lua_CFunction = Option<unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int>;
 pub type lua_Number = ::core::ffi::c_double;
 pub type lua_Integer = ptrdiff_t;
 #[derive(Copy, Clone)]
@@ -319,18 +274,15 @@ pub struct json_encode_t {
     pub json: *mut strbuf_t,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 60] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 60],
-        [::core::ffi::c_char; 60],
-    >(*b"void json_next_string_token(json_parse_t *, json_token_t *)\0")
+    ::core::mem::transmute::<[u8; 60], [::core::ffi::c_char; 60]>(
+        *b"void json_next_string_token(json_parse_t *, json_token_t *)\0",
+    )
 };
-pub const PTRDIFF_MIN: ::core::ffi::c_long = -9223372036854775807 as ::core::ffi::c_long
-    - 1 as ::core::ffi::c_long;
+pub const PTRDIFF_MIN: ::core::ffi::c_long =
+    -9223372036854775807 as ::core::ffi::c_long - 1 as ::core::ffi::c_long;
 pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_REGISTRYINDEX: ::core::ffi::c_int = -10000 as ::core::ffi::c_int;
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002 as ::core::ffi::c_int;
 pub const LUA_ERRRUN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -350,23 +302,17 @@ pub const DEFAULT_ENCODE_INVALID_NUMBERS: ::core::ffi::c_int = 0 as ::core::ffi:
 pub const DEFAULT_DECODE_INVALID_NUMBERS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_ENCODE_KEEP_BUFFER: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_ENCODE_NUMBER_PRECISION: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const DEFAULT_ENCODE_EMPTY_TABLE_AS_OBJECT: ::core::ffi::c_int = 0
-    as ::core::ffi::c_int;
-pub const DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT: ::core::ffi::c_int = 0
-    as ::core::ffi::c_int;
+pub const DEFAULT_ENCODE_EMPTY_TABLE_AS_OBJECT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub const DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const DEFAULT_DECODE_SKIP_COMMENTS: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const DEFAULT_ENCODE_ESCAPE_FORWARD_SLASH: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
-pub const DEFAULT_ENCODE_SKIP_UNSUPPORTED_VALUE_TYPES: ::core::ffi::c_int = 0
-    as ::core::ffi::c_int;
+pub const DEFAULT_ENCODE_ESCAPE_FORWARD_SLASH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const DEFAULT_ENCODE_SKIP_UNSUPPORTED_VALUE_TYPES: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const DEFAULT_ENCODE_INDENT: *mut ::core::ffi::c_void = NULL;
 pub const DEFAULT_ENCODE_SORT_KEYS: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static mut json_empty_array: *const *const ::core::ffi::c_char = ::core::ptr::null::<
-    *const ::core::ffi::c_char,
->();
-static mut json_array: *const *const ::core::ffi::c_char = ::core::ptr::null::<
-    *const ::core::ffi::c_char,
->();
+static mut json_empty_array: *const *const ::core::ffi::c_char =
+    ::core::ptr::null::<*const ::core::ffi::c_char>();
+static mut json_array: *const *const ::core::ffi::c_char =
+    ::core::ptr::null::<*const ::core::ffi::c_char>();
 static mut json_token_type_name: [*const ::core::ffi::c_char; 16] = [
     b"T_OBJ_BEGIN\0".as_ptr() as *const ::core::ffi::c_char,
     b"T_OBJ_END\0".as_ptr() as *const ::core::ffi::c_char,
@@ -646,13 +592,11 @@ static mut char2escape: [*const ::core::ffi::c_char; 256] = [
 ];
 unsafe extern "C" fn json_fetch_config(mut l: *mut lua_State) -> *mut json_config_t {
     let mut cfg: *mut json_config_t = ::core::ptr::null_mut::<json_config_t>();
-    cfg = lua_touserdata(l, LUA_GLOBALSINDEX - 1 as ::core::ffi::c_int)
-        as *mut json_config_t;
+    cfg = lua_touserdata(l, LUA_GLOBALSINDEX - 1 as ::core::ffi::c_int) as *mut json_config_t;
     if cfg.is_null() {
         luaL_error(
             l,
-            b"BUG: Unable to fetch CJSON configuration\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"BUG: Unable to fetch CJSON configuration\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
     return cfg;
@@ -669,8 +613,7 @@ unsafe extern "C" fn json_destroy_config(mut l: *mut lua_State) -> ::core::ffi::
 unsafe extern "C" fn json_create_config(mut l: *mut lua_State) {
     let mut cfg: *mut json_config_t = ::core::ptr::null_mut::<json_config_t>();
     let mut i: ::core::ffi::c_int = 0;
-    cfg = lua_newuserdata(l, ::core::mem::size_of::<json_config_t>())
-        as *mut json_config_t;
+    cfg = lua_newuserdata(l, ::core::mem::size_of::<json_config_t>()) as *mut json_config_t;
     if cfg.is_null() {
         abort();
     }
@@ -682,10 +625,7 @@ unsafe extern "C" fn json_create_config(mut l: *mut lua_State) {
     lua_createtable(l, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     lua_pushcclosure(
         l,
-        Some(
-            json_destroy_config
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(json_destroy_config as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -747,15 +687,12 @@ unsafe extern "C" fn json_create_config(mut l: *mut lua_State) {
         i += 1;
     }
     (*cfg).escape2char['"' as ::core::ffi::c_int as usize] = '"' as ::core::ffi::c_char;
-    (*cfg).escape2char['\\' as ::core::ffi::c_int as usize] = '\\'
-        as ::core::ffi::c_char;
+    (*cfg).escape2char['\\' as ::core::ffi::c_int as usize] = '\\' as ::core::ffi::c_char;
     (*cfg).escape2char['/' as ::core::ffi::c_int as usize] = '/' as ::core::ffi::c_char;
-    (*cfg).escape2char['b' as ::core::ffi::c_int as usize] = '\u{8}'
-        as ::core::ffi::c_char;
+    (*cfg).escape2char['b' as ::core::ffi::c_int as usize] = '\u{8}' as ::core::ffi::c_char;
     (*cfg).escape2char['t' as ::core::ffi::c_int as usize] = '\t' as ::core::ffi::c_char;
     (*cfg).escape2char['n' as ::core::ffi::c_int as usize] = '\n' as ::core::ffi::c_char;
-    (*cfg).escape2char['f' as ::core::ffi::c_int as usize] = '\u{c}'
-        as ::core::ffi::c_char;
+    (*cfg).escape2char['f' as ::core::ffi::c_int as usize] = '\u{c}' as ::core::ffi::c_char;
     (*cfg).escape2char['r' as ::core::ffi::c_int as usize] = '\r' as ::core::ffi::c_char;
     (*cfg).escape2char['u' as ::core::ffi::c_int as usize] = 'u' as ::core::ffi::c_char;
 }
@@ -785,9 +722,7 @@ unsafe extern "C" fn json_append_string_contents(
     mut lindex: ::core::ffi::c_int,
     mut use_keybuf: ::core::ffi::c_int,
 ) {
-    let mut escstr: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut escstr: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut len: size_t = 0;
     let mut i: size_t = 0;
@@ -834,12 +769,10 @@ unsafe extern "C" fn lua_array_length(
     items = 0 as ::core::ffi::c_int;
     lua_pushnil(l);
     while lua_next(l, -2 as ::core::ffi::c_int) != 0 as ::core::ffi::c_int {
-        if lua_type(l, -2 as ::core::ffi::c_int) == LUA_TNUMBER
-            && {
-                k = lua_tonumber(l, -2 as ::core::ffi::c_int) as ::core::ffi::c_double;
-                k != 0.
-            }
-        {
+        if lua_type(l, -2 as ::core::ffi::c_int) == LUA_TNUMBER && {
+            k = lua_tonumber(l, -2 as ::core::ffi::c_int) as ::core::ffi::c_double;
+            k != 0.
+        } {
             if floor(k) == k && k >= 1 as ::core::ffi::c_int as ::core::ffi::c_double {
                 if k > max as ::core::ffi::c_double {
                     max = k as ::core::ffi::c_int;
@@ -853,7 +786,8 @@ unsafe extern "C" fn lua_array_length(
         return -1 as ::core::ffi::c_int;
     }
     if (*cfg).encode_sparse_ratio > 0 as ::core::ffi::c_int
-        && max > items * (*cfg).encode_sparse_ratio && max > (*cfg).encode_sparse_safe
+        && max > items * (*cfg).encode_sparse_ratio
+        && max > (*cfg).encode_sparse_safe
     {
         if (*cfg).encode_sparse_convert == 0 {
             json_encode_exception(
@@ -873,9 +807,7 @@ unsafe extern "C" fn json_check_encode_depth(
     mut current_depth: ::core::ffi::c_int,
     mut json: *mut strbuf_t,
 ) {
-    if current_depth <= (*cfg).encode_max_depth
-        && lua_checkstack(l, 3 as ::core::ffi::c_int) != 0
-    {
+    if current_depth <= (*cfg).encode_max_depth && lua_checkstack(l, 3 as ::core::ffi::c_int) != 0 {
         return;
     }
     if (*cfg).encode_keep_buffer == 0 {
@@ -883,8 +815,7 @@ unsafe extern "C" fn json_check_encode_depth(
     }
     luaL_error(
         l,
-        b"Cannot serialise, excessive nesting (%d)\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Cannot serialise, excessive nesting (%d)\0".as_ptr() as *const ::core::ffi::c_char,
         current_depth,
     );
 }
@@ -944,11 +875,7 @@ unsafe extern "C" fn json_append_array(
         i += 1;
     }
     if has_items != 0 && !(*(*ctx).options).indent.is_null() {
-        json_append_newline_and_indent(
-            json,
-            ctx,
-            current_depth - 1 as ::core::ffi::c_int,
-        );
+        json_append_newline_and_indent(json, ctx, current_depth - 1 as ::core::ffi::c_int);
     }
     strbuf_append_char(json, ']' as ::core::ffi::c_char);
 }
@@ -967,10 +894,15 @@ unsafe extern "C" fn json_append_number(
     }
     if (*cfg).encode_invalid_numbers == 0 as ::core::ffi::c_int {
         if if num.is_infinite() {
-            if num.is_sign_positive() { 1 } else { -1 }
+            if num.is_sign_positive() {
+                1
+            } else {
+                -1
+            }
         } else {
             0
-        } != 0 || num.is_nan() as i32 != 0
+        } != 0
+            || num.is_nan() as i32 != 0
         {
             json_encode_exception(
                 l,
@@ -989,7 +921,11 @@ unsafe extern "C" fn json_append_number(
             return;
         }
         if if num.is_infinite() {
-            if num.is_sign_positive() { 1 } else { -1 }
+            if num.is_sign_positive() {
+                1
+            } else {
+                -1
+            }
         } else {
             0
         } != 0
@@ -1010,10 +946,15 @@ unsafe extern "C" fn json_append_number(
             return;
         }
     } else if if num.is_infinite() {
-        if num.is_sign_positive() { 1 } else { -1 }
+        if num.is_sign_positive() {
+            1
+        } else {
+            -1
+        }
     } else {
         0
-    } != 0 || num.is_nan() as i32 != 0
+    } != 0
+        || num.is_nan() as i32 != 0
     {
         strbuf_append_mem(
             json,
@@ -1035,7 +976,11 @@ unsafe extern "C" fn cmp_key_entries(
     let mut res: ::core::ffi::c_int = memcmp(
         (*(*ka).buf).buf.offset((*ka).offset as isize) as *const ::core::ffi::c_void,
         (*(*kb).buf).buf.offset((*kb).offset as isize) as *const ::core::ffi::c_void,
-        if (*ka).length < (*kb).length { (*ka).length } else { (*kb).length },
+        if (*ka).length < (*kb).length {
+            (*ka).length
+        } else {
+            (*kb).length
+        },
     );
     if res == 0 as ::core::ffi::c_int {
         return (*ka).length.wrapping_sub((*kb).length) as ::core::ffi::c_int;
@@ -1097,19 +1042,16 @@ unsafe extern "C" fn json_append_object(
                 );
             } else if keytype == LUA_TNUMBER {
                 json_append_number(l, ctx, -2 as ::core::ffi::c_int, true_0);
-                key_entry.raw.number = lua_tointeger(l, -2 as ::core::ffi::c_int)
-                    as lua_Number;
+                key_entry.raw.number = lua_tointeger(l, -2 as ::core::ffi::c_int) as lua_Number;
             } else {
                 json_encode_exception(
                     l,
                     ctx,
                     -2 as ::core::ffi::c_int,
-                    b"table key must be number or string\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"table key must be number or string\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
-            key_entry.length = strbuf_length(&raw mut (*keybuf).buf)
-                .wrapping_sub(key_entry.offset);
+            key_entry.length = strbuf_length(&raw mut (*keybuf).buf).wrapping_sub(key_entry.offset);
             let c2rust_fresh3 = (*keybuf).size;
             (*keybuf).size = (*keybuf).size.wrapping_add(1);
             *(*keybuf).keys.offset(c2rust_fresh3 as isize) = key_entry;
@@ -1140,10 +1082,7 @@ unsafe extern "C" fn json_append_object(
             if !(*(*ctx).options).indent.is_null() {
                 json_append_newline_and_indent(json, ctx, current_depth);
             }
-            strbuf_ensure_empty_length(
-                json,
-                (*current_key).length.wrapping_add(3 as size_t),
-            );
+            strbuf_ensure_empty_length(json, (*current_key).length.wrapping_add(3 as size_t));
             strbuf_append_char_unsafe(json, '"' as ::core::ffi::c_char);
             strbuf_append_mem_unsafe(
                 json,
@@ -1226,11 +1165,7 @@ unsafe extern "C" fn json_append_object(
         }
     }
     if has_items != 0 && !(*(*ctx).options).indent.is_null() {
-        json_append_newline_and_indent(
-            json,
-            ctx,
-            current_depth - 1 as ::core::ffi::c_int,
-        );
+        json_append_newline_and_indent(json, ctx, current_depth - 1 as ::core::ffi::c_int);
     }
     strbuf_append_char(json, '}' as ::core::ffi::c_char);
 }
@@ -1279,23 +1214,13 @@ unsafe extern "C" fn json_append_data(
                 has_metatable = lua_getmetatable(l, -1 as ::core::ffi::c_int);
                 if has_metatable != 0 {
                     nlua_pushref(l, nlua_get_empty_dict_ref(l));
-                    if lua_rawequal(
-                        l,
-                        -2 as ::core::ffi::c_int,
-                        -1 as ::core::ffi::c_int,
-                    ) != 0
-                    {
+                    if lua_rawequal(l, -2 as ::core::ffi::c_int, -1 as ::core::ffi::c_int) != 0 {
                         as_empty_dict = true_0;
                     } else {
-                        lua_settop(
-                            l,
-                            -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        );
+                        lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
                         lua_pushlightuserdata(
                             l,
-                            ::core::ptr::from_exposed_addr_mut::<
-                                ::core::ffi::c_void,
-                            >(
+                            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
                                 ((&raw mut json_array).expose_addr() as uintptr_t
                                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                                         .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
@@ -1303,26 +1228,16 @@ unsafe extern "C" fn json_append_data(
                             ),
                         );
                         lua_rawget(l, LUA_REGISTRYINDEX);
-                        as_array = lua_rawequal(
-                            l,
-                            -1 as ::core::ffi::c_int,
-                            -2 as ::core::ffi::c_int,
-                        );
+                        as_array =
+                            lua_rawequal(l, -1 as ::core::ffi::c_int, -2 as ::core::ffi::c_int);
                     }
                     if as_array != 0 {
                         raw = 1 as ::core::ffi::c_int;
-                        lua_settop(
-                            l,
-                            -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        );
-                        len = lua_objlen(l, -1 as ::core::ffi::c_int)
-                            as ::core::ffi::c_int;
+                        lua_settop(l, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+                        len = lua_objlen(l, -1 as ::core::ffi::c_int) as ::core::ffi::c_int;
                     } else {
                         raw = 0 as ::core::ffi::c_int;
-                        lua_settop(
-                            l,
-                            -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        );
+                        lua_settop(l, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
                         if luaL_getmetafield(
                             l,
                             -1 as ::core::ffi::c_int,
@@ -1330,17 +1245,9 @@ unsafe extern "C" fn json_append_data(
                         ) != 0
                         {
                             lua_pushvalue(l, -2 as ::core::ffi::c_int);
-                            lua_call(
-                                l,
-                                1 as ::core::ffi::c_int,
-                                1 as ::core::ffi::c_int,
-                            );
-                            len = lua_tonumber(l, -1 as ::core::ffi::c_int)
-                                as ::core::ffi::c_int;
-                            lua_settop(
-                                l,
-                                -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            );
+                            lua_call(l, 1 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
+                            len = lua_tonumber(l, -1 as ::core::ffi::c_int) as ::core::ffi::c_int;
+                            lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
                             as_array = 1 as ::core::ffi::c_int;
                         }
                     }
@@ -1363,9 +1270,7 @@ unsafe extern "C" fn json_append_data(
                             lua_getmetatable(l, -1 as ::core::ffi::c_int);
                             lua_pushlightuserdata(
                                 l,
-                                ::core::ptr::from_exposed_addr_mut::<
-                                    ::core::ffi::c_void,
-                                >(
+                                ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
                                     ((&raw mut json_empty_array).expose_addr() as uintptr_t
                                         & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                                             .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
@@ -1373,18 +1278,11 @@ unsafe extern "C" fn json_append_data(
                                 ),
                             );
                             lua_rawget(l, LUA_REGISTRYINDEX);
-                            as_array = lua_rawequal(
-                                l,
-                                -1 as ::core::ffi::c_int,
-                                -2 as ::core::ffi::c_int,
-                            );
-                            lua_settop(
-                                l,
-                                -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            );
+                            as_array =
+                                lua_rawequal(l, -1 as ::core::ffi::c_int, -2 as ::core::ffi::c_int);
+                            lua_settop(l, -2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
                             if as_array != 0 {
-                                len = lua_objlen(l, -1 as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int;
+                                len = lua_objlen(l, -1 as ::core::ffi::c_int) as ::core::ffi::c_int;
                                 raw = 1 as ::core::ffi::c_int;
                                 json_append_array(l, ctx, current_depth, len, raw);
                                 break 's_309;
@@ -1419,11 +1317,7 @@ unsafe extern "C" fn json_append_data(
             }
             LUA_TUSERDATA => {
                 nlua_pushref(l, nlua_get_nil_ref(l));
-                is_nil = lua_rawequal(
-                    l,
-                    -2 as ::core::ffi::c_int,
-                    -1 as ::core::ffi::c_int,
-                ) != 0;
+                is_nil = lua_rawequal(l, -2 as ::core::ffi::c_int, -1 as ::core::ffi::c_int) != 0;
                 lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
                 if is_nil {
                     strbuf_append_mem(
@@ -1437,7 +1331,7 @@ unsafe extern "C" fn json_append_data(
             _ => {}
         }
         if (*cfg).encode_skip_unsupported_value_types != 0 {
-            return 1 as ::core::ffi::c_int
+            return 1 as ::core::ffi::c_int;
         } else {
             json_encode_exception(
                 l,
@@ -1740,13 +1634,10 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
         debug: 0,
     };
     let mut encode_buf: *mut strbuf_t = ::core::ptr::null_mut::<strbuf_t>();
-    let mut json: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut json: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: size_t = 0;
-    let mut customChar2escape: [*const ::core::ffi::c_char; 256] = [::core::ptr::null::<
-        ::core::ffi::c_char,
-    >(); 256];
+    let mut customChar2escape: [*const ::core::ffi::c_char; 256] =
+        [::core::ptr::null::<::core::ffi::c_char>(); 256];
     match lua_gettop(l) {
         1 => {}
         2 => {
@@ -1758,10 +1649,8 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
             );
             if !(lua_type(l, -1 as ::core::ffi::c_int) == LUA_TNIL) {
                 luaL_checktype(l, -1 as ::core::ffi::c_int, LUA_TBOOLEAN);
-                let mut escape_slash: ::core::ffi::c_int = lua_toboolean(
-                    l,
-                    -1 as ::core::ffi::c_int,
-                );
+                let mut escape_slash: ::core::ffi::c_int =
+                    lua_toboolean(l, -1 as ::core::ffi::c_int);
                 if escape_slash != 0 {
                     memcpy(
                         &raw mut customChar2escape as *mut *const ::core::ffi::c_char
@@ -1770,11 +1659,11 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
                             as *const ::core::ffi::c_void,
                         ::core::mem::size_of::<[*const ::core::ffi::c_char; 256]>(),
                     );
-                    customChar2escape['/' as ::core::ffi::c_int as usize] = b"\\/\0"
-                        .as_ptr() as *const ::core::ffi::c_char;
+                    customChar2escape['/' as ::core::ffi::c_int as usize] =
+                        b"\\/\0".as_ptr() as *const ::core::ffi::c_char;
                     *(&raw mut (*ctx.options).char2escape
-                        as *mut *mut *const ::core::ffi::c_char) = &raw mut customChar2escape
-                        as *mut *const ::core::ffi::c_char;
+                        as *mut *mut *const ::core::ffi::c_char) =
+                        &raw mut customChar2escape as *mut *const ::core::ffi::c_char;
                 }
             }
             lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
@@ -1789,8 +1678,8 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
                     -1 as ::core::ffi::c_int,
                     ::core::ptr::null_mut::<size_t>(),
                 );
-                if *options.indent.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == '\0' as ::core::ffi::c_int
+                if *options.indent.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == '\0' as ::core::ffi::c_int
                 {
                     options.indent = ::core::ptr::null::<::core::ffi::c_char>();
                 }
@@ -1803,10 +1692,7 @@ unsafe extern "C" fn json_encode(mut l: *mut lua_State) -> ::core::ffi::c_int {
             );
             if !(lua_type(l, -1 as ::core::ffi::c_int) == LUA_TNIL) {
                 luaL_checktype(l, -1 as ::core::ffi::c_int, LUA_TBOOLEAN);
-                let mut sort_keys: ::core::ffi::c_int = lua_toboolean(
-                    l,
-                    -1 as ::core::ffi::c_int,
-                );
+                let mut sort_keys: ::core::ffi::c_int = lua_toboolean(l, -1 as ::core::ffi::c_int);
                 if sort_keys != 0 {
                     options.sort_keys = sort_keys;
                     strbuf_init(&raw mut options.keybuf.buf, 0 as size_t);
@@ -1861,19 +1747,15 @@ unsafe extern "C" fn hexdigit2int(mut hex: ::core::ffi::c_char) -> ::core::ffi::
     {
         return hex as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
     }
-    hex = (hex as ::core::ffi::c_int | 0x20 as ::core::ffi::c_int)
-        as ::core::ffi::c_char;
+    hex = (hex as ::core::ffi::c_int | 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
     if 'a' as ::core::ffi::c_int <= hex as ::core::ffi::c_int
         && hex as ::core::ffi::c_int <= 'f' as ::core::ffi::c_int
     {
-        return 10 as ::core::ffi::c_int + hex as ::core::ffi::c_int
-            - 'a' as ::core::ffi::c_int;
+        return 10 as ::core::ffi::c_int + hex as ::core::ffi::c_int - 'a' as ::core::ffi::c_int;
     }
     return -1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn decode_hex4(
-    mut hex: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn decode_hex4(mut hex: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut digit: [::core::ffi::c_int; 4] = [0; 4];
     let mut i: ::core::ffi::c_int = 0;
     i = 0 as ::core::ffi::c_int;
@@ -1894,51 +1776,48 @@ unsafe extern "C" fn codepoint_to_utf8(
     mut codepoint: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     if codepoint <= 0x7f as ::core::ffi::c_int {
-        *utf8.offset(0 as ::core::ffi::c_int as isize) = codepoint
-            as ::core::ffi::c_char;
+        *utf8.offset(0 as ::core::ffi::c_int as isize) = codepoint as ::core::ffi::c_char;
         return 1 as ::core::ffi::c_int;
     }
     if codepoint <= 0x7ff as ::core::ffi::c_int {
-        *utf8.offset(0 as ::core::ffi::c_int as isize) = (codepoint
-            >> 6 as ::core::ffi::c_int | 0xc0 as ::core::ffi::c_int)
+        *utf8.offset(0 as ::core::ffi::c_int as isize) = (codepoint >> 6 as ::core::ffi::c_int
+            | 0xc0 as ::core::ffi::c_int)
             as ::core::ffi::c_char;
-        *utf8.offset(1 as ::core::ffi::c_int as isize) = (codepoint
-            & 0x3f as ::core::ffi::c_int | 0x80 as ::core::ffi::c_int)
+        *utf8.offset(1 as ::core::ffi::c_int as isize) = (codepoint & 0x3f as ::core::ffi::c_int
+            | 0x80 as ::core::ffi::c_int)
             as ::core::ffi::c_char;
         return 2 as ::core::ffi::c_int;
     }
     if codepoint <= 0xffff as ::core::ffi::c_int {
-        *utf8.offset(0 as ::core::ffi::c_int as isize) = (codepoint
-            >> 12 as ::core::ffi::c_int | 0xe0 as ::core::ffi::c_int)
+        *utf8.offset(0 as ::core::ffi::c_int as isize) = (codepoint >> 12 as ::core::ffi::c_int
+            | 0xe0 as ::core::ffi::c_int)
             as ::core::ffi::c_char;
-        *utf8.offset(1 as ::core::ffi::c_int as isize) = (codepoint
-            >> 6 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int
-            | 0x80 as ::core::ffi::c_int) as ::core::ffi::c_char;
-        *utf8.offset(2 as ::core::ffi::c_int as isize) = (codepoint
-            & 0x3f as ::core::ffi::c_int | 0x80 as ::core::ffi::c_int)
+        *utf8.offset(1 as ::core::ffi::c_int as isize) =
+            (codepoint >> 6 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int
+                | 0x80 as ::core::ffi::c_int) as ::core::ffi::c_char;
+        *utf8.offset(2 as ::core::ffi::c_int as isize) = (codepoint & 0x3f as ::core::ffi::c_int
+            | 0x80 as ::core::ffi::c_int)
             as ::core::ffi::c_char;
         return 3 as ::core::ffi::c_int;
     }
     if codepoint <= 0x1fffff as ::core::ffi::c_int {
-        *utf8.offset(0 as ::core::ffi::c_int as isize) = (codepoint
-            >> 18 as ::core::ffi::c_int | 0xf0 as ::core::ffi::c_int)
+        *utf8.offset(0 as ::core::ffi::c_int as isize) = (codepoint >> 18 as ::core::ffi::c_int
+            | 0xf0 as ::core::ffi::c_int)
             as ::core::ffi::c_char;
-        *utf8.offset(1 as ::core::ffi::c_int as isize) = (codepoint
-            >> 12 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int
-            | 0x80 as ::core::ffi::c_int) as ::core::ffi::c_char;
-        *utf8.offset(2 as ::core::ffi::c_int as isize) = (codepoint
-            >> 6 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int
-            | 0x80 as ::core::ffi::c_int) as ::core::ffi::c_char;
-        *utf8.offset(3 as ::core::ffi::c_int as isize) = (codepoint
-            & 0x3f as ::core::ffi::c_int | 0x80 as ::core::ffi::c_int)
+        *utf8.offset(1 as ::core::ffi::c_int as isize) =
+            (codepoint >> 12 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int
+                | 0x80 as ::core::ffi::c_int) as ::core::ffi::c_char;
+        *utf8.offset(2 as ::core::ffi::c_int as isize) =
+            (codepoint >> 6 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int
+                | 0x80 as ::core::ffi::c_int) as ::core::ffi::c_char;
+        *utf8.offset(3 as ::core::ffi::c_int as isize) = (codepoint & 0x3f as ::core::ffi::c_int
+            | 0x80 as ::core::ffi::c_int)
             as ::core::ffi::c_char;
         return 4 as ::core::ffi::c_int;
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn json_append_unicode_escape(
-    mut json: *mut json_parse_t,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn json_append_unicode_escape(mut json: *mut json_parse_t) -> ::core::ffi::c_int {
     let mut utf8: [::core::ffi::c_char; 4] = [0; 4];
     let mut codepoint: ::core::ffi::c_int = 0;
     let mut surrogate_low: ::core::ffi::c_int = 0;
@@ -1974,8 +1853,7 @@ unsafe extern "C" fn json_append_unicode_escape(
         if surrogate_low & 0xfc00 as ::core::ffi::c_int != 0xdc00 as ::core::ffi::c_int {
             return -1 as ::core::ffi::c_int;
         }
-        codepoint = (codepoint & 0x3ff as ::core::ffi::c_int)
-            << 10 as ::core::ffi::c_int;
+        codepoint = (codepoint & 0x3ff as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
         surrogate_low &= 0x3ff as ::core::ffi::c_int;
         codepoint = (codepoint | surrogate_low) + 0x10000 as ::core::ffi::c_int;
         escape_len = 12 as ::core::ffi::c_int;
@@ -2005,11 +1883,12 @@ unsafe extern "C" fn json_next_string_token(
     mut json: *mut json_parse_t,
     mut token: *mut json_token_t,
 ) {
-    let mut escape2char: *mut ::core::ffi::c_char = &raw mut (*(*json).cfg).escape2char
-        as *mut ::core::ffi::c_char;
+    let mut escape2char: *mut ::core::ffi::c_char =
+        &raw mut (*(*json).cfg).escape2char as *mut ::core::ffi::c_char;
     let mut ch: ::core::ffi::c_char = 0;
     '_c2rust_label: {
-        if *(*json).ptr as ::core::ffi::c_int == '"' as ::core::ffi::c_int {} else {
+        if *(*json).ptr as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"*json->ptr == '\"'\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/cjson/lua_cjson.c\0".as_ptr()
@@ -2044,8 +1923,7 @@ unsafe extern "C" fn json_next_string_token(
                 json_set_token_error(
                     token,
                     json,
-                    b"invalid unicode escape code\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"invalid unicode escape code\0".as_ptr() as *const ::core::ffi::c_char,
                 );
                 return;
             } else {
@@ -2068,9 +1946,7 @@ unsafe extern "C" fn json_next_string_token(
     (*token).type_0 = T_STRING;
     (*token).value.string = strbuf_string((*json).tmp, &raw mut (*token).string_len);
 }
-unsafe extern "C" fn json_is_invalid_number(
-    mut json: *mut json_parse_t,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn json_is_invalid_number(mut json: *mut json_parse_t) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = (*json).ptr;
     if *p as ::core::ffi::c_int == '+' as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
@@ -2080,8 +1956,7 @@ unsafe extern "C" fn json_is_invalid_number(
     }
     if *p as ::core::ffi::c_int == '0' as ::core::ffi::c_int {
         let mut ch2: ::core::ffi::c_char = *p.offset(1 as ::core::ffi::c_int as isize);
-        if ch2 as ::core::ffi::c_int | 0x20 as ::core::ffi::c_int
-            == 'x' as ::core::ffi::c_int
+        if ch2 as ::core::ffi::c_int | 0x20 as ::core::ffi::c_int == 'x' as ::core::ffi::c_int
             || '0' as ::core::ffi::c_int <= ch2 as ::core::ffi::c_int
                 && ch2 as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
         {
@@ -2089,13 +1964,21 @@ unsafe extern "C" fn json_is_invalid_number(
         }
         return 0 as ::core::ffi::c_int;
     } else if *p as ::core::ffi::c_int <= '9' as ::core::ffi::c_int {
-        return 0 as ::core::ffi::c_int
+        return 0 as ::core::ffi::c_int;
     }
-    if strncasecmp(p, b"inf\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t) == 0
+    if strncasecmp(
+        p,
+        b"inf\0".as_ptr() as *const ::core::ffi::c_char,
+        3 as size_t,
+    ) == 0
     {
         return 1 as ::core::ffi::c_int;
     }
-    if strncasecmp(p, b"nan\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t) == 0
+    if strncasecmp(
+        p,
+        b"nan\0".as_ptr() as *const ::core::ffi::c_char,
+        3 as size_t,
+    ) == 0
     {
         return 1 as ::core::ffi::c_int;
     }
@@ -2105,14 +1988,9 @@ unsafe extern "C" fn json_next_number_token(
     mut json: *mut json_parse_t,
     mut token: *mut json_token_t,
 ) {
-    let mut endptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut tmpval: ::core::ffi::c_longlong = strtoll(
-        (*json).ptr,
-        &raw mut endptr,
-        10 as ::core::ffi::c_int,
-    );
+    let mut endptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut tmpval: ::core::ffi::c_longlong =
+        strtoll((*json).ptr, &raw mut endptr, 10 as ::core::ffi::c_int);
     if (*json).ptr == endptr as *const ::core::ffi::c_char
         || *endptr as ::core::ffi::c_int == '.' as ::core::ffi::c_int
         || *endptr as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
@@ -2140,12 +2018,9 @@ unsafe extern "C" fn json_next_number_token(
     }
     (*json).ptr = endptr;
 }
-unsafe extern "C" fn json_next_token(
-    mut json: *mut json_parse_t,
-    mut token: *mut json_token_t,
-) {
-    let mut ch2token: *const json_token_type_t = &raw mut (*(*json).cfg).ch2token
-        as *mut json_token_type_t;
+unsafe extern "C" fn json_next_token(mut json: *mut json_parse_t, mut token: *mut json_token_t) {
+    let mut ch2token: *const json_token_type_t =
+        &raw mut (*(*json).cfg).ch2token as *mut json_token_type_t;
     let mut ch: ::core::ffi::c_int = 0;
     loop {
         loop {
@@ -2162,12 +2037,13 @@ unsafe extern "C" fn json_next_token(
             break;
         }
         if *(*json).ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uchar
-            as ::core::ffi::c_int != '/' as ::core::ffi::c_int
-            || *(*json).ptr.offset(1 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_uchar as ::core::ffi::c_int
+            as ::core::ffi::c_int
+            != '/' as ::core::ffi::c_int
+            || *(*json).ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uchar
+                as ::core::ffi::c_int
                 != '/' as ::core::ffi::c_int
-                && *(*json).ptr.offset(1 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_uchar as ::core::ffi::c_int
+                && *(*json).ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uchar
+                    as ::core::ffi::c_int
                     != '*' as ::core::ffi::c_int
         {
             break;
@@ -2188,15 +2064,14 @@ unsafe extern "C" fn json_next_token(
                     json_set_token_error(
                         token,
                         json,
-                        b"unclosed multi-line comment\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"unclosed multi-line comment\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     return;
                 }
-                if *(*json).ptr.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == '*' as ::core::ffi::c_int
-                    && *(*json).ptr.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '/' as ::core::ffi::c_int
+                if *(*json).ptr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == '*' as ::core::ffi::c_int
+                    && *(*json).ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '/' as ::core::ffi::c_int
                 {
                     (*json).ptr = (*json).ptr.offset(2 as ::core::ffi::c_int as isize);
                     break;
@@ -2217,8 +2092,7 @@ unsafe extern "C" fn json_next_token(
         );
         return;
     }
-    if (*token).type_0 as ::core::ffi::c_uint
-        == T_END as ::core::ffi::c_int as ::core::ffi::c_uint
+    if (*token).type_0 as ::core::ffi::c_uint == T_END as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         return;
     }
@@ -2234,9 +2108,7 @@ unsafe extern "C" fn json_next_token(
     } else if ch == '-' as ::core::ffi::c_int
         || '0' as ::core::ffi::c_int <= ch && ch <= '9' as ::core::ffi::c_int
     {
-        if (*(*json).cfg).decode_invalid_numbers == 0
-            && json_is_invalid_number(json) != 0
-        {
+        if (*(*json).cfg).decode_invalid_numbers == 0 && json_is_invalid_number(json) != 0 {
             json_set_token_error(
                 token,
                 json,
@@ -2275,9 +2147,7 @@ unsafe extern "C" fn json_next_token(
         (*token).type_0 = T_NULL;
         (*json).ptr = (*json).ptr.offset(4 as ::core::ffi::c_int as isize);
         return;
-    } else if (*(*json).cfg).decode_invalid_numbers != 0
-        && json_is_invalid_number(json) != 0
-    {
+    } else if (*(*json).cfg).decode_invalid_numbers != 0 && json_is_invalid_number(json) != 0 {
         json_next_number_token(json, token);
         return;
     }
@@ -2293,9 +2163,7 @@ unsafe extern "C" fn json_throw_parse_error(
     mut exp: *const ::core::ffi::c_char,
     mut token: *mut json_token_t,
 ) {
-    let mut found: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut found: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     strbuf_free((*json).tmp);
     if (*token).type_0 as ::core::ffi::c_uint
         == T_ERROR as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2306,8 +2174,7 @@ unsafe extern "C" fn json_throw_parse_error(
     }
     luaL_error(
         l,
-        b"Expected %s but found %s at character %d\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Expected %s but found %s at character %d\0".as_ptr() as *const ::core::ffi::c_char,
         exp,
         found,
         (*token).index.wrapping_add(1 as size_t),
@@ -2323,9 +2190,7 @@ unsafe extern "C" fn json_decode_descend(
     mut slots: ::core::ffi::c_int,
 ) {
     (*json).current_depth += 1;
-    if (*json).current_depth <= (*(*json).cfg).decode_max_depth
-        && lua_checkstack(l, slots) != 0
-    {
+    if (*json).current_depth <= (*(*json).cfg).decode_max_depth && lua_checkstack(l, slots) != 0 {
         return;
     }
     strbuf_free((*json).tmp);
@@ -2337,10 +2202,7 @@ unsafe extern "C" fn json_decode_descend(
         (*json).ptr.offset_from((*json).data),
     );
 }
-unsafe extern "C" fn json_parse_object_context(
-    mut l: *mut lua_State,
-    mut json: *mut json_parse_t,
-) {
+unsafe extern "C" fn json_parse_object_context(mut l: *mut lua_State, mut json: *mut json_parse_t) {
     let mut token: json_token_t = json_token_t {
         type_0: T_OBJ_BEGIN,
         index: 0,
@@ -2352,8 +2214,7 @@ unsafe extern "C" fn json_parse_object_context(
     json_decode_descend(l, json, 3 as ::core::ffi::c_int);
     lua_createtable(l, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
     json_next_token(json, &raw mut token);
-    if token.type_0 as ::core::ffi::c_uint
-        == T_OBJ_END as ::core::ffi::c_int as ::core::ffi::c_uint
+    if token.type_0 as ::core::ffi::c_uint == T_OBJ_END as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         nlua_pushref(l, nlua_get_empty_dict_ref(l));
         lua_setmetatable(l, -2 as ::core::ffi::c_int);
@@ -2404,12 +2265,9 @@ unsafe extern "C" fn json_parse_object_context(
             );
         }
         json_next_token(json, &raw mut token);
-    };
+    }
 }
-unsafe extern "C" fn json_parse_array_context(
-    mut l: *mut lua_State,
-    mut json: *mut json_parse_t,
-) {
+unsafe extern "C" fn json_parse_array_context(mut l: *mut lua_State, mut json: *mut json_parse_t) {
     let mut token: json_token_t = json_token_t {
         type_0: T_OBJ_BEGIN,
         index: 0,
@@ -2424,20 +2282,18 @@ unsafe extern "C" fn json_parse_array_context(
     if (*(*json).cfg).decode_array_with_array_mt != 0 {
         lua_pushlightuserdata(
             l,
-            ::core::ptr::from_exposed_addr_mut::<
-                ::core::ffi::c_void,
-            >(
+            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
                 ((&raw mut json_array).expose_addr() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
-                        .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t)) as usize,
+                        .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
+                    as usize,
             ),
         );
         lua_rawget(l, LUA_REGISTRYINDEX);
         lua_setmetatable(l, -2 as ::core::ffi::c_int);
     }
     json_next_token(json, &raw mut token);
-    if token.type_0 as ::core::ffi::c_uint
-        == T_ARR_END as ::core::ffi::c_int as ::core::ffi::c_uint
+    if token.type_0 as ::core::ffi::c_uint == T_ARR_END as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         json_decode_ascend(json);
         return;
@@ -2465,7 +2321,7 @@ unsafe extern "C" fn json_parse_array_context(
         }
         json_next_token(json, &raw mut token);
         i += 1;
-    };
+    }
 }
 unsafe extern "C" fn json_process_value(
     mut l: *mut lua_State,
@@ -2592,11 +2448,14 @@ unsafe extern "C" fn json_decode(mut l: *mut lua_State) -> ::core::ffi::c_int {
     }
     json.tmp = strbuf_new(json_len);
     json_next_token(&raw mut json, &raw mut token);
-    json_process_value(l, &raw mut json, &raw mut token, (*json.options).luanil_object);
+    json_process_value(
+        l,
+        &raw mut json,
+        &raw mut token,
+        (*json.options).luanil_object,
+    );
     json_next_token(&raw mut json, &raw mut token);
-    if token.type_0 as ::core::ffi::c_uint
-        != T_END as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if token.type_0 as ::core::ffi::c_uint != T_END as ::core::ffi::c_int as ::core::ffi::c_uint {
         json_throw_parse_error(
             l,
             &raw mut json,
@@ -2630,9 +2489,7 @@ unsafe extern "C" fn compat_luaL_setfuncs(
     }
     lua_settop(l, -nup - 1 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn json_protect_conversion(
-    mut l: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn json_protect_conversion(mut l: *mut lua_State) -> ::core::ffi::c_int {
     let mut err: ::core::ffi::c_int = 0;
     (lua_gettop(l) == 1 as ::core::ffi::c_int
         || luaL_argerror(
@@ -2658,8 +2515,7 @@ unsafe extern "C" fn json_protect_conversion(
     }
     return luaL_error(
         l,
-        b"Memory allocation error in CJSON protected call\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"Memory allocation error in CJSON protected call\0".as_ptr() as *const ::core::ffi::c_char,
     );
 }
 #[no_mangle]
@@ -2667,22 +2523,15 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
     let mut reg: [luaL_Reg; 4] = [
         luaL_Reg {
             name: b"encode\0".as_ptr() as *const ::core::ffi::c_char,
-            func: Some(
-                json_encode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            func: Some(json_encode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         },
         luaL_Reg {
             name: b"decode\0".as_ptr() as *const ::core::ffi::c_char,
-            func: Some(
-                json_decode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            func: Some(json_decode as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         },
         luaL_Reg {
             name: b"new\0".as_ptr() as *const ::core::ffi::c_char,
-            func: Some(
-                lua_cjson_new
-                    as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
+            func: Some(lua_cjson_new as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         },
         luaL_Reg {
             name: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2701,9 +2550,7 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
     }
     lua_pushlightuserdata(
         l,
-        ::core::ptr::from_exposed_addr_mut::<
-            ::core::ffi::c_void,
-        >(
+        ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
             ((&raw mut json_empty_array).expose_addr() as uintptr_t
                 & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
                     .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t)) as usize,
@@ -2714,24 +2561,22 @@ pub unsafe extern "C" fn lua_cjson_new(mut l: *mut lua_State) -> ::core::ffi::c_
         lua_settop(l, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
         lua_pushlightuserdata(
             l,
-            ::core::ptr::from_exposed_addr_mut::<
-                ::core::ffi::c_void,
-            >(
+            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
                 ((&raw mut json_empty_array).expose_addr() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
-                        .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t)) as usize,
+                        .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
+                    as usize,
             ),
         );
         lua_createtable(l, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
         lua_rawset(l, LUA_REGISTRYINDEX);
         lua_pushlightuserdata(
             l,
-            ::core::ptr::from_exposed_addr_mut::<
-                ::core::ffi::c_void,
-            >(
+            ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
                 ((&raw mut json_array).expose_addr() as uintptr_t
                     & ((1 as uintptr_t) << 47 as ::core::ffi::c_int)
-                        .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t)) as usize,
+                        .wrapping_sub(1 as ::core::ffi::c_int as uintptr_t))
+                    as usize,
             ),
         );
         lua_createtable(l, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
@@ -2776,10 +2621,7 @@ unsafe extern "C" fn lua_cjson_safe_new(mut l: *mut lua_State) -> ::core::ffi::c
     lua_cjson_new(l);
     lua_pushcclosure(
         l,
-        Some(
-            lua_cjson_safe_new
-                as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int,
-        ),
+        Some(lua_cjson_safe_new as unsafe extern "C" fn(*mut lua_State) -> ::core::ffi::c_int),
         0 as ::core::ffi::c_int,
     );
     lua_setfield(
@@ -2809,9 +2651,7 @@ pub unsafe extern "C" fn luaopen_cjson(mut l: *mut lua_State) -> ::core::ffi::c_
     return 1 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn luaopen_cjson_safe(
-    mut l: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn luaopen_cjson_safe(mut l: *mut lua_State) -> ::core::ffi::c_int {
     lua_cjson_safe_new(l);
     return 1 as ::core::ffi::c_int;
 }
@@ -2821,7 +2661,10 @@ unsafe extern "C" fn strbuf_reset(mut s: *mut strbuf_t) {
 }
 #[inline]
 unsafe extern "C" fn strbuf_empty_length(mut s: *mut strbuf_t) -> size_t {
-    return (*s).size.wrapping_sub((*s).length).wrapping_sub(1 as size_t);
+    return (*s)
+        .size
+        .wrapping_sub((*s).length)
+        .wrapping_sub(1 as size_t);
 }
 #[inline]
 unsafe extern "C" fn strbuf_ensure_empty_length(mut s: *mut strbuf_t, mut len: size_t) {
@@ -2834,10 +2677,7 @@ unsafe extern "C" fn strbuf_empty_ptr(mut s: *mut strbuf_t) -> *mut ::core::ffi:
     return (*s).buf.offset((*s).length as isize);
 }
 #[inline]
-unsafe extern "C" fn strbuf_set_length(
-    mut s: *mut strbuf_t,
-    mut len: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn strbuf_set_length(mut s: *mut strbuf_t, mut len: ::core::ffi::c_int) {
     (*s).length = len as size_t;
 }
 #[inline]
@@ -2856,10 +2696,7 @@ unsafe extern "C" fn strbuf_append_char(mut s: *mut strbuf_t, c: ::core::ffi::c_
     *(*s).buf.offset(c2rust_fresh2 as isize) = c;
 }
 #[inline]
-unsafe extern "C" fn strbuf_append_char_unsafe(
-    mut s: *mut strbuf_t,
-    c: ::core::ffi::c_char,
-) {
+unsafe extern "C" fn strbuf_append_char_unsafe(mut s: *mut strbuf_t, c: ::core::ffi::c_char) {
     let c2rust_fresh0 = (*s).length;
     (*s).length = (*s).length.wrapping_add(1);
     *(*s).buf.offset(c2rust_fresh0 as isize) = c;

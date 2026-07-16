@@ -14,11 +14,7 @@ extern "C" {
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(
-        arena: *mut Arena,
-        size: size_t,
-        align: bool,
-    ) -> *mut ::core::ffi::c_void;
+    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_mem_free(mem: ArenaMem);
     fn mpack_tokbuf_init(tb: *mut mpack_tokbuf_t);
     fn mpack_read(
@@ -42,12 +38,7 @@ extern "C" {
         name_len: size_t,
         error: *mut Error,
     ) -> MsgpackRpcRequestHandler;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn mpack_parser_init(p: *mut mpack_parser_t, c: mpack_uint32_t);
     fn mpack_parse(
         parser: *mut mpack_parser_t,
@@ -154,9 +145,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -264,9 +254,8 @@ pub struct KeySetLink {
     pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
-pub type FieldHashfn = Option<
-    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink,
->;
+pub type FieldHashfn =
+    Option<unsafe extern "C" fn(*const ::core::ffi::c_char, size_t) -> *mut KeySetLink>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct GridLineEvent {
@@ -338,9 +327,7 @@ pub union mpack_data_t {
 pub type C2Rust_Unnamed_3 = ::core::ffi::c_int;
 pub const MPACK_NOMEM: C2Rust_Unnamed_3 = 3;
 pub const MPACK_EXCEPTION: C2Rust_Unnamed_3 = -1;
-pub type mpack_walk_cb = Option<
-    unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
->;
+pub type mpack_walk_cb = Option<unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct AdditionalDataBuilder {
@@ -348,9 +335,7 @@ pub struct AdditionalDataBuilder {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     pos: 0 as size_t,
@@ -473,14 +458,8 @@ pub unsafe extern "C" fn unpack(
         &raw mut unpacker.parser,
         &raw mut data,
         &raw mut size,
-        Some(
-            api_parse_enter
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
-        ),
-        Some(
-            api_parse_exit
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
-        ),
+        Some(api_parse_enter as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
+        Some(api_parse_exit as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
     );
     *arena = unpacker.arena;
     if result == MPACK_NOMEM as ::core::ffi::c_int {
@@ -510,16 +489,12 @@ pub unsafe extern "C" fn unpack(
     }
     return unpacker.result;
 }
-unsafe extern "C" fn api_parse_enter(
-    mut parser: *mut mpack_parser_t,
-    mut node: *mut mpack_node_t,
-) {
+unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: *mut mpack_node_t) {
     let mut p: *mut Unpacker = (*parser).data.p as *mut Unpacker;
     let mut result: *mut Object = ::core::ptr::null_mut::<Object>();
     let mut key_location: *mut String_0 = ::core::ptr::null_mut::<String_0>();
-    let mut parent: *mut mpack_node_t = if (*node
-        .offset(-(1 as ::core::ffi::c_int as isize)))
-        .pos == -1 as ::core::ffi::c_int as size_t
+    let mut parent: *mut mpack_node_t = if (*node.offset(-(1 as ::core::ffi::c_int as isize))).pos
+        == -1 as ::core::ffi::c_int as size_t
     {
         ::core::ptr::null_mut::<mpack_node_t>()
     } else {
@@ -528,20 +503,15 @@ unsafe extern "C" fn api_parse_enter(
     if !parent.is_null() {
         match (*parent).tok.type_0 as ::core::ffi::c_uint {
             7 => {
-                let mut obj: *mut Object = (*parent)
-                    .data[0 as ::core::ffi::c_int as usize]
-                    .p as *mut Object;
+                let mut obj: *mut Object =
+                    (*parent).data[0 as ::core::ffi::c_int as usize].p as *mut Object;
                 result = (*obj).data.array.items.offset((*parent).pos as isize);
             }
             8 => {
-                let mut obj_0: *mut Object = (*parent)
-                    .data[0 as ::core::ffi::c_int as usize]
-                    .p as *mut Object;
-                let mut kv: *mut KeyValuePair = (*obj_0)
-                    .data
-                    .dict
-                    .items
-                    .offset((*parent).pos as isize);
+                let mut obj_0: *mut Object =
+                    (*parent).data[0 as ::core::ffi::c_int as usize].p as *mut Object;
+                let mut kv: *mut KeyValuePair =
+                    (*obj_0).data.dict.items.offset((*parent).pos as isize);
                 if (*parent).key_visited == 0 {
                     (*kv).key = STRING_INIT;
                     key_location = &raw mut (*kv).key;
@@ -552,7 +522,8 @@ unsafe extern "C" fn api_parse_enter(
                 '_c2rust_label: {
                     if (*node).tok.type_0 as ::core::ffi::c_uint
                         == MPACK_TOKEN_CHUNK as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"node->tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -630,23 +601,22 @@ unsafe extern "C" fn api_parse_enter(
                     data: C2Rust_Unnamed_1 { string: str },
                 };
             }
-            (*node).data[0 as ::core::ffi::c_int as usize].p = str.data
-                as *mut ::core::ffi::c_void;
+            (*node).data[0 as ::core::ffi::c_int as usize].p = str.data as *mut ::core::ffi::c_void;
         }
         11 => {
-            (*node).data[0 as ::core::ffi::c_int as usize].p = result
-                as *mut ::core::ffi::c_void;
+            (*node).data[0 as ::core::ffi::c_int as usize].p = result as *mut ::core::ffi::c_void;
         }
         6 => {
             '_c2rust_label_0: {
-                if !parent.is_null() {} else {
+                if !parent.is_null() {
+                } else {
                     __assert_fail(
                         b"parent\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         120 as ::core::ffi::c_uint,
-                        b"void api_parse_enter(mpack_parser_t *, mpack_node_t *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"void api_parse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -655,21 +625,17 @@ unsafe extern "C" fn api_parse_enter(
                 || (*parent).tok.type_0 as ::core::ffi::c_uint
                     == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut data: *mut ::core::ffi::c_char = (*parent)
-                    .data[0 as ::core::ffi::c_int as usize]
-                    .p as *mut ::core::ffi::c_char;
+                let mut data: *mut ::core::ffi::c_char =
+                    (*parent).data[0 as ::core::ffi::c_int as usize].p as *mut ::core::ffi::c_char;
                 memcpy(
                     data.offset((*parent).pos as isize) as *mut ::core::ffi::c_void,
                     (*node).tok.data.chunk_ptr as *const ::core::ffi::c_void,
                     (*node).tok.length as size_t,
                 );
             } else {
-                let mut res: *mut Object = (*parent)
-                    .data[0 as ::core::ffi::c_int as usize]
-                    .p as *mut Object;
-                let mut endlen: size_t = (*parent)
-                    .pos
-                    .wrapping_add((*node).tok.length as size_t);
+                let mut res: *mut Object =
+                    (*parent).data[0 as ::core::ffi::c_int as usize].p as *mut Object;
+                let mut endlen: size_t = (*parent).pos.wrapping_add((*node).tok.length as size_t);
                 if endlen > MAX_EXT_LEN as size_t {
                     *res = object {
                         type_0: kObjectTypeNil,
@@ -678,15 +644,16 @@ unsafe extern "C" fn api_parse_enter(
                 } else {
                     memcpy(
                         (&raw mut (*p).ext_buf as *mut ::core::ffi::c_char)
-                            .offset((*parent).pos as isize) as *mut ::core::ffi::c_void,
+                            .offset((*parent).pos as isize)
+                            as *mut ::core::ffi::c_void,
                         (*node).tok.data.chunk_ptr as *const ::core::ffi::c_void,
                         (*node).tok.length as size_t,
                     );
                     if (*parent).pos.wrapping_add((*node).tok.length as size_t)
                         >= (*parent).tok.length as size_t
                     {
-                        let mut buf: *const ::core::ffi::c_char = &raw mut (*p).ext_buf
-                            as *mut ::core::ffi::c_char;
+                        let mut buf: *const ::core::ffi::c_char =
+                            &raw mut (*p).ext_buf as *mut ::core::ffi::c_char;
                         let mut size: size_t = (*parent).tok.length as size_t;
                         let mut ext_tok: mpack_token_t = mpack_token_t {
                             type_0: 0 as mpack_token_type_t,
@@ -695,34 +662,27 @@ unsafe extern "C" fn api_parse_enter(
                                 value: mpack_value_t { lo: 0, hi: 0 },
                             },
                         };
-                        let mut status: ::core::ffi::c_int = mpack_rtoken(
-                            &raw mut buf,
-                            &raw mut size,
-                            &raw mut ext_tok,
-                        );
+                        let mut status: ::core::ffi::c_int =
+                            mpack_rtoken(&raw mut buf, &raw mut size, &raw mut ext_tok);
                         if status != 0
                             || ext_tok.type_0 as ::core::ffi::c_uint
-                                != MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                != MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             *res = object {
                                 type_0: kObjectTypeNil,
                                 data: C2Rust_Unnamed_1 { boolean: false },
                             };
                         } else {
-                            let mut ext_type: ::core::ffi::c_int = (*parent)
-                                .tok
-                                .data
-                                .ext_type;
+                            let mut ext_type: ::core::ffi::c_int = (*parent).tok.data.ext_type;
                             if 0 as ::core::ffi::c_int <= ext_type
                                 && ext_type
                                     <= kObjectTypeTabpage as ::core::ffi::c_int
                                         - kObjectTypeBuffer as ::core::ffi::c_int
                             {
-                                (*res).type_0 = (ext_type
-                                    + kObjectTypeBuffer as ::core::ffi::c_int) as ObjectType;
-                                (*res).data.integer = mpack_unpack_uint(ext_tok) as int64_t
-                                    as Integer;
+                                (*res).type_0 = (ext_type + kObjectTypeBuffer as ::core::ffi::c_int)
+                                    as ObjectType;
+                                (*res).data.integer =
+                                    mpack_unpack_uint(ext_tok) as int64_t as Integer;
                             } else {
                                 *res = object {
                                     type_0: kObjectTypeNil,
@@ -751,8 +711,7 @@ unsafe extern "C" fn api_parse_enter(
                 type_0: kObjectTypeArray,
                 data: C2Rust_Unnamed_1 { array: arr },
             };
-            (*node).data[0 as ::core::ffi::c_int as usize].p = result
-                as *mut ::core::ffi::c_void;
+            (*node).data[0 as ::core::ffi::c_int as usize].p = result as *mut ::core::ffi::c_void;
         }
         8 => {
             let mut dict: Dict = Dict {
@@ -771,16 +730,12 @@ unsafe extern "C" fn api_parse_enter(
                 type_0: kObjectTypeDict,
                 data: C2Rust_Unnamed_1 { dict: dict },
             };
-            (*node).data[0 as ::core::ffi::c_int as usize].p = result
-                as *mut ::core::ffi::c_void;
+            (*node).data[0 as ::core::ffi::c_int as usize].p = result as *mut ::core::ffi::c_void;
         }
         _ => {}
     };
 }
-unsafe extern "C" fn api_parse_exit(
-    mut parser: *mut mpack_parser_t,
-    mut node: *mut mpack_node_t,
-) {}
+unsafe extern "C" fn api_parse_exit(mut parser: *mut mpack_parser_t, mut node: *mut mpack_node_t) {}
 #[no_mangle]
 pub unsafe extern "C" fn unpacker_init(mut p: *mut Unpacker) {
     mpack_parser_init(&raw mut (*p).parser, 0 as mpack_uint32_t);
@@ -812,16 +767,15 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
     let mut data: *const ::core::ffi::c_char = (*p).read_ptr;
     let mut size: size_t = (*p).read_size;
     '_c2rust_label: {
-        if !((*p).unpack_error.type_0 as ::core::ffi::c_int
-            != kErrorTypeNone as ::core::ffi::c_int)
-        {} else {
+        if !((*p).unpack_error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
+        {
+        } else {
             __assert_fail(
                 b"!ERROR_SET(&p->unpack_error)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                207 as ::core::ffi::c_uint,
-                b"_Bool unpacker_parse_header(Unpacker *)\0".as_ptr()
+                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
+                207 as ::core::ffi::c_uint,
+                b"_Bool unpacker_parse_header(Unpacker *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -835,7 +789,8 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
         if result == 0 {
             if !(tok.type_0 as ::core::ffi::c_uint
                 != MPACK_TOKEN_ARRAY as ::core::ffi::c_int as ::core::ffi::c_uint
-                || tok.length < 3 as mpack_uint32_t || tok.length > 4 as mpack_uint32_t)
+                || tok.length < 3 as mpack_uint32_t
+                || tok.length > 4 as mpack_uint32_t)
             {
                 array_length = tok.length as size_t;
                 result = mpack_read(
@@ -869,8 +824,7 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
                                 if result != 0 {
                                     break '_error;
                                 } else if tok.type_0 as ::core::ffi::c_uint
-                                    != MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
+                                    != MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
                                     break '_error;
                                 } else {
@@ -889,11 +843,11 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
                                 if result != 0 {
                                     break '_error;
                                 } else if tok.type_0 as ::core::ffi::c_uint
-                                    != MPACK_TOKEN_STR as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
+                                    != MPACK_TOKEN_STR as ::core::ffi::c_int as ::core::ffi::c_uint
                                     && tok.type_0 as ::core::ffi::c_uint
                                         != MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint || tok.length > 100 as mpack_uint32_t
+                                            as ::core::ffi::c_uint
+                                    || tok.length > 100 as mpack_uint32_t
                                 {
                                     break '_error;
                                 } else {
@@ -912,7 +866,8 @@ pub unsafe extern "C" fn unpacker_parse_header(mut p: *mut Unpacker) -> bool {
                                                 if tok.type_0 as ::core::ffi::c_uint
                                                     == MPACK_TOKEN_CHUNK as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
-                                                {} else {
+                                                {
+                                                } else {
                                                     __assert_fail(
                                                         b"tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -968,14 +923,14 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
     let mut result: ::core::ffi::c_int = 0;
     let mut c2rust_current_block: u64;
     '_c2rust_label: {
-        if (*p).state >= 0 as ::core::ffi::c_int {} else {
+        if (*p).state >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"p->state >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                308 as ::core::ffi::c_uint,
-                b"_Bool unpacker_advance(Unpacker *)\0".as_ptr()
+                b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
+                308 as ::core::ffi::c_uint,
+                b"_Bool unpacker_advance(Unpacker *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -984,17 +939,11 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
         if !unpacker_parse_header(p) {
             return false_0 != 0;
         }
-        if (*p).type_0 as ::core::ffi::c_int
-            == kMessageTypeNotification as ::core::ffi::c_int
+        if (*p).type_0 as ::core::ffi::c_int == kMessageTypeNotification as ::core::ffi::c_int
             && (*p).handler.fn_0
                 == Some(
                     handle_ui_client_redraw
-                        as unsafe extern "C" fn(
-                            uint64_t,
-                            Array,
-                            *mut Arena,
-                            *mut Error,
-                        ) -> Object,
+                        as unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
                 )
         {
             (*p).type_0 = kMessageTypeRedrawEvent;
@@ -1011,9 +960,7 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
         }
     }
     '_done: {
-        if (*p).state >= 10 as ::core::ffi::c_int
-            && (*p).state != 13 as ::core::ffi::c_int
-        {
+        if (*p).state >= 10 as ::core::ffi::c_int && (*p).state != 13 as ::core::ffi::c_int {
             if !unpacker_parse_redraw(p) {
                 return false_0 != 0;
             }
@@ -1023,7 +970,8 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
                 break '_done;
             } else {
                 '_c2rust_label_0: {
-                    if (*p).state == 12 as ::core::ffi::c_int {} else {
+                    if (*p).state == 12 as ::core::ffi::c_int {
+                    } else {
                         __assert_fail(
                             b"p->state == 12\0".as_ptr() as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
@@ -1050,66 +998,57 @@ pub unsafe extern "C" fn unpacker_advance(mut p: *mut Unpacker) -> bool {
                     &raw mut (*p).read_size,
                     Some(
                         api_parse_enter
-                            as unsafe extern "C" fn(
-                                *mut mpack_parser_t,
-                                *mut mpack_node_t,
-                            ) -> (),
+                            as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
                     ),
                     Some(
                         api_parse_exit
-                            as unsafe extern "C" fn(
-                                *mut mpack_parser_t,
-                                *mut mpack_node_t,
-                            ) -> (),
+                            as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
                     ),
                 );
                 if result == MPACK_EOF as ::core::ffi::c_int {
-                    return false_0 != 0
+                    return false_0 != 0;
                 } else if result != MPACK_OK as ::core::ffi::c_int {
                     api_set_error(
                         &raw mut (*p).unpack_error,
                         kErrorTypeValidation,
-                        b"failed to parse msgpack\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"failed to parse msgpack\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
                 }
                 c2rust_current_block = 18326220445127191884;
             }
-            _ => {
-                match (*p).state {
-                    1 => {
-                        (*p).error = (*p).result;
-                        (*p).state = 2 as ::core::ffi::c_int;
-                        c2rust_current_block = 11682394310085580349;
-                    }
-                    2 => {
-                        (*p).state = 0 as ::core::ffi::c_int;
-                        return true_0 != 0;
-                    }
-                    13 | 16 => {
-                        (*p).ncalls -= 1;
-                        if (*p).ncalls > 0 as ::core::ffi::c_int {
-                            (*p).state = if (*p).state == 16 as ::core::ffi::c_int {
-                                14 as ::core::ffi::c_int
-                            } else {
-                                12 as ::core::ffi::c_int
-                            };
-                        } else if (*p).nevents > 0 as ::core::ffi::c_int {
-                            (*p).state = 11 as ::core::ffi::c_int;
-                        } else {
-                            (*p).state = 0 as ::core::ffi::c_int;
-                        }
-                        return true_0 != 0;
-                    }
-                    _ => {
-                        abort();
-                    }
+            _ => match (*p).state {
+                1 => {
+                    (*p).error = (*p).result;
+                    (*p).state = 2 as ::core::ffi::c_int;
+                    c2rust_current_block = 11682394310085580349;
                 }
-            }
+                2 => {
+                    (*p).state = 0 as ::core::ffi::c_int;
+                    return true_0 != 0;
+                }
+                13 | 16 => {
+                    (*p).ncalls -= 1;
+                    if (*p).ncalls > 0 as ::core::ffi::c_int {
+                        (*p).state = if (*p).state == 16 as ::core::ffi::c_int {
+                            14 as ::core::ffi::c_int
+                        } else {
+                            12 as ::core::ffi::c_int
+                        };
+                    } else if (*p).nevents > 0 as ::core::ffi::c_int {
+                        (*p).state = 11 as ::core::ffi::c_int;
+                    } else {
+                        (*p).state = 0 as ::core::ffi::c_int;
+                    }
+                    return true_0 != 0;
+                }
+                _ => {
+                    abort();
+                }
+            },
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
@@ -1130,17 +1069,12 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             'c_26758: {
                 match (*p).state {
                     10 => {
-                        result = mpack_rtoken(
-                            &raw mut data,
-                            &raw mut size,
-                            &raw mut tok,
-                        );
+                        result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
                         if result == MPACK_EOF as ::core::ffi::c_int {
-                            return false_0 != 0
+                            return false_0 != 0;
                         } else if result != 0
                             || tok.type_0 as ::core::ffi::c_uint
-                                != MPACK_TOKEN_ARRAY as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                != MPACK_TOKEN_ARRAY as ::core::ffi::c_int as ::core::ffi::c_uint
                                 && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                                     == MPACK_TOKEN_STR as ::core::ffi::c_int
                                     && tok.type_0 as ::core::ffi::c_uint
@@ -1174,20 +1108,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 }
                 result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
                 if result == MPACK_EOF as ::core::ffi::c_int {
-                    return false_0 != 0
+                    return false_0 != 0;
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_ARRAY as ::core::ffi::c_int as ::core::ffi::c_uint
                         && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                             == MPACK_TOKEN_STR as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                         && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                             == MPACK_TOKEN_SINT as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1201,20 +1133,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                 }
                 result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
                 if result == MPACK_EOF as ::core::ffi::c_int {
-                    return false_0 != 0
+                    return false_0 != 0;
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_STR as ::core::ffi::c_int as ::core::ffi::c_uint
                         && !(MPACK_TOKEN_STR as ::core::ffi::c_int
                             == MPACK_TOKEN_STR as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                         && !(MPACK_TOKEN_STR as ::core::ffi::c_int
                             == MPACK_TOKEN_SINT as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1236,11 +1166,9 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                     != ::core::mem::transmute::<
                         Option<unsafe extern "C" fn(Array) -> !>,
                         Option<unsafe extern "C" fn(Array) -> ()>,
-                    >(
-                        Some(
-                            ui_client_event_grid_line as unsafe extern "C" fn(Array) -> !,
-                        ),
-                    )
+                    >(Some(
+                        ui_client_event_grid_line as unsafe extern "C" fn(Array) -> !,
+                    ))
                 {
                     (*p).state = 12 as ::core::ffi::c_int;
                     return true_0 != 0;
@@ -1251,20 +1179,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             }
             result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
             if result == MPACK_EOF as ::core::ffi::c_int {
-                return false_0 != 0
+                return false_0 != 0;
             } else if result != 0
                 || tok.type_0 as ::core::ffi::c_uint
                     != MPACK_TOKEN_ARRAY as ::core::ffi::c_int as ::core::ffi::c_uint
                     && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                         == MPACK_TOKEN_STR as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                     && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                         == MPACK_TOKEN_SINT as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 (*p).state = -1 as ::core::ffi::c_int;
                 return false_0 != 0;
@@ -1278,20 +1204,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             while i < 3 as ::core::ffi::c_int {
                 result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
                 if result == MPACK_EOF as ::core::ffi::c_int {
-                    return false_0 != 0
+                    return false_0 != 0;
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint
                         && !(MPACK_TOKEN_UINT as ::core::ffi::c_int
                             == MPACK_TOKEN_STR as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                         && !(MPACK_TOKEN_UINT as ::core::ffi::c_int
                             == MPACK_TOKEN_SINT as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1301,20 +1225,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             }
             result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
             if result == MPACK_EOF as ::core::ffi::c_int {
-                return false_0 != 0
+                return false_0 != 0;
             } else if result != 0
                 || tok.type_0 as ::core::ffi::c_uint
                     != MPACK_TOKEN_ARRAY as ::core::ffi::c_int as ::core::ffi::c_uint
                     && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                         == MPACK_TOKEN_STR as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                     && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                         == MPACK_TOKEN_SINT as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 (*p).state = -1 as ::core::ffi::c_int;
                 return false_0 != 0;
@@ -1329,7 +1251,8 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
         }
         while (*g).icell != (*g).ncells {
             '_c2rust_label: {
-                if (*g).icell < (*g).ncells {} else {
+                if (*g).icell < (*g).ncells {
+                } else {
                     __assert_fail(
                         b"g->icell < g->ncells\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
@@ -1342,47 +1265,41 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             };
             result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
             if result == MPACK_EOF as ::core::ffi::c_int {
-                return false_0 != 0
+                return false_0 != 0;
             } else if result != 0
                 || tok.type_0 as ::core::ffi::c_uint
                     != MPACK_TOKEN_ARRAY as ::core::ffi::c_int as ::core::ffi::c_uint
                     && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                         == MPACK_TOKEN_STR as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                     && !(MPACK_TOKEN_ARRAY as ::core::ffi::c_int
                         == MPACK_TOKEN_SINT as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 (*p).state = -1 as ::core::ffi::c_int;
                 return false_0 != 0;
             }
             let mut cellarrsize: ::core::ffi::c_int = tok.length as ::core::ffi::c_int;
-            if cellarrsize < 1 as ::core::ffi::c_int
-                || cellarrsize > 3 as ::core::ffi::c_int
-            {
+            if cellarrsize < 1 as ::core::ffi::c_int || cellarrsize > 3 as ::core::ffi::c_int {
                 (*p).state = -1 as ::core::ffi::c_int;
                 return false_0 != 0;
             }
             result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
             if result == MPACK_EOF as ::core::ffi::c_int {
-                return false_0 != 0
+                return false_0 != 0;
             } else if result != 0
                 || tok.type_0 as ::core::ffi::c_uint
                     != MPACK_TOKEN_STR as ::core::ffi::c_int as ::core::ffi::c_uint
                     && !(MPACK_TOKEN_STR as ::core::ffi::c_int
                         == MPACK_TOKEN_STR as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                     && !(MPACK_TOKEN_STR as ::core::ffi::c_int
                         == MPACK_TOKEN_SINT as ::core::ffi::c_int
                         && tok.type_0 as ::core::ffi::c_uint
-                            == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+                            == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 (*p).state = -1 as ::core::ffi::c_int;
                 return false_0 != 0;
@@ -1397,20 +1314,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             if cellarrsize >= 2 as ::core::ffi::c_int {
                 result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
                 if result == MPACK_EOF as ::core::ffi::c_int {
-                    return false_0 != 0
+                    return false_0 != 0;
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_SINT as ::core::ffi::c_int as ::core::ffi::c_uint
                         && !(MPACK_TOKEN_SINT as ::core::ffi::c_int
                             == MPACK_TOKEN_STR as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                         && !(MPACK_TOKEN_SINT as ::core::ffi::c_int
                             == MPACK_TOKEN_SINT as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1421,20 +1336,18 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             if cellarrsize >= 3 as ::core::ffi::c_int {
                 result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
                 if result == MPACK_EOF as ::core::ffi::c_int {
-                    return false_0 != 0
+                    return false_0 != 0;
                 } else if result != 0
                     || tok.type_0 as ::core::ffi::c_uint
                         != MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint
                         && !(MPACK_TOKEN_UINT as ::core::ffi::c_int
                             == MPACK_TOKEN_STR as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_BIN as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
                         && !(MPACK_TOKEN_UINT as ::core::ffi::c_int
                             == MPACK_TOKEN_SINT as ::core::ffi::c_int
                             && tok.type_0 as ::core::ffi::c_uint
-                                == MPACK_TOKEN_UINT as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint)
+                                == MPACK_TOKEN_UINT as ::core::ffi::c_int as ::core::ffi::c_uint)
                 {
                     (*p).state = -1 as ::core::ffi::c_int;
                     return false_0 != 0;
@@ -1444,8 +1357,8 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
             (*g).clear_width = 0 as ::core::ffi::c_int;
             if (*g).icell == (*g).ncells - 1 as ::core::ffi::c_int
                 && cellsize == 1 as size_t
-                && *cellbuf.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
+                && *cellbuf.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == ' ' as ::core::ffi::c_int
                 && repeat > 1 as ::core::ffi::c_int
             {
                 (*g).clear_width = repeat;
@@ -1460,8 +1373,7 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
                     *grid_line_buf_char.offset((*g).coloff as isize) = sc;
                     let c2rust_fresh1 = (*g).coloff;
                     (*g).coloff = (*g).coloff + 1;
-                    *grid_line_buf_attr.offset(c2rust_fresh1 as isize) = (*g).cur_attr
-                        as sattr_T;
+                    *grid_line_buf_attr.offset(c2rust_fresh1 as isize) = (*g).cur_attr as sattr_T;
                     r += 1;
                 }
             }
@@ -1473,12 +1385,11 @@ pub unsafe extern "C" fn unpacker_parse_redraw(mut p: *mut Unpacker) -> bool {
     }
     result = mpack_rtoken(&raw mut data, &raw mut size, &raw mut tok);
     if result == MPACK_EOF as ::core::ffi::c_int {
-        return false_0 != 0
+        return false_0 != 0;
     } else if result != 0
         || tok.type_0 as ::core::ffi::c_uint
             != MPACK_TOKEN_BOOLEAN as ::core::ffi::c_int as ::core::ffi::c_uint
-            && !(MPACK_TOKEN_BOOLEAN as ::core::ffi::c_int
-                == MPACK_TOKEN_STR as ::core::ffi::c_int
+            && !(MPACK_TOKEN_BOOLEAN as ::core::ffi::c_int == MPACK_TOKEN_STR as ::core::ffi::c_int
                 && tok.type_0 as ::core::ffi::c_uint
                     == MPACK_TOKEN_BIN as ::core::ffi::c_int as ::core::ffi::c_uint)
             && !(MPACK_TOKEN_BOOLEAN as ::core::ffi::c_int
@@ -1508,11 +1419,7 @@ pub unsafe extern "C" fn unpack_string(
             value: mpack_value_t { lo: 0, hi: 0 },
         },
     };
-    let mut result: ::core::ffi::c_int = mpack_rtoken(
-        &raw mut data2,
-        &raw mut size2,
-        &raw mut tok,
-    );
+    let mut result: ::core::ffi::c_int = mpack_rtoken(&raw mut data2, &raw mut size2, &raw mut tok);
     if result != 0
         || tok.type_0 as ::core::ffi::c_uint
             != MPACK_TOKEN_STR as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -1589,10 +1496,7 @@ pub unsafe extern "C" fn unpack_uint_or_sint(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn parse_nop(
-    mut parser: *mut mpack_parser_t,
-    mut node: *mut mpack_node_t,
-) {}
+unsafe extern "C" fn parse_nop(mut parser: *mut mpack_parser_t, mut node: *mut mpack_node_t) {}
 #[no_mangle]
 pub unsafe extern "C" fn unpack_skip(
     mut data: *mut *const ::core::ffi::c_char,
@@ -1639,14 +1543,8 @@ pub unsafe extern "C" fn unpack_skip(
         &raw mut parser,
         data,
         size,
-        Some(
-            parse_nop
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
-        ),
-        Some(
-            parse_nop
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
-        ),
+        Some(parse_nop as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
+        Some(parse_nop as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()),
     );
 }
 #[no_mangle]
@@ -1663,7 +1561,9 @@ pub unsafe extern "C" fn push_additional_data(
         };
         if ::core::mem::size_of::<AdditionalData>() > 0 as usize {
             if (*ad).capacity
-                < (*ad).size.wrapping_add(::core::mem::size_of::<AdditionalData>())
+                < (*ad)
+                    .size
+                    .wrapping_add(::core::mem::size_of::<AdditionalData>())
             {
                 (*ad).capacity = (*ad)
                     .size
@@ -1678,12 +1578,12 @@ pub unsafe extern "C" fn push_additional_data(
                 (*ad).capacity = (*ad).capacity;
                 (*ad).items = xrealloc(
                     (*ad).items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul((*ad).capacity),
+                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*ad).capacity),
                 ) as *mut ::core::ffi::c_char;
             }
             '_c2rust_label: {
-                if !(*ad).items.is_null() {} else {
+                if !(*ad).items.is_null() {
+                } else {
                     __assert_fail(
                         b"(*ad).items\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
@@ -1721,12 +1621,12 @@ pub unsafe extern "C" fn push_additional_data(
             (*ad).capacity = (*ad).capacity;
             (*ad).items = xrealloc(
                 (*ad).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*ad).capacity),
+                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*ad).capacity),
             ) as *mut ::core::ffi::c_char;
         }
         '_c2rust_label_0: {
-            if !(*ad).items.is_null() {} else {
+            if !(*ad).items.is_null() {
+            } else {
                 __assert_fail(
                     b"(*ad).items\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/unpacker.c\0"
@@ -1777,37 +1677,33 @@ pub unsafe extern "C" fn unpack_keydict(
         let mut key: String_0 = unpack_string(data, size);
         if key.data.is_null() {
             *error = arena_printf(
-                    ::core::ptr::null_mut::<Arena>(),
-                    b"has key value which is not a string\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                )
-                .data;
+                ::core::ptr::null_mut::<Arena>(),
+                b"has key value which is not a string\0".as_ptr() as *const ::core::ffi::c_char,
+            )
+            .data;
             return false_0 != 0;
         } else if key.size == 0 as size_t {
             *error = arena_printf(
-                    ::core::ptr::null_mut::<Arena>(),
-                    b"has empty key\0".as_ptr() as *const ::core::ffi::c_char,
-                )
-                .data;
+                ::core::ptr::null_mut::<Arena>(),
+                b"has empty key\0".as_ptr() as *const ::core::ffi::c_char,
+            )
+            .data;
             return false_0 != 0;
         }
-        let mut field: *mut KeySetLink = hashy
-            .expect("non-null function pointer")(key.data, key.size);
+        let mut field: *mut KeySetLink =
+            hashy.expect("non-null function pointer")(key.data, key.size);
         if field.is_null() {
             let mut status: ::core::ffi::c_int = unpack_skip(data, size);
             if status != 0 {
                 return false_0 != 0;
             }
             if !ad.is_null() {
-                push_additional_data(
-                    ad,
-                    item_start,
-                    (*data).offset_from(item_start) as size_t,
-                );
+                push_additional_data(ad, item_start, (*data).offset_from(item_start) as size_t);
             }
         } else {
             '_c2rust_label: {
-                if (*field).opt_index >= 0 as ::core::ffi::c_int {} else {
+                if (*field).opt_index >= 0 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
                         b"field->opt_index >= 0\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -1819,17 +1715,15 @@ pub unsafe extern "C" fn unpack_keydict(
                     );
                 }
             };
-            let mut flag: uint64_t = ((1 as ::core::ffi::c_ulonglong)
-                << (*field).opt_index) as uint64_t;
+            let mut flag: uint64_t =
+                ((1 as ::core::ffi::c_ulonglong) << (*field).opt_index) as uint64_t;
             if (*ks).is_set_ & flag as OptionalKeys != 0 {
-                *error = xstrdup(
-                    b"duplicate key\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                *error = xstrdup(b"duplicate key\0".as_ptr() as *const ::core::ffi::c_char);
                 return false_0 != 0;
             }
             (*ks).is_set_ |= flag;
-            let mut mem: *mut ::core::ffi::c_char = (retval as *mut ::core::ffi::c_char)
-                .offset((*field).ptr_off as isize);
+            let mut mem: *mut ::core::ffi::c_char =
+                (retval as *mut ::core::ffi::c_char).offset((*field).ptr_off as isize);
             match (*field).type_0 {
                 1 => {
                     if *size == 0 as size_t
@@ -1837,30 +1731,30 @@ pub unsafe extern "C" fn unpack_keydict(
                             != 0xc2 as ::core::ffi::c_int
                     {
                         *error = arena_printf(
-                                ::core::ptr::null_mut::<Arena>(),
-                                b"has %.*s key value which is not a boolean\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                key.size as ::core::ffi::c_int,
-                                key.data,
-                            )
-                            .data;
+                            ::core::ptr::null_mut::<Arena>(),
+                            b"has %.*s key value which is not a boolean\0".as_ptr()
+                                as *const ::core::ffi::c_char,
+                            key.size as ::core::ffi::c_int,
+                            key.data,
+                        )
+                        .data;
                         return false_0 != 0;
                     }
-                    *(mem as *mut Boolean) = **data as ::core::ffi::c_int
-                        & 0x1 as ::core::ffi::c_int != 0;
+                    *(mem as *mut Boolean) =
+                        **data as ::core::ffi::c_int & 0x1 as ::core::ffi::c_int != 0;
                     *data = (*data).offset(1);
                     *size = (*size).wrapping_sub(1);
                 }
                 2 => {
                     if !unpack_integer(data, size, mem as *mut Integer) {
                         *error = arena_printf(
-                                ::core::ptr::null_mut::<Arena>(),
-                                b"has %.*s key value which is not an integer\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                key.size as ::core::ffi::c_int,
-                                key.data,
-                            )
-                            .data;
+                            ::core::ptr::null_mut::<Arena>(),
+                            b"has %.*s key value which is not an integer\0".as_ptr()
+                                as *const ::core::ffi::c_char,
+                            key.size as ::core::ffi::c_int,
+                            key.data,
+                        )
+                        .data;
                         return false_0 != 0;
                     }
                 }
@@ -1868,13 +1762,13 @@ pub unsafe extern "C" fn unpack_keydict(
                     let mut val: String_0 = unpack_string(data, size);
                     if val.data.is_null() {
                         *error = arena_printf(
-                                ::core::ptr::null_mut::<Arena>(),
-                                b"has %.*s key value which is not a binary\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                key.size as ::core::ffi::c_int,
-                                key.data,
-                            )
-                            .data;
+                            ::core::ptr::null_mut::<Arena>(),
+                            b"has %.*s key value which is not a binary\0".as_ptr()
+                                as *const ::core::ffi::c_char,
+                            key.size as ::core::ffi::c_int,
+                            key.data,
+                        )
+                        .data;
                         return false_0 != 0;
                     }
                     *(mem as *mut String_0) = val;
@@ -1883,13 +1777,13 @@ pub unsafe extern "C" fn unpack_keydict(
                     let mut len: ssize_t = unpack_array(data, size);
                     if len < 0 as ssize_t {
                         *error = arena_printf(
-                                ::core::ptr::null_mut::<Arena>(),
-                                b"has %.*s key with non-array value\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                key.size as ::core::ffi::c_int,
-                                key.data,
-                            )
-                            .data;
+                            ::core::ptr::null_mut::<Arena>(),
+                            b"has %.*s key with non-array value\0".as_ptr()
+                                as *const ::core::ffi::c_char,
+                            key.size as ::core::ffi::c_int,
+                            key.data,
+                        )
+                        .data;
                         return false_0 != 0;
                     }
                     let mut a: *mut StringArray = mem as *mut StringArray;
@@ -1905,8 +1799,7 @@ pub unsafe extern "C" fn unpack_keydict(
                         (*a).capacity = (*a).capacity;
                         (*a).items = xrealloc(
                             (*a).items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<String_0>()
-                                .wrapping_mul((*a).capacity),
+                            ::core::mem::size_of::<String_0>().wrapping_mul((*a).capacity),
                         ) as *mut String_0;
                     }
                     let mut j: size_t = 0 as size_t;
@@ -1914,13 +1807,13 @@ pub unsafe extern "C" fn unpack_keydict(
                         let mut item: String_0 = unpack_string(data, size);
                         if item.data.is_null() {
                             *error = arena_printf(
-                                    ::core::ptr::null_mut::<Arena>(),
-                                    b"has %.*s array with non-binary value\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    key.size as ::core::ffi::c_int,
-                                    key.data,
-                                )
-                                .data;
+                                ::core::ptr::null_mut::<Arena>(),
+                                b"has %.*s array with non-binary value\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
+                                key.size as ::core::ffi::c_int,
+                                key.data,
+                            )
+                            .data;
                             return false_0 != 0;
                         }
                         if (*a).size == (*a).capacity {
@@ -1931,10 +1824,10 @@ pub unsafe extern "C" fn unpack_keydict(
                             });
                             (*a).items = xrealloc(
                                 (*a).items as *mut ::core::ffi::c_void,
-                                ::core::mem::size_of::<String_0>()
-                                    .wrapping_mul((*a).capacity),
+                                ::core::mem::size_of::<String_0>().wrapping_mul((*a).capacity),
                             ) as *mut String_0;
-                        } else {};
+                        } else {
+                        };
                         let c2rust_fresh2 = (*a).size;
                         (*a).size = (*a).size.wrapping_add(1);
                         *(*a).items.offset(c2rust_fresh2 as isize) = item;

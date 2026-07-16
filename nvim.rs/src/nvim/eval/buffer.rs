@@ -14,11 +14,7 @@ extern "C" {
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn strnequal(
-        a: *const ::core::ffi::c_char,
-        b: *const ::core::ffi::c_char,
-        n: size_t,
-    ) -> bool;
+    fn strnequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char, n: size_t) -> bool;
     fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T);
     fn aucmd_restbuf(aco: *mut aco_save_T);
     fn block_autocmds();
@@ -67,11 +63,7 @@ extern "C" {
     fn tv_list_item_remove(l: *mut list_T, item: *mut listitem_T) -> *mut listitem_T;
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
     fn callback_free(callback: *mut Callback);
     fn tv_dict_alloc() -> *mut dict_T;
@@ -144,11 +136,8 @@ extern "C" {
         len: colnr_T,
         newfile: bool,
     ) -> ::core::ffi::c_int;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn ml_replace_buf(
         buf: *mut buf_T,
         lnum: linenr_T,
@@ -159,10 +148,7 @@ extern "C" {
     fn ml_delete_flags(lnum: linenr_T, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn update_topline(wp: *mut win_T);
     fn path_with_url(fname: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn concat_str(
         str1: *const ::core::ffi::c_char,
         str2: *const ::core::ffi::c_char,
@@ -207,9 +193,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -1952,9 +1937,7 @@ pub struct cob_T {
 }
 pub const ML_DEL_MESSAGE: C2Rust_Unnamed_14 = 1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1980,8 +1963,7 @@ pub unsafe extern "C" fn find_buffer(mut avar: *mut typval_T) -> *mut buf_T {
                 if !(*bp).b_fname.is_null()
                     && (path_with_url((*bp).b_fname) != 0
                         || bt_nofilename(bp) as ::core::ffi::c_int != 0)
-                    && strcmp((*bp).b_fname, (*avar).vval.v_string)
-                        == 0 as ::core::ffi::c_int
+                    && strcmp((*bp).b_fname, (*avar).vval.v_string) == 0 as ::core::ffi::c_int
                 {
                     buf = bp;
                     break;
@@ -2005,10 +1987,7 @@ unsafe extern "C" fn find_win_for_curbuf() {
         }
     }
 }
-unsafe extern "C" fn change_other_buffer_prepare(
-    mut cob: *mut cob_T,
-    mut buf: *mut buf_T,
-) {
+unsafe extern "C" fn change_other_buffer_prepare(mut cob: *mut cob_T, mut buf: *mut buf_T) {
     memset(
         cob as *mut ::core::ffi::c_void,
         0 as ::core::ffi::c_int,
@@ -2049,9 +2028,7 @@ unsafe extern "C" fn set_buffer_lines(
         });
     let mut added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let is_curbuf: bool = buf == curbuf;
-    if buf.is_null() || !is_curbuf && (*buf).b_ml.ml_mfp.is_null()
-        || lnum < 1 as linenr_T
-    {
+    if buf.is_null() || !is_curbuf && (*buf).b_ml.ml_mfp.is_null() || lnum < 1 as linenr_T {
         (*rettv).vval.v_number = 1 as varnumber_T;
         return;
     }
@@ -2086,9 +2063,7 @@ unsafe extern "C" fn set_buffer_lines(
     }
     let mut l: *mut list_T = ::core::ptr::null_mut::<list_T>();
     let mut li: *mut listitem_T = ::core::ptr::null_mut::<listitem_T>();
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     '_cleanup: {
         if (*lines).v_type as ::core::ffi::c_uint
             == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2122,8 +2097,7 @@ unsafe extern "C" fn set_buffer_lines(
                 u_sync(true_0 != 0);
             }
             if !append && lnum <= (*curbuf).b_ml.ml_line_count {
-                let mut old_len: ::core::ffi::c_int = strlen(ml_get(lnum))
-                    as ::core::ffi::c_int;
+                let mut old_len: ::core::ffi::c_int = strlen(ml_get(lnum)) as ::core::ffi::c_int;
                 if u_savesub(lnum) == OK && ml_replace(lnum, line, true_0 != 0) == OK {
                     inserted_bytes(
                         lnum,
@@ -2131,20 +2105,14 @@ unsafe extern "C" fn set_buffer_lines(
                         old_len,
                         strlen(line) as ::core::ffi::c_int,
                     );
-                    if is_curbuf as ::core::ffi::c_int != 0
-                        && lnum == (*curwin).w_cursor.lnum
-                    {
+                    if is_curbuf as ::core::ffi::c_int != 0 && lnum == (*curwin).w_cursor.lnum {
                         check_cursor_col(curwin);
                     }
                     (*rettv).vval.v_number = 0 as varnumber_T;
                 }
-            } else if added > 0 as ::core::ffi::c_int
-                || u_save(lnum - 1 as linenr_T, lnum) == OK
-            {
+            } else if added > 0 as ::core::ffi::c_int || u_save(lnum - 1 as linenr_T, lnum) == OK {
                 added += 1;
-                if ml_append(lnum - 1 as linenr_T, line, 0 as colnr_T, false_0 != 0)
-                    == OK
-                {
+                if ml_append(lnum - 1 as linenr_T, line, 0 as colnr_T, false_0 != 0) == OK {
                     (*rettv).vval.v_number = 0 as varnumber_T;
                 }
             }
@@ -2206,17 +2174,11 @@ unsafe extern "C" fn buf_set_append_line(
     mut append: bool,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    let buf: *mut buf_T = tv_get_buf(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        false_0,
-    );
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
         (*rettv).vval.v_number = 1 as varnumber_T;
     } else {
-        let lnum: linenr_T = tv_get_lnum_buf(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            buf,
-        );
+        let lnum: linenr_T = tv_get_lnum_buf(argvars.offset(1 as ::core::ffi::c_int as isize), buf);
         if did_emsg == did_emsg_before {
             set_buffer_lines(
                 buf,
@@ -2245,15 +2207,11 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 1 as varnumber_T;
-    let buf: *mut buf_T = tv_get_buf_from_arg(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let buf: *mut buf_T = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     if buf.is_null() || !bt_prompt(buf) {
         return;
     }
-    let mut lnum: linenr_T = if 0 as linenr_T
-        > (*buf).b_prompt_start.mark.lnum - 1 as linenr_T
-    {
+    let mut lnum: linenr_T = if 0 as linenr_T > (*buf).b_prompt_start.mark.lnum - 1 as linenr_T {
         0 as linenr_T
     } else {
         (*buf).b_prompt_start.mark.lnum - 1 as linenr_T
@@ -2272,9 +2230,7 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
             let mut l: *mut list_T = (*lines).vval.v_list;
             if !l.is_null() && tv_list_len(l) > 0 as ::core::ffi::c_int {
                 let mut li: *mut listitem_T = tv_list_first(l);
-                let mut str: *const ::core::ffi::c_char = tv_get_string(
-                    &raw mut (*li).li_tv,
-                );
+                let mut str: *const ::core::ffi::c_char = tv_get_string(&raw mut (*li).li_tv);
                 let mut new_str: *mut ::core::ffi::c_char = concat_str(text, str);
                 tv_clear(&raw mut (*li).li_tv);
                 (*li).li_tv.v_type = VAR_STRING;
@@ -2314,13 +2270,11 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
             let mut l_1: *mut list_T = (*lines).vval.v_list;
             if !l_1.is_null() && tv_list_len(l_1) > 0 as ::core::ffi::c_int {
                 let mut li_1: *mut listitem_T = tv_list_last(l_1);
-                let mut str_1: *const ::core::ffi::c_char = tv_get_string(
-                    &raw mut (*li_1).li_tv,
-                );
+                let mut str_1: *const ::core::ffi::c_char = tv_get_string(&raw mut (*li_1).li_tv);
                 let mut len: size_t = strlen(str_1);
                 if len > 0 as size_t
-                    && *str_1.offset(len.wrapping_sub(1 as size_t) as isize)
-                        as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                    && *str_1.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                        == '\n' as ::core::ffi::c_int
                 {
                     (*buf).b_prompt_append_new_line = true_0 != 0;
                 }
@@ -2331,8 +2285,8 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
             let mut str_2: *const ::core::ffi::c_char = tv_get_string(lines);
             let mut len_0: size_t = strlen(str_2);
             if len_0 > 0 as size_t
-                && *str_2.offset(len_0.wrapping_sub(1 as size_t) as isize)
-                    as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                && *str_2.offset(len_0.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                    == '\n' as ::core::ffi::c_int
             {
                 (*buf).b_prompt_append_new_line = true_0 != 0;
             }
@@ -2345,9 +2299,8 @@ pub unsafe extern "C" fn f_bufadd(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut name: *mut ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as *mut ::core::ffi::c_char;
+    let mut name: *mut ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_char;
     (*rettv).vval.v_number = buflist_add(
         if *name as ::core::ffi::c_int == NUL {
             ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -2363,9 +2316,7 @@ pub unsafe extern "C" fn f_bufexists(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    (*rettv).vval.v_number = !find_buffer(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-        )
+    (*rettv).vval.v_number = !find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize))
         .is_null() as ::core::ffi::c_int as varnumber_T;
 }
 #[no_mangle]
@@ -2376,8 +2327,8 @@ pub unsafe extern "C" fn f_buflisted(
 ) {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     buf = find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize));
-    (*rettv).vval.v_number = (!buf.is_null() && (*buf).b_p_bl != 0) as ::core::ffi::c_int
-        as varnumber_T;
+    (*rettv).vval.v_number =
+        (!buf.is_null() && (*buf).b_p_bl != 0) as ::core::ffi::c_int as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_bufload(
@@ -2385,9 +2336,7 @@ pub unsafe extern "C" fn f_bufload(
     mut unused: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut buf: *mut buf_T = get_buf_arg(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut buf: *mut buf_T = get_buf_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     if !buf.is_null() {
         if swap_exists_action != SEA_READONLY {
             swap_exists_action = SEA_NONE;
@@ -2403,8 +2352,8 @@ pub unsafe extern "C" fn f_bufloaded(
 ) {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     buf = find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize));
-    (*rettv).vval.v_number = (!buf.is_null() && !(*buf).b_ml.ml_mfp.is_null())
-        as ::core::ffi::c_int as varnumber_T;
+    (*rettv).vval.v_number =
+        (!buf.is_null() && !(*buf).b_ml.ml_mfp.is_null()) as ::core::ffi::c_int as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_bufname(
@@ -2447,17 +2396,15 @@ pub unsafe extern "C" fn f_bufnr(
         buf = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
         emsg_off -= 1;
     }
-    let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if buf.is_null()
-        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         && tv_get_number_chk(
             argvars.offset(1 as ::core::ffi::c_int as isize),
             &raw mut error,
-        ) != 0 as varnumber_T && !error
+        ) != 0 as varnumber_T
+        && !error
         && {
             name = tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
             !name.is_null()
@@ -2479,9 +2426,7 @@ unsafe extern "C" fn buf_win_common(
     mut rettv: *mut typval_T,
     mut get_nr: bool,
 ) {
-    let buf: *const buf_T = tv_get_buf_from_arg(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let buf: *const buf_T = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     if buf.is_null() {
         (*rettv).vval.v_number = -1 as varnumber_T;
         return;
@@ -2507,7 +2452,11 @@ unsafe extern "C" fn buf_win_common(
         }
     }
     (*rettv).vval.v_number = (if found_buf as ::core::ffi::c_int != 0 {
-        if get_nr as ::core::ffi::c_int != 0 { winnr } else { winid }
+        if get_nr as ::core::ffi::c_int != 0 {
+            winnr
+        } else {
+            winid
+        }
     } else {
         -1 as ::core::ffi::c_int
     }) as varnumber_T;
@@ -2536,18 +2485,12 @@ pub unsafe extern "C" fn f_deletebufline(
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
     (*rettv).vval.v_number = 1 as varnumber_T;
-    let buf: *mut buf_T = tv_get_buf(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        false_0,
-    );
+    let buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
         return;
     }
     let mut last: linenr_T = 0;
-    let first: linenr_T = tv_get_lnum_buf(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-        buf,
-    );
+    let first: linenr_T = tv_get_lnum_buf(argvars.offset(1 as ::core::ffi::c_int as isize), buf);
     if did_emsg > did_emsg_before {
         return;
     }
@@ -2558,8 +2501,10 @@ pub unsafe extern "C" fn f_deletebufline(
     } else {
         last = first;
     }
-    if (*buf).b_ml.ml_mfp.is_null() || first < 1 as linenr_T
-        || first > (*buf).b_ml.ml_line_count || last < first
+    if (*buf).b_ml.ml_mfp.is_null()
+        || first < 1 as linenr_T
+        || first > (*buf).b_ml.ml_line_count
+        || last < first
     {
         return;
     }
@@ -2590,8 +2535,8 @@ pub unsafe extern "C" fn f_deletebufline(
     if last > (*curbuf).b_ml.ml_line_count {
         last = (*curbuf).b_ml.ml_line_count;
     }
-    let count: ::core::ffi::c_int = last as ::core::ffi::c_int
-        - first as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+    let count: ::core::ffi::c_int =
+        last as ::core::ffi::c_int - first as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
     if u_sync_once == 2 as ::core::ffi::c_int {
         u_sync_once = 1 as ::core::ffi::c_int;
         u_sync(true_0 != 0);
@@ -2654,8 +2599,11 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
         dict,
         b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        (if buf == curbuf { (*curwin).w_cursor.lnum } else { buflist_findlnum(buf) })
-            as varnumber_T,
+        (if buf == curbuf {
+            (*curwin).w_cursor.lnum
+        } else {
+            buflist_findlnum(buf)
+        }) as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
@@ -2706,12 +2654,14 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         (*buf).b_vars,
     );
-    let windows: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
+    let windows: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*wp).w_buffer == buf {
                 tv_list_append_number(windows, (*wp).handle as varnumber_T);
@@ -2766,8 +2716,8 @@ pub unsafe extern "C" fn f_getbufinfo(
             di = tv_dict_find(
                 sel_d,
                 b"buflisted\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as usize) as ptrdiff_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as usize)
+                    as ptrdiff_t,
             );
             if !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0 {
                 sel_buflisted = true_0 != 0;
@@ -2775,8 +2725,8 @@ pub unsafe extern "C" fn f_getbufinfo(
             di = tv_dict_find(
                 sel_d,
                 b"bufloaded\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as usize) as ptrdiff_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as usize)
+                    as ptrdiff_t,
             );
             if !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0 {
                 sel_bufloaded = true_0 != 0;
@@ -2784,15 +2734,14 @@ pub unsafe extern "C" fn f_getbufinfo(
             di = tv_dict_find(
                 sel_d,
                 b"bufmodified\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                    .wrapping_sub(1 as usize) as ptrdiff_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize)
+                    as ptrdiff_t,
             );
             if !di.is_null() && tv_get_number(&raw mut (*di).di_tv) != 0 {
                 sel_bufmodified = true_0 != 0;
             }
         }
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
-        as ::core::ffi::c_uint
+    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         argbuf = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2804,11 +2753,9 @@ pub unsafe extern "C" fn f_getbufinfo(
     while !buf.is_null() {
         if !(!argbuf.is_null() && argbuf != buf) {
             if !(filtered as ::core::ffi::c_int != 0
-                && (sel_bufloaded as ::core::ffi::c_int != 0
-                    && (*buf).b_ml.ml_mfp.is_null()
+                && (sel_bufloaded as ::core::ffi::c_int != 0 && (*buf).b_ml.ml_mfp.is_null()
                     || sel_buflisted as ::core::ffi::c_int != 0 && (*buf).b_p_bl == 0
-                    || sel_bufmodified as ::core::ffi::c_int != 0
-                        && (*buf).b_changed == 0))
+                    || sel_bufmodified as ::core::ffi::c_int != 0 && (*buf).b_changed == 0))
             {
                 let d: *mut dict_T = get_buffer_info(buf);
                 tv_list_append_dict((*rettv).vval.v_list, d);
@@ -2833,9 +2780,7 @@ unsafe extern "C" fn get_buffer_lines(
         VAR_STRING as ::core::ffi::c_int
     }) as VarType;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() || start < 0 as linenr_T
-        || end < start
-    {
+    if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() || start < 0 as linenr_T || end < start {
         if retlist {
             tv_list_alloc_ret(rettv, 0 as ptrdiff_t);
         }
@@ -2859,9 +2804,7 @@ unsafe extern "C" fn get_buffer_lines(
         }
     } else {
         (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = if start >= 1 as linenr_T
-            && start <= (*buf).b_ml.ml_line_count
-        {
+        (*rettv).vval.v_string = if start >= 1 as linenr_T && start <= (*buf).b_ml.ml_line_count {
             xstrnsave(ml_get_buf(buf, start), ml_get_buf_len(buf, start) as size_t)
         } else {
             ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -2874,13 +2817,8 @@ unsafe extern "C" fn getbufline(
     mut retlist: bool,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    let buf: *mut buf_T = tv_get_buf_from_arg(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
-    let lnum: linenr_T = tv_get_lnum_buf(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-        buf,
-    );
+    let buf: *mut buf_T = tv_get_buf_from_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
+    let lnum: linenr_T = tv_get_lnum_buf(argvars.offset(1 as ::core::ffi::c_int as isize), buf);
     if did_emsg > did_emsg_before {
         return;
     }
@@ -2945,9 +2883,7 @@ pub unsafe extern "C" fn f_setline(
     mut fptr: EvalFuncData,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
-    let mut lnum: linenr_T = tv_get_lnum(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut lnum: linenr_T = tv_get_lnum(argvars.offset(0 as ::core::ffi::c_int as isize));
     if did_emsg == did_emsg_before {
         set_buffer_lines(
             curbuf,
@@ -2959,10 +2895,7 @@ pub unsafe extern "C" fn f_setline(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn switch_buffer(
-    mut save_curbuf: *mut bufref_T,
-    mut buf: *mut buf_T,
-) {
+pub unsafe extern "C" fn switch_buffer(mut save_curbuf: *mut bufref_T, mut buf: *mut buf_T) {
     block_autocmds();
     set_bufref(save_curbuf, curbuf);
     (*curbuf).b_nwindows -= 1;
@@ -2995,10 +2928,7 @@ pub unsafe extern "C" fn f_prompt_setcallback(
     if check_secure() {
         return;
     }
-    let mut buf: *mut buf_T = tv_get_buf(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        false_0,
-    );
+    let mut buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
         return;
     }
@@ -3026,10 +2956,7 @@ pub unsafe extern "C" fn f_prompt_setinterrupt(
     if check_secure() {
         return;
     }
-    let mut buf: *mut buf_T = tv_get_buf(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        false_0,
-    );
+    let mut buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
         return;
     }
@@ -3051,18 +2978,13 @@ pub unsafe extern "C" fn f_prompt_setprompt(
     if check_secure() {
         return;
     }
-    let mut buf: *mut buf_T = tv_get_buf(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        false_0,
-    );
+    let mut buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
     if buf.is_null() {
         return;
     }
-    let mut new_prompt: *const ::core::ffi::c_char = tv_get_string(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-    );
-    let mut new_prompt_len: ::core::ffi::c_int = strlen(new_prompt)
-        as ::core::ffi::c_int;
+    let mut new_prompt: *const ::core::ffi::c_char =
+        tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize));
+    let mut new_prompt_len: ::core::ffi::c_int = strlen(new_prompt) as ::core::ffi::c_int;
     if bt_prompt(buf) as ::core::ffi::c_int != 0 && !(*buf).b_ml.ml_mfp.is_null() {
         if (*buf).b_prompt_start.mark.lnum < 1 as linenr_T
             || (*buf).b_prompt_start.mark.lnum > (*curbuf).b_ml.ml_line_count
@@ -3072,8 +2994,7 @@ pub unsafe extern "C" fn f_prompt_setprompt(
                     (*buf).b_prompt_start.mark.lnum
                 } else {
                     (*buf).b_ml.ml_line_count
-                })
-            {
+                }) {
                 1 as linenr_T
             } else if (*buf).b_prompt_start.mark.lnum < (*buf).b_ml.ml_line_count {
                 (*buf).b_prompt_start.mark.lnum
@@ -3086,8 +3007,7 @@ pub unsafe extern "C" fn f_prompt_setprompt(
         let mut old_prompt: *mut ::core::ffi::c_char = buf_prompt_text(buf);
         let mut old_line: *mut ::core::ffi::c_char = ml_get_buf(buf, prompt_lno);
         let mut old_line_len: colnr_T = ml_get_buf_len(buf, prompt_lno);
-        let mut old_prompt_len: ::core::ffi::c_int = strlen(old_prompt)
-            as ::core::ffi::c_int;
+        let mut old_prompt_len: ::core::ffi::c_int = strlen(old_prompt) as ::core::ffi::c_int;
         let mut cursor_col: colnr_T = (*curwin).w_cursor.col;
         if (*buf).b_prompt_start.mark.col < old_prompt_len
             || (*buf).b_prompt_start.mark.col > old_line_len
@@ -3120,9 +3040,7 @@ pub unsafe extern "C" fn f_prompt_setprompt(
                 new_prompt,
                 old_line.offset((*buf).b_prompt_start.mark.col as isize),
             );
-            if ml_replace_buf(buf, prompt_lno, new_line, false_0 != 0, false_0 != 0)
-                != OK
-            {
+            if ml_replace_buf(buf, prompt_lno, new_line, false_0 != 0, false_0 != 0) != OK {
                 xfree(new_line as *mut ::core::ffi::c_void);
             }
             extmark_splice_cols(
@@ -3133,9 +3051,8 @@ pub unsafe extern "C" fn f_prompt_setprompt(
                 new_prompt_len as colnr_T,
                 kExtmarkNoUndo,
             );
-            cursor_col
-                += (new_prompt_len as colnr_T - (*buf).b_prompt_start.mark.col)
-                    as ::core::ffi::c_int;
+            cursor_col +=
+                (new_prompt_len as colnr_T - (*buf).b_prompt_start.mark.col) as ::core::ffi::c_int;
         }
         if (*curwin).w_buffer == buf && (*curwin).w_cursor.lnum == prompt_lno {
             (*curwin).w_cursor.col = cursor_col;

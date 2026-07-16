@@ -111,17 +111,12 @@ pub struct C2Rust_Unnamed_0 {
     pub init_array: [ContainerStackItem; 2],
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 56],
-        [::core::ffi::c_char; 56],
-    >(*b"void mpack_handle(ObjectType, handle_T, PackerBuffer *)\0")
+    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+        *b"void mpack_handle(ObjectType, handle_T, PackerBuffer *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const KV_INITIAL_VALUE: C2Rust_Unnamed_0 = C2Rust_Unnamed_0 {
     size: 0 as size_t,
@@ -139,8 +134,7 @@ unsafe extern "C" fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -151,8 +145,7 @@ pub const MPACK_ITEM_SIZE: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh0 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh0 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh0 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh1 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh1 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
@@ -161,25 +154,19 @@ unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint3
 unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh2 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh2 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh2 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh3 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh3 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh3 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh4 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh4 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh4 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh5 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh5 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_uint(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut val: uint32_t,
-) {
+unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
     if val > 0xffff as uint32_t {
         let c2rust_fresh6 = *buf;
         *buf = (*buf).offset(1);
@@ -215,10 +202,7 @@ unsafe extern "C" fn mpack_bool(mut buf: *mut *mut ::core::ffi::c_char, mut val:
         })) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_array(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut len: uint32_t,
-) {
+unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
     if len < 0x10 as uint32_t {
         let c2rust_fresh12 = *buf;
         *buf = (*buf).offset(1);
@@ -236,10 +220,7 @@ unsafe extern "C" fn mpack_array(
     };
 }
 #[inline]
-unsafe extern "C" fn mpack_map(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut len: uint32_t,
-) {
+unsafe extern "C" fn mpack_map(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
     if len < 0x10 as uint32_t {
         let c2rust_fresh15 = *buf;
         *buf = (*buf).offset(1);
@@ -279,10 +260,7 @@ unsafe extern "C" fn mpack_w8(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_uint64(
-    mut ptr: *mut *mut ::core::ffi::c_char,
-    mut i: uint64_t,
-) {
+pub unsafe extern "C" fn mpack_uint64(mut ptr: *mut *mut ::core::ffi::c_char, mut i: uint64_t) {
     if i > 0xfffffff as uint64_t {
         let c2rust_fresh18 = *ptr;
         *ptr = (*ptr).offset(1);
@@ -293,10 +271,7 @@ pub unsafe extern "C" fn mpack_uint64(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_integer(
-    mut ptr: *mut *mut ::core::ffi::c_char,
-    mut i: Integer,
-) {
+pub unsafe extern "C" fn mpack_integer(mut ptr: *mut *mut ::core::ffi::c_char, mut i: Integer) {
     if i >= 0 as Integer {
         mpack_uint64(ptr, i as uint64_t);
     } else if (i as ::core::ffi::c_longlong) < -0x80000000 as ::core::ffi::c_longlong {
@@ -476,7 +451,8 @@ pub unsafe extern "C" fn mpack_handle(
         *c2rust_fresh44 = handle as ::core::ffi::c_char;
     } else {
         '_c2rust_label: {
-            if handle >= 0 as ::core::ffi::c_int {} else {
+            if handle >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"handle >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/msgpack_rpc/packer.c\0"
@@ -489,8 +465,7 @@ pub unsafe extern "C" fn mpack_handle(
         let mut buf: [::core::ffi::c_char; 9] = [0; 9];
         let mut pos: *mut ::core::ffi::c_char = &raw mut buf as *mut ::core::ffi::c_char;
         mpack_uint(&raw mut pos, handle as uint32_t);
-        let mut packsize: ptrdiff_t = pos
-            .offset_from(&raw mut buf as *mut ::core::ffi::c_char);
+        let mut packsize: ptrdiff_t = pos.offset_from(&raw mut buf as *mut ::core::ffi::c_char);
         let c2rust_fresh45 = (*packer).ptr;
         (*packer).ptr = (*packer).ptr.offset(1);
         *c2rust_fresh45 = 0xc7 as ::core::ffi::c_int as ::core::ffi::c_char;
@@ -509,17 +484,11 @@ pub unsafe extern "C" fn mpack_handle(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_object(
-    mut obj: *mut Object,
-    mut packer: *mut PackerBuffer,
-) {
+pub unsafe extern "C" fn mpack_object(mut obj: *mut Object, mut packer: *mut PackerBuffer) {
     mpack_object_inner(obj, ::core::ptr::null_mut::<Object>(), 0 as size_t, packer);
 }
 #[no_mangle]
-pub unsafe extern "C" fn mpack_object_array(
-    mut arr: Array,
-    mut packer: *mut PackerBuffer,
-) {
+pub unsafe extern "C" fn mpack_object_array(mut arr: Array, mut packer: *mut PackerBuffer) {
     mpack_array(&raw mut (*packer).ptr, arr.size as uint32_t);
     if arr.size > 0 as size_t {
         let mut container: Object = object {
@@ -550,8 +519,8 @@ pub unsafe extern "C" fn mpack_object_inner(
         .wrapping_div(::core::mem::size_of::<ContainerStackItem>())
         .wrapping_div(
             (::core::mem::size_of::<[ContainerStackItem; 2]>()
-                .wrapping_rem(::core::mem::size_of::<ContainerStackItem>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<ContainerStackItem>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     stack.size = 0 as size_t;
     stack.items = &raw mut stack.init_array as *mut ContainerStackItem;
@@ -604,8 +573,8 @@ pub unsafe extern "C" fn mpack_object_inner(
                     }
                     if current_size > 0 as size_t {
                         if (*current).type_0 as ::core::ffi::c_uint
-                            == kObjectTypeArray as ::core::ffi::c_int
-                                as ::core::ffi::c_uint && current_size == 1 as size_t
+                            == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
+                            && current_size == 1 as size_t
                         {
                             current = (*current)
                                 .data
@@ -616,35 +585,53 @@ pub unsafe extern "C" fn mpack_object_inner(
                         } else {
                             if !container.is_null() {
                                 if stack.size == stack.capacity {
-                                    stack.capacity = (if stack.capacity
-                                        << 1 as ::core::ffi::c_int
+                                    stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
                                         > ::core::mem::size_of::<[ContainerStackItem; 2]>()
-                                            .wrapping_div(::core::mem::size_of::<ContainerStackItem>())
+                                            .wrapping_div(
+                                                ::core::mem::size_of::<ContainerStackItem>(),
+                                            )
                                             .wrapping_div(
                                                 (::core::mem::size_of::<[ContainerStackItem; 2]>()
-                                                    .wrapping_rem(::core::mem::size_of::<ContainerStackItem>())
-                                                    == 0) as ::core::ffi::c_int as usize,
-                                            )
-                                    {
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        ContainerStackItem,
+                                                    >(
+                                                    ))
+                                                    == 0)
+                                                    as ::core::ffi::c_int
+                                                    as usize,
+                                            ) {
                                         stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         ::core::mem::size_of::<[ContainerStackItem; 2]>()
-                                            .wrapping_div(::core::mem::size_of::<ContainerStackItem>())
+                                            .wrapping_div(
+                                                ::core::mem::size_of::<ContainerStackItem>(),
+                                            )
                                             .wrapping_div(
                                                 (::core::mem::size_of::<[ContainerStackItem; 2]>()
-                                                    .wrapping_rem(::core::mem::size_of::<ContainerStackItem>())
-                                                    == 0) as ::core::ffi::c_int as size_t,
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        ContainerStackItem,
+                                                    >(
+                                                    ))
+                                                    == 0)
+                                                    as ::core::ffi::c_int
+                                                    as size_t,
                                             )
                                     });
                                     stack.items = (if stack.capacity
                                         == ::core::mem::size_of::<[ContainerStackItem; 2]>()
-                                            .wrapping_div(::core::mem::size_of::<ContainerStackItem>())
+                                            .wrapping_div(
+                                                ::core::mem::size_of::<ContainerStackItem>(),
+                                            )
                                             .wrapping_div(
                                                 (::core::mem::size_of::<[ContainerStackItem; 2]>()
-                                                    .wrapping_rem(::core::mem::size_of::<ContainerStackItem>())
-                                                    == 0) as ::core::ffi::c_int as usize,
-                                            )
-                                    {
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        ContainerStackItem,
+                                                    >(
+                                                    ))
+                                                    == 0)
+                                                    as ::core::ffi::c_int
+                                                    as usize,
+                                            ) {
                                         (if stack.items
                                             == &raw mut stack.init_array as *mut ContainerStackItem
                                         {
@@ -654,9 +641,10 @@ pub unsafe extern "C" fn mpack_object_inner(
                                                 &raw mut stack.init_array as *mut ContainerStackItem
                                                     as *mut ::core::ffi::c_void,
                                                 stack.items as *mut ::core::ffi::c_void,
-                                                stack
-                                                    .size
-                                                    .wrapping_mul(::core::mem::size_of::<ContainerStackItem>()),
+                                                stack.size.wrapping_mul(::core::mem::size_of::<
+                                                    ContainerStackItem,
+                                                >(
+                                                )),
                                             )
                                         })
                                     } else {
@@ -664,26 +652,27 @@ pub unsafe extern "C" fn mpack_object_inner(
                                             == &raw mut stack.init_array as *mut ContainerStackItem
                                         {
                                             memcpy(
-                                                xmalloc(
-                                                    stack
-                                                        .capacity
-                                                        .wrapping_mul(::core::mem::size_of::<ContainerStackItem>()),
-                                                ),
+                                                xmalloc(stack.capacity.wrapping_mul(
+                                                    ::core::mem::size_of::<ContainerStackItem>(),
+                                                )),
                                                 stack.items as *const ::core::ffi::c_void,
-                                                stack
-                                                    .size
-                                                    .wrapping_mul(::core::mem::size_of::<ContainerStackItem>()),
+                                                stack.size.wrapping_mul(::core::mem::size_of::<
+                                                    ContainerStackItem,
+                                                >(
+                                                )),
                                             )
                                         } else {
                                             xrealloc(
                                                 stack.items as *mut ::core::ffi::c_void,
-                                                stack
-                                                    .capacity
-                                                    .wrapping_mul(::core::mem::size_of::<ContainerStackItem>()),
+                                                stack.capacity.wrapping_mul(
+                                                    ::core::mem::size_of::<ContainerStackItem>(),
+                                                ),
                                             )
                                         })
-                                    }) as *mut ContainerStackItem;
-                                } else {};
+                                    })
+                                        as *mut ContainerStackItem;
+                                } else {
+                                };
                                 let c2rust_fresh49 = stack.size;
                                 stack.size = stack.size.wrapping_add(1);
                                 *stack.items.offset(c2rust_fresh49 as isize) = ContainerStackItem {
@@ -740,8 +729,8 @@ pub unsafe extern "C" fn mpack_object_inner(
         }
     }
     if stack.items != &raw mut stack.init_array as *mut ContainerStackItem {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut stack.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -750,28 +739,22 @@ pub unsafe extern "C" fn mpack_object_inner(
 #[no_mangle]
 pub unsafe extern "C" fn packer_string_buffer() -> PackerBuffer {
     let initial_size: size_t = 64 as size_t;
-    let mut alloc: *mut ::core::ffi::c_char = xmalloc(initial_size)
-        as *mut ::core::ffi::c_char;
+    let mut alloc: *mut ::core::ffi::c_char = xmalloc(initial_size) as *mut ::core::ffi::c_char;
     return packer_buffer_t {
         startptr: alloc,
         ptr: alloc,
         endptr: alloc.offset(initial_size as isize),
         anydata: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         anyint: 0,
-        packer_flush: Some(
-            flush_string_buffer as unsafe extern "C" fn(*mut PackerBuffer) -> (),
-        ),
+        packer_flush: Some(flush_string_buffer as unsafe extern "C" fn(*mut PackerBuffer) -> ()),
     };
 }
 unsafe extern "C" fn flush_string_buffer(mut buffer: *mut PackerBuffer) {
-    let mut current_capacity: size_t = (*buffer).endptr.offset_from((*buffer).startptr)
-        as size_t;
+    let mut current_capacity: size_t = (*buffer).endptr.offset_from((*buffer).startptr) as size_t;
     let mut new_capacity: size_t = (2 as size_t).wrapping_mul(current_capacity);
     let mut len: size_t = (*buffer).ptr.offset_from((*buffer).startptr) as size_t;
-    (*buffer).startptr = xrealloc(
-        (*buffer).startptr as *mut ::core::ffi::c_void,
-        new_capacity,
-    ) as *mut ::core::ffi::c_char;
+    (*buffer).startptr = xrealloc((*buffer).startptr as *mut ::core::ffi::c_void, new_capacity)
+        as *mut ::core::ffi::c_char;
     (*buffer).ptr = (*buffer).startptr.offset(len as isize);
     (*buffer).endptr = (*buffer).startptr.offset(new_capacity as isize);
 }

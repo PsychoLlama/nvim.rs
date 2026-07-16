@@ -53,10 +53,8 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strstr(
         __haystack: *const ::core::ffi::c_char,
         __needle: *const ::core::ffi::c_char,
@@ -72,10 +70,7 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrchrnul(
         str: *const ::core::ffi::c_char,
         c: ::core::ffi::c_char,
@@ -87,22 +82,13 @@ extern "C" {
     ) -> size_t;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
-    fn strnequal(
-        a: *const ::core::ffi::c_char,
-        b: *const ::core::ffi::c_char,
-        n: size_t,
-    ) -> bool;
+    fn strnequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char, n: size_t) -> bool;
     fn cstr_to_string(str: *const ::core::ffi::c_char) -> String_0;
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn api_free_string(value: String_0);
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn copy_string(str: String_0, arena: *mut Arena) -> String_0;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_err_invalid(
         err: *mut Error,
         name: *const ::core::ffi::c_char,
@@ -614,11 +600,7 @@ extern "C" {
     fn tv_free(tv: *mut typval_T);
     fn set_vim_var_tv(idx: VimVarIndex, tv: *mut typval_T);
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T;
     fn reset_v_option_vars();
     fn switch_win_noblock(
@@ -640,11 +622,7 @@ extern "C" {
     fn foldmethodIsDiff(wp: *mut win_T) -> bool;
     fn newFoldLevel();
     fn foldUpdateAll(win: *mut win_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn fuzzy_match_str(
         str: *mut ::core::ffi::c_char,
@@ -696,10 +674,7 @@ extern "C" {
         dict: *mut KeyDict_highlight,
     );
     fn hl_invalidate_blends();
-    fn syn_check_group(
-        name: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> ::core::ffi::c_int;
+    fn syn_check_group(name: *const ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn highlight_changed();
     fn tabstop_set(var: *mut ::core::ffi::c_char, array: *mut *mut colnr_T) -> bool;
     fn briopt_check(briopt: *mut ::core::ffi::c_char, wp: *mut win_T) -> bool;
@@ -746,10 +721,7 @@ extern "C" {
     fn free_string_option(p: *mut ::core::ffi::c_char);
     fn clear_string_option(pp: *mut *mut ::core::ffi::c_char);
     fn check_string_option(pp: *mut *mut ::core::ffi::c_char);
-    fn check_signcolumn(
-        scl: *mut ::core::ffi::c_char,
-        wp: *mut win_T,
-    ) -> ::core::ffi::c_int;
+    fn check_signcolumn(scl: *mut ::core::ffi::c_char, wp: *mut win_T) -> ::core::ffi::c_int;
     fn check_illegal_path_names(val: *mut ::core::ffi::c_char, flags: uint32_t) -> bool;
     fn expand_set_str_generic(
         args: *mut optexpand_T,
@@ -940,21 +912,14 @@ extern "C" {
         fname1: *const ::core::ffi::c_char,
         fname2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn FullName_save(
-        fname: *const ::core::ffi::c_char,
-        force: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
     fn after_pathsep(
         b: *const ::core::ffi::c_char,
         p: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
     fn pum_redraw();
     fn pum_drawn() -> bool;
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn did_set_runtimepackpath(args: *mut optset_T) -> *const ::core::ffi::c_char;
     fn source_runtime_vim_lua(
         name: *mut ::core::ffi::c_char,
@@ -1000,11 +965,7 @@ extern "C" {
     fn win_comp_scroll(wp: *mut win_T);
     fn command_height();
     fn last_status(morewin: bool);
-    fn set_winbar_win(
-        wp: *mut win_T,
-        make_room: bool,
-        valid_cursor: bool,
-    ) -> ::core::ffi::c_int;
+    fn set_winbar_win(wp: *mut win_T, make_room: bool, valid_cursor: bool) -> ::core::ffi::c_int;
     fn set_winbar(make_room: bool);
     fn tabline_height() -> ::core::ffi::c_int;
     fn global_stl_height() -> ::core::ffi::c_int;
@@ -3851,9 +3812,8 @@ pub struct optset_T {
     pub os_win: *mut ::core::ffi::c_void,
     pub os_buf: *mut ::core::ffi::c_void,
 }
-pub type opt_did_set_cb_T = Option<
-    unsafe extern "C" fn(*mut optset_T) -> *const ::core::ffi::c_char,
->;
+pub type opt_did_set_cb_T =
+    Option<unsafe extern "C" fn(*mut optset_T) -> *const ::core::ffi::c_char>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct optexpand_T {
@@ -5100,9 +5060,7 @@ pub const DIP_ERR: C2Rust_Unnamed_39 = 4;
 pub const DIP_DIR: C2Rust_Unnamed_39 = 2;
 pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
 pub const MIN_LINES: C2Rust_Unnamed_40 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const ROOT_UID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -5120,13 +5078,11 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const CTRL_F_STR: [::core::ffi::c_char; 2] = unsafe {
-    ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x06\0")
-};
+pub const CTRL_F_STR: [::core::ffi::c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x06\0") };
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const PATHSEPSTR: [::core::ffi::c_char; 2] = unsafe {
-    ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0")
-};
+pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
 #[inline(always)]
 unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
     return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
@@ -5165,32 +5121,25 @@ pub const DFLT_EFM: [::core::ffi::c_char; 667] = unsafe {
     )
 };
 pub const DFLT_GFN: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 55],
-        [::core::ffi::c_char; 55],
-    >(*b"Source Code Pro,DejaVu Sans Mono,Courier New,monospace\0")
+    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
+        *b"Source Code Pro,DejaVu Sans Mono,Courier New,monospace\0",
+    )
 };
 pub const DFLT_GREPFORMAT: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"%f:%l:%m,%f:%l%m,%f  %l%m\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"%f:%l:%m,%f:%l%m,%f  %l%m\0")
 };
-pub const ENC_DFLT: [::core::ffi::c_char; 6] = unsafe {
-    ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"utf-8\0")
-};
+pub const ENC_DFLT: [::core::ffi::c_char; 6] =
+    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"utf-8\0") };
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DFLT_FO_VIM: [::core::ffi::c_char; 5] = unsafe {
-    ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"tcqj\0")
-};
+pub const DFLT_FO_VIM: [::core::ffi::c_char; 5] =
+    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"tcqj\0") };
 pub const MAX_MCO: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const CPO_BUFOPT: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const CPO_BUFOPTGLOB: ::core::ffi::c_int = 'S' as ::core::ffi::c_int;
-pub const CPO_VIM: [::core::ffi::c_char; 9] = unsafe {
-    ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"aABceFs_\0")
-};
+pub const CPO_VIM: [::core::ffi::c_char; 9] =
+    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"aABceFs_\0") };
 pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 pub const BS_NOSTOP: ::core::ffi::c_int = 'p' as ::core::ffi::c_int;
 pub const LISPWORD_VALUE: [::core::ffi::c_char; 746] = unsafe {
@@ -5202,41 +5151,33 @@ pub const LISPWORD_VALUE: [::core::ffi::c_char; 746] = unsafe {
     )
 };
 #[no_mangle]
-pub static mut p_vfile: *mut ::core::ffi::c_char = unsafe {
-    &raw const empty_string_option as *mut ::core::ffi::c_char
-};
+pub static mut p_vfile: *mut ::core::ffi::c_char =
+    unsafe { &raw const empty_string_option as *mut ::core::ffi::c_char };
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
 pub const SB_MAX: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const TABSTOP_MAX: ::core::ffi::c_int = 9999 as ::core::ffi::c_int;
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
-pub const DFLT_ERRORFILE: [::core::ffi::c_char; 11] = unsafe {
-    ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"errors.err\0")
-};
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
+pub const DFLT_ERRORFILE: [::core::ffi::c_char; 11] =
+    unsafe { ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"errors.err\0") };
 pub const DFLT_HELPFILE: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 25],
-        [::core::ffi::c_char; 25],
-    >(*b"$VIMRUNTIME/doc/help.txt\0")
+    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"$VIMRUNTIME/doc/help.txt\0")
 };
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DFLT_COLS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
 pub const DFLT_ROWS: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KENTER: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 #[inline]
 unsafe extern "C" fn is_power_of_two(mut x: uint64_t) -> bool {
     return x != 0 as uint64_t && x & x.wrapping_sub(1 as uint64_t) == 0 as uint64_t;
 }
 #[inline]
-unsafe extern "C" fn optval_type_get_name(
-    type_0: OptValType,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn optval_type_get_name(type_0: OptValType) -> *const ::core::ffi::c_char {
     match type_0 as ::core::ffi::c_int {
         -1 => return b"nil\0".as_ptr() as *const ::core::ffi::c_char,
         0 => return b"boolean\0".as_ptr() as *const ::core::ffi::c_char,
@@ -5247,53 +5188,40 @@ unsafe extern "C" fn optval_type_get_name(
     unreachable!();
 }
 static mut e_unknown_option: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E518: Unknown option\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E518: Unknown option\0")
 };
 static mut e_not_allowed_in_modeline: [::core::ffi::c_char; 32] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 32],
-        [::core::ffi::c_char; 32],
-    >(*b"E520: Not allowed in a modeline\0")
+    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
+        *b"E520: Not allowed in a modeline\0",
+    )
 };
 static mut e_not_allowed_in_modeline_when_modelineexpr_is_off: [::core::ffi::c_char; 59] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 59],
-        [::core::ffi::c_char; 59],
-    >(*b"E992: Not allowed in a modeline when 'modelineexpr' is off\0")
+    ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
+        *b"E992: Not allowed in a modeline when 'modelineexpr' is off\0",
+    )
 };
 static mut e_number_required_after_equal: [::core::ffi::c_char; 30] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 30],
-        [::core::ffi::c_char; 30],
-    >(*b"E521: Number required after =\0")
+    ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
+        *b"E521: Number required after =\0",
+    )
 };
 static mut e_preview_window_already_exists: [::core::ffi::c_char; 38] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 38],
-        [::core::ffi::c_char; 38],
-    >(*b"E590: A preview window already exists\0")
+    ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
+        *b"E590: A preview window already exists\0",
+    )
 };
 static mut e_cannot_have_negative_or_zero_number_of_quickfix: [::core::ffi::c_char; 72] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 72],
-        [::core::ffi::c_char; 72],
-    >(*b"E1542: Cannot have a negative or zero number of quickfix/location lists\0")
+    ::core::mem::transmute::<[u8; 72], [::core::ffi::c_char; 72]>(
+        *b"E1542: Cannot have a negative or zero number of quickfix/location lists\0",
+    )
 };
 static mut e_cannot_have_more_than_hundred_quickfix: [::core::ffi::c_char; 63] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 63],
-        [::core::ffi::c_char; 63],
-    >(*b"E1543: Cannot have more than a hundred quickfix/location lists\0")
+    ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
+        *b"E1543: Cannot have more than a hundred quickfix/location lists\0",
+    )
 };
-static mut p_term: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
-static mut p_ttytype: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut p_term: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+static mut p_ttytype: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 static mut p_et_nobin: ::core::ffi::c_int = 0;
 static mut p_ml_nobin: ::core::ffi::c_int = 0;
 static mut p_tw_nobin: OptInt = 0;
@@ -5303,15 +5231,14 @@ static mut p_et_nopaste: ::core::ffi::c_int = 0;
 static mut p_sts_nopaste: OptInt = 0;
 static mut p_tw_nopaste: OptInt = 0;
 static mut p_wm_nopaste: OptInt = 0;
-static mut p_vsts_nopaste: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut p_vsts_nopaste: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 pub const OPTION_COUNT: usize = ::core::mem::size_of::<[vimoption_T; 374]>()
     .wrapping_div(::core::mem::size_of::<vimoption_T>())
     .wrapping_div(
         (::core::mem::size_of::<[vimoption_T; 374]>()
-            .wrapping_rem(::core::mem::size_of::<vimoption_T>()) == 0)
-            as ::core::ffi::c_int as usize,
+            .wrapping_rem(::core::mem::size_of::<vimoption_T>())
+            == 0) as ::core::ffi::c_int as usize,
     );
 static mut p_bin_dep_opts: [::core::ffi::c_int; 5] = [
     kOptTextwidth as ::core::ffi::c_int,
@@ -5335,12 +5262,14 @@ static mut p_paste_dep_opts: [::core::ffi::c_int; 11] = [
 ];
 #[no_mangle]
 pub unsafe extern "C" fn set_init_tablocal() {
-    p_ch = options[kOptCmdheight as ::core::ffi::c_int as usize].def_val.data.number;
+    p_ch = options[kOptCmdheight as ::core::ffi::c_int as usize]
+        .def_val
+        .data
+        .number;
 }
 unsafe extern "C" fn set_init_default_shell() {
-    let mut shell: *mut ::core::ffi::c_char = os_getenv(
-        b"SHELL\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut shell: *mut ::core::ffi::c_char =
+        os_getenv(b"SHELL\0".as_ptr() as *const ::core::ffi::c_char);
     if !shell.is_null() {
         if !vim_strchr(shell, ' ' as ::core::ffi::c_int).is_null() {
             let len: size_t = strlen(shell).wrapping_add(3 as size_t);
@@ -5373,27 +5302,27 @@ unsafe extern "C" fn set_init_default_backupskip() {
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     let mut opt_idx: OptIndex = kOptBackupskip;
-    ga_init(&raw mut ga, 1 as ::core::ffi::c_int, 100 as ::core::ffi::c_int);
+    ga_init(
+        &raw mut ga,
+        1 as ::core::ffi::c_int,
+        100 as ::core::ffi::c_int,
+    );
     let mut i: size_t = 0 as size_t;
-    while i
-        < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-            .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-            .wrapping_div(
-                (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
+    while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
+        .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+        .wrapping_div(
+            (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
+                .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                == 0) as ::core::ffi::c_int as usize,
+        )
     {
         let mut mustfree: bool = true_0 != 0;
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut plen: size_t = 0;
         if *names[i as usize] as ::core::ffi::c_int == NUL {
-            p = b"/tmp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-            plen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                .wrapping_sub(1 as usize) as size_t;
+            p = b"/tmp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            plen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
+                as size_t;
             mustfree = false_0 != 0;
         } else {
             p = vim_getenv(names[i as usize] as *const ::core::ffi::c_char);
@@ -5416,8 +5345,7 @@ unsafe extern "C" fn set_init_default_backupskip() {
                     }) as size_t,
                 )
                 .wrapping_add(2 as size_t);
-            let mut item: *mut ::core::ffi::c_char = xmalloc(itemsize)
-                as *mut ::core::ffi::c_char;
+            let mut item: *mut ::core::ffi::c_char = xmalloc(itemsize) as *mut ::core::ffi::c_char;
             let mut itemseplen: size_t = (if ga.ga_len == 0 as ::core::ffi::c_int {
                 0 as ::core::ffi::c_int
             } else {
@@ -5435,31 +5363,29 @@ unsafe extern "C" fn set_init_default_backupskip() {
                 },
             ) as size_t;
             if find_dup_item(
-                    ga.ga_data as *const ::core::ffi::c_char,
-                    item,
-                    itemlen,
-                    options[opt_idx as usize].flags,
-                )
-                .is_null()
+                ga.ga_data as *const ::core::ffi::c_char,
+                item,
+                itemlen,
+                options[opt_idx as usize].flags,
+            )
+            .is_null()
             {
                 ga_grow(
                     &raw mut ga,
                     itemseplen.wrapping_add(itemlen).wrapping_add(1 as size_t)
                         as ::core::ffi::c_int,
                 );
-                ga.ga_len
-                    += vim_snprintf(
-                        (ga.ga_data as *mut ::core::ffi::c_char)
-                            .offset(ga.ga_len as isize),
-                        itemseplen.wrapping_add(itemlen).wrapping_add(1 as size_t),
-                        b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        if itemseplen > 0 as size_t {
-                            b",\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            b"\0".as_ptr() as *const ::core::ffi::c_char
-                        },
-                        item,
-                    );
+                ga.ga_len += vim_snprintf(
+                    (ga.ga_data as *mut ::core::ffi::c_char).offset(ga.ga_len as isize),
+                    itemseplen.wrapping_add(itemlen).wrapping_add(1 as size_t),
+                    b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    if itemseplen > 0 as size_t {
+                        b",\0".as_ptr() as *const ::core::ffi::c_char
+                    } else {
+                        b"\0".as_ptr() as *const ::core::ffi::c_char
+                    },
+                    item,
+                );
             }
             xfree(item as *mut ::core::ffi::c_void);
         }
@@ -5477,14 +5403,15 @@ unsafe extern "C" fn set_init_default_backupskip() {
     }
 }
 unsafe extern "C" fn set_init_default_cdpath() {
-    let mut cdpath: *mut ::core::ffi::c_char = vim_getenv(
-        b"CDPATH\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut cdpath: *mut ::core::ffi::c_char =
+        vim_getenv(b"CDPATH\0".as_ptr() as *const ::core::ffi::c_char);
     if cdpath.is_null() {
         return;
     }
     let mut buf: *mut ::core::ffi::c_char = xmalloc(
-        (2 as size_t).wrapping_mul(strlen(cdpath)).wrapping_add(2 as size_t),
+        (2 as size_t)
+            .wrapping_mul(strlen(cdpath))
+            .wrapping_add(2 as size_t),
     ) as *mut ::core::ffi::c_char;
     *buf.offset(0 as ::core::ffi::c_int as isize) = ',' as ::core::ffi::c_char;
     let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -5495,10 +5422,8 @@ unsafe extern "C" fn set_init_default_cdpath() {
             j = j + 1;
             *buf.offset(c2rust_fresh0 as isize) = ',' as ::core::ffi::c_char;
         } else {
-            if *cdpath.offset(i as isize) as ::core::ffi::c_int
-                == ' ' as ::core::ffi::c_int
-                || *cdpath.offset(i as isize) as ::core::ffi::c_int
-                    == ',' as ::core::ffi::c_int
+            if *cdpath.offset(i as isize) as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
+                || *cdpath.offset(i as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
             {
                 let c2rust_fresh1 = j;
                 j = j + 1;
@@ -5525,12 +5450,10 @@ unsafe extern "C" fn set_init_default_cdpath() {
 unsafe extern "C" fn set_init_expand_env() {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-            .offset(opt_idx as isize);
+        let mut opt: *mut vimoption_T =
+            (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
         if (*opt).flags & kOptFlagNoDefExp as ::core::ffi::c_int as uint32_t == 0 {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             if (*opt).flags & kOptFlagGettext as ::core::ffi::c_int as uint32_t != 0
                 && !(*opt).var.is_null()
             {
@@ -5568,8 +5491,7 @@ unsafe extern "C" fn set_init_fenc_default() {
     let mut p: *mut ::core::ffi::c_char = enc_locale();
     if p.is_null() {
         p = xmemdupz(
-            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char
-                as *const ::core::ffi::c_void,
+            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
             ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
         ) as *mut ::core::ffi::c_char;
     }
@@ -5663,7 +5585,10 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
         );
     }
     save_file_ff(curbuf);
-    if os_env_exists(b"MLTERM\0".as_ptr() as *const ::core::ffi::c_char, false_0 != 0) {
+    if os_env_exists(
+        b"MLTERM\0".as_ptr() as *const ::core::ffi::c_char,
+        false_0 != 0,
+    ) {
         set_option_value_give_err(
             kOptTermbidi,
             OptVal {
@@ -5684,8 +5609,7 @@ pub unsafe extern "C" fn get_option_default(
     opt_idx: OptIndex,
     mut opt_flags: ::core::ffi::c_int,
 ) -> OptVal {
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     let mut is_global_local_option: bool = option_is_global_local(opt_idx);
     if opt_idx as ::core::ffi::c_int == kOptModeline as ::core::ffi::c_int
         && getuid() == ROOT_UID as __uid_t
@@ -5698,14 +5622,12 @@ pub unsafe extern "C" fn get_option_default(
     if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
         && is_global_local_option as ::core::ffi::c_int != 0
     {
-        return get_option_unset_value(opt_idx)
+        return get_option_unset_value(opt_idx);
     } else if option_has_type(opt_idx, kOptValTypeString) as ::core::ffi::c_int != 0
         && (*opt).flags & kOptFlagNoDefExp as ::core::ffi::c_int as uint32_t == 0
     {
-        let mut s: *mut ::core::ffi::c_char = option_expand(
-            opt_idx,
-            (*opt).def_val.data.string.data,
-        );
+        let mut s: *mut ::core::ffi::c_char =
+            option_expand(opt_idx, (*opt).def_val.data.string.data);
         return if s.is_null() {
             (*opt).def_val
         } else {
@@ -5717,15 +5639,13 @@ pub unsafe extern "C" fn get_option_default(
             }
         };
     } else {
-        return (*opt).def_val
+        return (*opt).def_val;
     };
 }
 unsafe extern "C" fn alloc_options_default() {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        options[opt_idx as usize].def_val = optval_copy(
-            options[opt_idx as usize].def_val,
-        );
+        options[opt_idx as usize].def_val = optval_copy(options[opt_idx as usize].def_val);
         opt_idx += 1;
     }
 }
@@ -5733,10 +5653,7 @@ unsafe extern "C" fn change_option_default(opt_idx: OptIndex, mut value: OptVal)
     optval_free(options[opt_idx as usize].def_val);
     options[opt_idx as usize].def_val = value;
 }
-unsafe extern "C" fn set_option_default(
-    opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn set_option_default(opt_idx: OptIndex, mut opt_flags: ::core::ffi::c_int) {
     let mut both: bool = opt_flags
         & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
         == 0 as ::core::ffi::c_int;
@@ -5755,8 +5672,8 @@ unsafe extern "C" fn set_option_default(
 unsafe extern "C" fn set_options_default(mut opt_flags: ::core::ffi::c_int) {
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        if options[opt_idx as usize].flags
-            & kOptFlagNoDefault as ::core::ffi::c_int as uint32_t == 0
+        if options[opt_idx as usize].flags & kOptFlagNoDefault as ::core::ffi::c_int as uint32_t
+            == 0
         {
             set_option_default(opt_idx, opt_flags);
         }
@@ -5764,7 +5681,11 @@ unsafe extern "C" fn set_options_default(mut opt_flags: ::core::ffi::c_int) {
     }
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             win_comp_scroll(wp);
             wp = (*wp).w_next;
@@ -5779,7 +5700,8 @@ unsafe extern "C" fn set_string_default(
     mut allocated: bool,
 ) {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -5795,9 +5717,11 @@ unsafe extern "C" fn set_string_default(
         OptVal {
             type_0: kOptValTypeString,
             data: OptValData {
-                string: cstr_as_string(
-                    if allocated as ::core::ffi::c_int != 0 { val } else { xstrdup(val) },
-                ),
+                string: cstr_as_string(if allocated as ::core::ffi::c_int != 0 {
+                    val
+                } else {
+                    xstrdup(val)
+                }),
             },
         },
     );
@@ -5814,13 +5738,14 @@ unsafe extern "C" fn find_dup_item(
     let mut bs: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut s: *const ::core::ffi::c_char = origval;
     while *s as ::core::ffi::c_int != NUL {
-        if (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0 || s == origval
+        if (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0
+            || s == origval
             || *s.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int && bs & 1 as ::core::ffi::c_int == 0)
+                == ',' as ::core::ffi::c_int
+                && bs & 1 as ::core::ffi::c_int == 0)
             && strncmp(s, newval, newvallen) == 0 as ::core::ffi::c_int
             && (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0
-                || *s.offset(newvallen as isize) as ::core::ffi::c_int
-                    == ',' as ::core::ffi::c_int
+                || *s.offset(newvallen as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
                 || *s.offset(newvallen as isize) as ::core::ffi::c_int == NUL)
         {
             return s;
@@ -5850,12 +5775,12 @@ pub unsafe extern "C" fn set_init_2(mut headless: bool) {
         b"set_init_2\0".as_ptr() as *const ::core::ffi::c_char,
         613 as ::core::ffi::c_int,
         true_0 != 0,
-        b"startup runtimepath/packpath value: %s\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        b"startup runtimepath/packpath value: %s\0".as_ptr() as *const ::core::ffi::c_char,
         p_rtp,
     );
     if options[kOptScroll as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t == 0
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        == 0
     {
         set_option_default(kOptScroll, OPT_LOCAL as ::core::ffi::c_int);
     }
@@ -5877,23 +5802,21 @@ pub unsafe extern "C" fn set_init_2(mut headless: bool) {
 pub unsafe extern "C" fn set_init_3() {
     parse_shape_opt(SHAPE_CURSOR);
     let mut do_srr: bool = options[kOptShellredir as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t == 0;
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        == 0;
     let mut do_sp: bool = options[kOptShellpipe as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t == 0;
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        == 0;
     let mut len: size_t = 0 as size_t;
-    let mut p: *mut ::core::ffi::c_char = invocation_path_tail(p_sh, &raw mut len)
-        as *mut ::core::ffi::c_char;
+    let mut p: *mut ::core::ffi::c_char =
+        invocation_path_tail(p_sh, &raw mut len) as *mut ::core::ffi::c_char;
     p = xmemdupz(p as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
-    let mut is_csh: bool = path_fnamecmp(
-        p,
-        b"csh\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
+    let mut is_csh: bool = path_fnamecmp(p, b"csh\0".as_ptr() as *const ::core::ffi::c_char)
+        == 0 as ::core::ffi::c_int
         || path_fnamecmp(p, b"tcsh\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int;
-    let mut is_known_shell: bool = path_fnamecmp(
-        p,
-        b"sh\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
+    let mut is_known_shell: bool = path_fnamecmp(p, b"sh\0".as_ptr() as *const ::core::ffi::c_char)
+        == 0 as ::core::ffi::c_int
         || path_fnamecmp(p, b"ksh\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int
         || path_fnamecmp(p, b"mksh\0".as_ptr() as *const ::core::ffi::c_char)
@@ -5975,7 +5898,8 @@ pub unsafe extern "C" fn set_init_3() {
     xfree(p as *mut ::core::ffi::c_void);
     if buf_is_empty(curbuf) {
         if options[kOptFileformats as ::core::ffi::c_int as usize].flags
-            & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0
+            & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+            != 0
         {
             set_fileformat(default_fileformat(), OPT_LOCAL as ::core::ffi::c_int);
         }
@@ -5992,43 +5916,43 @@ pub unsafe extern "C" fn set_helplang_default(mut lang: *const ::core::ffi::c_ch
         return;
     }
     if options[kOptHelplang as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        != 0
     {
         return;
     }
     free_string_option(p_hlg);
-    p_hlg = xmemdupz(lang as *const ::core::ffi::c_void, lang_len)
-        as *mut ::core::ffi::c_char;
+    p_hlg = xmemdupz(lang as *const ::core::ffi::c_void, lang_len) as *mut ::core::ffi::c_char;
     if strncasecmp(
         p_hlg,
         b"zh_\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         3 as ::core::ffi::c_int as size_t,
-    ) == 0 as ::core::ffi::c_int && lang_len >= 5 as size_t
+    ) == 0 as ::core::ffi::c_int
+        && lang_len >= 5 as size_t
     {
-        *p_hlg.offset(0 as ::core::ffi::c_int as isize) = (if (*p_hlg
-            .offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            < 'A' as ::core::ffi::c_int
-            || *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                > 'Z' as ::core::ffi::c_int
-        {
-            *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
-            *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) as ::core::ffi::c_char;
-        *p_hlg.offset(1 as ::core::ffi::c_int as isize) = (if (*p_hlg
-            .offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            < 'A' as ::core::ffi::c_int
-            || *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                > 'Z' as ::core::ffi::c_int
-        {
-            *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
-            *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) as ::core::ffi::c_char;
-    } else if lang_len != 0 && *p_hlg as ::core::ffi::c_int == 'C' as ::core::ffi::c_int
-    {
+        *p_hlg.offset(0 as ::core::ffi::c_int as isize) =
+            (if (*p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                < 'A' as ::core::ffi::c_int
+                || *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    > 'Z' as ::core::ffi::c_int
+            {
+                *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            } else {
+                *p_hlg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
+            }) as ::core::ffi::c_char;
+        *p_hlg.offset(1 as ::core::ffi::c_int as isize) =
+            (if (*p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                < 'A' as ::core::ffi::c_int
+                || *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    > 'Z' as ::core::ffi::c_int
+            {
+                *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            } else {
+                *p_hlg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
+            }) as ::core::ffi::c_char;
+    } else if lang_len != 0 && *p_hlg as ::core::ffi::c_int == 'C' as ::core::ffi::c_int {
         *p_hlg.offset(0 as ::core::ffi::c_int as isize) = 'e' as ::core::ffi::c_char;
         *p_hlg.offset(1 as ::core::ffi::c_int as isize) = 'n' as ::core::ffi::c_char;
     }
@@ -6037,7 +5961,8 @@ pub unsafe extern "C" fn set_helplang_default(mut lang: *const ::core::ffi::c_ch
 #[no_mangle]
 pub unsafe extern "C" fn set_title_defaults() {
     if options[kOptTitle as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t == 0
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        == 0
     {
         change_option_default(
             kOptTitle,
@@ -6049,7 +5974,8 @@ pub unsafe extern "C" fn set_title_defaults() {
         p_title = 0 as ::core::ffi::c_int;
     }
     if options[kOptIcon as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t == 0
+        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        == 0
     {
         change_option_default(
             kOptIcon,
@@ -6066,8 +5992,7 @@ pub unsafe extern "C" fn ex_set(mut eap: *mut exarg_T) {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_setlocal as ::core::ffi::c_int {
         flags = OPT_LOCAL as ::core::ffi::c_int;
-    } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_setglobal as ::core::ffi::c_int
-    {
+    } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_setglobal as ::core::ffi::c_int {
         flags = OPT_GLOBAL as ::core::ffi::c_int;
     }
     if (*eap).forceit != 0 {
@@ -6083,15 +6008,12 @@ unsafe extern "C" fn stropt_copy_value(
 ) -> *mut ::core::ffi::c_char {
     let mut arg: *mut ::core::ffi::c_char = *argp;
     let mut newlen: size_t = strlen(arg).wrapping_add(1 as size_t);
-    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
         newlen = newlen.wrapping_add(strlen(origval).wrapping_add(1 as size_t));
     }
-    let mut newval: *mut ::core::ffi::c_char = xmalloc(newlen)
-        as *mut ::core::ffi::c_char;
+    let mut newval: *mut ::core::ffi::c_char = xmalloc(newlen) as *mut ::core::ffi::c_char;
     let mut s: *mut ::core::ffi::c_char = newval;
-    while *arg as ::core::ffi::c_int != NUL && !ascii_iswhite(*arg as ::core::ffi::c_int)
-    {
+    while *arg as ::core::ffi::c_int != NUL && !ascii_iswhite(*arg as ::core::ffi::c_int) {
         if *arg as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
             && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         {
@@ -6130,13 +6052,10 @@ unsafe extern "C" fn stropt_expand_envvar(
     }
     xfree(newval as *mut ::core::ffi::c_void);
     let mut newlen: uint32_t = (strlen(s) as uint32_t).wrapping_add(1 as uint32_t);
-    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        newlen = (newlen as ::core::ffi::c_uint)
-            .wrapping_add(
-                (strlen(origval) as ::core::ffi::c_uint)
-                    .wrapping_add(1 as ::core::ffi::c_uint),
-            ) as uint32_t;
+    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
+        newlen = (newlen as ::core::ffi::c_uint).wrapping_add(
+            (strlen(origval) as ::core::ffi::c_uint).wrapping_add(1 as ::core::ffi::c_uint),
+        ) as uint32_t;
     }
     newval = xmalloc(newlen as size_t) as *mut ::core::ffi::c_char;
     strcpy(newval, s);
@@ -6149,27 +6068,25 @@ unsafe extern "C" fn stropt_concat_with_comma(
     mut flags: uint32_t,
 ) {
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut comma: ::core::ffi::c_int = (flags
-        & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
-        && *origval as ::core::ffi::c_int != NUL && *newval as ::core::ffi::c_int != NUL)
-        as ::core::ffi::c_int;
-    if op as ::core::ffi::c_uint
-        == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    let mut comma: ::core::ffi::c_int =
+        (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
+            && *origval as ::core::ffi::c_int != NUL
+            && *newval as ::core::ffi::c_int != NUL) as ::core::ffi::c_int;
+    if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint {
         len = strlen(origval) as ::core::ffi::c_int;
-        if comma != 0 && len > 1 as ::core::ffi::c_int
+        if comma != 0
+            && len > 1 as ::core::ffi::c_int
             && flags & kOptFlagOneComma as ::core::ffi::c_int as uint32_t
                 == kOptFlagOneComma as ::core::ffi::c_int as uint32_t
-            && *origval.offset((len - 1 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-            && *origval.offset((len - 2 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+            && *origval.offset((len - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+                == ',' as ::core::ffi::c_int
+            && *origval.offset((len - 2 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+                != '\\' as ::core::ffi::c_int
         {
             len -= 1;
         }
         memmove(
-            newval.offset(len as isize).offset(comma as isize)
-                as *mut ::core::ffi::c_void,
+            newval.offset(len as isize).offset(comma as isize) as *mut ::core::ffi::c_void,
             newval as *const ::core::ffi::c_void,
             strlen(newval).wrapping_add(1 as size_t),
         );
@@ -6181,8 +6098,7 @@ unsafe extern "C" fn stropt_concat_with_comma(
     } else {
         len = strlen(newval) as ::core::ffi::c_int;
         memmove(
-            newval.offset(len as isize).offset(comma as isize)
-                as *mut ::core::ffi::c_void,
+            newval.offset(len as isize).offset(comma as isize) as *mut ::core::ffi::c_void,
             origval as *const ::core::ffi::c_void,
             strlen(origval).wrapping_add(1 as size_t),
         );
@@ -6202,9 +6118,7 @@ unsafe extern "C" fn stropt_remove_val(
     if *strval != 0 {
         if flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0 {
             if strval == origval {
-                if *strval.offset(len as isize) as ::core::ffi::c_int
-                    == ',' as ::core::ffi::c_int
-                {
+                if *strval.offset(len as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
                     len += 1;
                 }
             } else {
@@ -6213,8 +6127,7 @@ unsafe extern "C" fn stropt_remove_val(
             }
         }
         memmove(
-            newval.offset(strval.offset_from(origval) as isize)
-                as *mut ::core::ffi::c_void,
+            newval.offset(strval.offset_from(origval) as isize) as *mut ::core::ffi::c_void,
             strval.offset(len as isize) as *const ::core::ffi::c_void,
             strlen(strval.offset(len as isize)).wrapping_add(1 as size_t),
         );
@@ -6233,10 +6146,7 @@ unsafe extern "C" fn find_key_item(
                 == ',' as ::core::ffi::c_int)
             && strncmp(p, key, keylen as size_t) == 0 as ::core::ffi::c_int
         {
-            let mut end: *mut ::core::ffi::c_char = vim_strchr(
-                p,
-                ',' as ::core::ffi::c_int,
-            );
+            let mut end: *mut ::core::ffi::c_char = vim_strchr(p, ',' as ::core::ffi::c_int);
             if end.is_null() {
                 end = p.offset(strlen(p) as isize);
             }
@@ -6252,18 +6162,16 @@ unsafe extern "C" fn remove_comma_item(
     mut item: *mut ::core::ffi::c_char,
     mut itemlen: ptrdiff_t,
 ) {
-    if *item.offset(itemlen as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-    {
+    if *item.offset(itemlen as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
         memmove(
             item as *mut ::core::ffi::c_void,
-            item.offset(itemlen as isize).offset(1 as ::core::ffi::c_int as isize)
-                as *const ::core::ffi::c_void,
+            item.offset(itemlen as isize)
+                .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
             strlen(
-                    item
-                        .offset(itemlen as isize)
-                        .offset(1 as ::core::ffi::c_int as isize),
-                )
-                .wrapping_add(1 as size_t),
+                item.offset(itemlen as isize)
+                    .offset(1 as ::core::ffi::c_int as isize),
+            )
+            .wrapping_add(1 as size_t),
         );
     } else if item > str as *mut ::core::ffi::c_char
         && *item.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
@@ -6285,9 +6193,7 @@ unsafe extern "C" fn remove_key_item(
     mut skip: *const ::core::ffi::c_char,
 ) {
     let mut itemlen: ptrdiff_t = 0;
-    let mut found: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut found: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     loop {
         found = find_key_item(str, key, keylen, &raw mut itemlen);
         if found.is_null() {
@@ -6304,7 +6210,7 @@ unsafe extern "C" fn remove_key_item(
             }
         }
         remove_comma_item(str, found, itemlen);
-    };
+    }
 }
 unsafe extern "C" fn append_item(
     mut str: *mut ::core::ffi::c_char,
@@ -6364,35 +6270,25 @@ unsafe extern "C" fn stropt_handle_keymatch(
     strcpy(newval, origval as *mut ::core::ffi::c_char);
     let mut item_start: *mut ::core::ffi::c_char = newval_copy;
     loop {
-        let mut p: *mut ::core::ffi::c_char = vim_strchr(
-            item_start,
-            ',' as ::core::ffi::c_int,
-        );
+        let mut p: *mut ::core::ffi::c_char = vim_strchr(item_start, ',' as ::core::ffi::c_int);
         let mut item_len: ptrdiff_t = if p.is_null() {
             strlen(item_start) as ptrdiff_t
         } else {
             p.offset_from(item_start)
         };
         if item_len > 0 as ptrdiff_t {
-            let mut colon: *mut ::core::ffi::c_char = vim_strchr(
-                item_start,
-                ':' as ::core::ffi::c_int,
-            );
+            let mut colon: *mut ::core::ffi::c_char =
+                vim_strchr(item_start, ':' as ::core::ffi::c_int);
             if !colon.is_null() && colon < item_start.offset(item_len as isize) {
-                let mut keylen: ptrdiff_t = colon.offset_from(item_start)
-                    + 1 as ptrdiff_t;
+                let mut keylen: ptrdiff_t = colon.offset_from(item_start) + 1 as ptrdiff_t;
                 if op as ::core::ffi::c_uint
                     == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
                     || op as ::core::ffi::c_uint
                         == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     let mut old_itemlen: ptrdiff_t = 0;
-                    let mut found: *mut ::core::ffi::c_char = find_key_item(
-                        newval,
-                        item_start,
-                        keylen,
-                        &raw mut old_itemlen,
-                    );
+                    let mut found: *mut ::core::ffi::c_char =
+                        find_key_item(newval, item_start, keylen, &raw mut old_itemlen);
                     if !found.is_null() {
                         if old_itemlen == item_len
                             && strncmp(found, item_start, item_len as size_t)
@@ -6407,8 +6303,7 @@ unsafe extern "C" fn stropt_handle_keymatch(
                                 ::core::ptr::null::<::core::ffi::c_char>(),
                             );
                             if op as ::core::ffi::c_uint
-                                == OP_PREPENDING as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
                             {
                                 prepend_item(newval, item_start, item_len);
                             } else {
@@ -6460,7 +6355,8 @@ unsafe extern "C" fn stropt_handle_keymatch(
                     item_start,
                     item_len as size_t,
                     kOptFlagComma as ::core::ffi::c_int as uint32_t,
-                ) as *mut ::core::ffi::c_char;
+                )
+                    as *mut ::core::ffi::c_char;
                 if !found_1.is_null() {
                     remove_comma_item(newval, found_1, item_len);
                 }
@@ -6486,33 +6382,30 @@ unsafe extern "C" fn stropt_remove_dupflags(
                 && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == ',' as ::core::ffi::c_int
                 && !vim_strchr(
-                        s.offset(2 as ::core::ffi::c_int as isize),
-                        *s as uint8_t as ::core::ffi::c_int,
-                    )
-                    .is_null()
+                    s.offset(2 as ::core::ffi::c_int as isize),
+                    *s as uint8_t as ::core::ffi::c_int,
+                )
+                .is_null()
             {
                 memmove(
                     s as *mut ::core::ffi::c_void,
-                    s.offset(2 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
-                    strlen(s.offset(2 as ::core::ffi::c_int as isize))
-                        .wrapping_add(1 as size_t),
+                    s.offset(2 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                    strlen(s.offset(2 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
                 );
                 continue;
             }
         } else if (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0
             || *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int)
             && !vim_strchr(
-                    s.offset(1 as ::core::ffi::c_int as isize),
-                    *s as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                s.offset(1 as ::core::ffi::c_int as isize),
+                *s as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             memmove(
                 s as *mut ::core::ffi::c_void,
                 s.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                strlen(s.offset(1 as ::core::ffi::c_int as isize))
-                    .wrapping_add(1 as size_t),
+                strlen(s.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
             );
             continue;
         }
@@ -6530,12 +6423,8 @@ unsafe extern "C" fn stropt_get_newval(
 ) -> *mut ::core::ffi::c_char {
     let mut arg: *mut ::core::ffi::c_char = *argp;
     let mut op: set_op_T = *op_arg;
-    let mut save_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut save_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     arg = arg.offset(1);
     if varp == &raw mut p_kp as *mut ::core::ffi::c_void
@@ -6543,8 +6432,7 @@ unsafe extern "C" fn stropt_get_newval(
             || *arg as ::core::ffi::c_int == ' ' as ::core::ffi::c_int)
     {
         save_arg = arg;
-        arg = b":help\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        arg = b":help\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     newval = stropt_copy_value(origval, &raw mut arg, op, flags);
     if op as ::core::ffi::c_uint == OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -6554,19 +6442,16 @@ unsafe extern "C" fn stropt_get_newval(
     }
     if !(flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
         && flags & kOptFlagColon as ::core::ffi::c_int as uint32_t != 0
-        && op as ::core::ffi::c_uint
-            != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
+        && op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
         && stropt_handle_keymatch(origval, newval, op, flags) as ::core::ffi::c_int != 0)
     {
         let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if op as ::core::ffi::c_uint
-            == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
+        if op as ::core::ffi::c_uint == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
             || flags & kOptFlagNoDup as ::core::ffi::c_int as uint32_t != 0
         {
             len = strlen(newval) as ::core::ffi::c_int;
             s = find_dup_item(origval, newval, len as size_t, flags);
-            if (op as ::core::ffi::c_uint
-                == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
+            if (op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
                 || op as ::core::ffi::c_uint
                     == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint)
                 && !s.is_null()
@@ -6578,8 +6463,7 @@ unsafe extern "C" fn stropt_get_newval(
                 s = origval.offset(strlen(origval) as ::core::ffi::c_int as isize);
             }
         }
-        if op as ::core::ffi::c_uint
-            == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
+        if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
             || op as ::core::ffi::c_uint
                 == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -6616,11 +6500,12 @@ unsafe extern "C" fn get_op(mut arg: *const ::core::ffi::c_char) -> set_op_T {
     }
     return op;
 }
-unsafe extern "C" fn get_option_prefix(
-    mut argp: *mut *mut ::core::ffi::c_char,
-) -> set_prefix_T {
-    if strncmp(*argp, b"no\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-        == 0 as ::core::ffi::c_int
+unsafe extern "C" fn get_option_prefix(mut argp: *mut *mut ::core::ffi::c_char) -> set_prefix_T {
+    if strncmp(
+        *argp,
+        b"no\0".as_ptr() as *const ::core::ffi::c_char,
+        2 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         *argp = (*argp).offset(2 as ::core::ffi::c_int as isize);
         return PREFIX_NO;
@@ -6644,15 +6529,12 @@ unsafe extern "C" fn validate_opt_idx(
     mut errmsg: *mut *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if !option_has_type(opt_idx, kOptValTypeBoolean)
-        && prefix as ::core::ffi::c_uint
-            != PREFIX_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
+        && prefix as ::core::ffi::c_uint != PREFIX_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
         return FAIL;
     }
-    if opt_flags & OPT_WINONLY as ::core::ffi::c_int != 0
-        && !option_is_window_local(opt_idx)
-    {
+    if opt_flags & OPT_WINONLY as ::core::ffi::c_int != 0 && !option_is_window_local(opt_idx) {
         return FAIL;
     }
     if opt_flags & OPT_NOWIN as ::core::ffi::c_int != 0
@@ -6691,11 +6573,11 @@ unsafe extern "C" fn find_tty_option_end(
     if strequal(arg, b"term\0".as_ptr() as *const ::core::ffi::c_char) {
         return arg
             .offset(::core::mem::size_of::<[::core::ffi::c_char; 5]>() as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize))
+            .offset(-(1 as ::core::ffi::c_int as isize));
     } else if strequal(arg, b"ttytype\0".as_ptr() as *const ::core::ffi::c_char) {
         return arg
             .offset(::core::mem::size_of::<[::core::ffi::c_char; 8]>() as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize))
+            .offset(-(1 as ::core::ffi::c_int as isize));
     }
     let mut p: *const ::core::ffi::c_char = arg;
     let mut delimit: bool = false_0 != 0;
@@ -6726,7 +6608,11 @@ unsafe extern "C" fn find_tty_option_end(
         }
         p = p.offset(1);
     }
-    return if arg == p { ::core::ptr::null::<::core::ffi::c_char>() } else { p };
+    return if arg == p {
+        ::core::ptr::null::<::core::ffi::c_char>()
+    } else {
+        p
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn find_option_end(
@@ -6773,7 +6659,8 @@ unsafe extern "C" fn get_option_newval(
     mut errmsg: *mut *const ::core::ffi::c_char,
 ) -> OptVal {
     '_c2rust_label: {
-        if !varp.is_null() {} else {
+        if !varp.is_null() {
+        } else {
             __assert_fail(
                 b"varp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -6784,21 +6671,27 @@ unsafe extern "C" fn get_option_newval(
             );
         }
     };
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     let mut arg: *mut ::core::ffi::c_char = *argp;
-    let oldval_is_global: bool = option_is_global_local(opt_idx) as ::core::ffi::c_int
-        != 0 && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
+    let oldval_is_global: bool = option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
+        && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
     let mut oldval: OptVal = optval_from_varp(
         opt_idx,
-        if oldval_is_global as ::core::ffi::c_int != 0 { get_varp(opt) } else { varp },
+        if oldval_is_global as ::core::ffi::c_int != 0 {
+            get_varp(opt)
+        } else {
+            varp
+        },
     );
     let mut newval: OptVal = OptVal {
         type_0: kOptValTypeNil,
         data: OptValData { boolean: kFalse },
     };
     if nextchar == '&' as ::core::ffi::c_int {
-        return optval_copy(get_option_default(opt_idx, OPT_GLOBAL as ::core::ffi::c_int))
+        return optval_copy(get_option_default(
+            opt_idx,
+            OPT_GLOBAL as ::core::ffi::c_int,
+        ));
     } else if nextchar == '<' as ::core::ffi::c_int {
         if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
             && opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0
@@ -6829,8 +6722,8 @@ unsafe extern "C" fn get_option_newval(
             } else if prefix as ::core::ffi::c_uint
                 == PREFIX_INV as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                newval_bool = (*(varp as *mut ::core::ffi::c_int)
-                    ^ 1 as ::core::ffi::c_int) as TriState;
+                newval_bool =
+                    (*(varp as *mut ::core::ffi::c_int) ^ 1 as ::core::ffi::c_int) as TriState;
             } else {
                 newval_bool = (if prefix as ::core::ffi::c_uint
                     == PREFIX_NO as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -6842,23 +6735,24 @@ unsafe extern "C" fn get_option_newval(
             }
             newval = OptVal {
                 type_0: kOptValTypeBoolean,
-                data: OptValData { boolean: newval_bool },
+                data: OptValData {
+                    boolean: newval_bool,
+                },
             };
         }
         1 => {
             let mut oldval_num: OptInt = oldval.data.number;
             let mut newval_num: OptInt = 0;
             arg = arg.offset(1);
-            if (varp as *mut OptInt == &raw mut p_wc
-                || varp as *mut OptInt == &raw mut p_wcm)
+            if (varp as *mut OptInt == &raw mut p_wc || varp as *mut OptInt == &raw mut p_wcm)
                 && (*arg as ::core::ffi::c_int == '<' as ::core::ffi::c_int
                     || *arg as ::core::ffi::c_int == '^' as ::core::ffi::c_int
                     || *arg as ::core::ffi::c_int != NUL
                         && (*arg.offset(1 as ::core::ffi::c_int as isize) == 0
                             || ascii_iswhite(
-                                *arg.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
-                            ) as ::core::ffi::c_int != 0)
+                                *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            ) as ::core::ffi::c_int
+                                != 0)
                         && !ascii_isdigit(*arg as ::core::ffi::c_int))
             {
                 newval_num = string_to_key(arg) as OptInt;
@@ -6885,18 +6779,15 @@ unsafe extern "C" fn get_option_newval(
                     || *arg.offset(i as isize) as ::core::ffi::c_int != NUL
                         && !ascii_iswhite(*arg.offset(i as isize) as ::core::ffi::c_int)
                 {
-                    *errmsg = &raw const e_number_required_after_equal
-                        as *const ::core::ffi::c_char;
+                    *errmsg =
+                        &raw const e_number_required_after_equal as *const ::core::ffi::c_char;
                     return newval;
                 }
             } else {
-                *errmsg = &raw const e_number_required_after_equal
-                    as *const ::core::ffi::c_char;
+                *errmsg = &raw const e_number_required_after_equal as *const ::core::ffi::c_char;
                 return newval;
             }
-            if op as ::core::ffi::c_uint
-                == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
+            if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint {
                 newval_num = oldval_num + newval_num;
             }
             if op as ::core::ffi::c_uint
@@ -6904,8 +6795,7 @@ unsafe extern "C" fn get_option_newval(
             {
                 newval_num = oldval_num * newval_num;
             }
-            if op as ::core::ffi::c_uint
-                == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
+            if op as ::core::ffi::c_uint == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 newval_num = oldval_num - newval_num;
             }
@@ -6950,7 +6840,8 @@ unsafe extern "C" fn do_one_set_option(
     let option_end: *const ::core::ffi::c_char = find_option_end(arg, &raw mut opt_idx);
     if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
         '_c2rust_label: {
-            if option_end >= arg as *const ::core::ffi::c_char {} else {
+            if option_end >= arg as *const ::core::ffi::c_char {
+            } else {
                 __assert_fail(
                     b"option_end >= arg\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -6962,7 +6853,7 @@ unsafe extern "C" fn do_one_set_option(
             }
         };
     } else if is_tty_option(arg) {
-        return
+        return;
     } else {
         *errmsg = &raw const e_unknown_option as *const ::core::ffi::c_char;
         return;
@@ -6973,8 +6864,7 @@ unsafe extern "C" fn do_one_set_option(
         p = p.offset(1);
     }
     let mut op: set_op_T = get_op(p);
-    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
         p = p.offset(1);
     }
     let mut nextchar: uint8_t = *p as uint8_t;
@@ -6987,10 +6877,10 @@ unsafe extern "C" fn do_one_set_option(
         return;
     }
     if !vim_strchr(
-            b"?=:!&<\0".as_ptr() as *const ::core::ffi::c_char,
-            nextchar as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"?=:!&<\0".as_ptr() as *const ::core::ffi::c_char,
+        nextchar as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         *argp = p;
         if nextchar as ::core::ffi::c_int == '&' as ::core::ffi::c_int
@@ -7008,14 +6898,13 @@ unsafe extern "C" fn do_one_set_option(
             }
         }
         if !vim_strchr(
-                b"?!&<\0".as_ptr() as *const ::core::ffi::c_char,
-                nextchar as ::core::ffi::c_int,
-            )
-            .is_null()
-            && *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
+            b"?!&<\0".as_ptr() as *const ::core::ffi::c_char,
+            nextchar as ::core::ffi::c_int,
+        )
+        .is_null()
+            && *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             && !ascii_iswhite(
-                *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
+                *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             )
         {
             *errmsg = &raw const e_trailing as *const ::core::ffi::c_char;
@@ -7023,13 +6912,13 @@ unsafe extern "C" fn do_one_set_option(
         }
     }
     if nextchar as ::core::ffi::c_int == '?' as ::core::ffi::c_int
-        || prefix as ::core::ffi::c_uint
-            == PREFIX_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
+        || prefix as ::core::ffi::c_uint == PREFIX_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
             && vim_strchr(
-                    b"=:&<\0".as_ptr() as *const ::core::ffi::c_char,
-                    nextchar as ::core::ffi::c_int,
-                )
-                .is_null() && !option_has_type(opt_idx, kOptValTypeBoolean)
+                b"=:&<\0".as_ptr() as *const ::core::ffi::c_char,
+                nextchar as ::core::ffi::c_int,
+            )
+            .is_null()
+            && !option_has_type(opt_idx, kOptValTypeBoolean)
     {
         if *did_show {
             msg_putchar('\n' as ::core::ffi::c_int);
@@ -7047,14 +6936,12 @@ unsafe extern "C" fn do_one_set_option(
                 last_set_msg(options[opt_idx as usize].script_ctx);
             } else if option_has_scope(opt_idx, kOptScopeWin) {
                 last_set_msg(
-                    (*curwin)
-                        .w_onebuf_opt
-                        .wo_script_ctx[option_scope_idx(opt_idx, kOptScopeWin) as usize],
+                    (*curwin).w_onebuf_opt.wo_script_ctx
+                        [option_scope_idx(opt_idx, kOptScopeWin) as usize],
                 );
             } else if option_has_scope(opt_idx, kOptScopeBuf) {
                 last_set_msg(
-                    (*curbuf)
-                        .b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize],
+                    (*curbuf).b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize],
                 );
             }
         }
@@ -7068,29 +6955,30 @@ unsafe extern "C" fn do_one_set_option(
     }
     if option_has_type(opt_idx, kOptValTypeBoolean) {
         if !vim_strchr(
-                b"=:\0".as_ptr() as *const ::core::ffi::c_char,
-                nextchar as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"=:\0".as_ptr() as *const ::core::ffi::c_char,
+            nextchar as ::core::ffi::c_int,
+        )
+        .is_null()
         {
             *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
             return;
         }
         if vim_strchr(
-                b"!&<\0".as_ptr() as *const ::core::ffi::c_char,
-                nextchar as ::core::ffi::c_int,
-            )
-            .is_null() && nextchar as ::core::ffi::c_int != NUL
+            b"!&<\0".as_ptr() as *const ::core::ffi::c_char,
+            nextchar as ::core::ffi::c_int,
+        )
+        .is_null()
+            && nextchar as ::core::ffi::c_int != NUL
             && !ascii_iswhite(afterchar as ::core::ffi::c_int)
         {
             *errmsg = &raw const e_trailing as *const ::core::ffi::c_char;
             return;
         }
     } else if vim_strchr(
-            b"=:&<\0".as_ptr() as *const ::core::ffi::c_char,
-            nextchar as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"=:&<\0".as_ptr() as *const ::core::ffi::c_char,
+        nextchar as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
         return;
@@ -7119,8 +7007,7 @@ unsafe extern "C" fn do_one_set_option(
         opt_flags,
         0 as scid_T,
         false_0 != 0,
-        op as ::core::ffi::c_uint
-            == OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint,
+        op as ::core::ffi::c_uint == OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint,
         errbuf,
         errbuflen,
     );
@@ -7136,16 +7023,19 @@ pub unsafe extern "C" fn do_set(
         did_show = true_0 != 0;
     } else {
         while *arg as ::core::ffi::c_int != NUL {
-            if strncmp(arg, b"all\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-                == 0 as ::core::ffi::c_int
+            if strncmp(
+                arg,
+                b"all\0".as_ptr() as *const ::core::ffi::c_char,
+                3 as size_t,
+            ) == 0 as ::core::ffi::c_int
                 && !(*arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
                     >= 'A' as ::core::ffi::c_uint
-                    && *arg.offset(3 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                    || *arg.offset(3 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                        && *arg.offset(3 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
+                    && *arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                        <= 'Z' as ::core::ffi::c_uint
+                    || *arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                        >= 'a' as ::core::ffi::c_uint
+                        && *arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                            <= 'z' as ::core::ffi::c_uint)
                 && opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0
             {
                 arg = arg.offset(3 as ::core::ffi::c_int as isize);
@@ -7162,9 +7052,8 @@ pub unsafe extern "C" fn do_set(
                 }
             } else {
                 let mut startarg: *mut ::core::ffi::c_char = arg;
-                let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-                    ::core::ffi::c_char,
-                >();
+                let mut errmsg: *const ::core::ffi::c_char =
+                    ::core::ptr::null::<::core::ffi::c_char>();
                 let mut errbuf: [::core::ffi::c_char; 80] = [0; 80];
                 do_one_set_option(
                     opt_flags,
@@ -7199,11 +7088,13 @@ pub unsafe extern "C" fn do_set(
                             (IOSIZE - i_0 + 2 as ::core::ffi::c_int) as size_t,
                         );
                         '_c2rust_label: {
-                            if arg >= startarg {} else {
+                            if arg >= startarg {
+                            } else {
                                 __assert_fail(
                                     b"arg >= startarg\0".as_ptr() as *const ::core::ffi::c_char,
                                     b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
+                                        .as_ptr()
+                                        as *const ::core::ffi::c_char,
                                     1620 as ::core::ffi::c_uint,
                                     b"int do_set(char *, int)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -7211,18 +7102,15 @@ pub unsafe extern "C" fn do_set(
                             }
                         };
                         memmove(
-                            (&raw mut IObuff as *mut ::core::ffi::c_char)
-                                .offset(i_0 as isize) as *mut ::core::ffi::c_void,
+                            (&raw mut IObuff as *mut ::core::ffi::c_char).offset(i_0 as isize)
+                                as *mut ::core::ffi::c_void,
                             startarg as *const ::core::ffi::c_void,
                             arg.offset_from(startarg) as size_t,
                         );
-                        IObuff[(i_0 as isize + arg.offset_from(startarg)) as usize] = NUL
-                            as ::core::ffi::c_char;
+                        IObuff[(i_0 as isize + arg.offset_from(startarg)) as usize] =
+                            NUL as ::core::ffi::c_char;
                     }
-                    trans_characters(
-                        &raw mut IObuff as *mut ::core::ffi::c_char,
-                        IOSIZE,
-                    );
+                    trans_characters(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE);
                     no_wait_return += 1;
                     emsg(&raw mut IObuff as *mut ::core::ffi::c_char);
                     no_wait_return -= 1;
@@ -7258,10 +7146,10 @@ unsafe extern "C" fn find_key_len(
             || *arg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '>' as ::core::ffi::c_int
         {
-            key = -(*arg.offset(2 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int
+            key = -(*arg.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
                 + ((*arg.offset(3 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+                    as ::core::ffi::c_int)
+                    << 8 as ::core::ffi::c_int));
         }
     } else if has_lt {
         arg = arg.offset(-1);
@@ -7270,7 +7158,8 @@ unsafe extern "C" fn find_key_len(
             &raw mut arg,
             len.wrapping_add(1 as size_t),
             &raw mut modifiers,
-            FSK_KEYCODE as ::core::ffi::c_int | FSK_KEEP_X_KEY as ::core::ffi::c_int
+            FSK_KEYCODE as ::core::ffi::c_int
+                | FSK_KEEP_X_KEY as ::core::ffi::c_int
                 | FSK_SIMPLIFY as ::core::ffi::c_int,
             ::core::ptr::null_mut::<bool>(),
         );
@@ -7281,9 +7170,7 @@ unsafe extern "C" fn find_key_len(
     return key;
 }
 #[no_mangle]
-pub unsafe extern "C" fn string_to_key(
-    mut arg: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn string_to_key(mut arg: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     if *arg as ::core::ffi::c_int == '<' as ::core::ffi::c_int
         && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
     {
@@ -7296,17 +7183,15 @@ pub unsafe extern "C" fn string_to_key(
     if *arg as ::core::ffi::c_int == '^' as ::core::ffi::c_int
         && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
     {
-        let mut key: ::core::ffi::c_int = (if (*arg
-            .offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int)
+        let mut key: ::core::ffi::c_int = (if (*arg.offset(1 as ::core::ffi::c_int as isize)
+            as uint8_t as ::core::ffi::c_int)
             < 'a' as ::core::ffi::c_int
-            || *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
+            || *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+                > 'z' as ::core::ffi::c_int
         {
-            *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int
+            *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
         } else {
-            *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int
+            *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
                 - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
         }) ^ 0x40 as ::core::ffi::c_int;
         if key == 0 as ::core::ffi::c_int {
@@ -7370,14 +7255,17 @@ pub unsafe extern "C" fn set_options_bin(
             p_et = p_et_nobin;
         }
     }
-    didset_options_sctx(opt_flags, &raw mut p_bin_dep_opts as *mut ::core::ffi::c_int);
+    didset_options_sctx(
+        opt_flags,
+        &raw mut p_bin_dep_opts as *mut ::core::ffi::c_int,
+    );
 }
 unsafe extern "C" fn option_expand(
     mut opt_idx: OptIndex,
     mut val: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    if options[opt_idx as usize].flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t
-        == 0 || is_option_hidden(opt_idx) as ::core::ffi::c_int != 0
+    if options[opt_idx as usize].flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t == 0
+        || is_option_hidden(opt_idx) as ::core::ffi::c_int != 0
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
@@ -7387,8 +7275,8 @@ unsafe extern "C" fn option_expand(
     if val.is_null() || strlen(val) > MAXPATHL as size_t {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    let mut var: *mut *mut ::core::ffi::c_char = options[opt_idx as usize].var
-        as *mut *mut ::core::ffi::c_char;
+    let mut var: *mut *mut ::core::ffi::c_char =
+        options[opt_idx as usize].var as *mut *mut ::core::ffi::c_char;
     let mut esc: bool = var == &raw mut p_tags || var == &raw mut p_path;
     expand_env_esc(
         val,
@@ -7396,17 +7284,13 @@ unsafe extern "C" fn option_expand(
         MAXPATHL,
         esc,
         false_0 != 0,
-        (if options[opt_idx as usize].var as *mut *mut ::core::ffi::c_char
-            == &raw mut p_sps
-        {
+        (if options[opt_idx as usize].var as *mut *mut ::core::ffi::c_char == &raw mut p_sps {
             b"file:\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             ::core::ptr::null::<::core::ffi::c_char>()
         }) as *mut ::core::ffi::c_char,
     );
-    if strcmp(&raw mut NameBuff as *mut ::core::ffi::c_char, val)
-        == 0 as ::core::ffi::c_int
-    {
+    if strcmp(&raw mut NameBuff as *mut ::core::ffi::c_char, val) == 0 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     return &raw mut NameBuff as *mut ::core::ffi::c_char;
@@ -7453,10 +7337,9 @@ pub unsafe extern "C" fn check_options() {
         if option_has_type(opt_idx, kOptValTypeString) as ::core::ffi::c_int != 0
             && !options[opt_idx as usize].var.is_null()
         {
-            check_string_option(
-                get_varp((&raw mut options as *mut vimoption_T).offset(opt_idx as isize))
-                    as *mut *mut ::core::ffi::c_char,
-            );
+            check_string_option(get_varp(
+                (&raw mut options as *mut vimoption_T).offset(opt_idx as isize),
+            ) as *mut *mut ::core::ffi::c_char);
         }
         opt_idx += 1;
     }
@@ -7468,7 +7351,8 @@ pub unsafe extern "C" fn was_set_insecurely(
     mut opt_flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -7491,7 +7375,8 @@ pub unsafe extern "C" fn insecure_flag(
 ) -> *mut uint32_t {
     if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
         '_c2rust_label: {
-            if !wp.is_null() {} else {
+            if !wp.is_null() {
+            } else {
                 __assert_fail(
                     b"wp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -7521,8 +7406,7 @@ pub unsafe extern "C" fn insecure_flag(
             _ => {}
         }
     }
-    return &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize))
-        .flags;
+    return &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize)).flags;
 }
 #[no_mangle]
 pub unsafe extern "C" fn redraw_titles() {
@@ -7560,15 +7444,16 @@ pub unsafe extern "C" fn parse_winhl_opt(
     mut winhl: *const ::core::ffi::c_char,
     mut wp: *mut win_T,
 ) -> bool {
-    let mut p: *const ::core::ffi::c_char = &raw mut empty_string_option
-        as *mut ::core::ffi::c_char;
+    let mut p: *const ::core::ffi::c_char =
+        &raw mut empty_string_option as *mut ::core::ffi::c_char;
     if !winhl.is_null() {
         p = winhl;
     } else if !wp.is_null() {
         p = (*wp).w_onebuf_opt.wo_winhl;
     }
     if *p == 0 {
-        if !wp.is_null() && (*wp).w_ns_hl_winhl > 0 as ::core::ffi::c_int
+        if !wp.is_null()
+            && (*wp).w_ns_hl_winhl > 0 as ::core::ffi::c_int
             && (*wp).w_ns_hl == (*wp).w_ns_hl_winhl
         {
             (*wp).w_ns_hl = 0 as ::core::ffi::c_int;
@@ -7579,13 +7464,10 @@ pub unsafe extern "C" fn parse_winhl_opt(
     let mut ns_hl: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if !wp.is_null() {
         if (*wp).w_ns_hl_winhl == 0 as ::core::ffi::c_int {
-            (*wp).w_ns_hl_winhl = nvim_create_namespace(NULL_STRING)
-                as ::core::ffi::c_int;
+            (*wp).w_ns_hl_winhl = nvim_create_namespace(NULL_STRING) as ::core::ffi::c_int;
         } else {
-            let mut dp: *mut DecorProvider = get_decor_provider(
-                (*wp).w_ns_hl_winhl as NS,
-                true_0 != 0,
-            );
+            let mut dp: *mut DecorProvider =
+                get_decor_provider((*wp).w_ns_hl_winhl as NS, true_0 != 0);
             (*dp).hl_valid += 1;
         }
         ns_hl = (*wp).w_ns_hl_winhl;
@@ -7599,12 +7481,8 @@ pub unsafe extern "C" fn parse_winhl_opt(
             return false_0 != 0;
         }
         let mut nlen: size_t = colon.offset_from(p) as size_t;
-        let mut hi: *const ::core::ffi::c_char = colon
-            .offset(1 as ::core::ffi::c_int as isize);
-        let mut commap: *const ::core::ffi::c_char = xstrchrnul(
-            hi,
-            ',' as ::core::ffi::c_char,
-        );
+        let mut hi: *const ::core::ffi::c_char = colon.offset(1 as ::core::ffi::c_int as isize);
+        let mut commap: *const ::core::ffi::c_char = xstrchrnul(hi, ',' as ::core::ffi::c_char);
         let mut len: size_t = commap.offset_from(hi) as size_t;
         let mut hl_id: ::core::ffi::c_int = if len != 0 {
             syn_check_group(hi, len)
@@ -7648,19 +7526,18 @@ pub unsafe extern "C" fn parse_winhl_opt(
 #[no_mangle]
 pub unsafe extern "C" fn get_option_sctx(mut opt_idx: OptIndex) -> *mut sctx_T {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2008 as ::core::ffi::c_uint,
-                b"sctx_T *get_option_sctx(OptIndex)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"sctx_T *get_option_sctx(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    return &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize))
-        .script_ctx;
+    return &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize)).script_ctx;
 }
 #[no_mangle]
 pub unsafe extern "C" fn set_option_sctx(
@@ -7672,10 +7549,9 @@ pub unsafe extern "C" fn set_option_sctx(
         & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
         == 0 as ::core::ffi::c_int;
     if opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0 {
-        script_ctx.sc_lnum
-            += (*(exestack.ga_data as *mut estack_T)
-                .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_lnum;
+        script_ctx.sc_lnum += (*(exestack.ga_data as *mut estack_T)
+            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+        .es_lnum;
     }
     nlua_set_sctx(&raw mut script_ctx);
     if both as ::core::ffi::c_int != 0
@@ -7684,19 +7560,15 @@ pub unsafe extern "C" fn set_option_sctx(
     {
         options[opt_idx as usize].script_ctx = script_ctx;
     }
-    if both as ::core::ffi::c_int != 0
-        || opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-    {
+    if both as ::core::ffi::c_int != 0 || opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
         if option_has_scope(opt_idx, kOptScopeBuf) {
             (*curbuf).b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize] = script_ctx;
         } else if option_has_scope(opt_idx, kOptScopeWin) {
-            (*curwin)
-                .w_onebuf_opt
-                .wo_script_ctx[option_scope_idx(opt_idx, kOptScopeWin) as usize] = script_ctx;
+            (*curwin).w_onebuf_opt.wo_script_ctx
+                [option_scope_idx(opt_idx, kOptScopeWin) as usize] = script_ctx;
             if both {
-                (*curwin)
-                    .w_allbuf_opt
-                    .wo_script_ctx[option_scope_idx(opt_idx, kOptScopeWin) as usize] = script_ctx;
+                (*curwin).w_allbuf_opt.wo_script_ctx
+                    [option_scope_idx(opt_idx, kOptScopeWin) as usize] = script_ctx;
             }
         }
     }
@@ -7710,7 +7582,8 @@ unsafe extern "C" fn apply_optionset_autocmd(
     mut newval: OptVal,
     mut errmsg: *const ::core::ffi::c_char,
 ) {
-    if starting != 0 || !errmsg.is_null()
+    if starting != 0
+        || !errmsg.is_null()
         || *get_vim_var_str(VV_OPTION_TYPE) as ::core::ffi::c_int != NUL
     {
         return;
@@ -7785,13 +7658,9 @@ unsafe extern "C" fn apply_optionset_autocmd(
     );
     reset_v_option_vars();
 }
-unsafe extern "C" fn did_set_arabic(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if (*win).w_onebuf_opt.wo_arab != 0 {
         if p_tbidi == 0 {
             if (*win).w_onebuf_opt.wo_rl == 0 {
@@ -7806,8 +7675,9 @@ unsafe extern "C" fn did_set_arabic(
         if strcmp(p_enc, b"utf-8\0".as_ptr() as *const ::core::ffi::c_char)
             != 0 as ::core::ffi::c_int
         {
-            static mut w_arabic: *mut ::core::ffi::c_char = b"W17: Arabic requires UTF-8, do ':set encoding=utf-8'\0"
-                .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            static mut w_arabic: *mut ::core::ffi::c_char =
+                b"W17: Arabic requires UTF-8, do ':set encoding=utf-8'\0".as_ptr()
+                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             msg_source(HLF_W as ::core::ffi::c_int);
             msg(gettext(w_arabic), HLF_W as ::core::ffi::c_int);
             set_vim_var_string(VV_WARNINGMSG, gettext(w_arabic), -1 as ptrdiff_t);
@@ -7840,15 +7710,11 @@ unsafe extern "C" fn did_set_arabic(
     }
     return errmsg;
 }
-unsafe extern "C" fn did_set_autochdir(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_autochdir(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     do_autochdir();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_binary(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_binary(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     set_options_bin(
         (*args).os_oldval.boolean as ::core::ffi::c_int,
@@ -7858,9 +7724,7 @@ unsafe extern "C" fn did_set_binary(
     redraw_titles();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_buflisted(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_buflisted(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*args).os_oldval.boolean as ::core::ffi::c_int != (*buf).b_p_bl {
         apply_autocmds(
@@ -7877,24 +7741,21 @@ unsafe extern "C" fn did_set_buflisted(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_cmdheight(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_cmdheight(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     if p_ch > (Rows - min_rows(curtab) + 1 as ::core::ffi::c_int) as OptInt {
         p_ch = (Rows - min_rows(curtab) + 1 as ::core::ffi::c_int) as OptInt;
     }
     if (p_ch != old_value
         || (tabline_height() + global_stl_height() + (*topframe).fr_height) as OptInt
-            != Rows as OptInt - p_ch) && full_screen as ::core::ffi::c_int != 0
+            != Rows as OptInt - p_ch)
+        && full_screen as ::core::ffi::c_int != 0
     {
         command_height();
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_diff(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_diff(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     diff_buf_adjust(win);
     if foldmethodIsDiff(win) {
@@ -7908,31 +7769,23 @@ unsafe extern "C" fn did_set_eof_eol_fixeol_bomb(
     redraw_titles();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_equalalways(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_equalalways(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if p_ea != 0 && (*args).os_oldval.boolean as u64 == 0 {
         win_equal(win, false_0 != 0, 0 as ::core::ffi::c_int);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_foldlevel(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_foldlevel(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     newFoldLevel();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_foldminlines(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_foldminlines(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     foldUpdateAll(win);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_foldnestmax(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_foldnestmax(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if foldmethodIsSyntax(win) as ::core::ffi::c_int != 0
         || foldmethodIsIndent(win) as ::core::ffi::c_int != 0
@@ -7941,54 +7794,38 @@ unsafe extern "C" fn did_set_foldnestmax(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_helpheight(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_helpheight(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !(firstwin == lastwin) {
-        if (*curbuf).b_help as ::core::ffi::c_int != 0
-            && ((*curwin).w_height as OptInt) < p_hh
-        {
+        if (*curbuf).b_help as ::core::ffi::c_int != 0 && ((*curwin).w_height as OptInt) < p_hh {
             win_setheight(p_hh as ::core::ffi::c_int);
         }
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_hlsearch(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_hlsearch(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     set_no_hlsearch(false_0 != 0);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_ignorecase(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_ignorecase(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if p_hls != 0 {
         redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_iminsert(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_iminsert(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     showmode();
     status_redraw_curbuf();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_langnoremap(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_langnoremap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     p_lrm = (p_lnr == 0) as ::core::ffi::c_int;
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_langremap(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_langremap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     p_lnr = (p_lrm == 0) as ::core::ffi::c_int;
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_laststatus(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     let mut value: OptInt = (*args).os_newval.number;
     if value == 3 as OptInt && old_value != 3 as OptInt {
@@ -8037,20 +7874,23 @@ unsafe extern "C" fn did_set_lines_or_columns(
             Columns = p_columns as ::core::ffi::c_int;
             check_screensize();
             let mut new_row: ::core::ffi::c_int = (Rows as OptInt
-                - (if p_ch > 1 as OptInt { p_ch } else { 1 as OptInt }))
-                as ::core::ffi::c_int;
+                - (if p_ch > 1 as OptInt {
+                    p_ch
+                } else {
+                    1 as OptInt
+                })) as ::core::ffi::c_int;
             if cmdline_row > new_row && Rows as OptInt > p_ch {
                 '_c2rust_label: {
-                    if p_ch >= 0 as OptInt && new_row <= 2147483647 as ::core::ffi::c_int
-                    {} else {
+                    if p_ch >= 0 as OptInt && new_row <= 2147483647 as ::core::ffi::c_int {
+                    } else {
                         __assert_fail(
                             b"p_ch >= 0 && new_row <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             2359 as ::core::ffi::c_uint,
-                            b"const char *did_set_lines_or_columns(optset_T *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"const char *did_set_lines_or_columns(optset_T *)\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         );
                     }
                 };
@@ -8066,22 +7906,16 @@ unsafe extern "C" fn did_set_lines_or_columns(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_lisp(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_lisp(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     buf_init_chartab(buf, false_0 != 0);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_modifiable(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_modifiable(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     redraw_titles();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_modified(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_modified(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*args).os_newval.boolean as u64 == 0 {
         save_file_ff(buf);
@@ -8100,16 +7934,12 @@ unsafe extern "C" fn did_set_number_relativenumber(
     check_signcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), win);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_numberwidth(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_numberwidth(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     (*win).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T;
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_paste(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_paste(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     static mut old_p_paste: ::core::ffi::c_int = false_0;
     static mut save_sm: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static mut save_sta: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -8128,8 +7958,7 @@ unsafe extern "C" fn did_set_paste(
                     xfree((*buf).b_p_vsts_nopaste as *mut ::core::ffi::c_void);
                 }
                 (*buf).b_p_vsts_nopaste = if !(*buf).b_p_vsts.is_null()
-                    && (*buf).b_p_vsts
-                        != &raw mut empty_string_option as *mut ::core::ffi::c_char
+                    && (*buf).b_p_vsts != &raw mut empty_string_option as *mut ::core::ffi::c_char
                 {
                     xstrdup((*buf).b_p_vsts)
                 } else {
@@ -8168,8 +7997,8 @@ unsafe extern "C" fn did_set_paste(
                 free_string_option((*buf_0).b_p_vsts);
             }
             (*buf_0).b_p_vsts = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*buf_0)
-                .b_p_vsts_array as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut (*buf_0).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             *ptr_;
@@ -8209,8 +8038,7 @@ unsafe extern "C" fn did_set_paste(
             };
             xfree((*buf_1).b_p_vsts_array as *mut ::core::ffi::c_void);
             if !(*buf_1).b_p_vsts.is_null()
-                && (*buf_1).b_p_vsts
-                    != &raw mut empty_string_option as *mut ::core::ffi::c_char
+                && (*buf_1).b_p_vsts != &raw mut empty_string_option as *mut ::core::ffi::c_char
             {
                 tabstop_set((*buf_1).b_p_vsts, &raw mut (*buf_1).b_p_vsts_array);
             } else {
@@ -8246,9 +8074,7 @@ unsafe extern "C" fn did_set_paste(
     );
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_previewwindow(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_previewwindow(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_pvw == 0 {
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -8261,25 +8087,20 @@ unsafe extern "C" fn did_set_previewwindow(
     while !wp.is_null() {
         if (*wp).w_onebuf_opt.wo_pvw != 0 && wp != win {
             (*win).w_onebuf_opt.wo_pvw = false_0;
-            return &raw const e_preview_window_already_exists
-                as *const ::core::ffi::c_char;
+            return &raw const e_preview_window_already_exists as *const ::core::ffi::c_char;
         }
         wp = (*wp).w_next;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_pumblend(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_pumblend(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     hl_invalidate_blends();
     if pum_drawn() {
         pum_redraw();
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_readonly(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_readonly(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*buf).b_p_ro == 0
         && (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int
@@ -8292,9 +8113,7 @@ unsafe extern "C" fn did_set_readonly(
     redraw_titles();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_scrollback(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_scrollback(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut old_value: OptInt = (*args).os_oldval.number;
     let mut value: OptInt = (*args).os_newval.number;
@@ -8303,9 +8122,7 @@ unsafe extern "C" fn did_set_scrollback(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_scrollbind(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_scrollbind(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_scb == 0 {
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -8328,33 +8145,25 @@ unsafe extern "C" fn did_set_shiftwidth_tabstop(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_showtabline(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_showtabline(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     win_new_screen_rows();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_smoothscroll(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_smoothscroll(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_sms == 0 {
         (*win).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_spell(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_spell(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_spell != 0 {
         return parse_spelllang(win);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_swapfile(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_swapfile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*buf).b_p_swf != 0 && p_uc != 0 {
         ml_open_file(buf);
@@ -8363,12 +8172,14 @@ unsafe extern "C" fn did_set_swapfile(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_textwidth(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_textwidth(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             check_colorcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
             wp = (*wp).w_next;
@@ -8377,24 +8188,18 @@ unsafe extern "C" fn did_set_textwidth(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_title_icon(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_title_icon(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     did_set_title();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_titlelen(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_titlelen(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     if starting != NO_SCREEN && old_value != p_titlelen {
         need_maketitle = true_0 != 0;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_undofile(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_undofile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*buf).b_p_udf == 0 && p_udf == 0 {
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -8402,8 +8207,10 @@ unsafe extern "C" fn did_set_undofile(
     let mut hash: [uint8_t; 32] = [0; 32];
     let mut bp: *mut buf_T = firstbuf;
     while !bp.is_null() {
-        if (buf == bp || (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
-            || (*args).os_flags == 0 as ::core::ffi::c_int) && !bufIsChanged(bp)
+        if (buf == bp
+            || (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
+            || (*args).os_flags == 0 as ::core::ffi::c_int)
+            && !bufIsChanged(bp)
             && !(*bp).b_ml.ml_mfp.is_null()
         {
             u_compute_hash(bp, &raw mut hash as *mut uint8_t);
@@ -8438,52 +8245,40 @@ pub unsafe extern "C" fn did_set_buflocal_undolevels(
     (*buf).b_p_ul = value;
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_undolevels(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_undolevels(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut pp: *mut OptInt = (*args).os_varp as *mut OptInt;
     if pp == &raw mut p_ul {
         did_set_global_undolevels((*args).os_newval.number, (*args).os_oldval.number);
     } else if pp == &raw mut (*buf).b_p_ul {
-        did_set_buflocal_undolevels(
-            buf,
-            (*args).os_newval.number,
-            (*args).os_oldval.number,
-        );
+        did_set_buflocal_undolevels(buf, (*args).os_newval.number, (*args).os_oldval.number);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_updatecount(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_updatecount(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     if p_uc != 0 && old_value == 0 {
         ml_open_files();
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_wildchar(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_wildchar(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut c: OptInt = *((*args).os_varp as *mut OptInt);
-    if c == Ctrl_C as OptInt || c == '\n' as OptInt || c == '\r' as OptInt
+    if c == Ctrl_C as OptInt
+        || c == '\n' as OptInt
+        || c == '\r' as OptInt
         || c == K_KENTER as OptInt
     {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_winblend(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_winblend(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut old_value: OptInt = (*args).os_oldval.number;
     let mut value: OptInt = (*args).os_newval.number;
     if value != old_value {
-        (*win).w_onebuf_opt.wo_winbl = if (if (*win).w_onebuf_opt.wo_winbl
-            < 100 as OptInt
-        {
+        (*win).w_onebuf_opt.wo_winbl = if (if (*win).w_onebuf_opt.wo_winbl < 100 as OptInt {
             (*win).w_onebuf_opt.wo_winbl
         } else {
             100 as OptInt
@@ -8502,9 +8297,7 @@ unsafe extern "C" fn did_set_winblend(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_window(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_window(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if p_window < 1 as OptInt {
         p_window = (Rows - 1 as ::core::ffi::c_int) as OptInt;
     } else if p_window >= Rows as OptInt {
@@ -8512,9 +8305,7 @@ unsafe extern "C" fn did_set_window(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_winheight(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_winheight(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !(firstwin == lastwin) {
         if ((*curwin).w_height as OptInt) < p_wh {
             win_setheight(p_wh as ::core::ffi::c_int);
@@ -8522,17 +8313,13 @@ unsafe extern "C" fn did_set_winheight(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_winwidth(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_winwidth(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !(firstwin == lastwin) && ((*curwin).w_width as OptInt) < p_wiw {
         win_setwidth(p_wiw as ::core::ffi::c_int);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_wrap(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_wrap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_wrap != 0 {
         (*win).w_leftcol = 0 as ::core::ffi::c_int as colnr_T;
@@ -8541,9 +8328,7 @@ unsafe extern "C" fn did_set_wrap(
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn did_set_xhistory(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn did_set_xhistory(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut is_p_chi: bool = (*args).os_varp as *mut OptInt == &raw mut p_chi;
     let mut arg: *mut OptInt = if is_p_chi as ::core::ffi::c_int != 0 {
@@ -8566,8 +8351,7 @@ unsafe extern "C" fn do_syntax_autocmd(mut buf: *mut buf_T, mut value_changed: b
         EVENT_SYNTAX,
         (*buf).b_p_syn,
         (*buf).b_fname,
-        value_changed as ::core::ffi::c_int != 0
-            || syn_recursive == 1 as ::core::ffi::c_int,
+        value_changed as ::core::ffi::c_int != 0 || syn_recursive == 1 as ::core::ffi::c_int,
         buf,
     );
     syn_recursive -= 1;
@@ -8575,8 +8359,11 @@ unsafe extern "C" fn do_syntax_autocmd(mut buf: *mut buf_T, mut value_changed: b
 unsafe extern "C" fn do_spelllang_source(mut win: *mut win_T) {
     let mut fname: [::core::ffi::c_char; 200] = [0; 200];
     let mut q: *mut ::core::ffi::c_char = (*(*win).w_s).b_p_spl;
-    if strncmp(q, b"cjk,\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        q,
+        b"cjk,\0".as_ptr() as *const ::core::ffi::c_char,
+        4 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         q = q.offset(4 as ::core::ffi::c_int as isize);
     }
@@ -8614,9 +8401,7 @@ unsafe extern "C" fn check_num_option_bounds(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     match opt_idx as ::core::ffi::c_int {
         169 => {
             if *newval < min_rows_for_all_tabpages() as OptInt
@@ -8626,8 +8411,7 @@ unsafe extern "C" fn check_num_option_bounds(
                     errbuf,
                     errbuflen,
                     gettext(
-                        b"E593: Need at least %d lines\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"E593: Need at least %d lines\0".as_ptr() as *const ::core::ffi::c_char
                     ),
                     min_rows_for_all_tabpages(),
                 );
@@ -8648,8 +8432,7 @@ unsafe extern "C" fn check_num_option_bounds(
                     errbuf,
                     errbuflen,
                     gettext(
-                        b"E594: Need at least %d columns\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"E594: Need at least %d columns\0".as_ptr() as *const ::core::ffi::c_char
                     ),
                     MIN_COLUMNS as ::core::ffi::c_int,
                 );
@@ -8663,10 +8446,17 @@ unsafe extern "C" fn check_num_option_bounds(
             };
         }
         222 => {
-            *newval = if (if *newval < 100 as OptInt { *newval } else { 100 as OptInt })
-                > 0 as OptInt
+            *newval = if (if *newval < 100 as OptInt {
+                *newval
+            } else {
+                100 as OptInt
+            }) > 0 as OptInt
             {
-                if *newval < 100 as OptInt { *newval } else { 100 as OptInt }
+                if *newval < 100 as OptInt {
+                    *newval
+                } else {
+                    100 as OptInt
+                }
             } else {
                 0 as OptInt
             };
@@ -8713,30 +8503,30 @@ unsafe extern "C" fn validate_num_option(
         }
         362 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if p_wmh > value {
-                return &raw const e_winheight as *const ::core::ffi::c_char
+                return &raw const e_winheight as *const ::core::ffi::c_char;
             }
         }
         364 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > p_wh {
-                return &raw const e_winheight as *const ::core::ffi::c_char
+                return &raw const e_winheight as *const ::core::ffi::c_char;
             }
         }
         366 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if p_wmw > value {
-                return &raw const e_winwidth as *const ::core::ffi::c_char
+                return &raw const e_winwidth as *const ::core::ffi::c_char;
             }
         }
         365 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > p_wiw {
-                return &raw const e_winwidth as *const ::core::ffi::c_char
+                return &raw const e_winwidth as *const ::core::ffi::c_char;
             }
         }
         183 => {
@@ -8749,16 +8539,16 @@ unsafe extern "C" fn validate_num_option(
         }
         133 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > 10000 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
         }
         227 => {
             if value == 0 as OptInt {
                 *newval = 3 as OptInt;
             } else if value != 3 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
         }
         233 => {
@@ -8783,16 +8573,16 @@ unsafe extern "C" fn validate_num_option(
         }
         58 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > 3 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
         }
         207 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > MAX_NUMBERWIDTH as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
         }
         142 => {
@@ -8813,25 +8603,25 @@ unsafe extern "C" fn validate_num_option(
         }
         304 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > TABSTOP_MAX as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
         }
         37 | 167 => {
             if value < 1 as OptInt {
                 return &raw const e_cannot_have_negative_or_zero_number_of_quickfix
-                    as *const ::core::ffi::c_char
+                    as *const ::core::ffi::c_char;
             } else if value > 100 as OptInt {
                 return &raw const e_cannot_have_more_than_hundred_quickfix
-                    as *const ::core::ffi::c_char
+                    as *const ::core::ffi::c_char;
             }
         }
         187 => {
             if value <= 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char
+                return &raw const e_positive as *const ::core::ffi::c_char;
             } else if value > MAX_SEARCH_COUNT as ::core::ffi::c_int as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char
+                return &raw const e_invarg as *const ::core::ffi::c_char;
             }
         }
         _ => {}
@@ -8883,15 +8673,12 @@ pub unsafe extern "C" fn is_tty_option(mut name: *const ::core::ffi::c_char) -> 
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_tty_option(mut name: *const ::core::ffi::c_char) -> OptVal {
-    let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if strequal(name, b"t_Co\0".as_ptr() as *const ::core::ffi::c_char) {
         if t_colors <= 1 as ::core::ffi::c_int {
             value = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
         } else {
-            value = xmalloc(NUMBUFLEN as ::core::ffi::c_int as size_t)
-                as *mut ::core::ffi::c_char;
+            value = xmalloc(NUMBUFLEN as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
             snprintf(
                 value,
                 NUMBUFLEN as ::core::ffi::c_int as size_t,
@@ -8969,9 +8756,7 @@ pub unsafe extern "C" fn find_option(name: *const ::core::ffi::c_char) -> OptInd
 pub unsafe extern "C" fn optval_free(mut o: OptVal) {
     match o.type_0 as ::core::ffi::c_int {
         2 => {
-            if o.data.string.data
-                != &raw mut empty_string_option as *mut ::core::ffi::c_char
-            {
+            if o.data.string.data != &raw mut empty_string_option as *mut ::core::ffi::c_char {
                 api_free_string(o.data.string);
             }
         }
@@ -9002,8 +8787,7 @@ pub unsafe extern "C" fn optval_equal(mut o1: OptVal, mut o2: OptVal) -> bool {
     match o1.type_0 as ::core::ffi::c_int {
         -1 => return true_0 != 0,
         0 => {
-            return o1.data.boolean as ::core::ffi::c_int
-                == o2.data.boolean as ::core::ffi::c_int;
+            return o1.data.boolean as ::core::ffi::c_int == o2.data.boolean as ::core::ffi::c_int;
         }
         1 => return o1.data.number == o2.data.number,
         2 => {
@@ -9013,7 +8797,8 @@ pub unsafe extern "C" fn optval_equal(mut o1: OptVal, mut o2: OptVal) -> bool {
                         o1.data.string.data,
                         o2.data.string.data,
                         o1.data.string.size,
-                    ) as ::core::ffi::c_int != 0);
+                    ) as ::core::ffi::c_int
+                        != 0);
         }
         _ => {}
     }
@@ -9047,13 +8832,9 @@ pub unsafe extern "C" fn optval_from_varp(
             return OptVal {
                 type_0: kOptValTypeBoolean,
                 data: OptValData {
-                    boolean: (if *(varp as *mut ::core::ffi::c_int)
-                        == 0 as ::core::ffi::c_int
-                    {
+                    boolean: (if *(varp as *mut ::core::ffi::c_int) == 0 as ::core::ffi::c_int {
                         kFalse as ::core::ffi::c_int
-                    } else if *(varp as *mut ::core::ffi::c_int)
-                        >= 1 as ::core::ffi::c_int
-                    {
+                    } else if *(varp as *mut ::core::ffi::c_int) >= 1 as ::core::ffi::c_int {
                         kTrue as ::core::ffi::c_int
                     } else {
                         kNone as ::core::ffi::c_int
@@ -9088,10 +8869,10 @@ unsafe extern "C" fn set_option_varp(
     mut free_oldval: bool,
 ) {
     '_c2rust_label: {
-        if option_has_type(opt_idx, value.type_0) {} else {
+        if option_has_type(opt_idx, value.type_0) {
+        } else {
             __assert_fail(
-                b"option_has_type(opt_idx, value.type)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"option_has_type(opt_idx, value.type)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3401 as ::core::ffi::c_uint,
@@ -9108,8 +8889,7 @@ unsafe extern "C" fn set_option_varp(
             abort();
         }
         0 => {
-            *(varp as *mut ::core::ffi::c_int) = value.data.boolean
-                as ::core::ffi::c_int;
+            *(varp as *mut ::core::ffi::c_int) = value.data.boolean as ::core::ffi::c_int;
             return;
         }
         1 => {
@@ -9128,18 +8908,15 @@ unsafe extern "C" fn optval_to_cstr(mut o: OptVal) -> *mut ::core::ffi::c_char {
     match o.type_0 as ::core::ffi::c_int {
         -1 => return xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char),
         0 => {
-            return xstrdup(
-                if o.data.boolean as ::core::ffi::c_int != 0 {
-                    b"true\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"false\0".as_ptr() as *const ::core::ffi::c_char
-                },
-            );
+            return xstrdup(if o.data.boolean as ::core::ffi::c_int != 0 {
+                b"true\0".as_ptr() as *const ::core::ffi::c_char
+            } else {
+                b"false\0".as_ptr() as *const ::core::ffi::c_char
+            });
         }
         1 => {
-            let mut buf: *mut ::core::ffi::c_char = xmalloc(
-                NUMBUFLEN as ::core::ffi::c_int as size_t,
-            ) as *mut ::core::ffi::c_char;
+            let mut buf: *mut ::core::ffi::c_char =
+                xmalloc(NUMBUFLEN as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
             snprintf(
                 buf,
                 NUMBUFLEN as ::core::ffi::c_int as size_t,
@@ -9149,9 +8926,8 @@ unsafe extern "C" fn optval_to_cstr(mut o: OptVal) -> *mut ::core::ffi::c_char {
             return buf;
         }
         2 => {
-            let mut buf_0: *mut ::core::ffi::c_char = xmalloc(
-                o.data.string.size.wrapping_add(3 as size_t),
-            ) as *mut ::core::ffi::c_char;
+            let mut buf_0: *mut ::core::ffi::c_char =
+                xmalloc(o.data.string.size.wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
             snprintf(
                 buf_0,
                 o.data.string.size.wrapping_add(3 as size_t),
@@ -9214,10 +8990,7 @@ pub unsafe extern "C" fn optval_as_object(mut o: OptVal) -> Object {
     unreachable!();
 }
 #[no_mangle]
-pub unsafe extern "C" fn object_as_optval(
-    mut o: Object,
-    mut error: *mut bool,
-) -> OptVal {
+pub unsafe extern "C" fn object_as_optval(mut o: Object, mut error: *mut bool) -> OptVal {
     match o.type_0 as ::core::ffi::c_uint {
         0 => {
             return OptVal {
@@ -9263,32 +9036,25 @@ pub unsafe extern "C" fn is_option_hidden(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
         && options[opt_idx as usize].immutable as ::core::ffi::c_int != 0
         && options[opt_idx as usize].var
-            == &raw mut (*(&raw mut options as *mut vimoption_T)
-                .offset(opt_idx as isize))
+            == &raw mut (*(&raw mut options as *mut vimoption_T).offset(opt_idx as isize))
                 .def_val
                 .data as *mut ::core::ffi::c_void;
 }
 #[no_mangle]
-pub unsafe extern "C" fn option_has_type(
-    mut opt_idx: OptIndex,
-    mut type_0: OptValType,
-) -> bool {
+pub unsafe extern "C" fn option_has_type(mut opt_idx: OptIndex, mut type_0: OptValType) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && options[opt_idx as usize].type_0 as ::core::ffi::c_int
-            == type_0 as ::core::ffi::c_int;
+        && options[opt_idx as usize].type_0 as ::core::ffi::c_int == type_0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn option_has_scope(
-    mut opt_idx: OptIndex,
-    mut scope: OptScope,
-) -> bool {
+pub unsafe extern "C" fn option_has_scope(mut opt_idx: OptIndex, mut scope: OptScope) -> bool {
     '_c2rust_label: {
         if scope as ::core::ffi::c_uint
             >= kOptScopeGlobal as ::core::ffi::c_int as ::core::ffi::c_uint
             && (scope as ::core::ffi::c_uint)
                 < (kOptScopeBuf as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
                     as ::core::ffi::c_uint
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"scope >= kOptScopeGlobal && scope < kOptScopeSize\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -9301,7 +9067,8 @@ pub unsafe extern "C" fn option_has_scope(
         }
     };
     return (*get_option(opt_idx)).scope_flags as ::core::ffi::c_int
-        & (1 as ::core::ffi::c_int) << scope as ::core::ffi::c_uint != 0;
+        & (1 as ::core::ffi::c_int) << scope as ::core::ffi::c_uint
+        != 0;
 }
 #[inline]
 unsafe extern "C" fn option_is_global_local(mut opt_idx: OptIndex) -> bool {
@@ -9312,21 +9079,20 @@ unsafe extern "C" fn option_is_global_local(mut opt_idx: OptIndex) -> bool {
 unsafe extern "C" fn option_is_global_only(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
         && is_power_of_two(options[opt_idx as usize].scope_flags as uint64_t)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
         && option_has_scope(opt_idx, kOptScopeGlobal) as ::core::ffi::c_int != 0;
 }
 #[inline]
 unsafe extern "C" fn option_is_window_local(mut opt_idx: OptIndex) -> bool {
     return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
         && is_power_of_two(options[opt_idx as usize].scope_flags as uint64_t)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
         && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn option_scope_idx(
-    mut opt_idx: OptIndex,
-    mut scope: OptScope,
-) -> ssize_t {
+pub unsafe extern "C" fn option_scope_idx(mut opt_idx: OptIndex, mut scope: OptScope) -> ssize_t {
     return options[opt_idx as usize].scope_idx[scope as usize];
 }
 #[no_mangle]
@@ -9348,22 +9114,21 @@ pub unsafe extern "C" fn get_option_value(
             data: OptValData { boolean: kFalse },
         };
     }
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
     return optval_copy(optval_from_varp(opt_idx, varp));
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_option(mut opt_idx: OptIndex) -> *mut vimoption_T {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3580 as ::core::ffi::c_uint,
-                b"vimoption_T *get_option(OptIndex)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"vimoption_T *get_option(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9371,19 +9136,18 @@ pub unsafe extern "C" fn get_option(mut opt_idx: OptIndex) -> *mut vimoption_T {
 }
 unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3593 as ::core::ffi::c_uint,
-                b"OptVal get_option_unset_value(OptIndex)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"OptVal get_option_unset_value(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     if option_is_global_local(opt_idx) {
         if option_has_type(opt_idx, kOptValTypeString) {
             return OptVal {
@@ -9408,7 +9172,9 @@ unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
             247 | 276 => {
                 return OptVal {
                     type_0: kOptValTypeNumber,
-                    data: OptValData { number: -1 as OptInt },
+                    data: OptValData {
+                        number: -1 as OptInt,
+                    },
                 };
             }
             333 => {
@@ -9434,10 +9200,8 @@ unsafe extern "C" fn is_option_local_value_unset(mut opt_idx: OptIndex) -> bool 
     if !option_is_global_local(opt_idx) {
         return false_0 != 0;
     }
-    let mut varp_local: *mut ::core::ffi::c_void = get_varp_scope(
-        opt,
-        OPT_LOCAL as ::core::ffi::c_int,
-    );
+    let mut varp_local: *mut ::core::ffi::c_void =
+        get_varp_scope(opt, OPT_LOCAL as ::core::ffi::c_int);
     let mut local_value: OptVal = optval_from_varp(opt_idx, varp_local);
     let mut unset_local_value: OptVal = get_option_unset_value(opt_idx);
     return optval_equal(local_value, unset_local_value);
@@ -9454,11 +9218,8 @@ unsafe extern "C" fn did_set_option(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut restore_chartab: bool = false_0 != 0;
     let mut value_changed: bool = false_0 != 0;
     let mut value_checked: bool = false_0 != 0;
@@ -9477,26 +9238,21 @@ unsafe extern "C" fn did_set_option(
         os_buf: curbuf as *mut ::core::ffi::c_void,
     };
     if !direct {
-        if (*opt).immutable as ::core::ffi::c_int != 0
-            && !optval_equal(old_value, new_value)
-        {
+        if (*opt).immutable as ::core::ffi::c_int != 0 && !optval_equal(old_value, new_value) {
             errmsg = &raw const e_unsupportedoption as *const ::core::ffi::c_char;
         } else if (secure != 0 || sandbox != 0 as ::core::ffi::c_int)
             && (*opt).flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
         {
             errmsg = &raw const e_secure as *const ::core::ffi::c_char;
-        } else if new_value.type_0 as ::core::ffi::c_int
-            == kOptValTypeString as ::core::ffi::c_int
-            && check_illegal_path_names(
-                *(varp as *mut *mut ::core::ffi::c_char),
-                (*opt).flags,
-            ) as ::core::ffi::c_int != 0
+        } else if new_value.type_0 as ::core::ffi::c_int == kOptValTypeString as ::core::ffi::c_int
+            && check_illegal_path_names(*(varp as *mut *mut ::core::ffi::c_char), (*opt).flags)
+                as ::core::ffi::c_int
+                != 0
         {
             errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
         } else if (*opt).opt_did_set_cb.is_some() {
-            errmsg = (*opt)
-                .opt_did_set_cb
-                .expect("non-null function pointer")(&raw mut did_set_cb_args);
+            errmsg =
+                (*opt).opt_did_set_cb.expect("non-null function pointer")(&raw mut did_set_cb_args);
             value_changed = did_set_cb_args.os_value_changed;
             value_checked = did_set_cb_args.os_value_checked;
             restore_chartab = did_set_cb_args.os_restore_chartab;
@@ -9529,10 +9285,8 @@ unsafe extern "C" fn did_set_option(
         == 0 as ::core::ffi::c_int;
     if scope_both {
         if option_is_global_local(opt_idx) {
-            let mut varp_local: *mut ::core::ffi::c_void = get_varp_scope(
-                opt,
-                OPT_LOCAL as ::core::ffi::c_int,
-            );
+            let mut varp_local: *mut ::core::ffi::c_void =
+                get_varp_scope(opt, OPT_LOCAL as ::core::ffi::c_int);
             let mut local_unset_value: OptVal = get_option_unset_value(opt_idx);
             set_option_varp(
                 opt_idx,
@@ -9541,10 +9295,8 @@ unsafe extern "C" fn did_set_option(
                 true_0 != 0,
             );
         } else {
-            let mut varp_global: *mut ::core::ffi::c_void = get_varp_scope(
-                opt,
-                OPT_GLOBAL as ::core::ffi::c_int,
-            );
+            let mut varp_global: *mut ::core::ffi::c_void =
+                get_varp_scope(opt, OPT_GLOBAL as ::core::ffi::c_int);
             set_option_varp(opt_idx, varp_global, optval_copy(new_value), true_0 != 0);
         }
     }
@@ -9577,10 +9329,10 @@ unsafe extern "C" fn did_set_option(
     }
     if (*curwin).w_curswant != MAXCOL as ::core::ffi::c_int
         && (*opt).flags
-            & (kOptFlagCurswant as ::core::ffi::c_int
-                | kOptFlagRedrAll as ::core::ffi::c_int) as uint32_t != 0 as uint32_t
-        && (*opt).flags & kOptFlagHLOnly as ::core::ffi::c_int as uint32_t
-            == 0 as uint32_t
+            & (kOptFlagCurswant as ::core::ffi::c_int | kOptFlagRedrAll as ::core::ffi::c_int)
+                as uint32_t
+            != 0 as uint32_t
+        && (*opt).flags & kOptFlagHLOnly as ::core::ffi::c_int as uint32_t == 0 as uint32_t
     {
         (*curwin).w_set_curswant = true_0;
     }
@@ -9594,7 +9346,8 @@ unsafe extern "C" fn did_set_option(
             ::core::ptr::null_mut::<uint32_t>()
         };
         if !value_checked
-            && (secure != 0 || sandbox != 0 as ::core::ffi::c_int
+            && (secure != 0
+                || sandbox != 0 as ::core::ffi::c_int
                 || opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0)
         {
             *flagsp |= kOptFlagInsecure as ::core::ffi::c_int as uint32_t;
@@ -9621,32 +9374,25 @@ unsafe extern "C" fn validate_option_value(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
         && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && optval_equal(*newval, get_option_unset_value(opt_idx)) as ::core::ffi::c_int
-            != 0
+        && optval_equal(*newval, get_option_unset_value(opt_idx)) as ::core::ffi::c_int != 0
     {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     if (*newval).type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int {
         if opt_flags == OPT_GLOBAL as ::core::ffi::c_int {
             errmsg = gettext(
-                b"Cannot unset global option value\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Cannot unset global option value\0".as_ptr() as *const ::core::ffi::c_char
             );
         } else {
             *newval = optval_copy(get_option_unset_value(opt_idx));
         }
     } else if !option_has_type(opt_idx, (*newval).type_0) {
         let mut rep: *mut ::core::ffi::c_char = optval_to_cstr(*newval);
-        let mut type_str: *const ::core::ffi::c_char = optval_type_get_name(
-            (*opt).type_0,
-        );
+        let mut type_str: *const ::core::ffi::c_char = optval_type_get_name((*opt).type_0);
         snprintf(
             errbuf,
             IOSIZE as size_t,
@@ -9661,15 +9407,8 @@ unsafe extern "C" fn validate_option_value(
         );
         xfree(rep as *mut ::core::ffi::c_void);
         errmsg = errbuf;
-    } else if (*newval).type_0 as ::core::ffi::c_int
-        == kOptValTypeNumber as ::core::ffi::c_int
-    {
-        errmsg = validate_num_option(
-            opt_idx,
-            &raw mut (*newval).data.number,
-            errbuf,
-            errbuflen,
-        );
+    } else if (*newval).type_0 as ::core::ffi::c_int == kOptValTypeNumber as ::core::ffi::c_int {
+        errmsg = validate_num_option(opt_idx, &raw mut (*newval).data.number, errbuf, errbuflen);
     }
     return errmsg;
 }
@@ -9684,7 +9423,8 @@ unsafe extern "C" fn set_option(
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -9695,24 +9435,15 @@ unsafe extern "C" fn set_option(
             );
         }
     };
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if !direct {
-        errmsg = validate_option_value(
-            opt_idx,
-            &raw mut value,
-            opt_flags,
-            errbuf,
-            errbuflen,
-        );
+        errmsg = validate_option_value(opt_idx, &raw mut value, opt_flags, errbuf, errbuflen);
         if !errmsg.is_null() {
             optval_free(value);
             return errmsg;
         }
     }
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     let scope_local: bool = opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
     let scope_global: bool = opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0;
     let scope_both: bool = !scope_local && !scope_global;
@@ -9724,14 +9455,10 @@ unsafe extern "C" fn set_option(
     } else {
         get_varp_scope(opt, opt_flags)
     };
-    let mut varp_local: *mut ::core::ffi::c_void = get_varp_scope(
-        opt,
-        OPT_LOCAL as ::core::ffi::c_int,
-    );
-    let mut varp_global: *mut ::core::ffi::c_void = get_varp_scope(
-        opt,
-        OPT_GLOBAL as ::core::ffi::c_int,
-    );
+    let mut varp_local: *mut ::core::ffi::c_void =
+        get_varp_scope(opt, OPT_LOCAL as ::core::ffi::c_int);
+    let mut varp_global: *mut ::core::ffi::c_void =
+        get_varp_scope(opt, OPT_GLOBAL as ::core::ffi::c_int);
     let mut old_value: OptVal = optval_from_varp(opt_idx, varp);
     let mut old_global_value: OptVal = optval_from_varp(opt_idx, varp_global);
     let mut old_local_value: OptVal = if is_opt_local_unset as ::core::ffi::c_int != 0 {
@@ -9754,8 +9481,7 @@ unsafe extern "C" fn set_option(
     let secure_saved: ::core::ffi::c_int = secure;
     if opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0
         || sandbox != 0 as ::core::ffi::c_int
-        || !value_replaced
-            && *p & kOptFlagInsecure as ::core::ffi::c_int as uint32_t != 0
+        || !value_replaced && *p & kOptFlagInsecure as ::core::ffi::c_int as uint32_t != 0
     {
         secure = 1 as ::core::ffi::c_int;
     }
@@ -9820,7 +9546,8 @@ pub unsafe extern "C" fn set_option_direct(
         ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
     );
     '_c2rust_label: {
-        if errmsg.is_null() {} else {
+        if errmsg.is_null() {
+        } else {
             __assert_fail(
                 b"errmsg == NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -9864,14 +9591,15 @@ pub unsafe extern "C" fn set_option_value(
     mut opt_flags: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4025 as ::core::ffi::c_uint,
-                b"const char *set_option_value(const OptIndex, const OptVal, int)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"const char *set_option_value(const OptIndex, const OptVal, int)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9894,14 +9622,12 @@ pub unsafe extern "C" fn set_option_value(
     );
 }
 #[inline]
-unsafe extern "C" fn unset_option_local_value(
-    opt_idx: OptIndex,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn unset_option_local_value(opt_idx: OptIndex) -> *const ::core::ffi::c_char {
     '_c2rust_label: {
-        if option_is_global_local(opt_idx) {} else {
+        if option_is_global_local(opt_idx) {
+        } else {
             __assert_fail(
-                b"option_is_global_local(opt_idx)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"option_is_global_local(opt_idx)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4045 as ::core::ffi::c_uint,
@@ -9944,11 +9670,7 @@ pub unsafe extern "C" fn set_option_value_give_err(
     mut value: OptVal,
     mut opt_flags: ::core::ffi::c_int,
 ) {
-    let mut errmsg: *const ::core::ffi::c_char = set_option_value(
-        opt_idx,
-        value,
-        opt_flags,
-    );
+    let mut errmsg: *const ::core::ffi::c_char = set_option_value(opt_idx, value, opt_flags);
     if !errmsg.is_null() {
         emsg(gettext(errmsg));
     }
@@ -9967,20 +9689,15 @@ unsafe extern "C" fn switch_option_context(
             if win == curwin {
                 return false_0 != 0;
             }
-            if switch_win_noblock(switchwin, win, win_find_tabpage(win), true_0 != 0)
-                == FAIL
-            {
+            if switch_win_noblock(switchwin, win, win_find_tabpage(win), true_0 != 0) == FAIL {
                 restore_win_noblock(switchwin, true_0 != 0);
-                if (*err).type_0 as ::core::ffi::c_int
-                    != kErrorTypeNone as ::core::ffi::c_int
-                {
+                if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                     return false_0 != 0;
                 }
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Problem while switching windows\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"Problem while switching windows\0".as_ptr() as *const ::core::ffi::c_char,
                 );
                 return false_0 != 0;
             }
@@ -9999,10 +9716,7 @@ unsafe extern "C" fn switch_option_context(
     }
     unreachable!();
 }
-unsafe extern "C" fn restore_option_context(
-    ctx: *mut ::core::ffi::c_void,
-    mut scope: OptScope,
-) {
+unsafe extern "C" fn restore_option_context(ctx: *mut ::core::ffi::c_void, mut scope: OptScope) {
     match scope as ::core::ffi::c_uint {
         1 => {
             restore_win_noblock(ctx as *mut switchwin_T, true_0 != 0);
@@ -10112,12 +9826,8 @@ pub unsafe extern "C" fn set_option_value_for(
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return;
     }
-    let errmsg: *const ::core::ffi::c_char = set_option_value_handle_tty(
-        name,
-        opt_idx,
-        value,
-        opt_flags,
-    );
+    let errmsg: *const ::core::ffi::c_char =
+        set_option_value_handle_tty(name, opt_idx, value, opt_flags);
     if !errmsg.is_null() {
         api_set_error(
             err,
@@ -10131,27 +9841,22 @@ pub unsafe extern "C" fn set_option_value_for(
     }
 }
 unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_int) {
-    let mut items: *mut *mut vimoption_T = xmalloc(
-        ::core::mem::size_of::<*mut vimoption_T>().wrapping_mul(OPTION_COUNT),
-    ) as *mut *mut vimoption_T;
+    let mut items: *mut *mut vimoption_T =
+        xmalloc(::core::mem::size_of::<*mut vimoption_T>().wrapping_mul(OPTION_COUNT))
+            as *mut *mut vimoption_T;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     if opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0 {
-        msg_puts_title(
-            gettext(
-                b"\n--- Global option values ---\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        msg_puts_title(gettext(
+            b"\n--- Global option values ---\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     } else if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
-        msg_puts_title(
-            gettext(
-                b"\n--- Local option values ---\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
-        );
+        msg_puts_title(gettext(
+            b"\n--- Local option values ---\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     } else {
-        msg_puts_title(
-            gettext(b"\n--- Options ---\0".as_ptr() as *const ::core::ffi::c_char),
-        );
+        msg_puts_title(gettext(
+            b"\n--- Options ---\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     }
     let mut run: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while run <= 2 as ::core::ffi::c_int && !got_int {
@@ -10162,9 +9867,8 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
             opt = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
             if !message_filtered((*opt).fullname) {
                 let mut varp: *mut ::core::ffi::c_void = NULL;
-                if opt_flags
-                    & (OPT_LOCAL as ::core::ffi::c_int
-                        | OPT_GLOBAL as ::core::ffi::c_int) != 0 as ::core::ffi::c_int
+                if opt_flags & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
+                    != 0 as ::core::ffi::c_int
                 {
                     if !option_is_global_only(opt_idx) {
                         varp = get_varp_scope(opt, opt_flags);
@@ -10173,8 +9877,7 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                     varp = get_varp(opt);
                 }
                 if !varp.is_null()
-                    && (all as ::core::ffi::c_int != 0
-                        || optval_default(opt_idx, varp) == 0)
+                    && (all as ::core::ffi::c_int != 0 || optval_default(opt_idx, varp) == 0)
                 {
                     let mut len: ::core::ffi::c_int = 0;
                     if opt_flags & OPT_ONECOLUMN as ::core::ffi::c_int != 0 {
@@ -10192,8 +9895,7 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                     {
                         let c2rust_fresh6 = item_count;
                         item_count = item_count + 1;
-                        let c2rust_lvalue_ptr = &raw mut *items
-                            .offset(c2rust_fresh6 as isize);
+                        let c2rust_lvalue_ptr = &raw mut *items.offset(c2rust_fresh6 as isize);
                         *c2rust_lvalue_ptr = opt;
                     }
                 }
@@ -10211,8 +9913,10 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                         / 20 as ::core::ffi::c_int
                         >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                     && (Columns + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
-                        / 20 as ::core::ffi::c_int <= 2147483647 as ::core::ffi::c_int
-                {} else {
+                        / 20 as ::core::ffi::c_int
+                        <= 2147483647 as ::core::ffi::c_int
+                {
+                } else {
                     __assert_fail(
                         b"Columns <= INT_MAX - GAP && Columns + GAP >= INT_MIN + 3 && (Columns + GAP - 3) / INC >= INT_MIN && (Columns + GAP - 3) / INC <= INT_MAX\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -10224,8 +9928,7 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
                     );
                 }
             };
-            let mut cols: ::core::ffi::c_int = (Columns + GAP - 3 as ::core::ffi::c_int)
-                / INC;
+            let mut cols: ::core::ffi::c_int = (Columns + GAP - 3 as ::core::ffi::c_int) / INC;
             if cols == 0 as ::core::ffi::c_int {
                 cols = 1 as ::core::ffi::c_int;
             }
@@ -10260,8 +9963,7 @@ unsafe extern "C" fn optval_default(
     mut opt_idx: OptIndex,
     mut varp: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     if is_option_hidden(opt_idx) {
         return true_0;
     }
@@ -10276,9 +9978,8 @@ pub unsafe extern "C" fn ui_refresh_options() {
         let mut flags: uint32_t = options[opt_idx as usize].flags;
         if flags & kOptFlagUIOption as ::core::ffi::c_int as uint32_t != 0 {
             let mut name: String_0 = cstr_as_string(options[opt_idx as usize].fullname);
-            let mut value: Object = optval_as_object(
-                optval_from_varp(opt_idx, options[opt_idx as usize].var),
-            );
+            let mut value: Object =
+                optval_as_object(optval_from_varp(opt_idx, options[opt_idx as usize].var));
             ui_call_option_set(name, value);
         }
         opt_idx += 1;
@@ -10287,10 +9988,7 @@ pub unsafe extern "C" fn ui_refresh_options() {
         setmouse();
     }
 }
-unsafe extern "C" fn showoneopt(
-    mut opt: *mut vimoption_T,
-    mut opt_flags: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn showoneopt(mut opt: *mut vimoption_T, mut opt_flags: ::core::ffi::c_int) {
     let mut save_silent: ::core::ffi::c_int = silent_mode as ::core::ffi::c_int;
     silent_mode = false_0 != 0;
     info_message = true_0 != 0;
@@ -10315,8 +10013,7 @@ unsafe extern "C" fn showoneopt(
     if !option_has_type(opt_idx, kOptValTypeBoolean) {
         msg_putchar('=' as ::core::ffi::c_int);
         option_value2string(opt, opt_flags);
-        if *(&raw mut NameBuff as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL
-        {
+        if *(&raw mut NameBuff as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL {
             msg_outtrans(
                 &raw mut NameBuff as *mut ::core::ffi::c_char,
                 0 as ::core::ffi::c_int,
@@ -10342,41 +10039,40 @@ pub unsafe extern "C" fn makeset(
             's_14: {
                 if (*opt).flags & kOptFlagNoMkrc as ::core::ffi::c_int as uint32_t == 0
                     && (pri == 1 as ::core::ffi::c_int) as ::core::ffi::c_int
-                        == ((*opt).flags
-                            & kOptFlagPriMkrc as ::core::ffi::c_int as uint32_t
+                        == ((*opt).flags & kOptFlagPriMkrc as ::core::ffi::c_int as uint32_t
                             != 0 as uint32_t) as ::core::ffi::c_int
                 {
                     if !(option_is_global_only(opt_idx) as ::core::ffi::c_int != 0
                         && opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0)
                     {
                         if !(opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
-                            && (*opt).flags
-                                & kOptFlagNoGlob as ::core::ffi::c_int as uint32_t != 0)
+                            && (*opt).flags & kOptFlagNoGlob as ::core::ffi::c_int as uint32_t != 0)
                         {
-                            let mut varp: *mut ::core::ffi::c_void = get_varp_scope(
-                                opt,
-                                opt_flags,
-                            );
+                            let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
                             if !varp.is_null() {
                                 if !(opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
                                     && optval_default(opt_idx, varp) != 0)
                                 {
                                     if !(opt_flags & OPT_SKIPRTP as ::core::ffi::c_int != 0
-                                        && ((*opt).var == &raw mut p_rtp as *mut ::core::ffi::c_void
-                                            || (*opt).var == &raw mut p_pp as *mut ::core::ffi::c_void))
+                                        && ((*opt).var
+                                            == &raw mut p_rtp as *mut ::core::ffi::c_void
+                                            || (*opt).var
+                                                == &raw mut p_pp as *mut ::core::ffi::c_void))
                                     {
                                         let mut round: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
                                         let mut varp_local: *mut ::core::ffi::c_void = NULL;
                                         if option_is_window_local(opt_idx) {
                                             if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
                                                 break 's_14;
-                                            } else if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0
+                                            } else if opt_flags & OPT_GLOBAL as ::core::ffi::c_int
+                                                == 0
                                                 && local_only == 0
                                             {
-                                                let mut varp_fresh: *mut ::core::ffi::c_void = get_varp_scope(
-                                                    opt,
-                                                    OPT_GLOBAL as ::core::ffi::c_int,
-                                                );
+                                                let mut varp_fresh: *mut ::core::ffi::c_void =
+                                                    get_varp_scope(
+                                                        opt,
+                                                        OPT_GLOBAL as ::core::ffi::c_int,
+                                                    );
                                                 if optval_default(opt_idx, varp_fresh) == 0 {
                                                     round = 1 as ::core::ffi::c_int;
                                                     varp_local = varp;
@@ -10385,16 +10081,17 @@ pub unsafe extern "C" fn makeset(
                                             }
                                         }
                                         while round <= 2 as ::core::ffi::c_int {
-                                            let mut cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                                                ::core::ffi::c_char,
-                                            >();
+                                            let mut cmd: *mut ::core::ffi::c_char =
+                                                ::core::ptr::null_mut::<::core::ffi::c_char>();
                                             if round == 1 as ::core::ffi::c_int
                                                 || opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
                                             {
-                                                cmd = b"set\0".as_ptr() as *const ::core::ffi::c_char
+                                                cmd = b"set\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                                     as *mut ::core::ffi::c_char;
                                             } else {
-                                                cmd = b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
+                                                cmd = b"setlocal\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                                     as *mut ::core::ffi::c_char;
                                             }
                                             let mut do_endif: bool = false_0 != 0;
@@ -10405,7 +10102,8 @@ pub unsafe extern "C" fn makeset(
                                             {
                                                 if fprintf(
                                                     fd,
-                                                    b"if &%s != '%s'\0".as_ptr() as *const ::core::ffi::c_char,
+                                                    b"if &%s != '%s'\0".as_ptr()
+                                                        as *const ::core::ffi::c_char,
                                                     (*opt).fullname,
                                                     *(varp as *mut *mut ::core::ffi::c_char),
                                                 ) < 0 as ::core::ffi::c_int
@@ -10421,7 +10119,8 @@ pub unsafe extern "C" fn makeset(
                                             if do_endif {
                                                 if put_line(
                                                     fd,
-                                                    b"endif\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"endif\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                         as *mut ::core::ffi::c_char,
                                                 ) == FAIL
                                                 {
@@ -10454,50 +10153,43 @@ pub unsafe extern "C" fn makefoldset(mut fd: *mut FILE) -> ::core::ffi::c_int {
     ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldexpr,
             &raw mut (*curwin).w_onebuf_opt.wo_fde as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldmarker,
             &raw mut (*curwin).w_onebuf_opt.wo_fmr as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldignore,
             &raw mut (*curwin).w_onebuf_opt.wo_fdi as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldlevel,
             &raw mut (*curwin).w_onebuf_opt.wo_fdl as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldminlines,
             &raw mut (*curwin).w_onebuf_opt.wo_fml as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldnestmax,
             &raw mut (*curwin).w_onebuf_opt.wo_fdn as *mut ::core::ffi::c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             kOptFoldenable,
             &raw mut (*curwin).w_onebuf_opt.wo_fen as *mut ::core::ffi::c_void,
         ) == FAIL
@@ -10513,13 +10205,12 @@ unsafe extern "C" fn put_set(
     mut varp: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut value: OptVal = optval_from_varp(opt_idx, varp);
-    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-        .offset(opt_idx as isize);
+    let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
     let mut name: *mut ::core::ffi::c_char = (*opt).fullname;
     let mut flags: uint64_t = (*opt).flags as uint64_t;
-    if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0 && varp != (*opt).var
-        && optval_equal(value, get_option_unset_value(opt_idx)) as ::core::ffi::c_int
-            != 0
+    if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
+        && varp != (*opt).var
+        && optval_equal(value, get_option_unset_value(opt_idx)) as ::core::ffi::c_int != 0
     {
         return OK;
     }
@@ -10529,31 +10220,26 @@ unsafe extern "C" fn put_set(
         }
         0 => {
             '_c2rust_label: {
-                if value.data.boolean as ::core::ffi::c_int
-                    != kNone as ::core::ffi::c_int
-                {} else {
+                if value.data.boolean as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
-                        b"value.data.boolean != kNone\0".as_ptr()
+                        b"value.data.boolean != kNone\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         4544 as ::core::ffi::c_uint,
                         b"int put_set(FILE *, char *, OptIndex, void *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
             };
-            let mut value_bool: bool = if value.data.boolean as ::core::ffi::c_int
-                == kTrue as ::core::ffi::c_int
-            {
-                true_0
-            } else if value.data.boolean as ::core::ffi::c_int
-                == kFalse as ::core::ffi::c_int
-            {
-                false_0
-            } else {
-                0 as ::core::ffi::c_int
-            } != 0;
+            let mut value_bool: bool =
+                if value.data.boolean as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
+                    true_0
+                } else if value.data.boolean as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
+                    false_0
+                } else {
+                    0 as ::core::ffi::c_int
+                } != 0;
             if fprintf(
                 fd,
                 b"%s %s%s\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10570,8 +10256,12 @@ unsafe extern "C" fn put_set(
             }
         }
         1 => {
-            if fprintf(fd, b"%s %s=\0".as_ptr() as *const ::core::ffi::c_char, cmd, name)
-                < 0 as ::core::ffi::c_int
+            if fprintf(
+                fd,
+                b"%s %s=\0".as_ptr() as *const ::core::ffi::c_char,
+                cmd,
+                name,
+            ) < 0 as ::core::ffi::c_int
             {
                 return FAIL;
             }
@@ -10579,10 +10269,7 @@ unsafe extern "C" fn put_set(
             let mut wc: OptInt = 0;
             if wc_use_keyname(varp, &raw mut wc) != 0 {
                 if fputs(
-                    get_special_key_name(
-                        wc as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
-                    ),
+                    get_special_key_name(wc as ::core::ffi::c_int, 0 as ::core::ffi::c_int),
                     fd,
                 ) < 0 as ::core::ffi::c_int
                 {
@@ -10594,26 +10281,24 @@ unsafe extern "C" fn put_set(
                 value_num,
             ) < 0 as ::core::ffi::c_int
             {
-                return FAIL
+                return FAIL;
             }
         }
         2 => {
-            if fprintf(fd, b"%s %s=\0".as_ptr() as *const ::core::ffi::c_char, cmd, name)
-                < 0 as ::core::ffi::c_int
+            if fprintf(
+                fd,
+                b"%s %s=\0".as_ptr() as *const ::core::ffi::c_char,
+                cmd,
+                name,
+            ) < 0 as ::core::ffi::c_int
             {
                 return FAIL;
             }
             let mut value_str: *const ::core::ffi::c_char = value.data.string.data;
-            let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
-            let mut part: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut part: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             if !value_str.is_null() {
-                if flags & kOptFlagExpand as ::core::ffi::c_int as uint64_t
-                    != 0 as uint64_t
-                {
+                if flags & kOptFlagExpand as ::core::ffi::c_int as uint64_t != 0 as uint64_t {
                     let mut size: size_t = strlen(value_str).wrapping_add(1 as size_t);
                     buf = xmalloc(size) as *mut ::core::ffi::c_char;
                     home_replace(
@@ -10624,8 +10309,7 @@ unsafe extern "C" fn put_set(
                         false_0 != 0,
                     );
                     if size >= MAXPATHL as size_t
-                        && flags & kOptFlagComma as ::core::ffi::c_int as uint64_t
-                            != 0 as uint64_t
+                        && flags & kOptFlagComma as ::core::ffi::c_int as uint64_t != 0 as uint64_t
                         && !vim_strchr(value_str, ',' as ::core::ffi::c_int).is_null()
                     {
                         part = xmalloc(size) as *mut ::core::ffi::c_char;
@@ -10671,7 +10355,7 @@ unsafe extern "C" fn put_set(
                         xfree(buf as *mut ::core::ffi::c_void);
                     }
                 } else if put_escstr(fd, value_str, 2 as ::core::ffi::c_int) == FAIL {
-                    return FAIL
+                    return FAIL;
                 }
             }
         }
@@ -10690,9 +10374,7 @@ pub unsafe extern "C" fn get_varp_scope_from(
     mut win: *mut win_T,
 ) -> *mut ::core::ffi::c_void {
     let mut opt_idx: OptIndex = get_opt_idx(p);
-    if opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
-        && !option_is_global_only(opt_idx)
-    {
+    if opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0 && !option_is_global_only(opt_idx) {
         if option_is_window_local(opt_idx) {
             return (get_varp_from(p, buf, win) as *mut ::core::ffi::c_char)
                 .offset(::core::mem::size_of::<winopt_T>() as isize)
@@ -11122,9 +10804,9 @@ pub unsafe extern "C" fn get_varp_from(
         356 => return &raw mut (*win).w_onebuf_opt.wo_winbl as *mut ::core::ffi::c_void,
         293 => return &raw mut (*win).w_onebuf_opt.wo_stc as *mut ::core::ffi::c_void,
         _ => {
-            iemsg(
-                gettext(b"E356: get_varp ERROR\0".as_ptr() as *const ::core::ffi::c_char),
-            );
+            iemsg(gettext(
+                b"E356: get_varp ERROR\0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     return &raw mut (*buf).b_p_wm as *mut ::core::ffi::c_void;
@@ -11152,20 +10834,21 @@ pub unsafe extern "C" fn get_findfunc() -> *mut ::core::ffi::c_char {
     return (*curbuf).b_p_ffu;
 }
 #[no_mangle]
-pub unsafe extern "C" fn win_copy_options(
-    mut wp_from: *mut win_T,
-    mut wp_to: *mut win_T,
-) {
-    copy_winopt(&raw mut (*wp_from).w_onebuf_opt, &raw mut (*wp_to).w_onebuf_opt);
-    copy_winopt(&raw mut (*wp_from).w_allbuf_opt, &raw mut (*wp_to).w_allbuf_opt);
+pub unsafe extern "C" fn win_copy_options(mut wp_from: *mut win_T, mut wp_to: *mut win_T) {
+    copy_winopt(
+        &raw mut (*wp_from).w_onebuf_opt,
+        &raw mut (*wp_to).w_onebuf_opt,
+    );
+    copy_winopt(
+        &raw mut (*wp_from).w_allbuf_opt,
+        &raw mut (*wp_to).w_allbuf_opt,
+    );
     didset_window_options(wp_to, true_0 != 0);
 }
 unsafe extern "C" fn copy_option_val(
     mut val: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    if val
-        == &raw mut empty_string_option as *mut ::core::ffi::c_char
-            as *const ::core::ffi::c_char
+    if val == &raw mut empty_string_option as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
     {
         return &raw mut empty_string_option as *mut ::core::ffi::c_char;
     }
@@ -11304,10 +10987,7 @@ pub unsafe extern "C" fn clear_winopt(mut wop: *mut winopt_T) {
     clear_string_option(&raw mut (*wop).wo_stc);
 }
 #[no_mangle]
-pub unsafe extern "C" fn didset_window_options(
-    mut wp: *mut win_T,
-    mut valid_cursor: bool,
-) {
+pub unsafe extern "C" fn didset_window_options(mut wp: *mut win_T, mut valid_cursor: bool) {
     if (*wp).w_onebuf_opt.wo_wrap != 0 {
         (*wp).w_leftcol = 0 as ::core::ffi::c_int as colnr_T;
     } else {
@@ -11339,14 +11019,9 @@ pub unsafe extern "C" fn didset_window_options(
     (*wp).w_grid_alloc.blending = (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 #[no_mangle]
-pub unsafe extern "C" fn buf_copy_options(
-    mut buf: *mut buf_T,
-    mut flags: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) {
     let mut should_copy: bool = true_0 != 0;
-    let mut save_p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut save_p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut did_isk: bool = false_0 != 0;
     if !p_cpo.is_null() {
         if (vim_strchr(p_cpo, CPO_BUFOPTGLOB).is_null()
@@ -11357,9 +11032,7 @@ pub unsafe extern "C" fn buf_copy_options(
         {
             should_copy = false_0 != 0;
         }
-        if should_copy as ::core::ffi::c_int != 0
-            || flags & BCO_ALWAYS as ::core::ffi::c_int != 0
-        {
+        if should_copy as ::core::ffi::c_int != 0 || flags & BCO_ALWAYS as ::core::ffi::c_int != 0 {
             memset(
                 &raw mut (*buf).b_p_script_ctx as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
@@ -11378,19 +11051,13 @@ pub unsafe extern "C" fn buf_copy_options(
                 (*buf).b_p_fenc = xstrdup(p_fenc);
                 match *p_ffs as ::core::ffi::c_int {
                     109 => {
-                        (*buf).b_p_ff = xstrdup(
-                            b"mac\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        (*buf).b_p_ff = xstrdup(b"mac\0".as_ptr() as *const ::core::ffi::c_char);
                     }
                     100 => {
-                        (*buf).b_p_ff = xstrdup(
-                            b"dos\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        (*buf).b_p_ff = xstrdup(b"dos\0".as_ptr() as *const ::core::ffi::c_char);
                     }
                     117 => {
-                        (*buf).b_p_ff = xstrdup(
-                            b"unix\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        (*buf).b_p_ff = xstrdup(b"unix\0".as_ptr() as *const ::core::ffi::c_char);
                     }
                     _ => {
                         (*buf).b_p_ff = xstrdup(p_ff);
@@ -11402,111 +11069,126 @@ pub unsafe extern "C" fn buf_copy_options(
                 free_buf_options(buf, false_0 != 0);
             }
             (*buf).b_p_ai = p_ai;
-            (*buf).b_p_script_ctx[kBufOptAutoindent as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptAutoindent as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptAutoindent as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptAutoindent as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_ai_nopaste = p_ai_nopaste;
             (*buf).b_p_sw = p_sw;
-            (*buf).b_p_script_ctx[kBufOptShiftwidth as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptShiftwidth as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptShiftwidth as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptShiftwidth as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_scbk = p_scbk;
-            (*buf).b_p_script_ctx[kBufOptScrollback as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptScrollback as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptScrollback as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptScrollback as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_tw = p_tw;
-            (*buf).b_p_script_ctx[kBufOptTextwidth as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptTextwidth as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptTextwidth as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptTextwidth as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_tw_nopaste = p_tw_nopaste;
             (*buf).b_p_tw_nobin = p_tw_nobin;
             (*buf).b_p_wm = p_wm;
-            (*buf).b_p_script_ctx[kBufOptWrapmargin as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptWrapmargin as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptWrapmargin as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptWrapmargin as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_wm_nopaste = p_wm_nopaste;
             (*buf).b_p_wm_nobin = p_wm_nobin;
             (*buf).b_p_bin = p_bin;
-            (*buf).b_p_script_ctx[kBufOptBinary as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptBinary as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptBinary as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptBinary as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_bomb = p_bomb;
-            (*buf).b_p_script_ctx[kBufOptBomb as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptBomb as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptBomb as ::core::ffi::c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_et = p_et;
-            (*buf).b_p_script_ctx[kBufOptExpandtab as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptExpandtab as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptExpandtab as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptExpandtab as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_fixeol = p_fixeol;
-            (*buf).b_p_script_ctx[kBufOptFixendofline as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptFixendofline as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptFixendofline as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptFixendofline as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_et_nobin = p_et_nobin;
             (*buf).b_p_et_nopaste = p_et_nopaste;
             (*buf).b_p_ml = p_ml;
-            (*buf).b_p_script_ctx[kBufOptModeline as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptModeline as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptModeline as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptModeline as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_ml_nobin = p_ml_nobin;
             (*buf).b_p_inf = p_inf;
-            (*buf).b_p_script_ctx[kBufOptInfercase as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptInfercase as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptInfercase as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptInfercase as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             if cmdmod.cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
                 (*buf).b_p_swf = false_0;
             } else {
                 (*buf).b_p_swf = p_swf;
-                (*buf).b_p_script_ctx[kBufOptSwapfile as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                        as *const OptIndex)
-                        .offset(kBufOptSwapfile as ::core::ffi::c_int as isize) as usize]
+                (*buf).b_p_script_ctx[kBufOptSwapfile as ::core::ffi::c_int as usize] = options
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptSwapfile as ::core::ffi::c_int as isize)
+                        as usize]
                     .script_ctx;
             }
             (*buf).b_p_cpt = xstrdup(p_cpt);
-            (*buf).b_p_script_ctx[kBufOptComplete as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptComplete as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptComplete as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptComplete as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             set_buflocal_cpt_callbacks(buf);
             (*buf).b_p_cfu = xstrdup(p_cfu);
-            (*buf).b_p_script_ctx[kBufOptCompletefunc as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptCompletefunc as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptCompletefunc as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCompletefunc as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             set_buflocal_cfu_callback(buf);
             (*buf).b_p_ofu = xstrdup(p_ofu);
-            (*buf).b_p_script_ctx[kBufOptOmnifunc as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptOmnifunc as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptOmnifunc as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptOmnifunc as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             set_buflocal_ofu_callback(buf);
             (*buf).b_p_tfu = xstrdup(p_tfu);
-            (*buf).b_p_script_ctx[kBufOptTagfunc as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptTagfunc as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptTagfunc as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptTagfunc as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             set_buflocal_tfu_callback(buf);
             (*buf).b_p_sts = p_sts;
-            (*buf).b_p_script_ctx[kBufOptSofttabstop as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSofttabstop as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSofttabstop as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSofttabstop as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_sts_nopaste = p_sts_nopaste;
             (*buf).b_p_vsts = xstrdup(p_vsts);
-            (*buf)
-                .b_p_script_ctx[kBufOptVarsofttabstop as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptVarsofttabstop as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptVarsofttabstop as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
@@ -11523,161 +11205,180 @@ pub unsafe extern "C" fn buf_copy_options(
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             };
             (*buf).b_p_com = xstrdup(p_com);
-            (*buf).b_p_script_ctx[kBufOptComments as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptComments as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptComments as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptComments as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_cms = xstrdup(p_cms);
-            (*buf).b_p_script_ctx[kBufOptCommentstring as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptCommentstring as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptCommentstring as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             (*buf).b_p_fo = xstrdup(p_fo);
-            (*buf).b_p_script_ctx[kBufOptFormatoptions as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptFormatoptions as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptFormatoptions as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             (*buf).b_p_flp = xstrdup(p_flp);
-            (*buf).b_p_script_ctx[kBufOptFormatlistpat as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptFormatlistpat as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptFormatlistpat as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             (*buf).b_p_nf = xstrdup(p_nf);
-            (*buf).b_p_script_ctx[kBufOptNrformats as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptNrformats as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptNrformats as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptNrformats as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_mps = xstrdup(p_mps);
-            (*buf).b_p_script_ctx[kBufOptMatchpairs as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptMatchpairs as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptMatchpairs as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptMatchpairs as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_si = p_si;
-            (*buf).b_p_script_ctx[kBufOptSmartindent as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSmartindent as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSmartindent as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSmartindent as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_channel = 0 as OptInt;
             (*buf).b_p_ci = p_ci;
-            (*buf).b_p_script_ctx[kBufOptCopyindent as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptCopyindent as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptCopyindent as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCopyindent as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_cin = p_cin;
-            (*buf).b_p_script_ctx[kBufOptCindent as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptCindent as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptCindent as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCindent as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_cink = xstrdup(p_cink);
-            (*buf).b_p_script_ctx[kBufOptCinkeys as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptCinkeys as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptCinkeys as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCinkeys as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_cino = xstrdup(p_cino);
-            (*buf).b_p_script_ctx[kBufOptCinoptions as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptCinoptions as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptCinoptions as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCinoptions as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_cinsd = xstrdup(p_cinsd);
-            (*buf).b_p_script_ctx[kBufOptCinscopedecls as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptCinscopedecls as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptCinscopedecls as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             (*buf).b_p_lop = xstrdup(p_lop);
-            (*buf).b_p_script_ctx[kBufOptLispoptions as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptLispoptions as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptLispoptions as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptLispoptions as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_ft = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_pi = p_pi;
-            (*buf)
-                .b_p_script_ctx[kBufOptPreserveindent as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptPreserveindent as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptPreserveindent as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             (*buf).b_p_cinw = xstrdup(p_cinw);
-            (*buf).b_p_script_ctx[kBufOptCinwords as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptCinwords as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptCinwords as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCinwords as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_lisp = p_lisp;
-            (*buf).b_p_script_ctx[kBufOptLisp as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptLisp as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptLisp as ::core::ffi::c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_syn = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_smc = p_smc;
-            (*buf).b_p_script_ctx[kBufOptSynmaxcol as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSynmaxcol as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSynmaxcol as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSynmaxcol as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
-            (*buf).b_s.b_syn_isk = &raw mut empty_string_option
-                as *mut ::core::ffi::c_char;
+            (*buf).b_s.b_syn_isk = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_s.b_p_spc = xstrdup(p_spc);
-            (*buf).b_p_script_ctx[kBufOptSpellcapcheck as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
+            (*buf).b_p_script_ctx[kBufOptSpellcapcheck as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
                     .offset(kBufOptSpellcapcheck as ::core::ffi::c_int as isize)
                     as usize]
                 .script_ctx;
             compile_cap_prog(&raw mut (*buf).b_s);
             (*buf).b_s.b_p_spf = xstrdup(p_spf);
-            (*buf).b_p_script_ctx[kBufOptSpellfile as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSpellfile as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSpellfile as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpellfile as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_s.b_p_spl = xstrdup(p_spl);
-            (*buf).b_p_script_ctx[kBufOptSpelllang as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSpelllang as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSpelllang as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpelllang as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_s.b_p_spo = xstrdup(p_spo);
-            (*buf).b_p_script_ctx[kBufOptSpelloptions as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSpelloptions as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSpelloptions as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpelloptions as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_s.b_p_spo_flags = spo_flags;
             (*buf).b_p_inde = xstrdup(p_inde);
-            (*buf).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptIndentexpr as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIndentexpr as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_indk = xstrdup(p_indk);
-            (*buf).b_p_script_ctx[kBufOptIndentkeys as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptIndentkeys as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptIndentkeys as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIndentkeys as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_fp = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_fex = xstrdup(p_fex);
-            (*buf).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptFormatexpr as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptFormatexpr as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_sua = xstrdup(p_sua);
-            (*buf).b_p_script_ctx[kBufOptSuffixesadd as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptSuffixesadd as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptSuffixesadd as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSuffixesadd as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_keymap = xstrdup(p_keymap);
-            (*buf).b_p_script_ctx[kBufOptKeymap as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptKeymap as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptKeymap as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptKeymap as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
-            (*buf).b_kmap_state = ((*buf).b_kmap_state as ::core::ffi::c_int
-                | KEYMAP_INIT) as int16_t;
+            (*buf).b_kmap_state =
+                ((*buf).b_kmap_state as ::core::ffi::c_int | KEYMAP_INIT) as int16_t;
             (*buf).b_p_iminsert = p_iminsert;
-            (*buf).b_p_script_ctx[kBufOptIminsert as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptIminsert as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptIminsert as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIminsert as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_imsearch = p_imsearch;
-            (*buf).b_p_script_ctx[kBufOptImsearch as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptImsearch as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptImsearch as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptImsearch as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_ac = -1 as ::core::ffi::c_int;
             (*buf).b_p_ar = -1 as ::core::ffi::c_int;
@@ -11699,9 +11400,10 @@ pub unsafe extern "C" fn buf_copy_options(
             (*buf).b_p_def = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_inc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_inex = xstrdup(p_inex);
-            (*buf).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptIncludeexpr as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIncludeexpr as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_cot = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_cot_flags = 0 as ::core::ffi::c_uint;
@@ -11710,20 +11412,23 @@ pub unsafe extern "C" fn buf_copy_options(
             (*buf).b_p_tsr = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_tsrfu = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_qe = xstrdup(p_qe);
-            (*buf).b_p_script_ctx[kBufOptQuoteescape as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptQuoteescape as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptQuoteescape as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptQuoteescape as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_udf = p_udf;
-            (*buf).b_p_script_ctx[kBufOptUndofile as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                    as *const OptIndex)
-                    .offset(kBufOptUndofile as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptUndofile as ::core::ffi::c_int as usize] = options
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptUndofile as ::core::ffi::c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_lw = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             (*buf).b_p_menc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
             if dont_do_help {
                 (*buf).b_p_isk = save_p_isk;
-                if !p_vts.is_null() && *p_vts as ::core::ffi::c_int != NUL
+                if !p_vts.is_null()
+                    && *p_vts as ::core::ffi::c_int != NUL
                     && (*buf).b_p_vts_array.is_null()
                 {
                     tabstop_set(p_vts, &raw mut (*buf).b_p_vts_array);
@@ -11732,25 +11437,26 @@ pub unsafe extern "C" fn buf_copy_options(
                 }
             } else {
                 (*buf).b_p_isk = xstrdup(p_isk);
-                (*buf).b_p_script_ctx[kBufOptIskeyword as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                        as *const OptIndex)
+                (*buf).b_p_script_ctx[kBufOptIskeyword as ::core::ffi::c_int as usize] = options
+                    [*(&raw const buf_opt_idx as *const OptIndex)
                         .offset(kBufOptIskeyword as ::core::ffi::c_int as isize)
                         as usize]
                     .script_ctx;
                 did_isk = true_0 != 0;
                 (*buf).b_p_ts = p_ts;
-                (*buf).b_p_script_ctx[kBufOptTabstop as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                        as *const OptIndex)
-                        .offset(kBufOptTabstop as ::core::ffi::c_int as isize) as usize]
+                (*buf).b_p_script_ctx[kBufOptTabstop as ::core::ffi::c_int as usize] = options
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptTabstop as ::core::ffi::c_int as isize)
+                        as usize]
                     .script_ctx;
                 (*buf).b_p_vts = xstrdup(p_vts);
-                (*buf)
-                    .b_p_script_ctx[kBufOptVartabstop as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                        as *const OptIndex)
+                (*buf).b_p_script_ctx[kBufOptVartabstop as ::core::ffi::c_int as usize] = options
+                    [*(&raw const buf_opt_idx as *const OptIndex)
                         .offset(kBufOptVartabstop as ::core::ffi::c_int as isize)
                         as usize]
                     .script_ctx;
-                if !p_vts.is_null() && *p_vts as ::core::ffi::c_int != NUL
+                if !p_vts.is_null()
+                    && *p_vts as ::core::ffi::c_int != NUL
                     && (*buf).b_p_vts_array.is_null()
                 {
                     tabstop_set(p_vts, &raw mut (*buf).b_p_vts_array);
@@ -11758,15 +11464,14 @@ pub unsafe extern "C" fn buf_copy_options(
                     (*buf).b_p_vts_array = ::core::ptr::null_mut::<colnr_T>();
                 }
                 (*buf).b_help = false_0 != 0;
-                if *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == 'h' as ::core::ffi::c_int
+                if *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    == 'h' as ::core::ffi::c_int
                 {
                     clear_string_option(&raw mut (*buf).b_p_bt);
                 }
                 (*buf).b_p_ma = p_ma;
-                (*buf)
-                    .b_p_script_ctx[kBufOptModifiable as ::core::ffi::c_int as usize] = options[*(&raw const buf_opt_idx
-                        as *const OptIndex)
+                (*buf).b_p_script_ctx[kBufOptModifiable as ::core::ffi::c_int as usize] = options
+                    [*(&raw const buf_opt_idx as *const OptIndex)
                         .offset(kBufOptModifiable as ::core::ffi::c_int as isize)
                         as usize]
                     .script_ctx;
@@ -11825,8 +11530,7 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         return;
     }
     let argend: *mut ::core::ffi::c_char = arg.offset(strlen(arg) as isize);
-    let mut p: *mut ::core::ffi::c_char = argend
-        .offset(-(1 as ::core::ffi::c_int as isize));
+    let mut p: *mut ::core::ffi::c_char = argend.offset(-(1 as ::core::ffi::c_int as isize));
     if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
         && *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
             != '\\' as ::core::ffi::c_int
@@ -11855,14 +11559,20 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
             p = p.offset(-1);
         }
     }
-    if strncmp(p, b"no\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        p,
+        b"no\0".as_ptr() as *const ::core::ffi::c_char,
+        2 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         (*xp).xp_context = EXPAND_BOOL_SETTINGS as ::core::ffi::c_int;
         (*xp).xp_prefix = XP_PREFIX_NO;
         p = p.offset(2 as ::core::ffi::c_int as isize);
-    } else if strncmp(p, b"inv\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-        == 0 as ::core::ffi::c_int
+    } else if strncmp(
+        p,
+        b"inv\0".as_ptr() as *const ::core::ffi::c_char,
+        3 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         (*xp).xp_context = EXPAND_BOOL_SETTINGS as ::core::ffi::c_int;
         (*xp).xp_prefix = XP_PREFIX_INV;
@@ -11882,9 +11592,8 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
                 return;
             }
         }
-        let mut key: ::core::ffi::c_int = get_special_key_code(
-            arg.offset(1 as ::core::ffi::c_int as isize),
-        );
+        let mut key: ::core::ffi::c_int =
+            get_special_key_code(arg.offset(1 as ::core::ffi::c_int as isize));
         if key == 0 as ::core::ffi::c_int {
             (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
             return;
@@ -11892,11 +11601,11 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         p = p.offset(1);
         nextchar = *p;
         is_term_option = true_0 != 0;
-        expand_option_name[2 as ::core::ffi::c_int as usize] = (-key
-            & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
-        expand_option_name[3 as ::core::ffi::c_int as usize] = (-key
-            as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
-            & 0xff as ::core::ffi::c_uint) as uint8_t as ::core::ffi::c_char;
+        expand_option_name[2 as ::core::ffi::c_int as usize] =
+            (-key & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
+        expand_option_name[3 as ::core::ffi::c_int as usize] =
+            (-key as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
+                as uint8_t as ::core::ffi::c_char;
     } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 't' as ::core::ffi::c_int
         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -11912,10 +11621,10 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
         p = p.offset(1);
         nextchar = *p;
         is_term_option = true_0 != 0;
-        expand_option_name[2 as ::core::ffi::c_int as usize] = *p
-            .offset(-2 as ::core::ffi::c_int as isize);
-        expand_option_name[3 as ::core::ffi::c_int as usize] = *p
-            .offset(-1 as ::core::ffi::c_int as isize);
+        expand_option_name[2 as ::core::ffi::c_int as usize] =
+            *p.offset(-2 as ::core::ffi::c_int as isize);
+        expand_option_name[3 as ::core::ffi::c_int as usize] =
+            *p.offset(-1 as ::core::ffi::c_int as isize);
     } else {
         while *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
@@ -11994,8 +11703,7 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
     if expand_option_subtract {
         (*xp).xp_context = EXPAND_SETTING_SUBTRACT as ::core::ffi::c_int;
         return;
-    } else if expand_option_idx as ::core::ffi::c_int
-        != kOptInvalid as ::core::ffi::c_int
+    } else if expand_option_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
         && options[expand_option_idx as usize].opt_expand_cb.is_some()
     {
         (*xp).xp_context = EXPAND_STRING_SETTING as ::core::ffi::c_int;
@@ -12053,8 +11761,8 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
             {
                 let mut s_0: *mut ::core::ffi::c_char = p;
                 while s_0 > (*xp).xp_pattern
-                    && *s_0.offset(-(1 as ::core::ffi::c_int as isize))
-                        as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+                    && *s_0.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
+                        == '\\' as ::core::ffi::c_int
                 {
                     s_0 = s_0.offset(-1);
                 }
@@ -12132,9 +11840,8 @@ pub unsafe extern "C" fn ExpandSettings(
 ) -> ::core::ffi::c_int {
     let mut num_normal: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static mut names: [*mut ::core::ffi::c_char; 1] = [
-        b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    ];
+    static mut names: [*mut ::core::ffi::c_char; 1] =
+        [b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char];
     let mut ic: ::core::ffi::c_int = (*regmatch).rm_ic as ::core::ffi::c_int;
     let mut fuzmatch: *mut fuzmatch_str_T = ::core::ptr::null_mut::<fuzmatch_str_T>();
     let fuzzy: bool = can_fuzzy as ::core::ffi::c_int != 0
@@ -12149,9 +11856,8 @@ pub unsafe extern "C" fn ExpandSettings(
                     .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut ::core::ffi::c_char; 1]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
+                            .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                            == 0) as ::core::ffi::c_int as usize,
                     ) as ::core::ffi::c_int
             {
                 if match_str(
@@ -12173,9 +11879,7 @@ pub unsafe extern "C" fn ExpandSettings(
                 match_0 += 1;
             }
         }
-        let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut opt_idx: OptIndex = kOptAleph;
         while (opt_idx as ::core::ffi::c_int) < kOptCount {
             str = options[opt_idx as usize].fullname;
@@ -12198,20 +11902,19 @@ pub unsafe extern "C" fn ExpandSettings(
                         } else {
                             count += 1;
                         }
-                    } else if !fuzzy && !options[opt_idx as usize].shortname.is_null()
-                        && vim_regexec(
-                            regmatch,
-                            options[opt_idx as usize].shortname,
-                            0 as colnr_T,
-                        ) as ::core::ffi::c_int != 0
+                    } else if !fuzzy
+                        && !options[opt_idx as usize].shortname.is_null()
+                        && vim_regexec(regmatch, options[opt_idx as usize].shortname, 0 as colnr_T)
+                            as ::core::ffi::c_int
+                            != 0
                     {
                         if loop_0 == 0 as ::core::ffi::c_int {
                             num_normal += 1;
                         } else {
                             let c2rust_fresh11 = count;
                             count = count + 1;
-                            let c2rust_lvalue_ptr = &raw mut *(*matches)
-                                .offset(c2rust_fresh11 as isize);
+                            let c2rust_lvalue_ptr =
+                                &raw mut *(*matches).offset(c2rust_fresh11 as isize);
                             *c2rust_lvalue_ptr = xstrdup(str);
                         }
                     }
@@ -12223,7 +11926,7 @@ pub unsafe extern "C" fn ExpandSettings(
             if num_normal > 0 as ::core::ffi::c_int {
                 *numMatches = num_normal;
             } else {
-                return OK
+                return OK;
             }
             if !fuzzy {
                 *matches = xmalloc(
@@ -12232,8 +11935,7 @@ pub unsafe extern "C" fn ExpandSettings(
                 ) as *mut *mut ::core::ffi::c_char;
             } else {
                 fuzmatch = xmalloc(
-                    (*numMatches as size_t)
-                        .wrapping_mul(::core::mem::size_of::<fuzmatch_str_T>()),
+                    (*numMatches as size_t).wrapping_mul(::core::mem::size_of::<fuzmatch_str_T>()),
                 ) as *mut fuzmatch_str_T;
             }
         }
@@ -12255,16 +11957,12 @@ pub unsafe extern "C" fn ExpandOldSetting(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut var: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut var: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     *numMatches = 0 as ::core::ffi::c_int;
     *matches = xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>())
         as *mut *mut ::core::ffi::c_char;
     if expand_option_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
-        expand_option_idx = find_option(
-            &raw mut expand_option_name as *mut ::core::ffi::c_char,
-        );
+        expand_option_idx = find_option(&raw mut expand_option_name as *mut ::core::ffi::c_char);
     }
     if expand_option_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
         option_value2string(
@@ -12305,19 +12003,19 @@ pub unsafe extern "C" fn ExpandStringSetting(
         oe_xp: xp,
         oe_set_arg: (*xp).xp_line.offset(expand_option_start_col as isize),
     };
-    args.oe_include_orig_val = !expand_option_append
-        && *args.oe_set_arg as ::core::ffi::c_int == NUL;
+    args.oe_include_orig_val =
+        !expand_option_append && *args.oe_set_arg as ::core::ffi::c_int == NUL;
     option_value2string(
         (&raw mut options as *mut vimoption_T).offset(expand_option_idx as isize),
         expand_option_flags,
     );
-    let mut var: *mut ::core::ffi::c_char = &raw mut NameBuff
-        as *mut ::core::ffi::c_char;
+    let mut var: *mut ::core::ffi::c_char = &raw mut NameBuff as *mut ::core::ffi::c_char;
     let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(var);
     args.oe_opt_value = buf;
-    let mut num_ret: ::core::ffi::c_int = options[expand_option_idx as usize]
-        .opt_expand_cb
-        .expect("non-null function pointer")(&raw mut args, numMatches, matches);
+    let mut num_ret: ::core::ffi::c_int =
+        options[expand_option_idx as usize]
+            .opt_expand_cb
+            .expect("non-null function pointer")(&raw mut args, numMatches, matches);
     xfree(buf as *mut ::core::ffi::c_void);
     return num_ret;
 }
@@ -12331,15 +12029,12 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
     if expand_option_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
         return ExpandOldSetting(numMatches, matches);
     }
-    let mut option_val: *mut ::core::ffi::c_char = *(get_option_varp_scope_from(
-        expand_option_idx,
-        expand_option_flags,
-        curbuf,
-        curwin,
-    ) as *mut *mut ::core::ffi::c_char);
+    let mut option_val: *mut ::core::ffi::c_char =
+        *(get_option_varp_scope_from(expand_option_idx, expand_option_flags, curbuf, curwin)
+            as *mut *mut ::core::ffi::c_char);
     let mut option_flags: uint32_t = options[expand_option_idx as usize].flags;
     if option_has_type(expand_option_idx, kOptValTypeNumber) {
-        return ExpandOldSetting(numMatches, matches)
+        return ExpandOldSetting(numMatches, matches);
     } else if option_flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0 {
         if *option_val as ::core::ffi::c_int == NUL {
             return FAIL;
@@ -12360,13 +12055,12 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
         );
         loop {
             let mut item: *mut ::core::ffi::c_char = next_val;
-            let mut comma: *mut ::core::ffi::c_char = vim_strchr(
-                next_val,
-                ',' as ::core::ffi::c_int,
-            );
-            while !comma.is_null() && comma != next_val
-                && *comma.offset(-(1 as ::core::ffi::c_int as isize))
-                    as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+            let mut comma: *mut ::core::ffi::c_char =
+                vim_strchr(next_val, ',' as ::core::ffi::c_int);
+            while !comma.is_null()
+                && comma != next_val
+                && *comma.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
+                    == '\\' as ::core::ffi::c_int
             {
                 comma = vim_strchr(
                     comma.offset(1 as ::core::ffi::c_int as isize),
@@ -12381,12 +12075,9 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
             }
             if *item as ::core::ffi::c_int != NUL {
                 if vim_regexec(regmatch, item, 0 as colnr_T) {
-                    let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(
-                        item,
-                    );
+                    let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(item);
                     ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                        .offset(ga.ga_len as isize) = buf;
+                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = buf;
                     ga.ga_len += 1;
                 }
             }
@@ -12414,21 +12105,16 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
         let c2rust_fresh12 = count;
         count = count + 1;
         let c2rust_lvalue_ptr = &raw mut *(*matches).offset(c2rust_fresh12 as isize);
-        *c2rust_lvalue_ptr = xmemdupz(
-            option_val as *const ::core::ffi::c_void,
-            num_flags,
-        ) as *mut ::core::ffi::c_char;
+        *c2rust_lvalue_ptr = xmemdupz(option_val as *const ::core::ffi::c_void, num_flags)
+            as *mut ::core::ffi::c_char;
         if num_flags > 1 as size_t {
             let mut flag: *mut ::core::ffi::c_char = option_val;
             while *flag as ::core::ffi::c_int != NUL {
                 let c2rust_fresh13 = count;
                 count = count + 1;
-                let c2rust_lvalue_ptr_0 = &raw mut *(*matches)
-                    .offset(c2rust_fresh13 as isize);
-                *c2rust_lvalue_ptr_0 = xmemdupz(
-                    flag as *const ::core::ffi::c_void,
-                    1 as size_t,
-                ) as *mut ::core::ffi::c_char;
+                let c2rust_lvalue_ptr_0 = &raw mut *(*matches).offset(c2rust_fresh13 as isize);
+                *c2rust_lvalue_ptr_0 = xmemdupz(flag as *const ::core::ffi::c_void, 1 as size_t)
+                    as *mut ::core::ffi::c_char;
                 flag = flag.offset(1);
             }
         }
@@ -12443,7 +12129,8 @@ unsafe extern "C" fn option_value2string(
 ) {
     let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
     '_c2rust_label: {
-        if !varp.is_null() {} else {
+        if !varp.is_null() {
+        } else {
             __assert_fail(
                 b"varp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
@@ -12502,8 +12189,7 @@ unsafe extern "C" fn wc_use_keyname(
     if varp as *mut OptInt == &raw mut p_wc || varp as *mut OptInt == &raw mut p_wcm {
         *wcp = *(varp as *mut OptInt);
         if *wcp < 0 as OptInt
-            || find_special_key_in_table(*wcp as ::core::ffi::c_int)
-                >= 0 as ::core::ffi::c_int
+            || find_special_key_in_table(*wcp as ::core::ffi::c_int) >= 0 as ::core::ffi::c_int
         {
             return true_0;
         }
@@ -12514,18 +12200,16 @@ unsafe extern "C" fn wc_use_keyname(
 pub unsafe extern "C" fn shortmess(mut x: ::core::ffi::c_int) -> bool {
     return !p_shm.is_null()
         && (!vim_strchr(p_shm, x).is_null()
-            || !vim_strchr(p_shm, 'a' as ::core::ffi::c_int).is_null()
-                && {
-                    let mut c2rust_lvalue: [::core::ffi::c_char; 5] = [
-                        SHM_RO as ::core::ffi::c_int as ::core::ffi::c_char,
-                        SHM_MOD as ::core::ffi::c_int as ::core::ffi::c_char,
-                        SHM_LINES as ::core::ffi::c_int as ::core::ffi::c_char,
-                        SHM_WRI as ::core::ffi::c_int as ::core::ffi::c_char,
-                        0 as ::core::ffi::c_char,
-                    ];
-                    !vim_strchr(&raw mut c2rust_lvalue as *mut ::core::ffi::c_char, x)
-                        .is_null()
-                });
+            || !vim_strchr(p_shm, 'a' as ::core::ffi::c_int).is_null() && {
+                let mut c2rust_lvalue: [::core::ffi::c_char; 5] = [
+                    SHM_RO as ::core::ffi::c_int as ::core::ffi::c_char,
+                    SHM_MOD as ::core::ffi::c_int as ::core::ffi::c_char,
+                    SHM_LINES as ::core::ffi::c_int as ::core::ffi::c_char,
+                    SHM_WRI as ::core::ffi::c_int as ::core::ffi::c_char,
+                    0 as ::core::ffi::c_char,
+                ];
+                !vim_strchr(&raw mut c2rust_lvalue as *mut ::core::ffi::c_char, x).is_null()
+            });
 }
 #[no_mangle]
 pub unsafe extern "C" fn vimrc_found(
@@ -12548,37 +12232,36 @@ pub unsafe extern "C" fn vimrc_found(
 #[no_mangle]
 pub unsafe extern "C" fn option_was_set(mut opt_idx: OptIndex) -> bool {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 6204 as ::core::ffi::c_uint,
-                b"_Bool option_was_set(OptIndex)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"_Bool option_was_set(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    return options[opt_idx as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0;
+    return options[opt_idx as usize].flags & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn reset_option_was_set(mut opt_idx: OptIndex) {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {} else {
+        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/option.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 6213 as ::core::ffi::c_uint,
-                b"void reset_option_was_set(OptIndex)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void reset_option_was_set(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    options[opt_idx as usize].flags = (options[opt_idx as usize].flags
-        as ::core::ffi::c_uint
-        & !(kOptFlagWasSet as ::core::ffi::c_int as ::core::ffi::c_uint)) as uint32_t;
+    options[opt_idx as usize].flags = (options[opt_idx as usize].flags as ::core::ffi::c_uint
+        & !(kOptFlagWasSet as ::core::ffi::c_int as ::core::ffi::c_uint))
+        as uint32_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn fill_culopt_flags(
@@ -12593,12 +12276,16 @@ pub unsafe extern "C" fn fill_culopt_flags(
         p = val;
     }
     while *p as ::core::ffi::c_int != NUL {
-        if strncmp(p, b"line\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-            == 0 as ::core::ffi::c_int
+        if strncmp(
+            p,
+            b"line\0".as_ptr() as *const ::core::ffi::c_char,
+            4 as size_t,
+        ) == 0 as ::core::ffi::c_int
         {
             p = p.offset(4 as ::core::ffi::c_int as isize);
             culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | kOptCuloptFlagLine as ::core::ffi::c_int) as uint8_t;
+                | kOptCuloptFlagLine as ::core::ffi::c_int)
+                as uint8_t;
         } else if strncmp(
             p,
             b"both\0".as_ptr() as *const ::core::ffi::c_char,
@@ -12608,7 +12295,8 @@ pub unsafe extern "C" fn fill_culopt_flags(
             p = p.offset(4 as ::core::ffi::c_int as isize);
             culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
                 | (kOptCuloptFlagLine as ::core::ffi::c_int
-                    | kOptCuloptFlagNumber as ::core::ffi::c_int)) as uint8_t;
+                    | kOptCuloptFlagNumber as ::core::ffi::c_int))
+                as uint8_t;
         } else if strncmp(
             p,
             b"number\0".as_ptr() as *const ::core::ffi::c_char,
@@ -12617,7 +12305,8 @@ pub unsafe extern "C" fn fill_culopt_flags(
         {
             p = p.offset(6 as ::core::ffi::c_int as isize);
             culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | kOptCuloptFlagNumber as ::core::ffi::c_int) as uint8_t;
+                | kOptCuloptFlagNumber as ::core::ffi::c_int)
+                as uint8_t;
         } else if strncmp(
             p,
             b"screenline\0".as_ptr() as *const ::core::ffi::c_char,
@@ -12626,10 +12315,10 @@ pub unsafe extern "C" fn fill_culopt_flags(
         {
             p = p.offset(10 as ::core::ffi::c_int as isize);
             culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | kOptCuloptFlagScreenline as ::core::ffi::c_int) as uint8_t;
+                | kOptCuloptFlagScreenline as ::core::ffi::c_int)
+                as uint8_t;
         }
-        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-            && *p as ::core::ffi::c_int != NUL
+        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
         {
             return FAIL;
         }
@@ -12637,10 +12326,9 @@ pub unsafe extern "C" fn fill_culopt_flags(
             p = p.offset(1);
         }
     }
-    if culopt_flags_new as ::core::ffi::c_int & kOptCuloptFlagLine as ::core::ffi::c_int
-        != 0
-        && culopt_flags_new as ::core::ffi::c_int
-            & kOptCuloptFlagScreenline as ::core::ffi::c_int != 0
+    if culopt_flags_new as ::core::ffi::c_int & kOptCuloptFlagLine as ::core::ffi::c_int != 0
+        && culopt_flags_new as ::core::ffi::c_int & kOptCuloptFlagScreenline as ::core::ffi::c_int
+            != 0
     {
         return FAIL;
     }
@@ -12727,7 +12415,11 @@ pub unsafe extern "C" fn can_bs(mut what: ::core::ffi::c_int) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_bkc_flags(mut buf: *mut buf_T) -> ::core::ffi::c_uint {
-    return if (*buf).b_bkc_flags != 0 { (*buf).b_bkc_flags } else { bkc_flags };
+    return if (*buf).b_bkc_flags != 0 {
+        (*buf).b_bkc_flags
+    } else {
+        bkc_flags
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_flp_value(mut buf: *mut buf_T) -> *mut ::core::ffi::c_char {
@@ -12742,14 +12434,11 @@ pub unsafe extern "C" fn get_ve_flags(mut wp: *mut win_T) -> ::core::ffi::c_uint
         (*wp).w_onebuf_opt.wo_ve_flags
     } else {
         ve_flags
-    })
-        & !((kOptVeFlagNone as ::core::ffi::c_int
-            | kOptVeFlagNoneU as ::core::ffi::c_int) as ::core::ffi::c_uint);
+    }) & !((kOptVeFlagNone as ::core::ffi::c_int | kOptVeFlagNoneU as ::core::ffi::c_int)
+        as ::core::ffi::c_uint);
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_showbreak_value(
-    win: *mut win_T,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn get_showbreak_value(win: *mut win_T) -> *mut ::core::ffi::c_char {
     if (*win).w_onebuf_opt.wo_sbr.is_null()
         || *(*win).w_onebuf_opt.wo_sbr as ::core::ffi::c_int == NUL
     {
@@ -12766,8 +12455,7 @@ pub unsafe extern "C" fn get_showbreak_value(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_fileformat(mut buf: *const buf_T) -> ::core::ffi::c_int {
-    let mut c: ::core::ffi::c_int = *(*buf).b_p_ff as ::core::ffi::c_uchar
-        as ::core::ffi::c_int;
+    let mut c: ::core::ffi::c_int = *(*buf).b_p_ff as ::core::ffi::c_uchar as ::core::ffi::c_int;
     if (*buf).b_p_bin != 0 || c == 'u' as ::core::ffi::c_int {
         return EOL_UNIX;
     }
@@ -12820,16 +12508,13 @@ pub unsafe extern "C" fn set_fileformat(
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match eol_style {
         EOL_UNIX => {
-            p = b"unix\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            p = b"unix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         EOL_MAC => {
-            p = b"mac\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            p = b"mac\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         EOL_DOS => {
-            p = b"dos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            p = b"dos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         _ => {}
     }
@@ -12884,11 +12569,10 @@ pub unsafe extern "C" fn copy_option_part(
         if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '\\' as ::core::ffi::c_int
             && !vim_strchr(
-                    sep_chars,
-                    *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                        as ::core::ffi::c_int,
-                )
-                .is_null()
+                sep_chars,
+                *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             p = p.offset(1);
         }
@@ -12900,9 +12584,7 @@ pub unsafe extern "C" fn copy_option_part(
         p = p.offset(1);
     }
     *buf.offset(len as isize) = NUL as ::core::ffi::c_char;
-    if *p as ::core::ffi::c_int != NUL
-        && *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-    {
+    if *p as ::core::ffi::c_int != NUL && *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         p = p.offset(1);
     }
     p = skip_to_option_part(p);
@@ -12911,38 +12593,35 @@ pub unsafe extern "C" fn copy_option_part(
 }
 #[no_mangle]
 pub unsafe extern "C" fn csh_like_shell() -> ::core::ffi::c_int {
-    return !strstr(path_tail(p_sh), b"csh\0".as_ptr() as *const ::core::ffi::c_char)
-        .is_null() as ::core::ffi::c_int;
+    return !strstr(
+        path_tail(p_sh),
+        b"csh\0".as_ptr() as *const ::core::ffi::c_char,
+    )
+    .is_null() as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn fish_like_shell() -> bool {
-    return !strstr(path_tail(p_sh), b"fish\0".as_ptr() as *const ::core::ffi::c_char)
-        .is_null();
+    return !strstr(
+        path_tail(p_sh),
+        b"fish\0".as_ptr() as *const ::core::ffi::c_char,
+    )
+    .is_null();
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_winbuf_options(bufopt: ::core::ffi::c_int) -> *mut dict_T {
     let d: *mut dict_T = tv_dict_alloc();
     let mut opt_idx: OptIndex = kOptAleph;
     while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        let mut opt: *mut vimoption_T = (&raw mut options as *mut vimoption_T)
-            .offset(opt_idx as isize);
-        if bufopt != 0
-            && option_has_scope(opt_idx, kOptScopeBuf) as ::core::ffi::c_int != 0
-            || bufopt == 0
-                && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0
+        let mut opt: *mut vimoption_T =
+            (&raw mut options as *mut vimoption_T).offset(opt_idx as isize);
+        if bufopt != 0 && option_has_scope(opt_idx, kOptScopeBuf) as ::core::ffi::c_int != 0
+            || bufopt == 0 && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0
         {
             let mut varp: *mut ::core::ffi::c_void = get_varp(opt);
             if !varp.is_null() {
-                let mut opt_tv: typval_T = optval_as_tv(
-                    optval_from_varp(opt_idx, varp),
-                    true_0 != 0,
-                );
-                tv_dict_add_tv(
-                    d,
-                    (*opt).fullname,
-                    strlen((*opt).fullname),
-                    &raw mut opt_tv,
-                );
+                let mut opt_tv: typval_T =
+                    optval_as_tv(optval_from_varp(opt_idx, varp), true_0 != 0);
+                tv_dict_add_tv(d, (*opt).fullname, strlen((*opt).fullname), &raw mut opt_tv);
             }
         }
         opt_idx += 1;
@@ -12951,9 +12630,7 @@ pub unsafe extern "C" fn get_winbuf_options(bufopt: ::core::ffi::c_int) -> *mut 
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_scrolloff_value(mut wp: *mut win_T) -> int64_t {
-    if State & MODE_TERMINAL as ::core::ffi::c_int != 0
-        && !(*(*wp).w_buffer).terminal.is_null()
-    {
+    if State & MODE_TERMINAL as ::core::ffi::c_int != 0 && !(*(*wp).w_buffer).terminal.is_null() {
         return 0 as int64_t;
     }
     return if (*wp).w_onebuf_opt.wo_so < 0 as OptInt {
@@ -13058,9 +12735,7 @@ unsafe extern "C" fn vimoption2dict(
             },
         },
     };
-    let mut scope: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut scope: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if option_has_scope(opt_idx, kOptScopeBuf) {
         scope = b"buf\0".as_ptr() as *const ::core::ffi::c_char;
     } else if option_has_scope(opt_idx, kOptScopeWin) {
@@ -13097,8 +12772,7 @@ unsafe extern "C" fn vimoption2dict(
         value: object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagComma as ::core::ffi::c_int as uint32_t
-                    != 0,
+                boolean: (*opt).flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0,
             },
         },
     };
@@ -13109,8 +12783,7 @@ unsafe extern "C" fn vimoption2dict(
         value: object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed {
-                boolean: (*opt).flags
-                    & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0,
+                boolean: (*opt).flags & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0,
             },
         },
     };
@@ -13121,8 +12794,7 @@ unsafe extern "C" fn vimoption2dict(
         value: object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
-                    != 0,
+                boolean: (*opt).flags & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0,
             },
         },
     };
@@ -13136,15 +12808,12 @@ unsafe extern "C" fn vimoption2dict(
         script_ctx = (*opt).script_ctx;
     } else {
         if option_has_scope(opt_idx, kOptScopeBuf) {
-            script_ctx = (*buf)
-                .b_p_script_ctx[(*opt)
-                .scope_idx[kOptScopeBuf as ::core::ffi::c_int as usize] as usize];
+            script_ctx = (*buf).b_p_script_ctx
+                [(*opt).scope_idx[kOptScopeBuf as ::core::ffi::c_int as usize] as usize];
         }
         if option_has_scope(opt_idx, kOptScopeWin) {
-            script_ctx = (*win)
-                .w_onebuf_opt
-                .wo_script_ctx[(*opt)
-                .scope_idx[kOptScopeWin as ::core::ffi::c_int as usize] as usize];
+            script_ctx = (*win).w_onebuf_opt.wo_script_ctx
+                [(*opt).scope_idx[kOptScopeWin as ::core::ffi::c_int as usize] as usize];
         }
         if opt_flags != OPT_LOCAL as ::core::ffi::c_int
             && script_ctx.sc_sid == 0 as ::core::ffi::c_int
@@ -13192,9 +12861,7 @@ unsafe extern "C" fn vimoption2dict(
         value: object {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed {
-                string: cstr_as_string(
-                    optval_type_get_name(option_get_type(get_opt_idx(opt))),
-                ),
+                string: cstr_as_string(optval_type_get_name(option_get_type(get_opt_idx(opt)))),
             },
         },
     };
@@ -13207,14 +12874,11 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh26 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh26 as isize) = key_value_pair {
-        key: cstr_as_string(
-            b"allows_duplicates\0".as_ptr() as *const ::core::ffi::c_char,
-        ),
+        key: cstr_as_string(b"allows_duplicates\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeBoolean,
             data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagNoDup as ::core::ffi::c_int as uint32_t
-                    == 0,
+                boolean: (*opt).flags & kOptFlagNoDup as ::core::ffi::c_int as uint32_t == 0,
             },
         },
     };
@@ -16130,973 +15794,943 @@ unsafe extern "C" fn find_option_hash(
     let mut low: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut high: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     match len {
-        2 => {
-            match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 0 as ::core::ffi::c_int;
-                    high = 4 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 4 as ::core::ffi::c_int;
-                    high = 10 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 10 as ::core::ffi::c_int;
-                    high = 17 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 17 as ::core::ffi::c_int;
-                    high = 22 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 22 as ::core::ffi::c_int;
-                    high = 25 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 25 as ::core::ffi::c_int;
-                    high = 31 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 31 as ::core::ffi::c_int;
-                    high = 33 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 33 as ::core::ffi::c_int;
-                    high = 40 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 40 as ::core::ffi::c_int;
-                    high = 49 as ::core::ffi::c_int;
-                }
-                106 => {
-                    low = 49 as ::core::ffi::c_int;
-                    high = 50 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 50 as ::core::ffi::c_int;
-                    high = 52 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 52 as ::core::ffi::c_int;
-                    high = 59 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 59 as ::core::ffi::c_int;
-                    high = 66 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 66 as ::core::ffi::c_int;
-                    high = 73 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 73 as ::core::ffi::c_int;
-                    high = 81 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 81 as ::core::ffi::c_int;
-                    high = 85 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 85 as ::core::ffi::c_int;
-                    high = 93 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 93 as ::core::ffi::c_int;
-                    high = 98 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 98 as ::core::ffi::c_int;
-                    high = 101 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 101 as ::core::ffi::c_int;
-                    high = 107 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 107 as ::core::ffi::c_int;
-                    high = 108 as ::core::ffi::c_int;
-                }
-                121 => {
-                    low = 108 as ::core::ffi::c_int;
-                    high = 109 as ::core::ffi::c_int;
-                }
-                122 => {
-                    low = 109 as ::core::ffi::c_int;
-                    high = 110 as ::core::ffi::c_int;
-                }
-                _ => {}
+        2 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 0 as ::core::ffi::c_int;
+                high = 4 as ::core::ffi::c_int;
             }
-        }
-        3 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 110 as ::core::ffi::c_int;
-                    high = 115 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 115 as ::core::ffi::c_int;
-                    high = 120 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 120 as ::core::ffi::c_int;
-                    high = 134 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 134 as ::core::ffi::c_int;
-                    high = 142 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 142 as ::core::ffi::c_int;
-                    high = 145 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 145 as ::core::ffi::c_int;
-                    high = 157 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 157 as ::core::ffi::c_int;
-                    high = 160 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 160 as ::core::ffi::c_int;
-                    high = 165 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 165 as ::core::ffi::c_int;
-                    high = 172 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 172 as ::core::ffi::c_int;
-                    high = 177 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 177 as ::core::ffi::c_int;
-                    high = 194 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 194 as ::core::ffi::c_int;
-                    high = 207 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 207 as ::core::ffi::c_int;
-                    high = 213 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 213 as ::core::ffi::c_int;
-                    high = 220 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 220 as ::core::ffi::c_int;
-                    high = 234 as ::core::ffi::c_int;
-                }
-                113 => {
-                    low = 234 as ::core::ffi::c_int;
-                    high = 236 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 236 as ::core::ffi::c_int;
-                    high = 247 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 247 as ::core::ffi::c_int;
-                    high = 263 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 263 as ::core::ffi::c_int;
-                    high = 271 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 271 as ::core::ffi::c_int;
-                    high = 276 as ::core::ffi::c_int;
-                }
-                118 => {
-                    low = 276 as ::core::ffi::c_int;
-                    high = 277 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 277 as ::core::ffi::c_int;
-                    high = 285 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 285 as ::core::ffi::c_int;
-                    high = 290 as ::core::ffi::c_int;
-                }
-                _ => {}
+            98 => {
+                low = 4 as ::core::ffi::c_int;
+                high = 10 as ::core::ffi::c_int;
             }
-        }
-        4 => {
-            match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 290 as ::core::ffi::c_int;
-                    high = 291 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 291 as ::core::ffi::c_int;
-                    high = 293 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 293 as ::core::ffi::c_int;
-                    high = 298 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 298 as ::core::ffi::c_int;
-                    high = 301 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 301 as ::core::ffi::c_int;
-                    high = 304 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 304 as ::core::ffi::c_int;
-                    high = 305 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 305 as ::core::ffi::c_int;
-                    high = 308 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 308 as ::core::ffi::c_int;
-                    high = 309 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 309 as ::core::ffi::c_int;
-                    high = 311 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 311 as ::core::ffi::c_int;
-                    high = 314 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 314 as ::core::ffi::c_int;
-                    high = 319 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 319 as ::core::ffi::c_int;
-                    high = 322 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 322 as ::core::ffi::c_int;
-                    high = 325 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 325 as ::core::ffi::c_int;
-                    high = 330 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 330 as ::core::ffi::c_int;
-                    high = 332 as ::core::ffi::c_int;
-                }
-                118 => {
-                    low = 332 as ::core::ffi::c_int;
-                    high = 333 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 333 as ::core::ffi::c_int;
-                    high = 335 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 335 as ::core::ffi::c_int;
-                    high = 336 as ::core::ffi::c_int;
-                }
-                121 => {
-                    low = 336 as ::core::ffi::c_int;
-                    high = 337 as ::core::ffi::c_int;
-                }
-                _ => {}
+            99 => {
+                low = 10 as ::core::ffi::c_int;
+                high = 17 as ::core::ffi::c_int;
             }
-        }
-        5 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 337 as ::core::ffi::c_int;
-                    high = 338 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 338 as ::core::ffi::c_int;
-                    high = 339 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 339 as ::core::ffi::c_int;
-                    high = 341 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 341 as ::core::ffi::c_int;
-                    high = 342 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 342 as ::core::ffi::c_int;
-                    high = 343 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 343 as ::core::ffi::c_int;
-                    high = 345 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 345 as ::core::ffi::c_int;
-                    high = 346 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 346 as ::core::ffi::c_int;
-                    high = 347 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 347 as ::core::ffi::c_int;
-                    high = 349 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 349 as ::core::ffi::c_int;
-                    high = 350 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 350 as ::core::ffi::c_int;
-                    high = 352 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 352 as ::core::ffi::c_int;
-                    high = 355 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 355 as ::core::ffi::c_int;
-                    high = 359 as ::core::ffi::c_int;
-                }
-                118 => {
-                    low = 359 as ::core::ffi::c_int;
-                    high = 360 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 360 as ::core::ffi::c_int;
-                    high = 363 as ::core::ffi::c_int;
-                }
-                _ => {}
+            100 => {
+                low = 17 as ::core::ffi::c_int;
+                high = 22 as ::core::ffi::c_int;
             }
-        }
-        6 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 363 as ::core::ffi::c_int;
-                    high = 364 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 364 as ::core::ffi::c_int;
-                    high = 366 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 366 as ::core::ffi::c_int;
-                    high = 367 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 367 as ::core::ffi::c_int;
-                    high = 369 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 369 as ::core::ffi::c_int;
-                    high = 370 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 370 as ::core::ffi::c_int;
-                    high = 371 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 371 as ::core::ffi::c_int;
-                    high = 372 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 372 as ::core::ffi::c_int;
-                    high = 373 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 373 as ::core::ffi::c_int;
-                    high = 375 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 375 as ::core::ffi::c_int;
-                    high = 379 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 379 as ::core::ffi::c_int;
-                    high = 380 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 380 as ::core::ffi::c_int;
-                    high = 382 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 382 as ::core::ffi::c_int;
-                    high = 383 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 383 as ::core::ffi::c_int;
-                    high = 387 as ::core::ffi::c_int;
-                }
-                118 => {
-                    low = 387 as ::core::ffi::c_int;
-                    high = 388 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 388 as ::core::ffi::c_int;
-                    high = 389 as ::core::ffi::c_int;
-                }
-                121 => {
-                    low = 389 as ::core::ffi::c_int;
-                    high = 390 as ::core::ffi::c_int;
-                }
-                _ => {}
+            101 => {
+                low = 22 as ::core::ffi::c_int;
+                high = 25 as ::core::ffi::c_int;
             }
-        }
-        7 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 390 as ::core::ffi::c_int;
-                    high = 391 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 391 as ::core::ffi::c_int;
-                    high = 393 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 393 as ::core::ffi::c_int;
-                    high = 394 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 394 as ::core::ffi::c_int;
-                    high = 395 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 395 as ::core::ffi::c_int;
-                    high = 398 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 398 as ::core::ffi::c_int;
-                    high = 401 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 401 as ::core::ffi::c_int;
-                    high = 404 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 404 as ::core::ffi::c_int;
-                    high = 406 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 406 as ::core::ffi::c_int;
-                    high = 407 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 407 as ::core::ffi::c_int;
-                    high = 410 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 410 as ::core::ffi::c_int;
-                    high = 412 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 412 as ::core::ffi::c_int;
-                    high = 416 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 416 as ::core::ffi::c_int;
-                    high = 417 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 417 as ::core::ffi::c_int;
-                    high = 418 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 418 as ::core::ffi::c_int;
-                    high = 419 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 419 as ::core::ffi::c_int;
-                    high = 423 as ::core::ffi::c_int;
-                }
-                121 => {
-                    low = 423 as ::core::ffi::c_int;
-                    high = 424 as ::core::ffi::c_int;
-                }
-                _ => {}
+            102 => {
+                low = 25 as ::core::ffi::c_int;
+                high = 31 as ::core::ffi::c_int;
             }
-        }
-        8 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 424 as ::core::ffi::c_int;
-                    high = 425 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 425 as ::core::ffi::c_int;
-                    high = 429 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 429 as ::core::ffi::c_int;
-                    high = 430 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 430 as ::core::ffi::c_int;
-                    high = 432 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 432 as ::core::ffi::c_int;
-                    high = 437 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 437 as ::core::ffi::c_int;
-                    high = 438 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 438 as ::core::ffi::c_int;
-                    high = 441 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 441 as ::core::ffi::c_int;
-                    high = 443 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 443 as ::core::ffi::c_int;
-                    high = 444 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 444 as ::core::ffi::c_int;
-                    high = 446 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 446 as ::core::ffi::c_int;
-                    high = 449 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 449 as ::core::ffi::c_int;
-                    high = 450 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 450 as ::core::ffi::c_int;
-                    high = 453 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 453 as ::core::ffi::c_int;
-                    high = 454 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 454 as ::core::ffi::c_int;
-                    high = 459 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 459 as ::core::ffi::c_int;
-                    high = 466 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 466 as ::core::ffi::c_int;
-                    high = 467 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 467 as ::core::ffi::c_int;
-                    high = 474 as ::core::ffi::c_int;
-                }
-                _ => {}
+            103 => {
+                low = 31 as ::core::ffi::c_int;
+                high = 33 as ::core::ffi::c_int;
             }
-        }
-        9 => {
-            match *str.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 474 as ::core::ffi::c_int;
-                    high = 479 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 479 as ::core::ffi::c_int;
-                    high = 483 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 483 as ::core::ffi::c_int;
-                    high = 486 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 486 as ::core::ffi::c_int;
-                    high = 493 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 493 as ::core::ffi::c_int;
-                    high = 495 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 495 as ::core::ffi::c_int;
-                    high = 499 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 499 as ::core::ffi::c_int;
-                    high = 502 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 502 as ::core::ffi::c_int;
-                    high = 507 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 507 as ::core::ffi::c_int;
-                    high = 511 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 511 as ::core::ffi::c_int;
-                    high = 515 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 515 as ::core::ffi::c_int;
-                    high = 518 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 518 as ::core::ffi::c_int;
-                    high = 521 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 521 as ::core::ffi::c_int;
-                    high = 528 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 528 as ::core::ffi::c_int;
-                    high = 532 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 532 as ::core::ffi::c_int;
-                    high = 537 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 537 as ::core::ffi::c_int;
-                    high = 540 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 540 as ::core::ffi::c_int;
-                    high = 541 as ::core::ffi::c_int;
-                }
-                _ => {}
+            104 => {
+                low = 33 as ::core::ffi::c_int;
+                high = 40 as ::core::ffi::c_int;
             }
-        }
-        10 => {
-            match *str.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 541 as ::core::ffi::c_int;
-                    high = 548 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 548 as ::core::ffi::c_int;
-                    high = 554 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 554 as ::core::ffi::c_int;
-                    high = 556 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 556 as ::core::ffi::c_int;
-                    high = 561 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 561 as ::core::ffi::c_int;
-                    high = 568 as ::core::ffi::c_int;
-                }
-                104 => {
-                    low = 568 as ::core::ffi::c_int;
-                    high = 569 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 569 as ::core::ffi::c_int;
-                    high = 575 as ::core::ffi::c_int;
-                }
-                106 => {
-                    low = 575 as ::core::ffi::c_int;
-                    high = 576 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 576 as ::core::ffi::c_int;
-                    high = 578 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 578 as ::core::ffi::c_int;
-                    high = 585 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 585 as ::core::ffi::c_int;
-                    high = 588 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 588 as ::core::ffi::c_int;
-                    high = 591 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 591 as ::core::ffi::c_int;
-                    high = 595 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 595 as ::core::ffi::c_int;
-                    high = 601 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 601 as ::core::ffi::c_int;
-                    high = 604 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 604 as ::core::ffi::c_int;
-                    high = 608 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 608 as ::core::ffi::c_int;
-                    high = 609 as ::core::ffi::c_int;
-                }
-                118 => {
-                    low = 609 as ::core::ffi::c_int;
-                    high = 611 as ::core::ffi::c_int;
-                }
-                _ => {}
+            105 => {
+                low = 40 as ::core::ffi::c_int;
+                high = 49 as ::core::ffi::c_int;
             }
-        }
-        11 => {
-            match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 611 as ::core::ffi::c_int;
-                    high = 615 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 615 as ::core::ffi::c_int;
-                    high = 617 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 617 as ::core::ffi::c_int;
-                    high = 619 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 619 as ::core::ffi::c_int;
-                    high = 620 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 620 as ::core::ffi::c_int;
-                    high = 625 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 625 as ::core::ffi::c_int;
-                    high = 628 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 628 as ::core::ffi::c_int;
-                    high = 629 as ::core::ffi::c_int;
-                }
-                105 => {
-                    low = 629 as ::core::ffi::c_int;
-                    high = 632 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 632 as ::core::ffi::c_int;
-                    high = 634 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 634 as ::core::ffi::c_int;
-                    high = 635 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 635 as ::core::ffi::c_int;
-                    high = 638 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 638 as ::core::ffi::c_int;
-                    high = 643 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 643 as ::core::ffi::c_int;
-                    high = 648 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 648 as ::core::ffi::c_int;
-                    high = 650 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 650 as ::core::ffi::c_int;
-                    high = 653 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 653 as ::core::ffi::c_int;
-                    high = 654 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 654 as ::core::ffi::c_int;
-                    high = 655 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 655 as ::core::ffi::c_int;
-                    high = 656 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 656 as ::core::ffi::c_int;
-                    high = 660 as ::core::ffi::c_int;
-                }
-                _ => {}
+            106 => {
+                low = 49 as ::core::ffi::c_int;
+                high = 50 as ::core::ffi::c_int;
             }
-        }
-        12 => {
-            match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 660 as ::core::ffi::c_int;
-                    high = 661 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 661 as ::core::ffi::c_int;
-                    high = 662 as ::core::ffi::c_int;
-                }
-                100 => {
-                    low = 662 as ::core::ffi::c_int;
-                    high = 664 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 664 as ::core::ffi::c_int;
-                    high = 669 as ::core::ffi::c_int;
-                }
-                103 => {
-                    low = 669 as ::core::ffi::c_int;
-                    high = 671 as ::core::ffi::c_int;
-                }
-                107 => {
-                    low = 671 as ::core::ffi::c_int;
-                    high = 672 as ::core::ffi::c_int;
-                }
-                108 => {
-                    low = 672 as ::core::ffi::c_int;
-                    high = 674 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 674 as ::core::ffi::c_int;
-                    high = 675 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 675 as ::core::ffi::c_int;
-                    high = 679 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 679 as ::core::ffi::c_int;
-                    high = 680 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 680 as ::core::ffi::c_int;
-                    high = 682 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 682 as ::core::ffi::c_int;
-                    high = 684 as ::core::ffi::c_int;
-                }
-                120 => {
-                    low = 684 as ::core::ffi::c_int;
-                    high = 686 as ::core::ffi::c_int;
-                }
-                _ => {}
+            107 => {
+                low = 50 as ::core::ffi::c_int;
+                high = 52 as ::core::ffi::c_int;
             }
-        }
-        13 => {
-            match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 686 as ::core::ffi::c_int;
-                    high = 687 as ::core::ffi::c_int;
-                }
-                98 => {
-                    low = 687 as ::core::ffi::c_int;
-                    high = 688 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 688 as ::core::ffi::c_int;
-                    high = 690 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 690 as ::core::ffi::c_int;
-                    high = 693 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 693 as ::core::ffi::c_int;
-                    high = 694 as ::core::ffi::c_int;
-                }
-                110 => {
-                    low = 694 as ::core::ffi::c_int;
-                    high = 696 as ::core::ffi::c_int;
-                }
-                111 => {
-                    low = 696 as ::core::ffi::c_int;
-                    high = 697 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 697 as ::core::ffi::c_int;
-                    high = 698 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 698 as ::core::ffi::c_int;
-                    high = 700 as ::core::ffi::c_int;
-                }
-                117 => {
-                    low = 700 as ::core::ffi::c_int;
-                    high = 702 as ::core::ffi::c_int;
-                }
-                _ => {}
+            108 => {
+                low = 52 as ::core::ffi::c_int;
+                high = 59 as ::core::ffi::c_int;
             }
-        }
-        14 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                98 => {
-                    low = 702 as ::core::ffi::c_int;
-                    high = 703 as ::core::ffi::c_int;
-                }
-                101 => {
-                    low = 703 as ::core::ffi::c_int;
-                    high = 704 as ::core::ffi::c_int;
-                }
-                102 => {
-                    low = 704 as ::core::ffi::c_int;
-                    high = 706 as ::core::ffi::c_int;
-                }
-                109 => {
-                    low = 706 as ::core::ffi::c_int;
-                    high = 708 as ::core::ffi::c_int;
-                }
-                112 => {
-                    low = 708 as ::core::ffi::c_int;
-                    high = 709 as ::core::ffi::c_int;
-                }
-                114 => {
-                    low = 709 as ::core::ffi::c_int;
-                    high = 710 as ::core::ffi::c_int;
-                }
-                115 => {
-                    low = 710 as ::core::ffi::c_int;
-                    high = 711 as ::core::ffi::c_int;
-                }
-                118 => {
-                    low = 711 as ::core::ffi::c_int;
-                    high = 712 as ::core::ffi::c_int;
-                }
-                119 => {
-                    low = 712 as ::core::ffi::c_int;
-                    high = 713 as ::core::ffi::c_int;
-                }
-                _ => {}
+            109 => {
+                low = 59 as ::core::ffi::c_int;
+                high = 66 as ::core::ffi::c_int;
             }
-        }
-        15 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                99 => {
-                    low = 713 as ::core::ffi::c_int;
-                    high = 714 as ::core::ffi::c_int;
-                }
-                116 => {
-                    low = 714 as ::core::ffi::c_int;
-                    high = 715 as ::core::ffi::c_int;
-                }
-                _ => {}
+            111 => {
+                low = 66 as ::core::ffi::c_int;
+                high = 73 as ::core::ffi::c_int;
             }
-        }
+            112 => {
+                low = 73 as ::core::ffi::c_int;
+                high = 81 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 81 as ::core::ffi::c_int;
+                high = 85 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 85 as ::core::ffi::c_int;
+                high = 93 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 93 as ::core::ffi::c_int;
+                high = 98 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 98 as ::core::ffi::c_int;
+                high = 101 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 101 as ::core::ffi::c_int;
+                high = 107 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 107 as ::core::ffi::c_int;
+                high = 108 as ::core::ffi::c_int;
+            }
+            121 => {
+                low = 108 as ::core::ffi::c_int;
+                high = 109 as ::core::ffi::c_int;
+            }
+            122 => {
+                low = 109 as ::core::ffi::c_int;
+                high = 110 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        3 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 110 as ::core::ffi::c_int;
+                high = 115 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 115 as ::core::ffi::c_int;
+                high = 120 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 120 as ::core::ffi::c_int;
+                high = 134 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 134 as ::core::ffi::c_int;
+                high = 142 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 142 as ::core::ffi::c_int;
+                high = 145 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 145 as ::core::ffi::c_int;
+                high = 157 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 157 as ::core::ffi::c_int;
+                high = 160 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 160 as ::core::ffi::c_int;
+                high = 165 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 165 as ::core::ffi::c_int;
+                high = 172 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 172 as ::core::ffi::c_int;
+                high = 177 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 177 as ::core::ffi::c_int;
+                high = 194 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 194 as ::core::ffi::c_int;
+                high = 207 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 207 as ::core::ffi::c_int;
+                high = 213 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 213 as ::core::ffi::c_int;
+                high = 220 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 220 as ::core::ffi::c_int;
+                high = 234 as ::core::ffi::c_int;
+            }
+            113 => {
+                low = 234 as ::core::ffi::c_int;
+                high = 236 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 236 as ::core::ffi::c_int;
+                high = 247 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 247 as ::core::ffi::c_int;
+                high = 263 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 263 as ::core::ffi::c_int;
+                high = 271 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 271 as ::core::ffi::c_int;
+                high = 276 as ::core::ffi::c_int;
+            }
+            118 => {
+                low = 276 as ::core::ffi::c_int;
+                high = 277 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 277 as ::core::ffi::c_int;
+                high = 285 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 285 as ::core::ffi::c_int;
+                high = 290 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        4 => match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 290 as ::core::ffi::c_int;
+                high = 291 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 291 as ::core::ffi::c_int;
+                high = 293 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 293 as ::core::ffi::c_int;
+                high = 298 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 298 as ::core::ffi::c_int;
+                high = 301 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 301 as ::core::ffi::c_int;
+                high = 304 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 304 as ::core::ffi::c_int;
+                high = 305 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 305 as ::core::ffi::c_int;
+                high = 308 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 308 as ::core::ffi::c_int;
+                high = 309 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 309 as ::core::ffi::c_int;
+                high = 311 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 311 as ::core::ffi::c_int;
+                high = 314 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 314 as ::core::ffi::c_int;
+                high = 319 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 319 as ::core::ffi::c_int;
+                high = 322 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 322 as ::core::ffi::c_int;
+                high = 325 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 325 as ::core::ffi::c_int;
+                high = 330 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 330 as ::core::ffi::c_int;
+                high = 332 as ::core::ffi::c_int;
+            }
+            118 => {
+                low = 332 as ::core::ffi::c_int;
+                high = 333 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 333 as ::core::ffi::c_int;
+                high = 335 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 335 as ::core::ffi::c_int;
+                high = 336 as ::core::ffi::c_int;
+            }
+            121 => {
+                low = 336 as ::core::ffi::c_int;
+                high = 337 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        5 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 337 as ::core::ffi::c_int;
+                high = 338 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 338 as ::core::ffi::c_int;
+                high = 339 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 339 as ::core::ffi::c_int;
+                high = 341 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 341 as ::core::ffi::c_int;
+                high = 342 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 342 as ::core::ffi::c_int;
+                high = 343 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 343 as ::core::ffi::c_int;
+                high = 345 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 345 as ::core::ffi::c_int;
+                high = 346 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 346 as ::core::ffi::c_int;
+                high = 347 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 347 as ::core::ffi::c_int;
+                high = 349 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 349 as ::core::ffi::c_int;
+                high = 350 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 350 as ::core::ffi::c_int;
+                high = 352 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 352 as ::core::ffi::c_int;
+                high = 355 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 355 as ::core::ffi::c_int;
+                high = 359 as ::core::ffi::c_int;
+            }
+            118 => {
+                low = 359 as ::core::ffi::c_int;
+                high = 360 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 360 as ::core::ffi::c_int;
+                high = 363 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        6 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 363 as ::core::ffi::c_int;
+                high = 364 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 364 as ::core::ffi::c_int;
+                high = 366 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 366 as ::core::ffi::c_int;
+                high = 367 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 367 as ::core::ffi::c_int;
+                high = 369 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 369 as ::core::ffi::c_int;
+                high = 370 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 370 as ::core::ffi::c_int;
+                high = 371 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 371 as ::core::ffi::c_int;
+                high = 372 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 372 as ::core::ffi::c_int;
+                high = 373 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 373 as ::core::ffi::c_int;
+                high = 375 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 375 as ::core::ffi::c_int;
+                high = 379 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 379 as ::core::ffi::c_int;
+                high = 380 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 380 as ::core::ffi::c_int;
+                high = 382 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 382 as ::core::ffi::c_int;
+                high = 383 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 383 as ::core::ffi::c_int;
+                high = 387 as ::core::ffi::c_int;
+            }
+            118 => {
+                low = 387 as ::core::ffi::c_int;
+                high = 388 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 388 as ::core::ffi::c_int;
+                high = 389 as ::core::ffi::c_int;
+            }
+            121 => {
+                low = 389 as ::core::ffi::c_int;
+                high = 390 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        7 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 390 as ::core::ffi::c_int;
+                high = 391 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 391 as ::core::ffi::c_int;
+                high = 393 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 393 as ::core::ffi::c_int;
+                high = 394 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 394 as ::core::ffi::c_int;
+                high = 395 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 395 as ::core::ffi::c_int;
+                high = 398 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 398 as ::core::ffi::c_int;
+                high = 401 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 401 as ::core::ffi::c_int;
+                high = 404 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 404 as ::core::ffi::c_int;
+                high = 406 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 406 as ::core::ffi::c_int;
+                high = 407 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 407 as ::core::ffi::c_int;
+                high = 410 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 410 as ::core::ffi::c_int;
+                high = 412 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 412 as ::core::ffi::c_int;
+                high = 416 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 416 as ::core::ffi::c_int;
+                high = 417 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 417 as ::core::ffi::c_int;
+                high = 418 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 418 as ::core::ffi::c_int;
+                high = 419 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 419 as ::core::ffi::c_int;
+                high = 423 as ::core::ffi::c_int;
+            }
+            121 => {
+                low = 423 as ::core::ffi::c_int;
+                high = 424 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        8 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 424 as ::core::ffi::c_int;
+                high = 425 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 425 as ::core::ffi::c_int;
+                high = 429 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 429 as ::core::ffi::c_int;
+                high = 430 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 430 as ::core::ffi::c_int;
+                high = 432 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 432 as ::core::ffi::c_int;
+                high = 437 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 437 as ::core::ffi::c_int;
+                high = 438 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 438 as ::core::ffi::c_int;
+                high = 441 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 441 as ::core::ffi::c_int;
+                high = 443 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 443 as ::core::ffi::c_int;
+                high = 444 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 444 as ::core::ffi::c_int;
+                high = 446 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 446 as ::core::ffi::c_int;
+                high = 449 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 449 as ::core::ffi::c_int;
+                high = 450 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 450 as ::core::ffi::c_int;
+                high = 453 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 453 as ::core::ffi::c_int;
+                high = 454 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 454 as ::core::ffi::c_int;
+                high = 459 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 459 as ::core::ffi::c_int;
+                high = 466 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 466 as ::core::ffi::c_int;
+                high = 467 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 467 as ::core::ffi::c_int;
+                high = 474 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        9 => match *str.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 474 as ::core::ffi::c_int;
+                high = 479 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 479 as ::core::ffi::c_int;
+                high = 483 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 483 as ::core::ffi::c_int;
+                high = 486 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 486 as ::core::ffi::c_int;
+                high = 493 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 493 as ::core::ffi::c_int;
+                high = 495 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 495 as ::core::ffi::c_int;
+                high = 499 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 499 as ::core::ffi::c_int;
+                high = 502 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 502 as ::core::ffi::c_int;
+                high = 507 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 507 as ::core::ffi::c_int;
+                high = 511 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 511 as ::core::ffi::c_int;
+                high = 515 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 515 as ::core::ffi::c_int;
+                high = 518 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 518 as ::core::ffi::c_int;
+                high = 521 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 521 as ::core::ffi::c_int;
+                high = 528 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 528 as ::core::ffi::c_int;
+                high = 532 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 532 as ::core::ffi::c_int;
+                high = 537 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 537 as ::core::ffi::c_int;
+                high = 540 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 540 as ::core::ffi::c_int;
+                high = 541 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        10 => match *str.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 541 as ::core::ffi::c_int;
+                high = 548 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 548 as ::core::ffi::c_int;
+                high = 554 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 554 as ::core::ffi::c_int;
+                high = 556 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 556 as ::core::ffi::c_int;
+                high = 561 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 561 as ::core::ffi::c_int;
+                high = 568 as ::core::ffi::c_int;
+            }
+            104 => {
+                low = 568 as ::core::ffi::c_int;
+                high = 569 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 569 as ::core::ffi::c_int;
+                high = 575 as ::core::ffi::c_int;
+            }
+            106 => {
+                low = 575 as ::core::ffi::c_int;
+                high = 576 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 576 as ::core::ffi::c_int;
+                high = 578 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 578 as ::core::ffi::c_int;
+                high = 585 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 585 as ::core::ffi::c_int;
+                high = 588 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 588 as ::core::ffi::c_int;
+                high = 591 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 591 as ::core::ffi::c_int;
+                high = 595 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 595 as ::core::ffi::c_int;
+                high = 601 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 601 as ::core::ffi::c_int;
+                high = 604 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 604 as ::core::ffi::c_int;
+                high = 608 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 608 as ::core::ffi::c_int;
+                high = 609 as ::core::ffi::c_int;
+            }
+            118 => {
+                low = 609 as ::core::ffi::c_int;
+                high = 611 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        11 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 611 as ::core::ffi::c_int;
+                high = 615 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 615 as ::core::ffi::c_int;
+                high = 617 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 617 as ::core::ffi::c_int;
+                high = 619 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 619 as ::core::ffi::c_int;
+                high = 620 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 620 as ::core::ffi::c_int;
+                high = 625 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 625 as ::core::ffi::c_int;
+                high = 628 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 628 as ::core::ffi::c_int;
+                high = 629 as ::core::ffi::c_int;
+            }
+            105 => {
+                low = 629 as ::core::ffi::c_int;
+                high = 632 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 632 as ::core::ffi::c_int;
+                high = 634 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 634 as ::core::ffi::c_int;
+                high = 635 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 635 as ::core::ffi::c_int;
+                high = 638 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 638 as ::core::ffi::c_int;
+                high = 643 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 643 as ::core::ffi::c_int;
+                high = 648 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 648 as ::core::ffi::c_int;
+                high = 650 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 650 as ::core::ffi::c_int;
+                high = 653 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 653 as ::core::ffi::c_int;
+                high = 654 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 654 as ::core::ffi::c_int;
+                high = 655 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 655 as ::core::ffi::c_int;
+                high = 656 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 656 as ::core::ffi::c_int;
+                high = 660 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        12 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 660 as ::core::ffi::c_int;
+                high = 661 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 661 as ::core::ffi::c_int;
+                high = 662 as ::core::ffi::c_int;
+            }
+            100 => {
+                low = 662 as ::core::ffi::c_int;
+                high = 664 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 664 as ::core::ffi::c_int;
+                high = 669 as ::core::ffi::c_int;
+            }
+            103 => {
+                low = 669 as ::core::ffi::c_int;
+                high = 671 as ::core::ffi::c_int;
+            }
+            107 => {
+                low = 671 as ::core::ffi::c_int;
+                high = 672 as ::core::ffi::c_int;
+            }
+            108 => {
+                low = 672 as ::core::ffi::c_int;
+                high = 674 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 674 as ::core::ffi::c_int;
+                high = 675 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 675 as ::core::ffi::c_int;
+                high = 679 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 679 as ::core::ffi::c_int;
+                high = 680 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 680 as ::core::ffi::c_int;
+                high = 682 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 682 as ::core::ffi::c_int;
+                high = 684 as ::core::ffi::c_int;
+            }
+            120 => {
+                low = 684 as ::core::ffi::c_int;
+                high = 686 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        13 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 686 as ::core::ffi::c_int;
+                high = 687 as ::core::ffi::c_int;
+            }
+            98 => {
+                low = 687 as ::core::ffi::c_int;
+                high = 688 as ::core::ffi::c_int;
+            }
+            99 => {
+                low = 688 as ::core::ffi::c_int;
+                high = 690 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 690 as ::core::ffi::c_int;
+                high = 693 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 693 as ::core::ffi::c_int;
+                high = 694 as ::core::ffi::c_int;
+            }
+            110 => {
+                low = 694 as ::core::ffi::c_int;
+                high = 696 as ::core::ffi::c_int;
+            }
+            111 => {
+                low = 696 as ::core::ffi::c_int;
+                high = 697 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 697 as ::core::ffi::c_int;
+                high = 698 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 698 as ::core::ffi::c_int;
+                high = 700 as ::core::ffi::c_int;
+            }
+            117 => {
+                low = 700 as ::core::ffi::c_int;
+                high = 702 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        14 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            98 => {
+                low = 702 as ::core::ffi::c_int;
+                high = 703 as ::core::ffi::c_int;
+            }
+            101 => {
+                low = 703 as ::core::ffi::c_int;
+                high = 704 as ::core::ffi::c_int;
+            }
+            102 => {
+                low = 704 as ::core::ffi::c_int;
+                high = 706 as ::core::ffi::c_int;
+            }
+            109 => {
+                low = 706 as ::core::ffi::c_int;
+                high = 708 as ::core::ffi::c_int;
+            }
+            112 => {
+                low = 708 as ::core::ffi::c_int;
+                high = 709 as ::core::ffi::c_int;
+            }
+            114 => {
+                low = 709 as ::core::ffi::c_int;
+                high = 710 as ::core::ffi::c_int;
+            }
+            115 => {
+                low = 710 as ::core::ffi::c_int;
+                high = 711 as ::core::ffi::c_int;
+            }
+            118 => {
+                low = 711 as ::core::ffi::c_int;
+                high = 712 as ::core::ffi::c_int;
+            }
+            119 => {
+                low = 712 as ::core::ffi::c_int;
+                high = 713 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
+        15 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            99 => {
+                low = 713 as ::core::ffi::c_int;
+                high = 714 as ::core::ffi::c_int;
+            }
+            116 => {
+                low = 714 as ::core::ffi::c_int;
+                high = 715 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
         16 => {
             low = 715 as ::core::ffi::c_int;
             high = 716 as ::core::ffi::c_int;
         }
-        17 => {
-            match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-                97 => {
-                    low = 716 as ::core::ffi::c_int;
-                    high = 717 as ::core::ffi::c_int;
-                }
-                99 => {
-                    low = 717 as ::core::ffi::c_int;
-                    high = 718 as ::core::ffi::c_int;
-                }
-                _ => {}
+        17 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
+            97 => {
+                low = 716 as ::core::ffi::c_int;
+                high = 717 as ::core::ffi::c_int;
             }
-        }
+            99 => {
+                low = 717 as ::core::ffi::c_int;
+                high = 718 as ::core::ffi::c_int;
+            }
+            _ => {}
+        },
         19 => {
             low = 718 as ::core::ffi::c_int;
             high = 719 as ::core::ffi::c_int;
@@ -17121,9 +16755,8 @@ pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const PROJECT_NAME: [::core::ffi::c_char; 5] = unsafe {
-    ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0")
-};
+pub const PROJECT_NAME: [::core::ffi::c_char; 5] =
+    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0") };
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 unsafe extern "C" fn c2rust_run_static_initializers() {
     options = [

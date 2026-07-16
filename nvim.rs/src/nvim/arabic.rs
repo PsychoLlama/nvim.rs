@@ -76,9 +76,7 @@ pub const a_f_LAM_ALEF_HAMZA_ABOVE: C2Rust_Unnamed = 65272;
 pub const a_f_LAM_ALEF_MADDA_ABOVE: C2Rust_Unnamed = 65270;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 static mut achars: [achar; 54] = [
     achar {
@@ -465,9 +463,8 @@ unsafe extern "C" fn find_achar(mut c: ::core::ffi::c_int) -> *mut achar {
     let mut h: ::core::ffi::c_int = ::core::mem::size_of::<[achar; 54]>()
         .wrapping_div(::core::mem::size_of::<achar>())
         .wrapping_div(
-            (::core::mem::size_of::<[achar; 54]>()
-                .wrapping_rem(::core::mem::size_of::<achar>()) == 0)
-                as ::core::ffi::c_int as usize,
+            (::core::mem::size_of::<[achar; 54]>().wrapping_rem(::core::mem::size_of::<achar>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as ::core::ffi::c_int;
     let mut l: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while l < h {
@@ -531,7 +528,9 @@ unsafe extern "C" fn can_join(
 ) -> ::core::ffi::c_int {
     let mut a1: *mut achar = find_achar(c1);
     let mut a2: *mut achar = find_achar(c2);
-    return (!a1.is_null() && !a2.is_null() && ((*a1).initial != 0 || (*a1).medial != 0)
+    return (!a1.is_null()
+        && !a2.is_null()
+        && ((*a1).initial != 0 || (*a1).medial != 0)
         && ((*a2).final_0 != 0 || (*a2).medial != 0)) as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -579,7 +578,8 @@ pub unsafe extern "C" fn arabic_shape(
     let mut prev_laa: bool = arabic_combine(prev_c, prev_c1);
     if curr_laa {
         if A_is_valid(prev_c) as ::core::ffi::c_int != 0
-            && can_join(prev_c, a_LAM as ::core::ffi::c_int) != 0 && !prev_laa
+            && can_join(prev_c, a_LAM as ::core::ffi::c_int) != 0
+            && !prev_laa
         {
             curr_c = chg_c_laa2f(*c1p);
         } else {
@@ -588,8 +588,8 @@ pub unsafe extern "C" fn arabic_shape(
         *c1p = 0 as ::core::ffi::c_int;
     } else {
         let mut curr_a: *mut achar = find_achar(c);
-        let mut backward_combine: ::core::ffi::c_int = (!prev_laa
-            && can_join(prev_c, c) != 0) as ::core::ffi::c_int;
+        let mut backward_combine: ::core::ffi::c_int =
+            (!prev_laa && can_join(prev_c, c) != 0) as ::core::ffi::c_int;
         let mut forward_combine: ::core::ffi::c_int = can_join(c, next_c);
         if backward_combine != 0 {
             if forward_combine != 0 {

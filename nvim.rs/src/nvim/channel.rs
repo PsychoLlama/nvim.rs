@@ -14,11 +14,7 @@ extern "C" {
         __line: ::core::ffi::c_uint,
         __function: *const ::core::ffi::c_char,
     ) -> !;
-    fn fcntl(
-        __fd: ::core::ffi::c_int,
-        __cmd: ::core::ffi::c_int,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
     static mut stderr: *mut FILE;
     fn freopen(
         __filename: *const ::core::ffi::c_char,
@@ -37,16 +33,9 @@ extern "C" {
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn xmemdup(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdup(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(
-        arena: *mut Arena,
-        size: size_t,
-        align: bool,
-    ) -> *mut ::core::ffi::c_void;
+    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_mem_free(mem: ArenaMem);
     fn dup2(__fd: ::core::ffi::c_int, __fd2: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error);
@@ -115,11 +104,7 @@ extern "C" {
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_unref(l: *mut list_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn callback_free(callback: *mut Callback);
     fn tv_dict_free(d: *mut dict_T);
     fn tv_dict_find(
@@ -147,19 +132,10 @@ extern "C" {
     fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
     fn rstream_init(stream: *mut RStream);
     fn rstream_start_inner(stream: *mut RStream);
-    fn rstream_start(
-        stream: *mut RStream,
-        cb: stream_read_cb,
-        data: *mut ::core::ffi::c_void,
-    );
+    fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut ::core::ffi::c_void);
     fn rstream_stop_inner(stream: *mut RStream);
     fn rstream_may_close(stream: *mut RStream);
-    fn proc_spawn(
-        proc: *mut Proc,
-        in_0: bool,
-        out: bool,
-        err: bool,
-    ) -> ::core::ffi::c_int;
+    fn proc_spawn(proc: *mut Proc, in_0: bool, out: bool, err: bool) -> ::core::ffi::c_int;
     fn proc_stop(proc: *mut Proc);
     fn proc_free(proc: *mut Proc);
     fn exit_on_closed_chan(status: ::core::ffi::c_int);
@@ -191,11 +167,7 @@ extern "C" {
     ) -> *mut WBuffer;
     fn stream_may_close(stream: *mut Stream);
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     static mut curbuf: *mut buf_T;
     static mut exiting: bool;
@@ -222,11 +194,7 @@ extern "C" {
     fn terminal_close(termpp: *mut *mut Terminal, status: ::core::ffi::c_int);
     fn terminal_set_state(term: *mut Terminal, suspended: bool);
     fn terminal_destroy(termpp: *mut *mut Terminal);
-    fn terminal_receive(
-        term: *mut Terminal,
-        data: *const ::core::ffi::c_char,
-        len: size_t,
-    );
+    fn terminal_receive(term: *mut Terminal, data: *const ::core::ffi::c_char, len: size_t);
     fn terminal_buf(term: *const Terminal) -> Buffer;
     fn ui_client_attach_to_restarted_server();
 }
@@ -2110,9 +2078,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2139,9 +2106,7 @@ pub struct C2Rust_Unnamed_14 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_15 {
@@ -2237,12 +2202,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2295,12 +2258,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -2327,9 +2288,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2340,9 +2300,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -2367,15 +2326,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_22 {
@@ -2509,9 +2463,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2704,9 +2657,7 @@ pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
 pub type event_T = auto_event;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -2721,9 +2672,7 @@ pub struct wbuffer {
     pub data: *mut ::core::ffi::c_char,
     pub cb: wbuffer_data_finalizer,
 }
-pub type wbuffer_data_finalizer = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
+pub type wbuffer_data_finalizer = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
 pub type WBuffer = wbuffer;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2736,16 +2685,11 @@ pub struct socket_watcher {
     pub close_cb: socket_close_cb,
     pub events: *mut MultiQueue,
 }
-pub type socket_close_cb = Option<
-    unsafe extern "C" fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> (),
->;
+pub type socket_close_cb =
+    Option<unsafe extern "C" fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
 pub type SocketWatcher = socket_watcher;
 pub type socket_cb = Option<
-    unsafe extern "C" fn(
-        *mut SocketWatcher,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> (),
+    unsafe extern "C" fn(*mut SocketWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
 >;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2965,25 +2909,15 @@ pub struct TerminalOptions {
     pub close_cb: terminal_close_cb,
     pub force_crlf: bool,
 }
-pub type terminal_close_cb = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
-pub type terminal_resume_cb = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
-pub type terminal_resize_cb = Option<
-    unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> (),
->;
+pub type terminal_close_cb = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
+pub type terminal_resume_cb = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
+pub type terminal_resize_cb =
+    Option<unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> ()>;
 pub type terminal_write_cb = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_char,
-        size_t,
-        *mut ::core::ffi::c_void,
-    ) -> (),
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> (),
 >;
-pub type terminal_read_pause_cb = Option<
-    unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> (),
->;
+pub type terminal_read_pause_cb =
+    Option<unsafe extern "C" fn(bool, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_34 {
@@ -2991,12 +2925,8 @@ pub struct C2Rust_Unnamed_34 {
     pub capacity: size_t,
     pub items: *mut int64_t,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const F_DUPFD_CLOEXEC: ::core::ffi::c_int = 1030 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
@@ -3087,9 +3017,7 @@ pub unsafe extern "C" fn channel_close(
 ) -> bool {
     let mut chan: *mut Channel = ::core::ptr::null_mut::<Channel>();
     let mut proc: *mut Proc = ::core::ptr::null_mut::<Proc>();
-    let mut dummy: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut dummy: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if error.is_null() {
         error = &raw mut dummy;
     }
@@ -3102,8 +3030,7 @@ pub unsafe extern "C" fn channel_close(
         return false_0 != 0;
     }
     let mut close_main: bool = false_0 != 0;
-    if part as ::core::ffi::c_uint
-        == kChannelPartRpc as ::core::ffi::c_int as ::core::ffi::c_uint
+    if part as ::core::ffi::c_uint == kChannelPartRpc as ::core::ffi::c_int as ::core::ffi::c_uint
         || part as ::core::ffi::c_uint
             == kChannelPartAll as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -3229,8 +3156,8 @@ pub unsafe extern "C" fn channel_init() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Channel {
-    let mut chan: *mut Channel = xcalloc(1 as size_t, ::core::mem::size_of::<Channel>())
-        as *mut Channel;
+    let mut chan: *mut Channel =
+        xcalloc(1 as size_t, ::core::mem::size_of::<Channel>()) as *mut Channel;
     if type_0 as ::core::ffi::c_uint
         == kChannelStreamStdio as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -3250,7 +3177,8 @@ pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Ch
     (*chan).streamtype = type_0;
     (*chan).detach = false_0 != 0;
     '_c2rust_label: {
-        if (*chan).id <= 9223372036854775807 as uint64_t {} else {
+        if (*chan).id <= 9223372036854775807 as uint64_t {
+        } else {
             __assert_fail(
                 b"chan->id <= VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
@@ -3269,9 +3197,7 @@ pub unsafe extern "C" fn channel_create_event(
     mut chan: *mut Channel,
     mut ext_source: *const ::core::ffi::c_char,
 ) {
-    let mut source: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut source: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if !ext_source.is_null() {
         source = ext_source;
     } else {
@@ -3282,7 +3208,8 @@ pub unsafe extern "C" fn channel_create_event(
         source = &raw mut IObuff as *mut ::core::ffi::c_char;
     }
     '_c2rust_label: {
-        if (*chan).id <= 9223372036854775807 as uint64_t {} else {
+        if (*chan).id <= 9223372036854775807 as uint64_t {
+        } else {
             __assert_fail(
                 b"chan->id <= VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
@@ -3309,9 +3236,9 @@ pub unsafe extern "C" fn channel_create_event(
         ::core::ptr::null_mut::<Error>(),
     );
     '_c2rust_label_0: {
-        if tv.v_type as ::core::ffi::c_uint
-            == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {} else {
+        if tv.v_type as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
+        {
+        } else {
             __assert_fail(
                 b"tv.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
@@ -3322,10 +3249,8 @@ pub unsafe extern "C" fn channel_create_event(
             );
         }
     };
-    let mut str: *mut ::core::ffi::c_char = encode_tv2json(
-        &raw mut tv,
-        ::core::ptr::null_mut::<size_t>(),
-    );
+    let mut str: *mut ::core::ffi::c_char =
+        encode_tv2json(&raw mut tv, ::core::ptr::null_mut::<size_t>());
     logmsg(
         LOGLVL_INF,
         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -3353,8 +3278,7 @@ pub unsafe extern "C" fn channel_decref(mut chan: *mut Channel) {
             main_loop.events,
             Event {
                 handler: Some(
-                    free_channel_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    free_channel_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     chan as *mut ::core::ffi::c_void,
@@ -3405,8 +3329,7 @@ unsafe extern "C" fn channel_destroy(mut chan: *mut Channel) {
     xfree(chan as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn free_channel_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Channel;
+    let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
     map_del_uint64_t_ptr_t(
         &raw mut channels,
         (*chan).id,
@@ -3433,8 +3356,7 @@ unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
         main_loop.events,
         Event {
             handler: Some(
-                free_channel_event
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                free_channel_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 chan as *mut ::core::ffi::c_void,
@@ -3451,10 +3373,7 @@ unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
         },
     );
 }
-unsafe extern "C" fn close_cb(
-    mut stream: *mut Stream,
-    mut data: *mut ::core::ffi::c_void,
-) {
+unsafe extern "C" fn close_cb(mut stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
     channel_decref(data as *mut Channel);
 }
 #[no_mangle]
@@ -3483,8 +3402,7 @@ pub unsafe extern "C" fn channel_job_start(
         if detach {
             semsg(
                 gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                b"terminal/pty job cannot be detached\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"terminal/pty job cannot be detached\0".as_ptr() as *const ::core::ffi::c_char,
             );
             shell_free_argv(argv);
             if !env.is_null() {
@@ -3494,10 +3412,7 @@ pub unsafe extern "C" fn channel_job_start(
             *status_out = 0 as varnumber_T;
             return ::core::ptr::null_mut::<Channel>();
         }
-        (*chan).stream.pty = pty_proc_init(
-            &raw mut main_loop,
-            chan as *mut ::core::ffi::c_void,
-        );
+        (*chan).stream.pty = pty_proc_init(&raw mut main_loop, chan as *mut ::core::ffi::c_void);
         if pty_width as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
             (*chan).stream.pty.width = pty_width;
         }
@@ -3505,21 +3420,14 @@ pub unsafe extern "C" fn channel_job_start(
             (*chan).stream.pty.height = pty_height;
         }
     } else {
-        (*chan).stream.uv = libuv_proc_init(
-            &raw mut main_loop,
-            chan as *mut ::core::ffi::c_void,
-        );
+        (*chan).stream.uv = libuv_proc_init(&raw mut main_loop, chan as *mut ::core::ffi::c_void);
     }
     let mut proc: *mut Proc = &raw mut (*chan).stream.proc;
     (*proc).argv = argv;
     (*proc).exepath = exepath;
     (*proc).cb = Some(
         channel_proc_exit_cb
-            as unsafe extern "C" fn(
-                *mut Proc,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> (),
+            as unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
     ) as proc_exit_cb;
     (*proc).state_cb = Some(
         channel_proc_state_cb
@@ -3648,9 +3556,9 @@ pub unsafe extern "C" fn channel_connect(
             channel_decref(channel);
             return 0 as uint64_t;
         }
-        (*channel).stream.socket.s.internal_close_cb = Some(
-            close_cb as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-        ) as stream_close_cb;
+        (*channel).stream.socket.s.internal_close_cb =
+            Some(close_cb as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ())
+                as stream_close_cb;
         (*channel).stream.socket.s.internal_data = channel as *mut ::core::ffi::c_void;
         wstream_init(&raw mut (*channel).stream.socket.s, 0 as size_t);
         rstream_init(&raw mut (*channel).stream.socket);
@@ -3685,14 +3593,17 @@ pub unsafe extern "C" fn channel_connect(
 pub unsafe extern "C" fn channel_from_connection(mut watcher: *mut SocketWatcher) {
     let mut channel: *mut Channel = channel_alloc(kChannelStreamSocket);
     socket_watcher_accept(watcher, &raw mut (*channel).stream.socket);
-    (*channel).stream.socket.s.internal_close_cb = Some(
-        close_cb as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-    ) as stream_close_cb;
+    (*channel).stream.socket.s.internal_close_cb =
+        Some(close_cb as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ())
+            as stream_close_cb;
     (*channel).stream.socket.s.internal_data = channel as *mut ::core::ffi::c_void;
     wstream_init(&raw mut (*channel).stream.socket.s, 0 as size_t);
     rstream_init(&raw mut (*channel).stream.socket);
     rpc_start(channel);
-    channel_create_event(channel, &raw mut (*watcher).addr as *mut ::core::ffi::c_char);
+    channel_create_event(
+        channel,
+        &raw mut (*watcher).addr as *mut ::core::ffi::c_char,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn channel_from_stdio(
@@ -3702,15 +3613,12 @@ pub unsafe extern "C" fn channel_from_stdio(
 ) -> uint64_t {
     if !headless_mode && !embedded_mode {
         *error = gettext(
-            b"can only be opened in headless mode\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"can only be opened in headless mode\0".as_ptr() as *const ::core::ffi::c_char
         );
         return 0 as uint64_t;
     }
     if did_stdio {
-        *error = gettext(
-            b"channel was already open\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        *error = gettext(b"channel was already open\0".as_ptr() as *const ::core::ffi::c_char);
         return 0 as uint64_t;
     }
     did_stdio = true_0 != 0;
@@ -3786,8 +3694,7 @@ pub unsafe extern "C" fn channel_send(
     {
         if (*chan).stream.err.closed {
             *error = gettext(
-                b"Can't send data to closed stream\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Can't send data to closed stream\0".as_ptr() as *const ::core::ffi::c_char
             );
         } else {
             let mut wres: ptrdiff_t = os_write(STDERR_FILENO, data, len, false_0 != 0);
@@ -3800,15 +3707,13 @@ pub unsafe extern "C" fn channel_send(
     {
         if (*chan).is_rpc {
             *error = gettext(
-                b"Can't send raw data to rpc channel\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Can't send raw data to rpc channel\0".as_ptr() as *const ::core::ffi::c_char
             );
         } else if (*chan).term.is_null()
             || (*chan).stream.internal.closed as ::core::ffi::c_int != 0
         {
             *error = gettext(
-                b"Can't send data to closed stream\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Can't send data to closed stream\0".as_ptr() as *const ::core::ffi::c_char
             );
         } else {
             terminal_receive((*chan).term, data, len);
@@ -3818,13 +3723,11 @@ pub unsafe extern "C" fn channel_send(
         in_0 = channel_instream(chan);
         if (*in_0).closed {
             *error = gettext(
-                b"Can't send data to closed stream\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Can't send data to closed stream\0".as_ptr() as *const ::core::ffi::c_char
             );
         } else if (*chan).is_rpc {
             *error = gettext(
-                b"Can't send raw data to rpc channel\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Can't send raw data to rpc channel\0".as_ptr() as *const ::core::ffi::c_char
             );
         } else {
             buf = wstream_new_buffer(
@@ -3854,10 +3757,12 @@ unsafe extern "C" fn buffer_to_tv_list(
     buf: *const ::core::ffi::c_char,
     len: size_t,
 ) -> *mut list_T {
-    let l: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
+    let l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
+    tv_list_append_string(
+        l,
+        b"\0".as_ptr() as *const ::core::ffi::c_char,
+        0 as ssize_t,
     );
-    tv_list_append_string(l, b"\0".as_ptr() as *const ::core::ffi::c_char, 0 as ssize_t);
     if len > 0 as size_t {
         encode_list_write(l as *mut ::core::ffi::c_void, buf, len);
     }
@@ -3935,8 +3840,7 @@ unsafe extern "C" fn schedule_channel_event(mut chan: *mut Channel) {
     }
 }
 unsafe extern "C" fn on_channel_event(mut args: *mut *mut ::core::ffi::c_void) {
-    let mut chan: *mut Channel = *args.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Channel;
+    let mut chan: *mut Channel = *args.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
     (*chan).callback_busy = true_0 != 0;
     (*chan).callback_scheduled = false_0 != 0;
     let mut exit_status: ::core::ffi::c_int = (*chan).exit_status;
@@ -3952,8 +3856,7 @@ unsafe extern "C" fn on_channel_event(mut args: *mut *mut ::core::ffi::c_void) {
             (*chan).events,
             Event {
                 handler: Some(
-                    on_channel_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    on_channel_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     chan as *mut ::core::ffi::c_void,
@@ -3981,9 +3884,7 @@ pub unsafe extern "C" fn channel_reader_callbacks(
     if (*reader).buffered {
         if (*reader).eof {
             if !(*reader).self_0.is_null() {
-                if tv_dict_find((*reader).self_0, (*reader).type_0, -1 as ptrdiff_t)
-                    .is_null()
-                {
+                if tv_dict_find((*reader).self_0, (*reader).type_0, -1 as ptrdiff_t).is_null() {
                     let mut data: *mut list_T = buffer_to_tv_list(
                         (*reader).buffer.ga_data as *const ::core::ffi::c_char,
                         (*reader).buffer.ga_len as size_t,
@@ -4079,16 +3980,15 @@ unsafe extern "C" fn channel_callback_call(
         tv_list_ref(argv[1 as ::core::ffi::c_int as usize].vval.v_list);
         ga_clear(&raw mut (*reader).buffer);
         cb = &raw mut (*reader).cb;
-        argv[2 as ::core::ffi::c_int as usize].vval.v_string = (*reader).type_0
-            as *mut ::core::ffi::c_char;
+        argv[2 as ::core::ffi::c_int as usize].vval.v_string =
+            (*reader).type_0 as *mut ::core::ffi::c_char;
     } else {
         argv[1 as ::core::ffi::c_int as usize].v_type = VAR_NUMBER;
         argv[1 as ::core::ffi::c_int as usize].v_lock = VAR_UNLOCKED;
-        argv[1 as ::core::ffi::c_int as usize].vval.v_number = (*chan).exit_status
-            as varnumber_T;
+        argv[1 as ::core::ffi::c_int as usize].vval.v_number = (*chan).exit_status as varnumber_T;
         cb = &raw mut (*chan).on_exit;
-        argv[2 as ::core::ffi::c_int as usize].vval.v_string = b"exit\0".as_ptr()
-            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        argv[2 as ::core::ffi::c_int as usize].vval.v_string =
+            b"exit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     argv[2 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
     argv[2 as ::core::ffi::c_int as usize].v_lock = VAR_UNLOCKED;
@@ -4109,10 +4009,7 @@ unsafe extern "C" fn channel_callback_call(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn channel_terminal_alloc(
-    mut buf: *mut buf_T,
-    mut chan: *mut Channel,
-) {
+pub unsafe extern "C" fn channel_terminal_alloc(mut buf: *mut buf_T, mut chan: *mut Channel) {
     let mut topts: TerminalOptions = TerminalOptions {
         data: chan as *mut ::core::ffi::c_void,
         width: (*chan).stream.pty.width,
@@ -4129,29 +4026,17 @@ pub unsafe extern "C" fn channel_terminal_alloc(
                 ) -> (),
         ),
         resize_cb: Some(
-            term_resize
-                as unsafe extern "C" fn(
-                    uint16_t,
-                    uint16_t,
-                    *mut ::core::ffi::c_void,
-                ) -> (),
+            term_resize as unsafe extern "C" fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> (),
         ),
-        resume_cb: Some(
-            term_resume as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
-        ),
-        close_cb: Some(
-            term_close as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
-        ),
+        resume_cb: Some(term_resume as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
+        close_cb: Some(term_close as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
         force_crlf: false_0 != 0,
     };
     (*buf).b_p_channel = (*chan).id as OptInt;
     channel_incref(chan);
     (*chan).term = terminal_alloc(buf, topts);
 }
-unsafe extern "C" fn term_read_pause(
-    mut pause: bool,
-    mut data: *mut ::core::ffi::c_void,
-) {
+unsafe extern "C" fn term_read_pause(mut pause: bool, mut data: *mut ::core::ffi::c_void) {
     let mut chan: *mut Channel = data as *mut Channel;
     if (*chan).stream.proc.out.s.closed {
         return;
@@ -4201,17 +4086,13 @@ unsafe extern "C" fn term_resume(mut data: *mut ::core::ffi::c_void) {
 }
 #[inline]
 unsafe extern "C" fn term_delayed_free(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Channel;
-    if (*chan).stream.proc.in_0.pending_reqs != 0
-        || (*chan).stream.proc.out.s.pending_reqs != 0
-    {
+    let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
+    if (*chan).stream.proc.in_0.pending_reqs != 0 || (*chan).stream.proc.out.s.pending_reqs != 0 {
         multiqueue_put_event(
             (*chan).events,
             Event {
                 handler: Some(
-                    term_delayed_free
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    term_delayed_free as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     chan as *mut ::core::ffi::c_void,
@@ -4241,8 +4122,7 @@ unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
         (*chan).events,
         Event {
             handler: Some(
-                term_delayed_free
-                    as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                term_delayed_free as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
             ),
             argv: [
                 data,
@@ -4260,10 +4140,7 @@ unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn channel_info_changed(
-    mut chan: *mut Channel,
-    mut new_chan: bool,
-) {
+pub unsafe extern "C" fn channel_info_changed(mut chan: *mut Channel, mut new_chan: bool) {
     let mut event: event_T = (if new_chan as ::core::ffi::c_int != 0 {
         EVENT_CHANOPEN as ::core::ffi::c_int
     } else {
@@ -4275,14 +4152,13 @@ pub unsafe extern "C" fn channel_info_changed(
             main_loop.events,
             Event {
                 handler: Some(
-                    set_info_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+                    set_info_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
                 ),
                 argv: [
                     chan as *mut ::core::ffi::c_void,
-                    ::core::ptr::from_exposed_addr_mut::<
-                        ::core::ffi::c_void,
-                    >(event as intptr_t as usize),
+                    ::core::ptr::from_exposed_addr_mut::<::core::ffi::c_void>(
+                        event as intptr_t as usize,
+                    ),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
                     ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -4297,10 +4173,9 @@ pub unsafe extern "C" fn channel_info_changed(
     }
 }
 unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize)
-        as *mut Channel;
-    let mut event: event_T = (*argv.offset(1 as ::core::ffi::c_int as isize))
-        .expose_addr() as ptrdiff_t as event_T;
+    let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
+    let mut event: event_T =
+        (*argv.offset(1 as ::core::ffi::c_int as isize)).expose_addr() as ptrdiff_t as event_T;
     let mut save_v_event: save_v_event_T = save_v_event_T {
         sve_did_save: false,
         sve_hashtab: hashtab_T {
@@ -4335,7 +4210,8 @@ unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
     '_c2rust_label: {
         if retval.v_type as ::core::ffi::c_uint
             == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {} else {
+        {
+        } else {
             __assert_fail(
                 b"retval.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/channel.c\0".as_ptr()
@@ -4393,12 +4269,8 @@ pub unsafe extern "C" fn channel_info(mut id: uint64_t, mut arena: *mut Arena) -
             },
         },
     };
-    let mut stream_desc: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut mode_desc: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut stream_desc: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut mode_desc: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     's_131: {
         match (*chan).streamtype as ::core::ffi::c_uint {
             0 => {
@@ -4406,15 +4278,12 @@ pub unsafe extern "C" fn channel_info(mut id: uint64_t, mut arena: *mut Arena) -
                 if (*chan).stream.proc.type_0 as ::core::ffi::c_uint
                     == kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    let mut name: *const ::core::ffi::c_char = pty_proc_tty_name(
-                        &raw mut (*chan).stream.pty,
-                    );
+                    let mut name: *const ::core::ffi::c_char =
+                        pty_proc_tty_name(&raw mut (*chan).stream.pty);
                     let c2rust_fresh2 = info.size;
                     info.size = info.size.wrapping_add(1);
                     *info.items.offset(c2rust_fresh2 as isize) = key_value_pair {
-                        key: cstr_as_string(
-                            b"pty\0".as_ptr() as *const ::core::ffi::c_char,
-                        ),
+                        key: cstr_as_string(b"pty\0".as_ptr() as *const ::core::ffi::c_char),
                         value: object {
                             type_0: kObjectTypeString,
                             data: C2Rust_Unnamed {
@@ -4452,9 +4321,7 @@ pub unsafe extern "C" fn channel_info(mut id: uint64_t, mut arena: *mut Arena) -
                 let c2rust_fresh4 = info.size;
                 info.size = info.size.wrapping_add(1);
                 *info.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-                    key: cstr_as_string(
-                        b"argv\0".as_ptr() as *const ::core::ffi::c_char,
-                    ),
+                    key: cstr_as_string(b"argv\0".as_ptr() as *const ::core::ffi::c_char),
                     value: object {
                         type_0: kObjectTypeArray,
                         data: C2Rust_Unnamed { array: argv },
@@ -4474,9 +4341,7 @@ pub unsafe extern "C" fn channel_info(mut id: uint64_t, mut arena: *mut Arena) -
                 let c2rust_fresh5 = info.size;
                 info.size = info.size.wrapping_add(1);
                 *info.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-                    key: cstr_as_string(
-                        b"internal\0".as_ptr() as *const ::core::ffi::c_char,
-                    ),
+                    key: cstr_as_string(b"internal\0".as_ptr() as *const ::core::ffi::c_char),
                     value: object {
                         type_0: kObjectTypeBoolean,
                         data: C2Rust_Unnamed { boolean: true },
@@ -4607,7 +4472,8 @@ pub unsafe extern "C" fn channel_all_info(mut arena: *mut Arena) -> Array {
                 ids.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<int64_t>().wrapping_mul(ids.capacity),
             ) as *mut int64_t;
-        } else {};
+        } else {
+        };
         let c2rust_fresh12 = ids.size;
         ids.size = ids.size.wrapping_add(1);
         *ids.items.offset(c2rust_fresh12 as isize) = id as int64_t;
@@ -4648,14 +4514,11 @@ unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
     (*l).lv_refcount += 1;
 }
 #[inline]
-unsafe extern "C" fn proc_get_exepath(
-    mut proc: *mut Proc,
-) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi::c_char {
     return if !(*proc).exepath.is_null() {
         (*proc).exepath
     } else {
-        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize)
-            as *const ::core::ffi::c_char
+        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_char
     };
 }
 #[inline]

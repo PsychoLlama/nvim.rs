@@ -35,14 +35,11 @@ pub struct UGrid {
     pub cells: *mut *mut UCell,
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 52] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 52],
-        [::core::ffi::c_char; 52],
-    >(*b"void ugrid_scroll(UGrid *, int, int, int, int, int)\0")
+    ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
+        *b"void ugrid_scroll(UGrid *, int, int, int, int, int)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
 pub unsafe extern "C" fn ugrid_init(mut grid: *mut UGrid) {
     (*grid).cells = ::core::ptr::null_mut::<*mut UCell>();
@@ -58,15 +55,12 @@ pub unsafe extern "C" fn ugrid_resize(
     mut height: ::core::ffi::c_int,
 ) {
     destroy_cells(grid);
-    (*grid).cells = xmalloc(
-        (height as size_t).wrapping_mul(::core::mem::size_of::<*mut UCell>()),
-    ) as *mut *mut UCell;
+    (*grid).cells = xmalloc((height as size_t).wrapping_mul(::core::mem::size_of::<*mut UCell>()))
+        as *mut *mut UCell;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < height {
-        *(*grid).cells.offset(i as isize) = xcalloc(
-            width as size_t,
-            ::core::mem::size_of::<UCell>(),
-        ) as *mut UCell;
+        *(*grid).cells.offset(i as isize) =
+            xcalloc(width as size_t, ::core::mem::size_of::<UCell>()) as *mut UCell;
         i += 1;
     }
     (*grid).width = width;
@@ -125,17 +119,16 @@ pub unsafe extern "C" fn ugrid_scroll(
     }
     let mut i: ::core::ffi::c_int = start;
     while i != stop {
-        let mut target_row: *mut UCell = (*(*grid).cells.offset(i as isize))
-            .offset(left as isize);
-        let mut source_row: *mut UCell = (*(*grid).cells.offset((i + count) as isize))
-            .offset(left as isize);
+        let mut target_row: *mut UCell = (*(*grid).cells.offset(i as isize)).offset(left as isize);
+        let mut source_row: *mut UCell =
+            (*(*grid).cells.offset((i + count) as isize)).offset(left as isize);
         '_c2rust_label: {
-            if right >= left && left >= 0 as ::core::ffi::c_int {} else {
+            if right >= left && left >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
-                    b"right >= left && left >= 0\0".as_ptr()
+                    b"right >= left && left >= 0\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/ugrid.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/ugrid.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     66 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
@@ -144,12 +137,11 @@ pub unsafe extern "C" fn ugrid_scroll(
         memcpy(
             target_row as *mut ::core::ffi::c_void,
             source_row as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<UCell>()
-                .wrapping_mul(
-                    (right as size_t)
-                        .wrapping_sub(left as size_t)
-                        .wrapping_add(1 as size_t),
-                ),
+            ::core::mem::size_of::<UCell>().wrapping_mul(
+                (right as size_t)
+                    .wrapping_sub(left as size_t)
+                    .wrapping_add(1 as size_t),
+            ),
         );
         i += step;
     }
@@ -182,8 +174,8 @@ unsafe extern "C" fn destroy_cells(mut grid: *mut UGrid) {
             xfree(*(*grid).cells.offset(i as isize) as *mut ::core::ffi::c_void);
             i += 1;
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*grid).cells
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*grid).cells as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;

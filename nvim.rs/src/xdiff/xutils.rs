@@ -137,23 +137,21 @@ pub struct s_xdfenv {
     pub xdf2: xdfile_t,
 }
 pub type xdfenv_t = s_xdfenv;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 1 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_CHANGE: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 2 as ::core::ffi::c_int;
-pub const XDF_IGNORE_WHITESPACE_AT_EOL: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 3 as ::core::ffi::c_int;
-pub const XDF_IGNORE_CR_AT_EOL: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 4 as ::core::ffi::c_int;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const XDF_IGNORE_WHITESPACE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
+pub const XDF_IGNORE_WHITESPACE_CHANGE: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
+pub const XDF_IGNORE_WHITESPACE_AT_EOL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 3 as ::core::ffi::c_int;
+pub const XDF_IGNORE_CR_AT_EOL: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
 pub const XDF_WHITESPACE_FLAGS: ::core::ffi::c_int = XDF_IGNORE_WHITESPACE
-    | XDF_IGNORE_WHITESPACE_CHANGE | XDF_IGNORE_WHITESPACE_AT_EOL | XDF_IGNORE_CR_AT_EOL;
+    | XDF_IGNORE_WHITESPACE_CHANGE
+    | XDF_IGNORE_WHITESPACE_AT_EOL
+    | XDF_IGNORE_CR_AT_EOL;
 #[no_mangle]
-pub unsafe extern "C" fn xdl_bogosqrt(
-    mut n: ::core::ffi::c_long,
-) -> ::core::ffi::c_long {
+pub unsafe extern "C" fn xdl_bogosqrt(mut n: ::core::ffi::c_long) -> ::core::ffi::c_long {
     let mut i: ::core::ffi::c_long = 0;
     i = 1 as ::core::ffi::c_long;
     while n > 0 as ::core::ffi::c_long {
@@ -183,18 +181,19 @@ pub unsafe extern "C" fn xdl_emit_diffrec(
         && *rec.offset((size - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int
             != '\n' as ::core::ffi::c_int
     {
-        mb[2 as ::core::ffi::c_int as usize].ptr = b"\n\\ No newline at end of file\n\0"
-            .as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        mb[2 as ::core::ffi::c_int as usize].size = strlen(
-            mb[2 as ::core::ffi::c_int as usize].ptr,
-        ) as ::core::ffi::c_long as ::core::ffi::c_int;
+        mb[2 as ::core::ffi::c_int as usize].ptr = b"\n\\ No newline at end of file\n\0".as_ptr()
+            as *const ::core::ffi::c_char
+            as *mut ::core::ffi::c_char;
+        mb[2 as ::core::ffi::c_int as usize].size = strlen(mb[2 as ::core::ffi::c_int as usize].ptr)
+            as ::core::ffi::c_long
+            as ::core::ffi::c_int;
         i += 1;
     }
-    if (*ecb)
-        .out_line
-        .expect(
-            "non-null function pointer",
-        )((*ecb).priv_0, &raw mut mb as *mut mmbuffer_t, i) < 0 as ::core::ffi::c_int
+    if (*ecb).out_line.expect("non-null function pointer")(
+        (*ecb).priv_0,
+        &raw mut mb as *mut mmbuffer_t,
+        i,
+    ) < 0 as ::core::ffi::c_int
     {
         return -1 as ::core::ffi::c_int;
     }
@@ -239,21 +238,16 @@ pub unsafe extern "C" fn xdl_cha_free(mut cha: *mut chastore_t) {
         }
         cur = (*cur).next as *mut chanode_t;
         xfree(tmp as *mut ::core::ffi::c_void);
-    };
+    }
 }
 #[no_mangle]
-pub unsafe extern "C" fn xdl_cha_alloc(
-    mut cha: *mut chastore_t,
-) -> *mut ::core::ffi::c_void {
+pub unsafe extern "C" fn xdl_cha_alloc(mut cha: *mut chastore_t) -> *mut ::core::ffi::c_void {
     let mut ancur: *mut chanode_t = ::core::ptr::null_mut::<chanode_t>();
-    let mut data: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-        ::core::ffi::c_void,
-    >();
+    let mut data: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
     ancur = (*cha).ancur;
     if ancur.is_null() || (*ancur).icurr == (*cha).nsize {
-        ancur = xmalloc(
-            ::core::mem::size_of::<chanode_t>().wrapping_add((*cha).nsize as size_t),
-        ) as *mut chanode_t;
+        ancur = xmalloc(::core::mem::size_of::<chanode_t>().wrapping_add((*cha).nsize as size_t))
+            as *mut chanode_t;
         if ancur.is_null() {
             return NULL;
         }
@@ -282,9 +276,7 @@ pub unsafe extern "C" fn xdl_guess_lines(
     let mut nl: ::core::ffi::c_long = 0 as ::core::ffi::c_long;
     let mut size: ::core::ffi::c_long = 0;
     let mut tsize: ::core::ffi::c_long = 0 as ::core::ffi::c_long;
-    let mut data: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut data: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut cur: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut top: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     data = xdl_mmfile_first(mf, &raw mut size) as *const ::core::ffi::c_char;
@@ -324,12 +316,10 @@ pub unsafe extern "C" fn xdl_blankline(
     i = 0 as ::core::ffi::c_long;
     while i < size
         && *(*__ctype_b_loc())
-            .offset(
-                *line.offset(i as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int
-                    as isize,
-            ) as ::core::ffi::c_int
-            & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                as ::core::ffi::c_int != 0
+            .offset(*line.offset(i as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
+            as ::core::ffi::c_int
+            & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+            != 0
     {
         i += 1;
     }
@@ -342,14 +332,16 @@ unsafe extern "C" fn ends_with_optional_cr(
 ) -> ::core::ffi::c_int {
     let mut complete: ::core::ffi::c_int = (s != 0
         && *l.offset((s - 1 as ::core::ffi::c_long) as isize) as ::core::ffi::c_int
-            == '\n' as ::core::ffi::c_int) as ::core::ffi::c_int;
+            == '\n' as ::core::ffi::c_int)
+        as ::core::ffi::c_int;
     if complete != 0 {
         s -= 1;
     }
     if s == i {
         return 1 as ::core::ffi::c_int;
     }
-    if complete != 0 && s == i + 1 as ::core::ffi::c_long
+    if complete != 0
+        && s == i + 1 as ::core::ffi::c_long
         && *l.offset(i as isize) as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
     {
         return 1 as ::core::ffi::c_int;
@@ -383,24 +375,20 @@ pub unsafe extern "C" fn xdl_recmatch(
     if flags & XDF_IGNORE_WHITESPACE as ::core::ffi::c_long != 0 {
         loop {
             while (i1 as ::core::ffi::c_long) < s1
-                && *(*__ctype_b_loc())
-                    .offset(
-                        *l1.offset(i1 as isize) as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int as isize,
-                    ) as ::core::ffi::c_int
-                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                        as ::core::ffi::c_int != 0
+                && *(*__ctype_b_loc()).offset(
+                    *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
+                ) as ::core::ffi::c_int
+                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                    != 0
             {
                 i1 += 1;
             }
             while (i2 as ::core::ffi::c_long) < s2
-                && *(*__ctype_b_loc())
-                    .offset(
-                        *l2.offset(i2 as isize) as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int as isize,
-                    ) as ::core::ffi::c_int
-                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                        as ::core::ffi::c_int != 0
+                && *(*__ctype_b_loc()).offset(
+                    *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
+                ) as ::core::ffi::c_int
+                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                    != 0
             {
                 i2 += 1;
             }
@@ -419,40 +407,36 @@ pub unsafe extern "C" fn xdl_recmatch(
         }
     } else if flags & XDF_IGNORE_WHITESPACE_CHANGE as ::core::ffi::c_long != 0 {
         while (i1 as ::core::ffi::c_long) < s1 && (i2 as ::core::ffi::c_long) < s2 {
-            if *(*__ctype_b_loc())
-                .offset(
-                    *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int
-                        as isize,
+            if *(*__ctype_b_loc()).offset(
+                *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
+            ) as ::core::ffi::c_int
+                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                != 0
+                && *(*__ctype_b_loc()).offset(
+                    *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
                 ) as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                    as ::core::ffi::c_int != 0
-                && *(*__ctype_b_loc())
-                    .offset(
-                        *l2.offset(i2 as isize) as ::core::ffi::c_uchar
-                            as ::core::ffi::c_int as isize,
-                    ) as ::core::ffi::c_int
-                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                        as ::core::ffi::c_int != 0
+                    & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                    != 0
             {
                 while (i1 as ::core::ffi::c_long) < s1
                     && *(*__ctype_b_loc())
-                        .offset(
-                            *l1.offset(i1 as isize) as ::core::ffi::c_uchar
-                                as ::core::ffi::c_int as isize,
-                        ) as ::core::ffi::c_int
+                        .offset(*l1.offset(i1 as isize) as ::core::ffi::c_uchar
+                            as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int != 0
+                            as ::core::ffi::c_int
+                        != 0
                 {
                     i1 += 1;
                 }
                 while (i2 as ::core::ffi::c_long) < s2
                     && *(*__ctype_b_loc())
-                        .offset(
-                            *l2.offset(i2 as isize) as ::core::ffi::c_uchar
-                                as ::core::ffi::c_int as isize,
-                        ) as ::core::ffi::c_int
+                        .offset(*l2.offset(i2 as isize) as ::core::ffi::c_uchar
+                            as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int != 0
+                            as ::core::ffi::c_int
+                        != 0
                 {
                     i2 += 1;
                 }
@@ -469,7 +453,8 @@ pub unsafe extern "C" fn xdl_recmatch(
             }
         }
     } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_long != 0 {
-        while (i1 as ::core::ffi::c_long) < s1 && (i2 as ::core::ffi::c_long) < s2
+        while (i1 as ::core::ffi::c_long) < s1
+            && (i2 as ::core::ffi::c_long) < s2
             && *l1.offset(i1 as isize) as ::core::ffi::c_int
                 == *l2.offset(i2 as isize) as ::core::ffi::c_int
         {
@@ -477,7 +462,8 @@ pub unsafe extern "C" fn xdl_recmatch(
             i2 += 1;
         }
     } else if flags & XDF_IGNORE_CR_AT_EOL as ::core::ffi::c_long != 0 {
-        while (i1 as ::core::ffi::c_long) < s1 && (i2 as ::core::ffi::c_long) < s2
+        while (i1 as ::core::ffi::c_long) < s1
+            && (i2 as ::core::ffi::c_long) < s2
             && *l1.offset(i1 as isize) as ::core::ffi::c_int
                 == *l2.offset(i2 as isize) as ::core::ffi::c_int
         {
@@ -490,13 +476,11 @@ pub unsafe extern "C" fn xdl_recmatch(
     }
     if (i1 as ::core::ffi::c_long) < s1 {
         while (i1 as ::core::ffi::c_long) < s1
-            && *(*__ctype_b_loc())
-                .offset(
-                    *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int
-                        as isize,
-                ) as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                    as ::core::ffi::c_int != 0
+            && *(*__ctype_b_loc()).offset(
+                *l1.offset(i1 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
+            ) as ::core::ffi::c_int
+                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                != 0
         {
             i1 += 1;
         }
@@ -506,13 +490,11 @@ pub unsafe extern "C" fn xdl_recmatch(
     }
     if (i2 as ::core::ffi::c_long) < s2 {
         while (i2 as ::core::ffi::c_long) < s2
-            && *(*__ctype_b_loc())
-                .offset(
-                    *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int
-                        as isize,
-                ) as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                    as ::core::ffi::c_int != 0
+            && *(*__ctype_b_loc()).offset(
+                *l2.offset(i2 as isize) as ::core::ffi::c_uchar as ::core::ffi::c_int as isize
+            ) as ::core::ffi::c_int
+                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                != 0
         {
             i2 += 1;
         }
@@ -527,43 +509,44 @@ unsafe extern "C" fn xdl_hash_record_with_whitespace(
 ) -> ::core::ffi::c_ulong {
     let mut ha: ::core::ffi::c_ulong = 5381 as ::core::ffi::c_ulong;
     let mut ptr: *const ::core::ffi::c_char = *data;
-    let mut cr_at_eol_only: ::core::ffi::c_int = (flags
-        & XDF_WHITESPACE_FLAGS as ::core::ffi::c_long
-        == XDF_IGNORE_CR_AT_EOL as ::core::ffi::c_long) as ::core::ffi::c_int;
+    let mut cr_at_eol_only: ::core::ffi::c_int =
+        (flags & XDF_WHITESPACE_FLAGS as ::core::ffi::c_long
+            == XDF_IGNORE_CR_AT_EOL as ::core::ffi::c_long) as ::core::ffi::c_int;
     while ptr < top && *ptr as ::core::ffi::c_int != '\n' as ::core::ffi::c_int {
         's_10: {
             if cr_at_eol_only != 0 {
                 if *ptr as ::core::ffi::c_int == '\r' as ::core::ffi::c_int
                     && (ptr.offset(1 as ::core::ffi::c_int as isize) < top
-                        && *ptr.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '\n' as ::core::ffi::c_int)
+                        && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '\n' as ::core::ffi::c_int)
                 {
                     break 's_10;
                 }
             } else if *(*__ctype_b_loc())
                 .offset(*ptr as ::core::ffi::c_uchar as ::core::ffi::c_int as isize)
                 as ::core::ffi::c_int
-                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                    as ::core::ffi::c_int != 0
+                & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                != 0
             {
                 let mut ptr2: *const ::core::ffi::c_char = ptr;
                 let mut at_eol: ::core::ffi::c_int = 0;
                 while ptr.offset(1 as ::core::ffi::c_int as isize) < top
                     && *(*__ctype_b_loc())
-                        .offset(
-                            *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_uchar as ::core::ffi::c_int as isize,
-                        ) as ::core::ffi::c_int
+                        .offset(*ptr.offset(1 as ::core::ffi::c_int as isize)
+                            as ::core::ffi::c_uchar
+                            as ::core::ffi::c_int as isize)
+                        as ::core::ffi::c_int
                         & _ISspace as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int != 0
-                    && *ptr.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                        != 0
+                    && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        != '\n' as ::core::ffi::c_int
                 {
                     ptr = ptr.offset(1);
                 }
                 at_eol = (top <= ptr.offset(1 as ::core::ffi::c_int as isize)
-                    || *ptr.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '\n' as ::core::ffi::c_int)
+                    || *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '\n' as ::core::ffi::c_int)
                     as ::core::ffi::c_int;
                 if flags & XDF_IGNORE_WHITESPACE as ::core::ffi::c_long == 0 {
                     if flags & XDF_IGNORE_WHITESPACE_CHANGE as ::core::ffi::c_long != 0
@@ -571,8 +554,8 @@ unsafe extern "C" fn xdl_hash_record_with_whitespace(
                     {
                         ha = ha.wrapping_add(ha << 5 as ::core::ffi::c_int);
                         ha ^= ' ' as ::core::ffi::c_int as ::core::ffi::c_ulong;
-                    } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_long
-                        != 0 && at_eol == 0
+                    } else if flags & XDF_IGNORE_WHITESPACE_AT_EOL as ::core::ffi::c_long != 0
+                        && at_eol == 0
                     {
                         while ptr2 != ptr.offset(1 as ::core::ffi::c_int as isize) {
                             ha = ha.wrapping_add(ha << 5 as ::core::ffi::c_int);
@@ -588,7 +571,11 @@ unsafe extern "C" fn xdl_hash_record_with_whitespace(
         }
         ptr = ptr.offset(1);
     }
-    *data = if ptr < top { ptr.offset(1 as ::core::ffi::c_int as isize) } else { ptr };
+    *data = if ptr < top {
+        ptr.offset(1 as ::core::ffi::c_int as isize)
+    } else {
+        ptr
+    };
     return ha;
 }
 #[no_mangle]
@@ -607,33 +594,36 @@ pub unsafe extern "C" fn xdl_hash_record(
         ha ^= *ptr as ::core::ffi::c_ulong;
         ptr = ptr.offset(1);
     }
-    *data = if ptr < top { ptr.offset(1 as ::core::ffi::c_int as isize) } else { ptr };
+    *data = if ptr < top {
+        ptr.offset(1 as ::core::ffi::c_int as isize)
+    } else {
+        ptr
+    };
     return ha;
 }
 #[no_mangle]
-pub unsafe extern "C" fn xdl_hashbits(
-    mut size: ::core::ffi::c_uint,
-) -> ::core::ffi::c_uint {
+pub unsafe extern "C" fn xdl_hashbits(mut size: ::core::ffi::c_uint) -> ::core::ffi::c_uint {
     let mut val: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
     let mut bits: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
     while val < size
         && (bits as usize)
-            < (CHAR_BIT as usize)
-                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_uint>())
+            < (CHAR_BIT as usize).wrapping_mul(::core::mem::size_of::<::core::ffi::c_uint>())
     {
         val <<= 1 as ::core::ffi::c_int;
         bits = bits.wrapping_add(1);
     }
-    return if bits != 0 { bits } else { 1 as ::core::ffi::c_uint };
+    return if bits != 0 {
+        bits
+    } else {
+        1 as ::core::ffi::c_uint
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn xdl_num_out(
     mut out: *mut ::core::ffi::c_char,
     mut val: ::core::ffi::c_long,
 ) -> ::core::ffi::c_int {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut str: *mut ::core::ffi::c_char = out;
     let mut buf: [::core::ffi::c_char; 32] = [0; 32];
     ptr = (&raw mut buf as *mut ::core::ffi::c_char)
@@ -647,10 +637,8 @@ pub unsafe extern "C" fn xdl_num_out(
     }
     while val != 0 && ptr > &raw mut buf as *mut ::core::ffi::c_char {
         ptr = ptr.offset(-1);
-        *ptr = ::core::mem::transmute::<
-            [u8; 11],
-            [::core::ffi::c_char; 11],
-        >(*b"0123456789\0")[(val % 10 as ::core::ffi::c_long) as usize];
+        *ptr = ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"0123456789\0")
+            [(val % 10 as ::core::ffi::c_long) as usize];
         val /= 10 as ::core::ffi::c_long;
     }
     if *ptr != 0 {
@@ -688,11 +676,14 @@ unsafe extern "C" fn xdl_format_hunk_hdr(
         4 as size_t,
     );
     nb += 4 as ::core::ffi::c_int;
-    nb
-        += xdl_num_out(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-            if c1 != 0 { s1 } else { s1 - 1 as ::core::ffi::c_long },
-        );
+    nb += xdl_num_out(
+        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
+        if c1 != 0 {
+            s1
+        } else {
+            s1 - 1 as ::core::ffi::c_long
+        },
+    );
     if c1 != 1 as ::core::ffi::c_long {
         memcpy(
             (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
@@ -701,24 +692,25 @@ unsafe extern "C" fn xdl_format_hunk_hdr(
             1 as size_t,
         );
         nb += 1 as ::core::ffi::c_int;
-        nb
-            += xdl_num_out(
-                (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-                c1,
-            );
+        nb += xdl_num_out(
+            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
+            c1,
+        );
     }
     memcpy(
-        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
-            as *mut ::core::ffi::c_void,
+        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize) as *mut ::core::ffi::c_void,
         b" +\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
         2 as size_t,
     );
     nb += 2 as ::core::ffi::c_int;
-    nb
-        += xdl_num_out(
-            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-            if c2 != 0 { s2 } else { s2 - 1 as ::core::ffi::c_long },
-        );
+    nb += xdl_num_out(
+        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
+        if c2 != 0 {
+            s2
+        } else {
+            s2 - 1 as ::core::ffi::c_long
+        },
+    );
     if c2 != 1 as ::core::ffi::c_long {
         memcpy(
             (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
@@ -727,15 +719,13 @@ unsafe extern "C" fn xdl_format_hunk_hdr(
             1 as size_t,
         );
         nb += 1 as ::core::ffi::c_int;
-        nb
-            += xdl_num_out(
-                (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
-                c2,
-            );
+        nb += xdl_num_out(
+            (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize),
+            c2,
+        );
     }
     memcpy(
-        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize)
-            as *mut ::core::ffi::c_void,
+        (&raw mut buf as *mut ::core::ffi::c_char).offset(nb as isize) as *mut ::core::ffi::c_void,
         b" @@\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
         3 as size_t,
     );
@@ -746,7 +736,8 @@ unsafe extern "C" fn xdl_format_hunk_hdr(
         buf[c2rust_fresh5 as usize] = ' ' as ::core::ffi::c_char;
         if funclen
             > ::core::mem::size_of::<[::core::ffi::c_char; 128]>() as ::core::ffi::c_long
-                - nb as ::core::ffi::c_long - 1 as ::core::ffi::c_long
+                - nb as ::core::ffi::c_long
+                - 1 as ::core::ffi::c_long
         {
             funclen = ::core::mem::size_of::<[::core::ffi::c_char; 128]>()
                 .wrapping_sub(nb as usize)
@@ -765,11 +756,11 @@ unsafe extern "C" fn xdl_format_hunk_hdr(
     buf[c2rust_fresh6 as usize] = '\n' as ::core::ffi::c_char;
     mb.ptr = &raw mut buf as *mut ::core::ffi::c_char;
     mb.size = nb;
-    if (*ecb)
-        .out_line
-        .expect(
-            "non-null function pointer",
-        )((*ecb).priv_0, &raw mut mb, 1 as ::core::ffi::c_int) < 0 as ::core::ffi::c_int
+    if (*ecb).out_line.expect("non-null function pointer")(
+        (*ecb).priv_0,
+        &raw mut mb,
+        1 as ::core::ffi::c_int,
+    ) < 0 as ::core::ffi::c_int
     {
         return -1 as ::core::ffi::c_int;
     }
@@ -788,15 +779,19 @@ pub unsafe extern "C" fn xdl_emit_hunk_hdr(
     if (*ecb).out_hunk.is_none() {
         return xdl_format_hunk_hdr(s1, c1, s2, c2, func, funclen, ecb);
     }
-    if (*ecb)
-        .out_hunk
-        .expect(
-            "non-null function pointer",
-        )(
+    if (*ecb).out_hunk.expect("non-null function pointer")(
         (*ecb).priv_0,
-        (if c1 != 0 { s1 } else { s1 - 1 as ::core::ffi::c_long }),
+        (if c1 != 0 {
+            s1
+        } else {
+            s1 - 1 as ::core::ffi::c_long
+        }),
         c1,
-        (if c2 != 0 { s2 } else { s2 - 1 as ::core::ffi::c_long }),
+        (if c2 != 0 {
+            s2
+        } else {
+            s2 - 1 as ::core::ffi::c_long
+        }),
         c2,
         func,
         funclen,
@@ -871,38 +866,38 @@ pub unsafe extern "C" fn xdl_fall_back_diff(
         .xdf1
         .recs
         .offset((line1 - 1 as ::core::ffi::c_int) as isize))
-        .ptr as *mut ::core::ffi::c_char;
+    .ptr as *mut ::core::ffi::c_char;
     subfile1.size = (**(*diff_env)
         .xdf1
         .recs
         .offset((line1 + count1 - 2 as ::core::ffi::c_int) as isize))
-        .ptr
-        .offset(
-            (**(*diff_env)
-                .xdf1
-                .recs
-                .offset((line1 + count1 - 2 as ::core::ffi::c_int) as isize))
-                .size as isize,
-        )
-        .offset_from(subfile1.ptr) as ::core::ffi::c_int;
+    .ptr
+    .offset(
+        (**(*diff_env)
+            .xdf1
+            .recs
+            .offset((line1 + count1 - 2 as ::core::ffi::c_int) as isize))
+        .size as isize,
+    )
+    .offset_from(subfile1.ptr) as ::core::ffi::c_int;
     subfile2.ptr = (**(*diff_env)
         .xdf2
         .recs
         .offset((line2 - 1 as ::core::ffi::c_int) as isize))
-        .ptr as *mut ::core::ffi::c_char;
+    .ptr as *mut ::core::ffi::c_char;
     subfile2.size = (**(*diff_env)
         .xdf2
         .recs
         .offset((line2 + count2 - 2 as ::core::ffi::c_int) as isize))
-        .ptr
-        .offset(
-            (**(*diff_env)
-                .xdf2
-                .recs
-                .offset((line2 + count2 - 2 as ::core::ffi::c_int) as isize))
-                .size as isize,
-        )
-        .offset_from(subfile2.ptr) as ::core::ffi::c_int;
+    .ptr
+    .offset(
+        (**(*diff_env)
+            .xdf2
+            .recs
+            .offset((line2 + count2 - 2 as ::core::ffi::c_int) as isize))
+        .size as isize,
+    )
+    .offset_from(subfile2.ptr) as ::core::ffi::c_int;
     if xdl_do_diff(&raw mut subfile1, &raw mut subfile2, xpp, &raw mut env)
         < 0 as ::core::ffi::c_int
     {

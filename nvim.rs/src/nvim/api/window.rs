@@ -32,12 +32,7 @@ extern "C" {
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_err_invalid(
         err: *mut Error,
         name: *const ::core::ffi::c_char,
@@ -57,11 +52,7 @@ extern "C" {
     fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static e_cmdwin: [::core::ffi::c_char; 0];
     static e_autocmd_close: [::core::ffi::c_char; 0];
-    fn win_execute_before(
-        args: *mut win_execute_T,
-        wp: *mut win_T,
-        tp: *mut tabpage_T,
-    ) -> bool;
+    fn win_execute_before(args: *mut win_execute_T, wp: *mut win_T, tp: *mut tabpage_T) -> bool;
     fn win_execute_after(args: *mut win_execute_T);
     fn switch_win(
         switchwin: *mut switchwin_T,
@@ -109,11 +100,7 @@ extern "C" {
     fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T;
     fn win_setheight_win(height: ::core::ffi::c_int, win: *mut win_T);
     fn win_setwidth_win(width: ::core::ffi::c_int, wp: *mut win_T);
-    fn win_get_tabwin(
-        id: handle_T,
-        tabnr: *mut ::core::ffi::c_int,
-        winnr: *mut ::core::ffi::c_int,
-    );
+    fn win_get_tabwin(id: handle_T, tabnr: *mut ::core::ffi::c_int, winnr: *mut ::core::ffi::c_int);
 }
 pub type __time_t = ::core::ffi::c_long;
 pub type int16_t = i16;
@@ -1859,30 +1846,20 @@ pub const UPD_REDRAW_TOP: C2Rust_Unnamed_14 = 30;
 pub const UPD_INVERTED_ALL: C2Rust_Unnamed_14 = 25;
 pub const UPD_INVERTED: C2Rust_Unnamed_14 = 20;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const KEYSET_OPTIDX_win_text_height__end_row: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_text_height__end_vcol: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_text_height__start_row: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_text_height__max_height: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_text_height__start_vcol: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_text_height__end_row: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_text_height__end_vcol: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_text_height__start_row: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_text_height__max_height: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_win_text_height__start_vcol: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_get_buf(
-    mut win: Window,
-    mut err: *mut Error,
-) -> Buffer {
+pub unsafe extern "C" fn nvim_win_get_buf(mut win: Window, mut err: *mut Error) -> Buffer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
         return 0 as Buffer;
@@ -1890,11 +1867,7 @@ pub unsafe extern "C" fn nvim_win_get_buf(
     return (*(*w).w_buffer).handle as Buffer;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_set_buf(
-    mut win: Window,
-    mut buf: Buffer,
-    mut err: *mut Error,
-) {
+pub unsafe extern "C" fn nvim_win_set_buf(mut win: Window, mut buf: Buffer, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     if w.is_null() || b.is_null() {
@@ -1941,21 +1914,15 @@ pub unsafe extern "C" fn nvim_win_get_cursor(
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_set_cursor(
-    mut win: Window,
-    mut pos: Array,
-    mut err: *mut Error,
-) {
+pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
         return;
     }
     if pos.size != 2 as size_t
-        || (*pos.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*pos.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*pos.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-            as ::core::ffi::c_uint
+        || (*pos.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
             != kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         api_err_exp(
@@ -2003,7 +1970,12 @@ pub unsafe extern "C" fn nvim_win_set_cursor(
         sw_same_win: false,
         sw_visual_active: false,
     };
-    switch_win(&raw mut switchwin, w, ::core::ptr::null_mut::<tabpage_T>(), true_0 != 0);
+    switch_win(
+        &raw mut switchwin,
+        w,
+        ::core::ptr::null_mut::<tabpage_T>(),
+        true_0 != 0,
+    );
     update_topline(curwin);
     validate_cursor(curwin);
     restore_win(&raw mut switchwin, true_0 != 0);
@@ -2011,10 +1983,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(
     (*w).w_redr_status = true_0 != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_get_height(
-    mut win: Window,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe extern "C" fn nvim_win_get_height(mut win: Window, mut err: *mut Error) -> Integer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
         return 0 as Integer;
@@ -2045,10 +2014,7 @@ pub unsafe extern "C" fn nvim_win_set_height(
     try_leave(&raw mut tstate, err);
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_get_width(
-    mut win: Window,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe extern "C" fn nvim_win_get_width(mut win: Window, mut err: *mut Error) -> Integer {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
         return 0 as Integer;
@@ -2168,10 +2134,7 @@ pub unsafe extern "C" fn nvim_win_get_position(
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_get_tabpage(
-    mut win: Window,
-    mut err: *mut Error,
-) -> Tabpage {
+pub unsafe extern "C" fn nvim_win_get_tabpage(mut win: Window, mut err: *mut Error) -> Tabpage {
     let mut rv: Tabpage = 0 as Tabpage;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if !w.is_null() {
@@ -2180,10 +2143,7 @@ pub unsafe extern "C" fn nvim_win_get_tabpage(
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_get_number(
-    mut win: Window,
-    mut err: *mut Error,
-) -> Integer {
+pub unsafe extern "C" fn nvim_win_get_number(mut win: Window, mut err: *mut Error) -> Integer {
     let mut rv: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() {
@@ -2221,7 +2181,9 @@ pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
     };
     try_enter(&raw mut tstate);
     if is_aucmd_win(w) {
-        emsg(gettext(&raw const e_autocmd_close as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_autocmd_close as *const ::core::ffi::c_char,
+        ));
     } else if tabpage == curtab {
         win_close(w, false, false);
     } else {
@@ -2230,11 +2192,7 @@ pub unsafe extern "C" fn nvim_win_hide(mut win: Window, mut err: *mut Error) {
     try_leave(&raw mut tstate, err);
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_win_close(
-    mut win: Window,
-    mut force: Boolean,
-    mut err: *mut Error,
-) {
+pub unsafe extern "C" fn nvim_win_close(mut win: Window, mut force: Boolean, mut err: *mut Error) {
     let mut w: *mut win_T = find_window_by_handle(win, err);
     if w.is_null() || !can_close_in_cmdwin(w, err) {
         return;
@@ -2253,7 +2211,11 @@ pub unsafe extern "C" fn nvim_win_close(
     ex_win_close(
         force as ::core::ffi::c_int,
         w,
-        if tabpage == curtab { ::core::ptr::null_mut::<tabpage_T>() } else { tabpage },
+        if tabpage == curtab {
+            ::core::ptr::null_mut::<tabpage_T>()
+        } else {
+            tabpage
+        },
     );
     try_leave(&raw mut tstate, err);
 }
@@ -2380,12 +2342,8 @@ pub unsafe extern "C" fn nvim_win_text_height(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_win_text_height__end_row
         != 0 as ::core::ffi::c_ulonglong
     {
-        end_lnum = normalize_index(
-            buf,
-            (*opts).end_row as int64_t,
-            false_0 != 0,
-            &raw mut oob,
-        ) as linenr_T;
+        end_lnum = normalize_index(buf, (*opts).end_row as int64_t, false_0 != 0, &raw mut oob)
+            as linenr_T;
     }
     if oob {
         api_set_error(
@@ -2401,8 +2359,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
             err,
             kErrorTypeValidation,
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            b"'start_row' is higher than 'end_row'\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"'start_row' is higher than 'end_row'\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return rv;
     }
@@ -2424,9 +2381,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
             return rv;
         }
         start_vcol = (*opts).start_vcol as int64_t;
-        if !(start_vcol >= 0 as int64_t
-            && start_vcol <= MAXCOL as ::core::ffi::c_int as int64_t)
-        {
+        if !(start_vcol >= 0 as int64_t && start_vcol <= MAXCOL as ::core::ffi::c_int as int64_t) {
             api_err_invalid(
                 err,
                 b"start_vcol\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2449,15 +2404,12 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 err,
                 kErrorTypeValidation,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'end_vcol' specified without 'end_row'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"'end_vcol' specified without 'end_row'\0".as_ptr() as *const ::core::ffi::c_char,
             );
             return rv;
         }
         end_vcol = (*opts).end_vcol as int64_t;
-        if !(end_vcol >= 0 as int64_t
-            && end_vcol <= MAXCOL as ::core::ffi::c_int as int64_t)
-        {
+        if !(end_vcol >= 0 as int64_t && end_vcol <= MAXCOL as ::core::ffi::c_int as int64_t) {
             api_err_invalid(
                 err,
                 b"end_vcol\0".as_ptr() as *const ::core::ffi::c_char,
@@ -2491,8 +2443,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
                 err,
                 kErrorTypeValidation,
                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                b"'start_vcol' is higher than 'end_vcol'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"'start_vcol' is higher than 'end_vcol'\0".as_ptr() as *const ::core::ffi::c_char,
             );
             return rv;
         }
@@ -2550,9 +2501,7 @@ pub unsafe extern "C" fn nvim_win_text_height(
         key: cstr_as_string(b"end_vcol\0".as_ptr() as *const ::core::ffi::c_char),
         value: object {
             type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: end_vcol,
-            },
+            data: C2Rust_Unnamed { integer: end_vcol },
         },
     };
     return rv;

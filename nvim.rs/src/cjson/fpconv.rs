@@ -32,10 +32,8 @@ extern "C" {
         __src: *const ::core::ffi::c_void,
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
 }
 pub type size_t = usize;
 pub type __off_t = ::core::ffi::c_long;
@@ -76,10 +74,9 @@ pub struct _IO_FILE {
 pub type _IO_lock_t = ();
 pub type FILE = _IO_FILE;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 36] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 36],
-        [::core::ffi::c_char; 36],
-    >(*b"void set_number_format(char *, int)\0")
+    ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
+        *b"void set_number_format(char *, int)\0",
+    )
 };
 static mut locale_decimal_point: ::core::ffi::c_char = '.' as ::core::ffi::c_char;
 unsafe extern "C" fn fpconv_update_locale() {
@@ -90,12 +87,9 @@ unsafe extern "C" fn fpconv_update_locale() {
         b"%g\0".as_ptr() as *const ::core::ffi::c_char,
         0.5f64,
     );
-    if buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-        != '0' as ::core::ffi::c_int
-        || buf[2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            != '5' as ::core::ffi::c_int
-        || buf[3 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_int
+    if buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != '0' as ::core::ffi::c_int
+        || buf[2 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != '5' as ::core::ffi::c_int
+        || buf[3 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0 as ::core::ffi::c_int
     {
         fprintf(
             stderr,
@@ -107,9 +101,7 @@ unsafe extern "C" fn fpconv_update_locale() {
     locale_decimal_point = buf[1 as ::core::ffi::c_int as usize];
 }
 #[inline]
-unsafe extern "C" fn valid_number_character(
-    mut ch: ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn valid_number_character(mut ch: ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut lower_ch: ::core::ffi::c_char = 0;
     if '0' as ::core::ffi::c_int <= ch as ::core::ffi::c_int
         && ch as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
@@ -122,8 +114,7 @@ unsafe extern "C" fn valid_number_character(
     {
         return 1 as ::core::ffi::c_int;
     }
-    lower_ch = (ch as ::core::ffi::c_int | 0x20 as ::core::ffi::c_int)
-        as ::core::ffi::c_char;
+    lower_ch = (ch as ::core::ffi::c_int | 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
     if 'a' as ::core::ffi::c_int <= lower_ch as ::core::ffi::c_int
         && lower_ch as ::core::ffi::c_int <= 'y' as ::core::ffi::c_int
     {
@@ -131,9 +122,7 @@ unsafe extern "C" fn valid_number_character(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn strtod_buffer_size(
-    mut s: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn strtod_buffer_size(mut s: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = s;
     while valid_number_character(*p) != 0 {
         p = p.offset(1);
@@ -146,15 +135,9 @@ pub unsafe extern "C" fn fpconv_strtod(
     mut endptr: *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_double {
     let mut localbuf: [::core::ffi::c_char; 32] = [0; 32];
-    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut endbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut dp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut endbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut dp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut buflen: ::core::ffi::c_int = 0;
     let mut value: ::core::ffi::c_double = 0.;
     if locale_decimal_point as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
@@ -166,10 +149,12 @@ pub unsafe extern "C" fn fpconv_strtod(
         return 0 as ::core::ffi::c_int as ::core::ffi::c_double;
     }
     if buflen >= FPCONV_G_FMT_BUFSIZE {
-        buf = malloc((buflen + 1 as ::core::ffi::c_int) as size_t)
-            as *mut ::core::ffi::c_char;
+        buf = malloc((buflen + 1 as ::core::ffi::c_int) as size_t) as *mut ::core::ffi::c_char;
         if buf.is_null() {
-            fprintf(stderr, b"Out of memory\0".as_ptr() as *const ::core::ffi::c_char);
+            fprintf(
+                stderr,
+                b"Out of memory\0".as_ptr() as *const ::core::ffi::c_char,
+            );
             abort();
         }
     } else {
@@ -200,11 +185,10 @@ unsafe extern "C" fn set_number_format(
     let mut d2: ::core::ffi::c_int = 0;
     let mut i: ::core::ffi::c_int = 0;
     '_c2rust_label: {
-        if 1 as ::core::ffi::c_int <= precision && precision <= 16 as ::core::ffi::c_int
-        {} else {
+        if 1 as ::core::ffi::c_int <= precision && precision <= 16 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
-                b"1 <= precision && precision <= 16\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"1 <= precision && precision <= 16\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/cjson/fpconv.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 163 as ::core::ffi::c_uint,
@@ -220,13 +204,12 @@ unsafe extern "C" fn set_number_format(
     if d1 != 0 {
         let c2rust_fresh2 = i;
         i = i + 1;
-        *fmt.offset(c2rust_fresh2 as isize) = ('0' as ::core::ffi::c_int + d1)
-            as ::core::ffi::c_char;
+        *fmt.offset(c2rust_fresh2 as isize) =
+            ('0' as ::core::ffi::c_int + d1) as ::core::ffi::c_char;
     }
     let c2rust_fresh3 = i;
     i = i + 1;
-    *fmt.offset(c2rust_fresh3 as isize) = ('0' as ::core::ffi::c_int + d2)
-        as ::core::ffi::c_char;
+    *fmt.offset(c2rust_fresh3 as isize) = ('0' as ::core::ffi::c_int + d2) as ::core::ffi::c_char;
     let c2rust_fresh4 = i;
     i = i + 1;
     *fmt.offset(c2rust_fresh4 as isize) = 'g' as ::core::ffi::c_char;
@@ -261,8 +244,7 @@ pub unsafe extern "C" fn fpconv_g_fmt(
     loop {
         let c2rust_fresh0 = str;
         str = str.offset(1);
-        *c2rust_fresh0 = (if *b as ::core::ffi::c_int
-            == locale_decimal_point as ::core::ffi::c_int
+        *c2rust_fresh0 = (if *b as ::core::ffi::c_int == locale_decimal_point as ::core::ffi::c_int
         {
             '.' as ::core::ffi::c_int
         } else {

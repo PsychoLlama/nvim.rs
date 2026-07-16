@@ -49,14 +49,11 @@ pub struct hashtab_T {
     pub ht_smallarray: [hashitem_T; 16],
 }
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"void hash_may_resize(hashtab_T *, size_t)\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"void hash_may_resize(hashtab_T *, size_t)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PERTURB_SHIFT: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 #[no_mangle]
@@ -69,8 +66,7 @@ pub unsafe extern "C" fn hash_init(mut ht: *mut hashtab_T) {
         ::core::mem::size_of::<hashtab_T>(),
     );
     (*ht).ht_array = &raw mut (*ht).ht_smallarray as *mut hashitem_T;
-    (*ht).ht_mask = (HT_INIT_SIZE as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-        as hash_T;
+    (*ht).ht_mask = (HT_INIT_SIZE as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as hash_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn hash_clear(mut ht: *mut hashtab_T) {
@@ -79,10 +75,7 @@ pub unsafe extern "C" fn hash_clear(mut ht: *mut hashtab_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn hash_clear_all(
-    mut ht: *mut hashtab_T,
-    mut off: ::core::ffi::c_uint,
-) {
+pub unsafe extern "C" fn hash_clear_all(mut ht: *mut hashtab_T, mut off: ::core::ffi::c_uint) {
     let mut todo: size_t = (*ht).ht_used;
     let mut hi: *mut hashitem_T = (*ht).ht_array;
     while todo > 0 as size_t {
@@ -128,7 +121,7 @@ pub unsafe extern "C" fn hash_lookup(
         && strncmp((*hi).hi_key, key, key_len) == 0 as ::core::ffi::c_int
         && *(*hi).hi_key.offset(key_len as isize) as ::core::ffi::c_int == NUL
     {
-        return hi
+        return hi;
     }
     let mut perturb: hash_T = hash;
     loop {
@@ -140,7 +133,8 @@ pub unsafe extern "C" fn hash_lookup(
         if (*hi).hi_key.is_null() {
             return if freeitem.is_null() { hi } else { freeitem };
         }
-        if (*hi).hi_hash == hash && (*hi).hi_key != &raw mut hash_removed
+        if (*hi).hi_hash == hash
+            && (*hi).hi_key != &raw mut hash_removed
             && strncmp((*hi).hi_key, key, key_len) == 0 as ::core::ffi::c_int
             && *(*hi).hi_key.offset(key_len as isize) as ::core::ffi::c_int == NUL
         {
@@ -150,7 +144,7 @@ pub unsafe extern "C" fn hash_lookup(
             freeitem = hi;
         }
         perturb >>= PERTURB_SHIFT;
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn hash_debug_results() {}
@@ -230,7 +224,11 @@ unsafe extern "C" fn hash_may_resize(mut ht: *mut hashtab_T, mut minitems: size_
             minsize = (*ht).ht_used.wrapping_mul(4 as size_t);
         }
     } else {
-        minitems = if minitems > (*ht).ht_used { minitems } else { (*ht).ht_used };
+        minitems = if minitems > (*ht).ht_used {
+            minitems
+        } else {
+            (*ht).ht_used
+        };
         minsize = minitems
             .wrapping_mul(3 as size_t)
             .wrapping_add(1 as size_t)
@@ -240,20 +238,21 @@ unsafe extern "C" fn hash_may_resize(mut ht: *mut hashtab_T, mut minitems: size_
     while newsize < minsize {
         newsize <<= 1 as ::core::ffi::c_int;
         '_c2rust_label: {
-            if newsize != 0 as size_t {} else {
+            if newsize != 0 as size_t {
+            } else {
                 __assert_fail(
                     b"newsize != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/hashtab.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/hashtab.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     328 as ::core::ffi::c_uint,
                     __ASSERT_FUNCTION.as_ptr(),
                 );
             }
         };
     }
-    let mut newarray_is_small: bool = newsize
-        == HT_INIT_SIZE as ::core::ffi::c_int as size_t;
-    if !newarray_is_small && newsize == oldsize
+    let mut newarray_is_small: bool = newsize == HT_INIT_SIZE as ::core::ffi::c_int as size_t;
+    if !newarray_is_small
+        && newsize == oldsize
         && (*ht).ht_filled.wrapping_mul(3 as size_t) < oldsize.wrapping_mul(2 as size_t)
     {
         return;
@@ -267,8 +266,7 @@ unsafe extern "C" fn hash_may_resize(mut ht: *mut hashtab_T, mut minitems: size_
     let mut oldarray: *mut hashitem_T = (if keep_smallarray as ::core::ffi::c_int != 0 {
         memcpy(
             &raw mut temparray as *mut hashitem_T as *mut ::core::ffi::c_void,
-            &raw mut (*ht).ht_smallarray as *mut hashitem_T
-                as *const ::core::ffi::c_void,
+            &raw mut (*ht).ht_smallarray as *mut hashitem_T as *const ::core::ffi::c_void,
             ::core::mem::size_of::<[hashitem_T; 16]>(),
         )
     } else {
@@ -281,8 +279,7 @@ unsafe extern "C" fn hash_may_resize(mut ht: *mut hashtab_T, mut minitems: size_
             ::core::mem::size_of::<[hashitem_T; 16]>(),
         );
     }
-    let mut newarray: *mut hashitem_T = (if newarray_is_small as ::core::ffi::c_int != 0
-    {
+    let mut newarray: *mut hashitem_T = (if newarray_is_small as ::core::ffi::c_int != 0 {
         &raw mut (*ht).ht_smallarray as *mut hashitem_T as *mut ::core::ffi::c_void
     } else {
         xcalloc(newsize, ::core::mem::size_of::<hashitem_T>())
@@ -327,31 +324,30 @@ pub unsafe extern "C" fn hash_hash(mut key: *const ::core::ffi::c_char) -> hash_
     if hash == 0 as hash_T {
         return 0 as hash_T;
     }
-    let mut p: *const uint8_t = (key as *mut uint8_t)
-        .offset(1 as ::core::ffi::c_int as isize);
+    let mut p: *const uint8_t = (key as *mut uint8_t).offset(1 as ::core::ffi::c_int as isize);
     while *p as ::core::ffi::c_int != NUL {
         let c2rust_fresh0 = p;
         p = p.offset(1);
-        hash = hash.wrapping_mul(101 as hash_T).wrapping_add(*c2rust_fresh0 as hash_T);
+        hash = hash
+            .wrapping_mul(101 as hash_T)
+            .wrapping_add(*c2rust_fresh0 as hash_T);
     }
     return hash;
 }
 #[no_mangle]
-pub unsafe extern "C" fn hash_hash_len(
-    mut key: *const ::core::ffi::c_char,
-    len: size_t,
-) -> hash_T {
+pub unsafe extern "C" fn hash_hash_len(mut key: *const ::core::ffi::c_char, len: size_t) -> hash_T {
     if len == 0 as size_t {
         return 0 as hash_T;
     }
     let mut hash: hash_T = *(key as *mut uint8_t) as hash_T;
     let mut end: *const uint8_t = (key as *mut uint8_t).offset(len as isize);
-    let mut p: *const uint8_t = (key as *const uint8_t)
-        .offset(1 as ::core::ffi::c_int as isize);
+    let mut p: *const uint8_t = (key as *const uint8_t).offset(1 as ::core::ffi::c_int as isize);
     while p < end {
         let c2rust_fresh1 = p;
         p = p.offset(1);
-        hash = hash.wrapping_mul(101 as hash_T).wrapping_add(*c2rust_fresh1 as hash_T);
+        hash = hash
+            .wrapping_mul(101 as hash_T)
+            .wrapping_add(*c2rust_fresh1 as hash_T);
     }
     return hash;
 }

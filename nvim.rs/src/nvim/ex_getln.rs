@@ -51,17 +51,10 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn arena_finish(arena: *mut Arena) -> ArenaMem;
-    fn arena_alloc(
-        arena: *mut Arena,
-        size: size_t,
-        align: bool,
-    ) -> *mut ::core::ffi::c_void;
+    fn arena_alloc(arena: *mut Arena, size: size_t, align: bool) -> *mut ::core::ffi::c_void;
     fn arena_mem_free(mem: ArenaMem);
     fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, new: *mut MHPutStatus) -> uint32_t;
     fn mh_get_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> uint32_t;
@@ -105,10 +98,7 @@ extern "C" {
         forceit: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn buflist_findnr(nr: ::core::ffi::c_int) -> *mut buf_T;
-    fn buf_open_scratch(
-        bufnr: handle_T,
-        bufname: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn buf_open_scratch(bufnr: handle_T, bufname: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T);
     static mut p_cedit: *mut ::core::ffi::c_char;
     static mut p_cwh: OptInt;
@@ -131,10 +121,7 @@ extern "C" {
     static mut p_wcm: OptInt;
     static mut p_wim: *mut ::core::ffi::c_char;
     static mut p_wmnu: ::core::ffi::c_int;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strsave_escaped(
         string: *const ::core::ffi::c_char,
         esc_chars: *const ::core::ffi::c_char,
@@ -247,11 +234,7 @@ extern "C" {
     fn eval_has_provider(feat: *const ::core::ffi::c_char, throw_if_fast: bool) -> bool;
     fn msg_grid_validate();
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn msg_start();
     fn msg_starthere();
@@ -282,10 +265,7 @@ extern "C" {
         key: *const ::core::ffi::c_char,
         len: ptrdiff_t,
     ) -> *mut dictitem_T;
-    fn tv_dict_get_number(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-    ) -> varnumber_T;
+    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
     fn tv_dict_get_string_buf_chk(
         d: *const dict_T,
         key: *const ::core::ffi::c_char,
@@ -389,11 +369,7 @@ extern "C" {
         u_col: colnr_T,
     ) -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
     fn stuff_empty() -> bool;
@@ -523,10 +499,7 @@ extern "C" {
     fn utf_iscomposing_first(c: ::core::ffi::c_int) -> bool;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn mb_tolower(a: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn utf_head_off(
         base_in: *const ::core::ffi::c_char,
@@ -547,11 +520,8 @@ extern "C" {
         len: colnr_T,
         newfile: bool,
     ) -> ::core::ffi::c_int;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn incl(lp: *mut pos_T) -> ::core::ffi::c_int;
     fn decl(lp: *mut pos_T) -> ::core::ffi::c_int;
     fn setmouse();
@@ -569,11 +539,7 @@ extern "C" {
         opt_flags: ::core::ffi::c_int,
         set_sid: scid_T,
     );
-    fn set_option_value_give_err(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    );
+    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
     fn set_iminsert_global(buf: *mut buf_T);
     fn set_imsearch_global(buf: *mut buf_T);
     fn magic_isset() -> bool;
@@ -605,11 +571,7 @@ extern "C" {
         allocated: *mut bool,
         errmsg: bool,
     ) -> bool;
-    fn cmdline_paste_reg(
-        regname: ::core::ffi::c_int,
-        literally_arg: bool,
-        remcr: bool,
-    ) -> bool;
+    fn cmdline_paste_reg(regname: ::core::ffi::c_int, literally_arg: bool, remcr: bool) -> bool;
     fn save_search_patterns();
     fn restore_search_patterns();
     fn save_last_search_pattern();
@@ -680,17 +642,11 @@ extern "C" {
     fn u_sync(force: bool);
     fn u_clearall(buf: *mut buf_T);
     fn u_blockfree(buf: *mut buf_T);
-    fn parser_simple_get_line(
-        cookie: *mut ::core::ffi::c_void,
-        ret_pline: *mut ParserLine,
-    );
+    fn parser_simple_get_line(cookie: *mut ::core::ffi::c_void, ret_pline: *mut ParserLine);
     fn viml_parser_destroy(pstate: *mut ParserState);
     fn viml_pexpr_free_ast(ast: ExprAST);
     fn viml_pexpr_parse(pstate: *mut ParserState, flags: ::core::ffi::c_int) -> ExprAST;
-    fn win_split(
-        size: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn win_valid(win: *const win_T) -> bool;
     fn close_windows(buf: *mut buf_T, keep_curwin: bool);
     fn last_window(win: *mut win_T) -> bool;
@@ -739,9 +695,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -4281,12 +4236,9 @@ pub struct vim_state {
     pub check: state_check_callback,
     pub execute: state_execute_callback,
 }
-pub type state_execute_callback = Option<
-    unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
->;
-pub type state_check_callback = Option<
-    unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
->;
+pub type state_execute_callback =
+    Option<unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int>;
+pub type state_check_callback = Option<unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ParserHighlightChunk {
@@ -4369,9 +4321,8 @@ pub struct ParserLine {
     pub size: size_t,
     pub allocated: bool,
 }
-pub type ParserLineGetter = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> (),
->;
+pub type ParserLineGetter =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ExprAST {
@@ -4799,12 +4750,8 @@ pub type C2Rust_Unnamed_57 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_58 = ::core::ffi::c_uint;
 static mut prev_prompt_id: ::core::ffi::c_uint = 0;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     pos: 0 as size_t,
@@ -4852,11 +4799,11 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -4991,19 +4938,13 @@ static mut cedit_key: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 static mut cmdpreview_bufnr: handle_T = 0 as handle_T;
 static mut cmdpreview_ns: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut e_active_window_or_buffer_changed_or_deleted: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 49],
-        [::core::ffi::c_char; 49],
-    >(*b"E199: Active window or buffer changed or deleted\0")
+    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+        *b"E199: Active window or buffer changed or deleted\0",
+    )
 };
-unsafe extern "C" fn trigger_cmd_autocmd(
-    mut typechar: ::core::ffi::c_int,
-    mut evt: event_T,
-) {
-    let mut typestr: [::core::ffi::c_char; 2] = [
-        typechar as ::core::ffi::c_char,
-        NUL as ::core::ffi::c_char,
-    ];
+unsafe extern "C" fn trigger_cmd_autocmd(mut typechar: ::core::ffi::c_int, mut evt: event_T) {
+    let mut typestr: [::core::ffi::c_char; 2] =
+        [typechar as ::core::ffi::c_char, NUL as ::core::ffi::c_char];
     apply_autocmds(
         evt,
         &raw mut typestr as *mut ::core::ffi::c_char,
@@ -5059,9 +5000,7 @@ pub unsafe extern "C" fn parse_pattern_and_range(
 ) -> bool {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut delim_optional: bool = false_0 != 0;
-    let mut dummy: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut dummy: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut magic: magic_T = 0 as magic_T;
     *skiplen = 0 as ::core::ffi::c_int;
     *patlen = ccline.cmdlen;
@@ -5130,15 +5069,13 @@ pub unsafe extern "C" fn parse_pattern_and_range(
         &raw mut dummy_cmdmod,
         true_0 != 0,
     );
-    let mut cmd: *mut ::core::ffi::c_char = skip_range(
-        ea.cmd,
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    );
+    let mut cmd: *mut ::core::ffi::c_char =
+        skip_range(ea.cmd, ::core::ptr::null_mut::<::core::ffi::c_int>());
     if vim_strchr(
-            b"sgvlu\0".as_ptr() as *const ::core::ffi::c_char,
-            *cmd as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"sgvlu\0".as_ptr() as *const ::core::ffi::c_char,
+        *cmd as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         return false_0 != 0;
     }
@@ -5192,8 +5129,11 @@ pub unsafe extern "C" fn parse_pattern_and_range(
     } else if strncmp(
         cmd,
         b"sort\0".as_ptr() as *const ::core::ffi::c_char,
-        (if p.offset_from(cmd) > 3 as isize { p.offset_from(cmd) } else { 3 as isize })
-            as size_t,
+        (if p.offset_from(cmd) > 3 as isize {
+            p.offset_from(cmd)
+        } else {
+            3 as isize
+        }) as size_t,
     ) == 0 as ::core::ffi::c_int
         || strncmp(
             cmd,
@@ -5210,20 +5150,16 @@ pub unsafe extern "C" fn parse_pattern_and_range(
         }
         loop {
             p = skipwhite(p);
-            if !(*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                && {
+            if !(*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint && {
+                p = skipwhite(p);
+                *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+            } || {
+                p = skipwhite(p);
+                *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint && {
                     p = skipwhite(p);
-                    *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+                    *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
                 }
-                || {
-                    p = skipwhite(p);
-                    *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                        && {
-                            p = skipwhite(p);
-                            *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-                        }
-                })
-            {
+            }) {
                 break;
             }
             p = p.offset(1);
@@ -5234,8 +5170,11 @@ pub unsafe extern "C" fn parse_pattern_and_range(
     } else if strncmp(
         cmd,
         b"vimgrep\0".as_ptr() as *const ::core::ffi::c_char,
-        (if p.offset_from(cmd) > 3 as isize { p.offset_from(cmd) } else { 3 as isize })
-            as size_t,
+        (if p.offset_from(cmd) > 3 as isize {
+            p.offset_from(cmd)
+        } else {
+            3 as isize
+        }) as size_t,
     ) == 0 as ::core::ffi::c_int
         || strncmp(
             cmd,
@@ -5280,7 +5219,7 @@ pub unsafe extern "C" fn parse_pattern_and_range(
             delim_optional = true_0 != 0;
         }
     } else {
-        return false_0 != 0
+        return false_0 != 0;
     }
     p = skipwhite(p);
     let mut delim: ::core::ffi::c_int = if delim_optional as ::core::ffi::c_int != 0
@@ -5308,11 +5247,7 @@ pub unsafe extern "C" fn parse_pattern_and_range(
     if !use_last_pat {
         let mut c: ::core::ffi::c_char = *end;
         *end = NUL as ::core::ffi::c_char;
-        let mut empty: bool = empty_pattern_magic(
-            p,
-            end.offset_from(p) as size_t,
-            magic,
-        );
+        let mut empty: bool = empty_pattern_magic(p, end.offset_from(p) as size_t, magic);
         *end = c;
         if empty {
             return false_0 != 0;
@@ -5324,8 +5259,16 @@ pub unsafe extern "C" fn parse_pattern_and_range(
     (*curwin).w_cursor = *incsearch_start;
     parse_cmd_address(&raw mut ea, &raw mut dummy, true_0 != 0);
     if ea.addr_count > 0 as ::core::ffi::c_int {
-        search_first_line = if ea.line2 < ea.line1 { ea.line2 } else { ea.line1 };
-        search_last_line = if ea.line2 > ea.line1 { ea.line2 } else { ea.line1 };
+        search_first_line = if ea.line2 < ea.line1 {
+            ea.line2
+        } else {
+            ea.line1
+        };
+        search_last_line = if ea.line2 > ea.line1 {
+            ea.line2
+        } else {
+            ea.line1
+        };
     } else if *cmd.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 's' as ::core::ffi::c_int
         && *cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -5395,13 +5338,13 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
         return;
     }
     (*s).incsearch_postponed = false_0 != 0;
-    let mut next_char: ::core::ffi::c_char = *ccline
-        .cmdbuff
-        .offset((skiplen + patlen) as isize);
+    let mut next_char: ::core::ffi::c_char = *ccline.cmdbuff.offset((skiplen + patlen) as isize);
     let mut use_last_pat: bool = patlen == 0 as ::core::ffi::c_int
         && skiplen > 0 as ::core::ffi::c_int
-        && *ccline.cmdbuff.offset((skiplen - 1 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int == next_char as ::core::ffi::c_int;
+        && *ccline
+            .cmdbuff
+            .offset((skiplen - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+            == next_char as ::core::ffi::c_int;
     if patlen != 0 as ::core::ffi::c_int || use_last_pat as ::core::ffi::c_int != 0 {
         ui_busy_start();
         ui_flush();
@@ -5418,7 +5361,8 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
     let mut found: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if patlen != 0 as ::core::ffi::c_int || use_last_pat as ::core::ffi::c_int != 0 {
         let mut search_flags: ::core::ffi::c_int = SEARCH_OPT as ::core::ffi::c_int
-            + SEARCH_NOOF as ::core::ffi::c_int + SEARCH_PEEK as ::core::ffi::c_int;
+            + SEARCH_NOOF as ::core::ffi::c_int
+            + SEARCH_PEEK as ::core::ffi::c_int;
         if p_hls == 0 {
             search_flags += SEARCH_KEEP as ::core::ffi::c_int;
         }
@@ -5450,8 +5394,7 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
         );
         emsg_off -= 1;
         *ccline.cmdbuff.offset((skiplen + patlen) as isize) = next_char;
-        if (*curwin).w_cursor.lnum < search_first_line
-            || (*curwin).w_cursor.lnum > search_last_line
+        if (*curwin).w_cursor.lnum < search_first_line || (*curwin).w_cursor.lnum > search_last_line
         {
             found = 0 as ::core::ffi::c_int;
             (*curwin).w_cursor = (*s).search_start;
@@ -5488,7 +5431,9 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
             ccline.cmdbuff.offset(skiplen as isize),
             patlen as size_t,
             search_delim,
-        ) as ::core::ffi::c_int != 0 && !no_hlsearch
+        ) as ::core::ffi::c_int
+            != 0
+            && !no_hlsearch
         {
             redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
             set_no_hlsearch(true_0 != 0);
@@ -5540,21 +5485,22 @@ unsafe extern "C" fn may_add_char_to_search(
         (*curwin).w_cursor = (*s).match_end;
         *c = gchar_cursor();
         if *c != NUL {
-            if p_ic != 0 && p_scs != 0
+            if p_ic != 0
+                && p_scs != 0
                 && !pat_has_uppercase(ccline.cmdbuff.offset(skiplen as isize))
             {
                 *c = mb_tolower(*c);
             }
             if *c == search_delim
                 || !vim_strchr(
-                        (if magic_isset() as ::core::ffi::c_int != 0 {
-                            b"\\~^$.*[\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            b"\\^$\0".as_ptr() as *const ::core::ffi::c_char
-                        }),
-                        *c,
-                    )
-                    .is_null()
+                    (if magic_isset() as ::core::ffi::c_int != 0 {
+                        b"\\~^$.*[\0".as_ptr() as *const ::core::ffi::c_char
+                    } else {
+                        b"\\^$\0".as_ptr() as *const ::core::ffi::c_char
+                    }),
+                    *c,
+                )
+                .is_null()
             {
                 stuffcharReadbuff(*c);
                 *c = '\\' as ::core::ffi::c_int;
@@ -5603,13 +5549,11 @@ unsafe extern "C" fn finish_incsearch_highlighting(
         update_screen();
     }
 }
-unsafe extern "C" fn init_ccline(
-    mut firstc: ::core::ffi::c_int,
-    mut indent: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn init_ccline(mut firstc: ::core::ffi::c_int, mut indent: ::core::ffi::c_int) {
     ccline.overstrike = false_0;
     '_c2rust_label: {
-        if indent >= 0 as ::core::ffi::c_int {} else {
+        if indent >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"indent >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
@@ -5632,8 +5576,7 @@ unsafe extern "C" fn init_ccline(
     alloc_cmdbuff(indent + 50 as ::core::ffi::c_int);
     ccline.cmdpos = 0 as ::core::ffi::c_int;
     ccline.cmdlen = ccline.cmdpos;
-    *ccline.cmdbuff.offset(0 as ::core::ffi::c_int as isize) = NUL
-        as ::core::ffi::c_char;
+    *ccline.cmdbuff.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     ccline.last_colors = ColoredCmdline {
         prompt_id: 0,
         cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -5830,11 +5773,12 @@ unsafe extern "C" fn command_line_enter(
     let mut did_save_ccline: bool = false_0 != 0;
     if !ccline.cmdbuff.is_null() {
         '_c2rust_label: {
-            if clear_ccline {} else {
+            if clear_ccline {
+            } else {
                 __assert_fail(
                     b"clear_ccline\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     756 as ::core::ffi::c_uint,
                     b"uint8_t *command_line_enter(int, int, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -5856,7 +5800,8 @@ unsafe extern "C" fn command_line_enter(
     }
     init_ccline((*s).firstc, (*s).indent);
     '_c2rust_label_0: {
-        if !ccline.cmdbuff.is_null() {} else {
+        if !ccline.cmdbuff.is_null() {
+        } else {
             __assert_fail(
                 b"ccline.cmdbuff != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
@@ -5872,14 +5817,15 @@ unsafe extern "C" fn command_line_enter(
     ccline.prompt_id = c2rust_fresh1;
     ccline.level = cmdline_level;
     if cmdline_level == 50 as ::core::ffi::c_int {
-        emsg(gettext(&raw const e_command_too_recursive as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_command_too_recursive as *const ::core::ffi::c_char,
+        ));
     } else {
         ExpandInit(&raw mut (*s).xpc);
         ccline.xpc = &raw mut (*s).xpc;
         clear_cmdline_orig();
         cmdmsg_rl = (*curwin).w_onebuf_opt.wo_rl != 0
-            && *(*curwin).w_onebuf_opt.wo_rlc as ::core::ffi::c_int
-                == 's' as ::core::ffi::c_int
+            && *(*curwin).w_onebuf_opt.wo_rlc as ::core::ffi::c_int == 's' as ::core::ffi::c_int
             && ((*s).firstc == '/' as ::core::ffi::c_int
                 || (*s).firstc == '?' as ::core::ffi::c_int);
         msg_grid_validate();
@@ -5924,8 +5870,7 @@ unsafe extern "C" fn command_line_enter(
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
         firstcbuf = [0; 2];
-        firstcbuf[0 as ::core::ffi::c_int as usize] = (*s).cmdline_type
-            as ::core::ffi::c_char;
+        firstcbuf[0 as ::core::ffi::c_int as usize] = (*s).cmdline_type as ::core::ffi::c_char;
         firstcbuf[1 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
         if has_event(EVENT_CMDLINEENTER) {
             let mut save_v_event: save_v_event_T = save_v_event_T {
@@ -5947,15 +5892,13 @@ unsafe extern "C" fn command_line_enter(
             tv_dict_add_str(
                 dict,
                 b"cmdtype\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 &raw mut firstcbuf as *mut ::core::ffi::c_char,
             );
             tv_dict_add_nr(
                 dict,
                 b"cmdlevel\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
                 ccline.level as varnumber_T,
             );
             tv_dict_set_keys_readonly(dict);
@@ -6031,16 +5974,12 @@ unsafe extern "C" fn command_line_enter(
         }
         did_emsg = false_0;
         got_int = false_0 != 0;
-        (*s).state.check = Some(
-            command_line_check
-                as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
-        ) as state_check_callback;
+        (*s).state.check =
+            Some(command_line_check as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int)
+                as state_check_callback;
         (*s).state.execute = Some(
             command_line_execute
-                as unsafe extern "C" fn(
-                    *mut VimState,
-                    ::core::ffi::c_int,
-                ) -> ::core::ffi::c_int,
+                as unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
         ) as state_execute_callback;
         state_enter(&raw mut (*s).state);
         if !(*s).event_cmdlineleavepre_triggered {
@@ -6067,23 +6006,20 @@ unsafe extern "C" fn command_line_enter(
             tv_dict_add_str(
                 dict_0,
                 b"cmdtype\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
                 &raw mut firstcbuf as *mut ::core::ffi::c_char,
             );
             tv_dict_add_nr(
                 dict_0,
                 b"cmdlevel\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
                 ccline.level as varnumber_T,
             );
             tv_dict_set_keys_readonly(dict_0);
             tv_dict_add_bool(
                 dict_0,
                 b"abort\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
                 (if (*s).gotesc as ::core::ffi::c_int != 0 {
                     kBoolVarTrue as ::core::ffi::c_int
                 } else {
@@ -6109,10 +6045,8 @@ unsafe extern "C" fn command_line_enter(
                 curbuf,
             );
             try_leave(&raw mut tstate_0, &raw mut err);
-            if tv_dict_get_number(
-                dict_0,
-                b"abort\0".as_ptr() as *const ::core::ffi::c_char,
-            ) != 0 as varnumber_T
+            if tv_dict_get_number(dict_0, b"abort\0".as_ptr() as *const ::core::ffi::c_char)
+                != 0 as varnumber_T
             {
                 (*s).gotesc = true_0 != 0;
             }
@@ -6132,7 +6066,8 @@ unsafe extern "C" fn command_line_enter(
         clear_cmdline_orig();
         finish_incsearch_highlighting((*s).gotesc, &raw mut (*s).is_state, false_0 != 0);
         if !ccline.cmdbuff.is_null() {
-            if (*s).histype != HIST_INVALID as ::core::ffi::c_int && ccline.cmdlen != 0
+            if (*s).histype != HIST_INVALID as ::core::ffi::c_int
+                && ccline.cmdlen != 0
                 && (*s).firstc != NUL
                 && ((*s).some_key_typed as ::core::ffi::c_int != 0
                     || (*s).histype == HIST_SEARCH as ::core::ffi::c_int)
@@ -6150,10 +6085,7 @@ unsafe extern "C" fn command_line_enter(
                 );
                 if (*s).firstc == ':' as ::core::ffi::c_int {
                     xfree(new_last_cmdline as *mut ::core::ffi::c_void);
-                    new_last_cmdline = xstrnsave(
-                        ccline.cmdbuff,
-                        ccline.cmdlen as size_t,
-                    );
+                    new_last_cmdline = xstrnsave(ccline.cmdbuff, ccline.cmdlen as size_t);
                 }
             }
             if (*s).gotesc {
@@ -6175,8 +6107,7 @@ unsafe extern "C" fn command_line_enter(
             api_clear_error(&raw mut err);
         }
         if (*s).some_key_typed as ::core::ffi::c_int != 0
-            && !(err.type_0 as ::core::ffi::c_int
-                != kErrorTypeNone as ::core::ffi::c_int)
+            && !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
         {
             need_wait_return = false_0 != 0;
         }
@@ -6229,8 +6160,8 @@ unsafe extern "C" fn command_line_enter(
 unsafe extern "C" fn command_line_check(mut state: *mut VimState) -> ::core::ffi::c_int {
     let mut s: *mut CommandLineState = state as *mut CommandLineState;
     (*s).prev_cmdpos = ccline.cmdpos;
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*s).prev_cmdbuff
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*s).prev_cmdbuff as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -6266,10 +6197,10 @@ unsafe extern "C" fn command_line_handle_ctrl_bsl(
     (*s).c = plain_vgetc();
     no_mapping -= 1;
     allow_keys -= 1;
-    if (*s).c != Ctrl_N && (*s).c != Ctrl_G
+    if (*s).c != Ctrl_N
+        && (*s).c != Ctrl_G
         && ((*s).c != 'e' as ::core::ffi::c_int
-            || ccline.cmdfirstc == '=' as ::core::ffi::c_int
-                && KeyTyped as ::core::ffi::c_int != 0
+            || ccline.cmdfirstc == '=' as ::core::ffi::c_int && KeyTyped as ::core::ffi::c_int != 0
             || cmdline_star > 0 as ::core::ffi::c_int)
     {
         vungetc((*s).c);
@@ -6323,23 +6254,28 @@ unsafe extern "C" fn command_line_wildchar_complete(
             + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
     let mut wim_noselect: bool = p_wmnu != 0
         && wim_flags[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            & kOptWimFlagNoselect as ::core::ffi::c_int != 0 as ::core::ffi::c_int;
+            & kOptWimFlagNoselect as ::core::ffi::c_int
+            != 0 as ::core::ffi::c_int;
     if wim_flags[(*s).wim_index as usize] as ::core::ffi::c_int
-        & kOptWimFlagLastused as ::core::ffi::c_int != 0
+        & kOptWimFlagLastused as ::core::ffi::c_int
+        != 0
     {
         options |= WILD_BUFLASTUSED as ::core::ffi::c_int;
     }
     if (*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int {
-        if (*s).xpc.xp_numfiles > 1 as ::core::ffi::c_int && !(*s).did_wild_list
+        if (*s).xpc.xp_numfiles > 1 as ::core::ffi::c_int
+            && !(*s).did_wild_list
             && wim_flags[(*s).wim_index as usize] as ::core::ffi::c_int
-                & kOptWimFlagList as ::core::ffi::c_int != 0
+                & kOptWimFlagList as ::core::ffi::c_int
+                != 0
         {
             showmatches(&raw mut (*s).xpc, false_0 != 0, true_0 != 0, wim_noselect);
             redrawcmd();
             (*s).did_wild_list = true_0 != 0;
         }
         if wim_flags[(*s).wim_index as usize] as ::core::ffi::c_int
-            & kOptWimFlagLongest as ::core::ffi::c_int != 0
+            & kOptWimFlagLongest as ::core::ffi::c_int
+            != 0
         {
             res = nextwild(
                 &raw mut (*s).xpc,
@@ -6348,7 +6284,8 @@ unsafe extern "C" fn command_line_wildchar_complete(
                 escape,
             );
         } else if wim_flags[(*s).wim_index as usize] as ::core::ffi::c_int
-            & kOptWimFlagFull as ::core::ffi::c_int != 0
+            & kOptWimFlagFull as ::core::ffi::c_int
+            != 0
         {
             res = nextwild(
                 &raw mut (*s).xpc,
@@ -6361,13 +6298,18 @@ unsafe extern "C" fn command_line_wildchar_complete(
         }
     } else {
         let mut wim_longest: bool = wim_flags[0 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int & kOptWimFlagLongest as ::core::ffi::c_int != 0;
-        let mut wim_list: bool = wim_flags[0 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int & kOptWimFlagList as ::core::ffi::c_int != 0;
-        let mut wim_full: bool = wim_flags[0 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int & kOptWimFlagFull as ::core::ffi::c_int != 0;
+            as ::core::ffi::c_int
+            & kOptWimFlagLongest as ::core::ffi::c_int
+            != 0;
+        let mut wim_list: bool = wim_flags[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+            & kOptWimFlagList as ::core::ffi::c_int
+            != 0;
+        let mut wim_full: bool = wim_flags[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+            & kOptWimFlagFull as ::core::ffi::c_int
+            != 0;
         (*s).wim_index = 0 as ::core::ffi::c_int;
-        if (*s).c as OptInt == p_wc || (*s).c as OptInt == p_wcm
+        if (*s).c as OptInt == p_wc
+            || (*s).c as OptInt == p_wcm
             || (*s).c
                 == -(253 as ::core::ffi::c_int
                     + ((KE_WILD as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
@@ -6391,9 +6333,7 @@ unsafe extern "C" fn command_line_wildchar_complete(
                 escape,
             );
         } else {
-            if wim_noselect as ::core::ffi::c_int != 0
-                || wim_list as ::core::ffi::c_int != 0
-            {
+            if wim_noselect as ::core::ffi::c_int != 0 || wim_list as ::core::ffi::c_int != 0 {
                 options |= WILD_NOSELECT as ::core::ffi::c_int;
             }
             res = nextwild(
@@ -6436,22 +6376,24 @@ unsafe extern "C" fn command_line_wildchar_complete(
                 {
                     showmatches(&raw mut (*s).xpc, p_wmnu != 0, wim_list, true_0 != 0);
                 } else if !found_longest_prefix {
-                    let mut wim_list_next: bool = wim_flags[1 as ::core::ffi::c_int
-                        as usize] as ::core::ffi::c_int
-                        & kOptWimFlagList as ::core::ffi::c_int != 0;
-                    let mut wim_full_next: bool = wim_flags[1 as ::core::ffi::c_int
-                        as usize] as ::core::ffi::c_int
-                        & kOptWimFlagFull as ::core::ffi::c_int != 0;
-                    let mut wim_noselect_next: bool = wim_flags[1 as ::core::ffi::c_int
-                        as usize] as ::core::ffi::c_int
-                        & kOptWimFlagNoselect as ::core::ffi::c_int != 0;
+                    let mut wim_list_next: bool = wim_flags[1 as ::core::ffi::c_int as usize]
+                        as ::core::ffi::c_int
+                        & kOptWimFlagList as ::core::ffi::c_int
+                        != 0;
+                    let mut wim_full_next: bool = wim_flags[1 as ::core::ffi::c_int as usize]
+                        as ::core::ffi::c_int
+                        & kOptWimFlagFull as ::core::ffi::c_int
+                        != 0;
+                    let mut wim_noselect_next: bool = wim_flags[1 as ::core::ffi::c_int as usize]
+                        as ::core::ffi::c_int
+                        & kOptWimFlagNoselect as ::core::ffi::c_int
+                        != 0;
                     if wim_list_next as ::core::ffi::c_int != 0
                         || p_wmnu != 0
                             && (wim_full_next as ::core::ffi::c_int != 0
                                 || wim_noselect_next as ::core::ffi::c_int != 0)
                     {
-                        if wim_full_next as ::core::ffi::c_int != 0 && !wim_noselect_next
-                        {
+                        if wim_full_next as ::core::ffi::c_int != 0 && !wim_noselect_next {
                             nextwild(
                                 &raw mut (*s).xpc,
                                 WILD_NEXT as ::core::ffi::c_int,
@@ -6478,9 +6420,7 @@ unsafe extern "C" fn command_line_wildchar_complete(
             {
                 showmatches(&raw mut (*s).xpc, p_wmnu != 0, wim_list, wim_noselect);
             } else {
-                vim_beep(
-                    kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint,
-                );
+                vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
             }
             redrawcmd();
             if wim_list {
@@ -6510,17 +6450,19 @@ unsafe extern "C" fn command_line_end_wildmenu(
     if cmdline_pum_active() {
         if c != -1 as ::core::ffi::c_int {
             (*s).skip_pum_redraw = (*s).skip_pum_redraw as ::core::ffi::c_int != 0
-                && !key_is_wc && !ascii_iswhite(c)
-                && (vim_isprintc(c) as ::core::ffi::c_int != 0 || c == K_BS
-                    || c == Ctrl_H || c == K_DEL
-                    || c
-                        == -(253 as ::core::ffi::c_int
-                            + ((KE_KDEL as ::core::ffi::c_int)
-                                << 8 as ::core::ffi::c_int)) || c == Ctrl_W || c == Ctrl_U);
+                && !key_is_wc
+                && !ascii_iswhite(c)
+                && (vim_isprintc(c) as ::core::ffi::c_int != 0
+                    || c == K_BS
+                    || c == Ctrl_H
+                    || c == K_DEL
+                    || c == -(253 as ::core::ffi::c_int
+                        + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+                    || c == Ctrl_W
+                    || c == Ctrl_U);
         }
         cmdline_pum_remove(
-            c != -1 as ::core::ffi::c_int
-                && (*s).skip_pum_redraw as ::core::ffi::c_int != 0,
+            c != -1 as ::core::ffi::c_int && (*s).skip_pum_redraw as ::core::ffi::c_int != 0,
         );
     }
     if (*s).xpc.xp_numfiles != -1 as ::core::ffi::c_int {
@@ -6597,7 +6539,8 @@ unsafe extern "C" fn command_line_execute(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
                 NULL_0,
                 DOCMD_NOWAIT as ::core::ffi::c_int,
@@ -6611,11 +6554,7 @@ unsafe extern "C" fn command_line_execute(
         if (*curwin).w_display_tick > display_tick_saved
             && (*s).is_state.did_incsearch as ::core::ffi::c_int != 0
         {
-            may_do_incsearch_highlighting(
-                (*s).firstc,
-                (*s).count,
-                &raw mut (*s).is_state,
-            );
+            may_do_incsearch_highlighting((*s).firstc, (*s).count, &raw mut (*s).is_state);
         }
         if ccline.cmdbuff_replaced {
             command_line_changed(s);
@@ -6657,8 +6596,7 @@ unsafe extern "C" fn command_line_execute(
                 }
                 -22269 => {
                     (*s).c = -(253 as ::core::ffi::c_int
-                        + ((KE_C_LEFT as ::core::ffi::c_int)
-                            << 8 as ::core::ffi::c_int));
+                        + ((KE_C_LEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
                 }
                 K_LEFT => {
                     (*s).c = K_RIGHT;
@@ -6668,14 +6606,14 @@ unsafe extern "C" fn command_line_execute(
                 }
                 -22013 => {
                     (*s).c = -(253 as ::core::ffi::c_int
-                        + ((KE_C_RIGHT as ::core::ffi::c_int)
-                            << 8 as ::core::ffi::c_int));
+                        + ((KE_C_RIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
                 }
                 _ => {}
             }
         }
     }
-    if (*s).c == Ctrl_C && (*s).firstc != '@' as ::core::ffi::c_int
+    if (*s).c == Ctrl_C
+        && (*s).firstc != '@' as ::core::ffi::c_int
         && (!(*s).break_ctrl_c || exmode_active as ::core::ffi::c_int != 0)
         && global_busy == 0
     {
@@ -6688,20 +6626,25 @@ unsafe extern "C" fn command_line_execute(
         && (*s).c
             != -(253 as ::core::ffi::c_int
                 + ((KE_S_UP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        && (*s).c != K_DOWN && (*s).c != K_UP && (*s).c != K_PAGEDOWN
-        && (*s).c != K_PAGEUP && (*s).c != K_KPAGEDOWN && (*s).c != K_KPAGEUP
-        && (*s).c != K_LEFT && (*s).c != K_RIGHT
-        && ((*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int
-            || (*s).c != Ctrl_P && (*s).c != Ctrl_N)
+        && (*s).c != K_DOWN
+        && (*s).c != K_UP
+        && (*s).c != K_PAGEDOWN
+        && (*s).c != K_PAGEUP
+        && (*s).c != K_KPAGEDOWN
+        && (*s).c != K_KPAGEUP
+        && (*s).c != K_LEFT
+        && (*s).c != K_RIGHT
+        && ((*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int || (*s).c != Ctrl_P && (*s).c != Ctrl_N)
     {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*s).lookfor
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*s).lookfor as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
         (*s).lookforlen = 0 as ::core::ffi::c_int;
     }
-    if (*s).c as OptInt != p_wc && (*s).c == K_S_TAB
+    if (*s).c as OptInt != p_wc
+        && (*s).c == K_S_TAB
         && (*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int
     {
         (*s).c = Ctrl_P;
@@ -6717,8 +6660,10 @@ unsafe extern "C" fn command_line_execute(
     let mut wild_type: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let key_is_wc: bool = (*s).c as OptInt == p_wc && KeyTyped as ::core::ffi::c_int != 0
         || (*s).c as OptInt == p_wcm;
-    if (cmdline_pum_active() as ::core::ffi::c_int != 0 || wild_menu_showing != 0
-        || (*s).did_wild_list as ::core::ffi::c_int != 0) && !key_is_wc
+    if (cmdline_pum_active() as ::core::ffi::c_int != 0
+        || wild_menu_showing != 0
+        || (*s).did_wild_list as ::core::ffi::c_int != 0)
+        && !key_is_wc
         && (*s).xpc.xp_numfiles > 0 as ::core::ffi::c_int
     {
         if (*s).c == Ctrl_E || (*s).c == Ctrl_Y {
@@ -6736,24 +6681,34 @@ unsafe extern "C" fn command_line_execute(
         }
     }
     if KeyTyped as ::core::ffi::c_int != 0
-        && ((*s).c == '\n' as ::core::ffi::c_int || (*s).c == '\r' as ::core::ffi::c_int
-            || (*s).c == K_KENTER || (*s).c == ESC) || (*s).c == Ctrl_C
+        && ((*s).c == '\n' as ::core::ffi::c_int
+            || (*s).c == '\r' as ::core::ffi::c_int
+            || (*s).c == K_KENTER
+            || (*s).c == ESC)
+        || (*s).c == Ctrl_C
     {
         set_vim_var_char((*s).c);
         trigger_cmd_autocmd((*s).cmdline_type, EVENT_CMDLINELEAVEPRE);
         (*s).event_cmdlineleavepre_triggered = true_0 != 0;
         if ((*s).c == ESC || (*s).c == Ctrl_C)
             && wim_flags[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                & kOptWimFlagList as ::core::ffi::c_int != 0
+                & kOptWimFlagList as ::core::ffi::c_int
+                != 0
         {
             set_no_hlsearch(true_0 != 0);
         }
     }
-    let mut end_wildmenu: bool = !key_is_wc && (*s).c != Ctrl_Z && (*s).c != Ctrl_N
-        && (*s).c != Ctrl_P && (*s).c != Ctrl_A && (*s).c != Ctrl_L;
+    let mut end_wildmenu: bool = !key_is_wc
+        && (*s).c != Ctrl_Z
+        && (*s).c != Ctrl_N
+        && (*s).c != Ctrl_P
+        && (*s).c != Ctrl_A
+        && (*s).c != Ctrl_L;
     end_wildmenu = end_wildmenu as ::core::ffi::c_int != 0
         && (!cmdline_pum_active()
-            || (*s).c != K_PAGEDOWN && (*s).c != K_PAGEUP && (*s).c != K_KPAGEDOWN
+            || (*s).c != K_PAGEDOWN
+                && (*s).c != K_PAGEUP
+                && (*s).c != K_KPAGEDOWN
                 && (*s).c != K_KPAGEUP);
     if end_wildmenu {
         command_line_end_wildmenu(s, key_is_wc, (*s).c);
@@ -6788,14 +6743,20 @@ unsafe extern "C" fn command_line_execute(
     } else {
         (*s).c = do_digraph((*s).c);
     }
-    if (*s).c == '\n' as ::core::ffi::c_int || (*s).c == '\r' as ::core::ffi::c_int
+    if (*s).c == '\n' as ::core::ffi::c_int
+        || (*s).c == '\r' as ::core::ffi::c_int
         || (*s).c == K_KENTER
         || (*s).c == ESC && (!KeyTyped || !vim_strchr(p_cpo, CPO_ESC).is_null())
     {
-        if exmode_active as ::core::ffi::c_int != 0 && (*s).c != ESC
-            && ccline.cmdpos == ccline.cmdlen && ccline.cmdpos > 0 as ::core::ffi::c_int
-            && *ccline.cmdbuff.offset((ccline.cmdpos - 1 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+        if exmode_active as ::core::ffi::c_int != 0
+            && (*s).c != ESC
+            && ccline.cmdpos == ccline.cmdlen
+            && ccline.cmdpos > 0 as ::core::ffi::c_int
+            && *ccline
+                .cmdbuff
+                .offset((ccline.cmdpos - 1 as ::core::ffi::c_int) as isize)
+                as ::core::ffi::c_int
+                == '\\' as ::core::ffi::c_int
         {
             if (*s).c == K_KENTER {
                 (*s).c = '\n' as ::core::ffi::c_int;
@@ -6856,15 +6817,19 @@ unsafe extern "C" fn command_line_execute(
             if (*s).xpc.xp_numfiles > 1 as ::core::ffi::c_int
                 && (!(*s).did_wild_list
                     && wim_flags[(*s).wim_index as usize] as ::core::ffi::c_int
-                        & kOptWimFlagList as ::core::ffi::c_int != 0 || p_wmnu != 0)
+                        & kOptWimFlagList as ::core::ffi::c_int
+                        != 0
+                    || p_wmnu != 0)
             {
                 showmatches(
                     &raw mut (*s).xpc,
                     p_wmnu != 0,
                     wim_flags[(*s).wim_index as usize] as ::core::ffi::c_int
-                        & kOptWimFlagList as ::core::ffi::c_int != 0,
+                        & kOptWimFlagList as ::core::ffi::c_int
+                        != 0,
                     wim_flags[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                        & kOptWimFlagNoselect as ::core::ffi::c_int != 0,
+                        & kOptWimFlagNoselect as ::core::ffi::c_int
+                        != 0,
                 );
             }
             nextwild(
@@ -6893,11 +6858,7 @@ unsafe extern "C" fn command_line_execute(
             init_incsearch_state(&raw mut (*s).is_state);
         }
         if KeyTyped as ::core::ffi::c_int != 0 || vpeekc() == NUL {
-            may_do_incsearch_highlighting(
-                (*s).firstc,
-                (*s).count,
-                &raw mut (*s).is_state,
-            );
+            may_do_incsearch_highlighting((*s).firstc, (*s).count, &raw mut (*s).is_state);
         }
         return command_line_not_changed(s);
     }
@@ -6936,9 +6897,7 @@ unsafe extern "C" fn may_do_command_line_next_incsearch(
         col: 0,
         coladd: 0,
     };
-    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut search_flags: ::core::ffi::c_int = SEARCH_NOOF as ::core::ffi::c_int;
     if search_delim == *ccline.cmdbuff.offset(skiplen as isize) as ::core::ffi::c_int {
         pat = last_search_pattern();
@@ -6953,16 +6912,14 @@ unsafe extern "C" fn may_do_command_line_next_incsearch(
     }
     let mut bslsh: bool = false_0 != 0;
     if patlen > 2 as ::core::ffi::c_int
-        && firstc
-            == *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int
+        && firstc == *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
     {
         patlen -= 1;
         if *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
             == '\\' as ::core::ffi::c_int
         {
-            *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) = firstc as uint8_t
-                as ::core::ffi::c_char;
+            *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) =
+                firstc as uint8_t as ::core::ffi::c_char;
             bslsh = true_0 != 0;
         }
     }
@@ -7001,8 +6958,7 @@ unsafe extern "C" fn may_do_command_line_next_incsearch(
     emsg_off -= 1;
     *pat.offset(patlen as isize) = save;
     if bslsh {
-        *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) = '\\'
-            as ::core::ffi::c_char;
+        *pat.offset((patlen - 1 as ::core::ffi::c_int) as isize) = '\\' as ::core::ffi::c_char;
     }
     ui_busy_stop();
     if found != 0 {
@@ -7012,9 +6968,7 @@ unsafe extern "C" fn may_do_command_line_next_incsearch(
         if !next_match && firstc != '?' as ::core::ffi::c_int {
             (*s).search_start = t;
             decl(&raw mut (*s).search_start);
-        } else if next_match as ::core::ffi::c_int != 0
-            && firstc == '?' as ::core::ffi::c_int
-        {
+        } else if next_match as ::core::ffi::c_int != 0 && firstc == '?' as ::core::ffi::c_int {
             (*s).search_start = t;
             incl(&raw mut (*s).search_start);
         }
@@ -7046,9 +7000,7 @@ unsafe extern "C" fn may_do_command_line_next_incsearch(
     restore_last_search_pattern();
     return FAIL;
 }
-unsafe extern "C" fn command_line_erase_chars(
-    mut s: *mut CommandLineState,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn command_line_erase_chars(mut s: *mut CommandLineState) -> ::core::ffi::c_int {
     if (*s).c
         == -(253 as ::core::ffi::c_int
             + ((KE_KDEL as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
@@ -7059,18 +7011,15 @@ unsafe extern "C" fn command_line_erase_chars(
         ccline.cmdpos += 1;
     }
     if (*s).c == K_DEL {
-        ccline.cmdpos
-            += mb_off_next(
-                ccline.cmdbuff,
-                ccline.cmdbuff.offset(ccline.cmdpos as isize),
-            );
+        ccline.cmdpos += mb_off_next(
+            ccline.cmdbuff,
+            ccline.cmdbuff.offset(ccline.cmdpos as isize),
+        );
     }
     if ccline.cmdpos > 0 as ::core::ffi::c_int {
         let mut j: ::core::ffi::c_int = ccline.cmdpos;
-        let mut p: *mut ::core::ffi::c_char = mb_prevptr(
-            ccline.cmdbuff,
-            ccline.cmdbuff.offset(j as isize),
-        );
+        let mut p: *mut ::core::ffi::c_char =
+            mb_prevptr(ccline.cmdbuff, ccline.cmdbuff.offset(j as isize));
         if (*s).c == Ctrl_W {
             while p > ccline.cmdbuff
                 && ascii_isspace(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
@@ -7093,9 +7042,8 @@ unsafe extern "C" fn command_line_erase_chars(
             j = j + 1;
             let c2rust_fresh30 = i_0;
             i_0 = i_0 + 1;
-            *ccline.cmdbuff.offset(c2rust_fresh30 as isize) = *ccline
-                .cmdbuff
-                .offset(c2rust_fresh29 as isize);
+            *ccline.cmdbuff.offset(c2rust_fresh30 as isize) =
+                *ccline.cmdbuff.offset(c2rust_fresh29 as isize);
         }
         *ccline.cmdbuff.offset(ccline.cmdlen as isize) = NUL as ::core::ffi::c_char;
         if ccline.cmdlen == 0 as ::core::ffi::c_int {
@@ -7103,11 +7051,12 @@ unsafe extern "C" fn command_line_erase_chars(
             (*s).is_state.old_viewstate = (*s).is_state.init_viewstate;
         }
         redrawcmd();
-    } else if ccline.cmdlen == 0 as ::core::ffi::c_int && (*s).c != Ctrl_W
-        && ccline.cmdprompt.is_null() && (*s).indent == 0 as ::core::ffi::c_int
+    } else if ccline.cmdlen == 0 as ::core::ffi::c_int
+        && (*s).c != Ctrl_W
+        && ccline.cmdprompt.is_null()
+        && (*s).indent == 0 as ::core::ffi::c_int
     {
-        if exmode_active as ::core::ffi::c_int != 0
-            || ccline.cmdfirstc == '>' as ::core::ffi::c_int
+        if exmode_active as ::core::ffi::c_int != 0 || ccline.cmdfirstc == '>' as ::core::ffi::c_int
         {
             return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
         }
@@ -7123,9 +7072,7 @@ unsafe extern "C" fn command_line_erase_chars(
     return CMDLINE_CHANGED as ::core::ffi::c_int;
 }
 unsafe extern "C" fn command_line_toggle_langmap(mut s: *mut CommandLineState) {
-    let mut b_im_ptr: *mut OptInt = if buf_valid((*s).b_im_ptr_buf) as ::core::ffi::c_int
-        != 0
-    {
+    let mut b_im_ptr: *mut OptInt = if buf_valid((*s).b_im_ptr_buf) as ::core::ffi::c_int != 0 {
         (*s).b_im_ptr
     } else {
         ::core::ptr::null_mut::<OptInt>()
@@ -7154,9 +7101,7 @@ unsafe extern "C" fn command_line_toggle_langmap(mut s: *mut CommandLineState) {
     ui_cursor_shape();
     status_redraw_curbuf();
 }
-unsafe extern "C" fn command_line_insert_reg(
-    mut s: *mut CommandLineState,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn command_line_insert_reg(mut s: *mut CommandLineState) -> ::core::ffi::c_int {
     let save_new_cmdpos: ::core::ffi::c_int = new_cmdpos;
     putcmdline('"' as ::core::ffi::c_char, true_0 != 0);
     no_mapping += 1;
@@ -7173,9 +7118,7 @@ unsafe extern "C" fn command_line_insert_reg(
     allow_keys -= 1;
     new_cmdpos = -1 as ::core::ffi::c_int;
     if (*s).c == '=' as ::core::ffi::c_int {
-        if ccline.cmdfirstc == '=' as ::core::ffi::c_int
-            || cmdline_star > 0 as ::core::ffi::c_int
-        {
+        if ccline.cmdfirstc == '=' as ::core::ffi::c_int || cmdline_star > 0 as ::core::ffi::c_int {
             beep_flush();
             (*s).c = ESC;
         } else {
@@ -7184,8 +7127,7 @@ unsafe extern "C" fn command_line_insert_reg(
     }
     let mut literally: bool = false_0 != 0;
     if (*s).c != ESC {
-        literally = i == Ctrl_R
-            || is_literal_register((*s).c) as ::core::ffi::c_int != 0;
+        literally = i == Ctrl_R || is_literal_register((*s).c) as ::core::ffi::c_int != 0;
         cmdline_paste((*s).c, literally, false_0 != 0);
         if aborting() {
             (*s).gotesc = true_0 != 0;
@@ -7231,17 +7173,13 @@ unsafe extern "C" fn command_line_left_right_mouse(mut s: *mut CommandLineState)
             break;
         }
         correct_screencol(ccline.cmdpos, cells, &raw mut ccline.cmdspos);
-        ccline.cmdpos
-            += utfc_ptr2len(ccline.cmdbuff.offset(ccline.cmdpos as isize))
-                - 1 as ::core::ffi::c_int;
+        ccline.cmdpos +=
+            utfc_ptr2len(ccline.cmdbuff.offset(ccline.cmdpos as isize)) - 1 as ::core::ffi::c_int;
         ccline.cmdspos += cells;
         ccline.cmdpos += 1;
     }
 }
-unsafe extern "C" fn command_line_next_histidx(
-    mut s: *mut CommandLineState,
-    mut next_match: bool,
-) {
+unsafe extern "C" fn command_line_next_histidx(mut s: *mut CommandLineState, mut next_match: bool) {
     loop {
         if !next_match {
             if (*s).hiscnt == get_hislen() {
@@ -7250,8 +7188,7 @@ unsafe extern "C" fn command_line_next_histidx(
                 && *get_hisidx((*s).histype) != get_hislen() - 1 as ::core::ffi::c_int
             {
                 (*s).hiscnt = get_hislen() - 1 as ::core::ffi::c_int;
-            } else if (*s).hiscnt != *get_hisidx((*s).histype) + 1 as ::core::ffi::c_int
-            {
+            } else if (*s).hiscnt != *get_hisidx((*s).histype) + 1 as ::core::ffi::c_int {
                 (*s).hiscnt -= 1;
             } else {
                 (*s).hiscnt = (*s).save_hiscnt;
@@ -7277,7 +7214,8 @@ unsafe extern "C" fn command_line_next_histidx(
         {
             (*s).hiscnt = (*s).save_hiscnt;
             break;
-        } else if (*s).c != K_UP && (*s).c != K_DOWN || (*s).hiscnt == (*s).save_hiscnt
+        } else if (*s).c != K_UP && (*s).c != K_DOWN
+            || (*s).hiscnt == (*s).save_hiscnt
             || strncmp(
                 (*get_histentry((*s).histype).offset((*s).hiscnt as isize)).hisstr,
                 (*s).lookfor,
@@ -7286,13 +7224,14 @@ unsafe extern "C" fn command_line_next_histidx(
         {
             break;
         }
-    };
+    }
 }
 unsafe extern "C" fn command_line_browse_history(
     mut s: *mut CommandLineState,
 ) -> ::core::ffi::c_int {
     if (*s).histype == HIST_INVALID as ::core::ffi::c_int
-        || get_hislen() == 0 as ::core::ffi::c_int || (*s).firstc == NUL
+        || get_hislen() == 0 as ::core::ffi::c_int
+        || (*s).firstc == NUL
     {
         return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
     }
@@ -7306,12 +7245,12 @@ unsafe extern "C" fn command_line_browse_history(
         || (*s).c
             == -(253 as ::core::ffi::c_int
                 + ((KE_S_DOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || (*s).c == Ctrl_N || (*s).c == K_PAGEDOWN || (*s).c == K_KPAGEDOWN;
+        || (*s).c == Ctrl_N
+        || (*s).c == K_PAGEDOWN
+        || (*s).c == K_KPAGEDOWN;
     command_line_next_histidx(s, next_match);
     if (*s).hiscnt != (*s).save_hiscnt {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut plen: ::core::ffi::c_int = 0;
         let mut old_firstc: ::core::ffi::c_int = 0;
         dealloc_cmdbuff();
@@ -7324,13 +7263,11 @@ unsafe extern "C" fn command_line_browse_history(
             plen = (*get_histentry((*s).histype).offset((*s).hiscnt as isize)).hisstrlen
                 as ::core::ffi::c_int;
         }
-        if (*s).histype == HIST_SEARCH as ::core::ffi::c_int && p != (*s).lookfor
-            && {
-                old_firstc = *p.offset((plen + 1 as ::core::ffi::c_int) as isize)
-                    as uint8_t as ::core::ffi::c_int;
-                old_firstc != (*s).firstc
-            }
-        {
+        if (*s).histype == HIST_SEARCH as ::core::ffi::c_int && p != (*s).lookfor && {
+            old_firstc = *p.offset((plen + 1 as ::core::ffi::c_int) as isize) as uint8_t
+                as ::core::ffi::c_int;
+            old_firstc != (*s).firstc
+        } {
             let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i <= 1 as ::core::ffi::c_int {
@@ -7340,21 +7277,22 @@ unsafe extern "C" fn command_line_browse_history(
                     if *p.offset(j as isize) as ::core::ffi::c_int == old_firstc
                         && (j == 0 as ::core::ffi::c_int
                             || *p.offset((j - 1 as ::core::ffi::c_int) as isize)
-                                as ::core::ffi::c_int != '\\' as ::core::ffi::c_int)
+                                as ::core::ffi::c_int
+                                != '\\' as ::core::ffi::c_int)
                     {
                         if i > 0 as ::core::ffi::c_int {
-                            *ccline.cmdbuff.offset(len as isize) = (*s).firstc
-                                as ::core::ffi::c_char;
+                            *ccline.cmdbuff.offset(len as isize) =
+                                (*s).firstc as ::core::ffi::c_char;
                         }
                     } else {
                         if *p.offset(j as isize) as ::core::ffi::c_int == (*s).firstc
                             && (j == 0 as ::core::ffi::c_int
                                 || *p.offset((j - 1 as ::core::ffi::c_int) as isize)
-                                    as ::core::ffi::c_int != '\\' as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    != '\\' as ::core::ffi::c_int)
                         {
                             if i > 0 as ::core::ffi::c_int {
-                                *ccline.cmdbuff.offset(len as isize) = '\\'
-                                    as ::core::ffi::c_char;
+                                *ccline.cmdbuff.offset(len as isize) = '\\' as ::core::ffi::c_char;
                             }
                             len += 1;
                         }
@@ -7385,11 +7323,8 @@ unsafe extern "C" fn command_line_browse_history(
     beep_flush();
     return CMDLINE_NOT_CHANGED as ::core::ffi::c_int;
 }
-unsafe extern "C" fn command_line_handle_key(
-    mut s: *mut CommandLineState,
-) -> ::core::ffi::c_int {
-    if !(ccline.one_key as ::core::ffi::c_int != 0 && (*s).c != ESC && (*s).c != Ctrl_C)
-    {
+unsafe extern "C" fn command_line_handle_key(mut s: *mut CommandLineState) -> ::core::ffi::c_int {
+    if !(ccline.one_key as ::core::ffi::c_int != 0 && (*s).c != ESC && (*s).c != Ctrl_C) {
         's_680: {
             'c_46093: {
                 'c_46136: {
@@ -7403,8 +7338,7 @@ unsafe extern "C" fn command_line_handle_key(
                                 }
                             }
                             K_INS | K_KINS => {
-                                ccline.overstrike = (ccline.overstrike == 0)
-                                    as ::core::ffi::c_int;
+                                ccline.overstrike = (ccline.overstrike == 0) as ::core::ffi::c_int;
                                 ui_cursor_shape();
                                 may_trigger_modechanged();
                                 status_redraw_curbuf();
@@ -7425,12 +7359,11 @@ unsafe extern "C" fn command_line_handle_key(
                                     j = j + 1;
                                     let c2rust_fresh8 = i;
                                     i = i + 1;
-                                    *ccline.cmdbuff.offset(c2rust_fresh8 as isize) = *ccline
-                                        .cmdbuff
-                                        .offset(c2rust_fresh7 as isize);
+                                    *ccline.cmdbuff.offset(c2rust_fresh8 as isize) =
+                                        *ccline.cmdbuff.offset(c2rust_fresh7 as isize);
                                 }
-                                *ccline.cmdbuff.offset(ccline.cmdlen as isize) = NUL
-                                    as ::core::ffi::c_char;
+                                *ccline.cmdbuff.offset(ccline.cmdlen as isize) =
+                                    NUL as ::core::ffi::c_char;
                                 if ccline.cmdlen == 0 as ::core::ffi::c_int {
                                     (*s).is_state.search_start = (*s).is_state.save_cursor;
                                 }
@@ -7450,13 +7383,11 @@ unsafe extern "C" fn command_line_handle_key(
                                 (*s).gotesc = true_0 != 0;
                                 return 0 as ::core::ffi::c_int;
                             }
-                            Ctrl_R => {
-                                match command_line_insert_reg(s) {
-                                    3 => return 0 as ::core::ffi::c_int,
-                                    2 => return command_line_changed(s),
-                                    _ => return command_line_not_changed(s),
-                                }
-                            }
+                            Ctrl_R => match command_line_insert_reg(s) {
+                                3 => return 0 as ::core::ffi::c_int,
+                                2 => return command_line_changed(s),
+                                _ => return command_line_not_changed(s),
+                            },
                             Ctrl_D => {
                                 if showmatches(
                                     &raw mut (*s).xpc,
@@ -7464,7 +7395,8 @@ unsafe extern "C" fn command_line_handle_key(
                                     true_0 != 0,
                                     wim_flags[0 as ::core::ffi::c_int as usize]
                                         as ::core::ffi::c_int
-                                        & kOptWimFlagNoselect as ::core::ffi::c_int != 0,
+                                        & kOptWimFlagNoselect as ::core::ffi::c_int
+                                        != 0,
                                 ) == EXPAND_NOTHING as ::core::ffi::c_int
                                 {
                                     break 's_680;
@@ -7475,19 +7407,16 @@ unsafe extern "C" fn command_line_handle_key(
                             }
                             K_RIGHT | K_S_RIGHT | -22269 => {
                                 while ccline.cmdpos < ccline.cmdlen {
-                                    let mut cells: ::core::ffi::c_int = cmdline_charsize(
-                                        ccline.cmdpos,
-                                    );
+                                    let mut cells: ::core::ffi::c_int =
+                                        cmdline_charsize(ccline.cmdpos);
                                     if KeyTyped as ::core::ffi::c_int != 0
                                         && ccline.cmdspos + cells >= Columns * Rows
                                     {
                                         break;
                                     }
                                     ccline.cmdspos += cells;
-                                    ccline.cmdpos
-                                        += utfc_ptr2len(
-                                            ccline.cmdbuff.offset(ccline.cmdpos as isize),
-                                        );
+                                    ccline.cmdpos +=
+                                        utfc_ptr2len(ccline.cmdbuff.offset(ccline.cmdpos as isize));
                                     if !(((*s).c == K_S_RIGHT
                                         || (*s).c
                                             == -(253 as ::core::ffi::c_int
@@ -7495,7 +7424,8 @@ unsafe extern "C" fn command_line_handle_key(
                                                     << 8 as ::core::ffi::c_int))
                                         || mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
                                         && *ccline.cmdbuff.offset(ccline.cmdpos as isize)
-                                            as ::core::ffi::c_int != ' ' as ::core::ffi::c_int)
+                                            as ::core::ffi::c_int
+                                            != ' ' as ::core::ffi::c_int)
                                     {
                                         break;
                                     }
@@ -7509,11 +7439,10 @@ unsafe extern "C" fn command_line_handle_key(
                                 }
                                 loop {
                                     ccline.cmdpos -= 1;
-                                    ccline.cmdpos
-                                        -= utf_head_off(
-                                            ccline.cmdbuff,
-                                            ccline.cmdbuff.offset(ccline.cmdpos as isize),
-                                        );
+                                    ccline.cmdpos -= utf_head_off(
+                                        ccline.cmdbuff,
+                                        ccline.cmdbuff.offset(ccline.cmdpos as isize),
+                                    );
                                     ccline.cmdspos -= cmdline_charsize(ccline.cmdpos);
                                     if !(ccline.cmdpos > 0 as ::core::ffi::c_int
                                         && ((*s).c == K_S_LEFT
@@ -7522,10 +7451,11 @@ unsafe extern "C" fn command_line_handle_key(
                                                     + ((KE_C_LEFT as ::core::ffi::c_int)
                                                         << 8 as ::core::ffi::c_int))
                                             || mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
-                                        && *ccline
-                                            .cmdbuff
-                                            .offset((ccline.cmdpos - 1 as ::core::ffi::c_int) as isize)
-                                            as ::core::ffi::c_int != ' ' as ::core::ffi::c_int)
+                                        && *ccline.cmdbuff.offset(
+                                            (ccline.cmdpos - 1 as ::core::ffi::c_int) as isize,
+                                        )
+                                            as ::core::ffi::c_int
+                                            != ' ' as ::core::ffi::c_int)
                                     {
                                         break;
                                     }
@@ -7545,7 +7475,8 @@ unsafe extern "C" fn command_line_handle_key(
                                     if eval_has_provider(
                                         b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
                                         false_0 != 0,
-                                    ) as ::core::ffi::c_int != 0
+                                    ) as ::core::ffi::c_int
+                                        != 0
                                     {
                                         '*' as ::core::ffi::c_int
                                     } else {
@@ -7569,16 +7500,8 @@ unsafe extern "C" fn command_line_handle_key(
                             K_RIGHTMOUSE => {
                                 break 'c_46093;
                             }
-                            K_MOUSEDOWN
-                            | K_MOUSEUP
-                            | K_MOUSELEFT
-                            | K_MOUSERIGHT
-                            | K_X1MOUSE
-                            | K_X1DRAG
-                            | K_X1RELEASE
-                            | K_X2MOUSE
-                            | K_X2DRAG
-                            | K_X2RELEASE
+                            K_MOUSEDOWN | K_MOUSEUP | K_MOUSELEFT | K_MOUSERIGHT | K_X1MOUSE
+                            | K_X1DRAG | K_X1RELEASE | K_X2MOUSE | K_X2DRAG | K_X2RELEASE
                             | K_MOUSEMOVE => return command_line_not_changed(s),
                             K_SELECT => return command_line_not_changed(s),
                             Ctrl_B | K_HOME | K_KHOME | K_S_HOME | K_C_HOME => {
@@ -7627,7 +7550,7 @@ unsafe extern "C" fn command_line_handle_key(
                                 {
                                     break 's_680;
                                 } else {
-                                    return command_line_changed(s)
+                                    return command_line_changed(s);
                                 }
                             }
                             Ctrl_N | Ctrl_P => {
@@ -7646,17 +7569,11 @@ unsafe extern "C" fn command_line_handle_key(
                                     {
                                         break 's_680;
                                     } else {
-                                        return command_line_changed(s)
+                                        return command_line_changed(s);
                                     }
                                 }
                             }
-                            K_UP
-                            | K_DOWN
-                            | -1277
-                            | -1533
-                            | K_PAGEUP
-                            | K_KPAGEUP
-                            | K_PAGEDOWN
+                            K_UP | K_DOWN | -1277 | -1533 | K_PAGEUP | K_KPAGEUP | K_PAGEDOWN
                             | K_KPAGEDOWN => {}
                             Ctrl_G | Ctrl_T => {
                                 if may_do_command_line_next_incsearch(
@@ -7705,7 +7622,7 @@ unsafe extern "C" fn command_line_handle_key(
                                 if p_ari == 0 {
                                     break 's_680;
                                 } else {
-                                    return command_line_not_changed(s)
+                                    return command_line_not_changed(s);
                                 }
                             }
                             113 => {
@@ -7720,16 +7637,17 @@ unsafe extern "C" fn command_line_handle_key(
                             }
                         }
                         if cmdline_pum_active() as ::core::ffi::c_int != 0
-                            && ((*s).c == K_PAGEUP || (*s).c == K_PAGEDOWN
-                                || (*s).c == K_KPAGEUP || (*s).c == K_KPAGEDOWN)
+                            && ((*s).c == K_PAGEUP
+                                || (*s).c == K_PAGEDOWN
+                                || (*s).c == K_KPAGEUP
+                                || (*s).c == K_KPAGEDOWN)
                         {
-                            let wild_type_0: ::core::ffi::c_int = if (*s).c == K_PAGEDOWN
-                                || (*s).c == K_KPAGEDOWN
-                            {
-                                WILD_PAGEDOWN as ::core::ffi::c_int
-                            } else {
-                                WILD_PAGEUP as ::core::ffi::c_int
-                            };
+                            let wild_type_0: ::core::ffi::c_int =
+                                if (*s).c == K_PAGEDOWN || (*s).c == K_KPAGEDOWN {
+                                    WILD_PAGEDOWN as ::core::ffi::c_int
+                                } else {
+                                    WILD_PAGEUP as ::core::ffi::c_int
+                                };
                             if nextwild(
                                 &raw mut (*s).xpc,
                                 wild_type_0,
@@ -7739,7 +7657,7 @@ unsafe extern "C" fn command_line_handle_key(
                             {
                                 break 's_680;
                             } else {
-                                return command_line_changed(s)
+                                return command_line_changed(s);
                             }
                         } else {
                             match command_line_browse_history(s) {
@@ -7774,7 +7692,8 @@ unsafe extern "C" fn command_line_handle_key(
                 } else {
                     (*s).c
                 }),
-            ) != 0 || (*s).c == Ctrl_RSB)
+            ) != 0
+                || (*s).c == Ctrl_RSB)
         {
             return command_line_changed(s);
         }
@@ -7786,12 +7705,14 @@ unsafe extern "C" fn command_line_handle_key(
             true_0 != 0,
         );
     } else {
-        let mut j_0: ::core::ffi::c_int = utf_char2bytes(
-            (*s).c,
-            &raw mut IObuff as *mut ::core::ffi::c_char,
-        );
+        let mut j_0: ::core::ffi::c_int =
+            utf_char2bytes((*s).c, &raw mut IObuff as *mut ::core::ffi::c_char);
         IObuff[j_0 as usize] = NUL as ::core::ffi::c_char;
-        put_on_cmdline(&raw mut IObuff as *mut ::core::ffi::c_char, j_0, true_0 != 0);
+        put_on_cmdline(
+            &raw mut IObuff as *mut ::core::ffi::c_char,
+            j_0,
+            true_0 != 0,
+        );
     }
     return if ccline.one_key as ::core::ffi::c_int != 0 {
         0 as ::core::ffi::c_int
@@ -7811,9 +7732,7 @@ unsafe extern "C" fn may_trigger_cursormovedc(mut s: *mut CommandLineState) {
         }) as CmdRedraw;
     }
 }
-unsafe extern "C" fn command_line_not_changed(
-    mut s: *mut CommandLineState,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn command_line_not_changed(mut s: *mut CommandLineState) -> ::core::ffi::c_int {
     may_trigger_cursormovedc(s);
     (*s).prev_cmdpos = ccline.cmdpos;
     if !(*s).is_state.incsearch_postponed {
@@ -7837,7 +7756,7 @@ unsafe extern "C" fn empty_pattern(
             &raw mut magic_val,
         );
     } else {
-        return true_0 != 0
+        return true_0 != 0;
     }
     return empty_pattern_magic(p, len, magic_val);
 }
@@ -7850,11 +7769,10 @@ unsafe extern "C" fn empty_pattern_magic(
         && *p.offset(len.wrapping_sub(2 as size_t) as isize) as ::core::ffi::c_int
             == '\\' as ::core::ffi::c_int
         && !vim_strchr(
-                b"mMvVcCZ\0".as_ptr() as *const ::core::ffi::c_char,
-                *p.offset(len.wrapping_sub(1 as size_t) as isize) as uint8_t
-                    as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"mMvVcCZ\0".as_ptr() as *const ::core::ffi::c_char,
+            *p.offset(len.wrapping_sub(1 as size_t) as isize) as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
     {
         len = len.wrapping_sub(2 as size_t);
     }
@@ -7866,8 +7784,8 @@ unsafe extern "C" fn empty_pattern_magic(
                 == '\\' as ::core::ffi::c_int
                 && magic_val as ::core::ffi::c_uint
                     == MAGIC_ON as ::core::ffi::c_int as ::core::ffi::c_uint
-                || *p.offset(len.wrapping_sub(2 as size_t) as isize)
-                    as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+                || *p.offset(len.wrapping_sub(2 as size_t) as isize) as ::core::ffi::c_int
+                    != '\\' as ::core::ffi::c_int
                     && magic_val as ::core::ffi::c_uint
                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint);
 }
@@ -7890,11 +7808,7 @@ unsafe extern "C" fn cmdpreview_open_buf() -> *mut buf_T {
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
-        let mut bufnr: handle_T = nvim_create_buf(
-            false_0 != 0,
-            true_0 != 0,
-            &raw mut err,
-        );
+        let mut bufnr: handle_T = nvim_create_buf(false_0 != 0, true_0 != 0, &raw mut err);
         if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return ::core::ptr::null_mut::<buf_T>();
         }
@@ -7919,9 +7833,9 @@ unsafe extern "C" fn cmdpreview_open_buf() -> *mut buf_T {
         save_prompt_insert: 0,
     };
     aucmd_prepbuf(&raw mut aco, cmdpreview_buf);
-    let mut retv: ::core::ffi::c_int = rename_buffer(
-        b"[Preview]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    );
+    let mut retv: ::core::ffi::c_int = rename_buffer(b"[Preview]\0".as_ptr()
+        as *const ::core::ffi::c_char
+        as *mut ::core::ffi::c_char);
     aucmd_restbuf(&raw mut aco);
     if retv == FAIL {
         return ::core::ptr::null_mut::<buf_T>();
@@ -7964,9 +7878,7 @@ unsafe extern "C" fn cmdpreview_open_win(mut cmdpreview_buf: *mut buf_T) -> *mut
         0 as ::core::ffi::c_int,
     );
     try_leave(&raw mut tstate, &raw mut err);
-    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-        || result == FAIL
-    {
+    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int || result == FAIL {
         api_clear_error(&raw mut err);
         return ::core::ptr::null_mut::<win_T>();
     }
@@ -7987,10 +7899,7 @@ unsafe extern "C" fn cmdpreview_close_win() {
         close_windows(buf, false_0 != 0);
     }
 }
-unsafe extern "C" fn cmdpreview_save_undo(
-    mut cp_undoinfo: *mut CpUndoInfo,
-    mut buf: *mut buf_T,
-) {
+unsafe extern "C" fn cmdpreview_save_undo(mut cp_undoinfo: *mut CpUndoInfo, mut buf: *mut buf_T) {
     (*cp_undoinfo).save_b_u_synced = (*buf).b_u_synced;
     (*cp_undoinfo).save_b_u_oldhead = (*buf).b_u_oldhead;
     (*cp_undoinfo).save_b_u_newhead = (*buf).b_u_newhead;
@@ -8069,9 +7978,7 @@ unsafe extern "C" fn cmdpreview_prepare(mut cpinfo: *mut CpInfo) {
                         save_b_u_seq_cur: 0,
                         save_b_u_time_cur: 0,
                         save_b_u_save_nr_cur: 0,
-                        save_b_u_line_ptr: ::core::ptr::null_mut::<
-                            ::core::ffi::c_char,
-                        >(),
+                        save_b_u_line_ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         save_b_u_line_lnum: 0,
                         save_b_u_line_colnr: 0,
                     },
@@ -8095,7 +8002,8 @@ unsafe extern "C" fn cmdpreview_prepare(mut cpinfo: *mut CpInfo) {
                         ::core::mem::size_of::<CpBufInfo>()
                             .wrapping_mul((*cpinfo).buf_info.capacity),
                     ) as *mut CpBufInfo;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh15 = (*cpinfo).buf_info.size;
                 (*cpinfo).buf_info.size = (*cpinfo).buf_info.size.wrapping_add(1);
                 *(*cpinfo).buf_info.items.offset(c2rust_fresh15 as isize) = cp_bufinfo;
@@ -8139,10 +8047,10 @@ unsafe extern "C" fn cmdpreview_prepare(mut cpinfo: *mut CpInfo) {
                 });
                 (*cpinfo).win_info.items = xrealloc(
                     (*cpinfo).win_info.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<CpWinInfo>()
-                        .wrapping_mul((*cpinfo).win_info.capacity),
+                    ::core::mem::size_of::<CpWinInfo>().wrapping_mul((*cpinfo).win_info.capacity),
                 ) as *mut CpWinInfo;
-            } else {};
+            } else {
+            };
             let c2rust_fresh16 = (*cpinfo).win_info.size;
             (*cpinfo).win_info.size = (*cpinfo).win_info.size.wrapping_add(1);
             *(*cpinfo).win_info.items.offset(c2rust_fresh16 as isize) = cp_wininfo;
@@ -8363,9 +8271,7 @@ unsafe extern "C" fn cmdpreview_may_show(mut s: *mut CommandLineState) -> bool {
     };
     let mut cmdpreview_type: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut cmdline: *mut ::core::ffi::c_char = xstrdup(ccline.cmdbuff);
-    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     emsg_off += 1;
     if !parse_cmdline(
         &raw mut cmdline,
@@ -8434,12 +8340,10 @@ unsafe extern "C" fn cmdpreview_may_show(mut s: *mut CommandLineState) -> bool {
             msg_silent += 1;
             block_autocmds();
             cmdpreview_prepare(&raw mut cpinfo);
-            if icm_split as ::core::ffi::c_int != 0
-                && {
-                    cmdpreview_buf = cmdpreview_open_buf();
-                    cmdpreview_buf.is_null()
-                }
-            {
+            if icm_split as ::core::ffi::c_int != 0 && {
+                cmdpreview_buf = cmdpreview_open_buf();
+                cmdpreview_buf.is_null()
+            } {
                 set_option_direct(
                     kOptInccommand,
                     OptVal {
@@ -8584,14 +8488,14 @@ unsafe extern "C" fn do_autocmd_cmdlinechanged(mut firstc: ::core::ffi::c_int) {
         }
     }
 }
-unsafe extern "C" fn command_line_changed(
-    mut s: *mut CommandLineState,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn command_line_changed(mut s: *mut CommandLineState) -> ::core::ffi::c_int {
     let prev_cmdpreview: bool = cmdpreview;
     if !((*s).firstc == ':' as ::core::ffi::c_int
         && current_sctx.sc_sid == 0 as ::core::ffi::c_int
-        && *p_icm as ::core::ffi::c_int != NUL && !exmode_active
-        && cmdline_star == 0 as ::core::ffi::c_int && vpeekc_any() == 0
+        && *p_icm as ::core::ffi::c_int != NUL
+        && !exmode_active
+        && cmdline_star == 0 as ::core::ffi::c_int
+        && vpeekc_any() == 0
         && cmdpreview_may_show(s) as ::core::ffi::c_int != 0)
     {
         cmdpreview = false_0 != 0;
@@ -8601,11 +8505,7 @@ unsafe extern "C" fn command_line_changed(
         if (*s).xpc.xp_context == EXPAND_NOTHING as ::core::ffi::c_int
             && (KeyTyped as ::core::ffi::c_int != 0 || vpeekc() == NUL)
         {
-            may_do_incsearch_highlighting(
-                (*s).firstc,
-                (*s).count,
-                &raw mut (*s).is_state,
-            );
+            may_do_incsearch_highlighting((*s).firstc, (*s).count, &raw mut (*s).is_state);
         }
     }
     if !ccline.cmdbuff_replaced
@@ -8613,13 +8513,11 @@ unsafe extern "C" fn command_line_changed(
             || !(*s).prev_cmdbuff.is_null()
                 && strcmp((*s).prev_cmdbuff, ccline.cmdbuff) != 0 as ::core::ffi::c_int)
     {
-        do_autocmd_cmdlinechanged(
-            if (*s).firstc > 0 as ::core::ffi::c_int {
-                (*s).firstc
-            } else {
-                '-' as ::core::ffi::c_int
-            },
-        );
+        do_autocmd_cmdlinechanged(if (*s).firstc > 0 as ::core::ffi::c_int {
+            (*s).firstc
+        } else {
+            '-' as ::core::ffi::c_int
+        });
     }
     may_trigger_cursormovedc(s);
     if p_arshape != 0 && p_tbidi == 0 {
@@ -8635,7 +8533,10 @@ unsafe extern "C" fn abandon_cmdline() {
         compute_cmdrow();
     }
     if !ccline.one_key {
-        msg(b"\0".as_ptr() as *const ::core::ffi::c_char, 0 as ::core::ffi::c_int);
+        msg(
+            b"\0".as_ptr() as *const ::core::ffi::c_char,
+            0 as ::core::ffi::c_int,
+        );
         redraw_cmdline = true_0 != 0;
     }
 }
@@ -8646,8 +8547,7 @@ pub unsafe extern "C" fn getcmdline(
     mut indent: ::core::ffi::c_int,
     mut do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
-    return command_line_enter(firstc, count, indent, true_0 != 0)
-        as *mut ::core::ffi::c_char;
+    return command_line_enter(firstc, count, indent, true_0 != 0) as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
 pub unsafe extern "C" fn getcmdline_prompt(
@@ -8760,8 +8660,7 @@ pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
         while *p.offset(i as isize) as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && *p.offset(i as isize) as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             || *p.offset(i as isize) as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && *p.offset(i as isize) as ::core::ffi::c_uint
-                    <= 'z' as ::core::ffi::c_uint
+                && *p.offset(i as isize) as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
         {
             i += 1;
         }
@@ -8778,22 +8677,28 @@ pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
                 7 as size_t,
             ) == 0 as ::core::ffi::c_int
         {
-            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize]
-                as ::core::ffi::c_int | kOptWimFlagLongest as ::core::ffi::c_int)
+            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
+                | kOptWimFlagLongest as ::core::ffi::c_int)
                 as uint8_t;
         } else if i == 4 as ::core::ffi::c_int
-            && strncmp(p, b"full\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-                == 0 as ::core::ffi::c_int
+            && strncmp(
+                p,
+                b"full\0".as_ptr() as *const ::core::ffi::c_char,
+                4 as size_t,
+            ) == 0 as ::core::ffi::c_int
         {
-            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize]
-                as ::core::ffi::c_int | kOptWimFlagFull as ::core::ffi::c_int)
+            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
+                | kOptWimFlagFull as ::core::ffi::c_int)
                 as uint8_t;
         } else if i == 4 as ::core::ffi::c_int
-            && strncmp(p, b"list\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-                == 0 as ::core::ffi::c_int
+            && strncmp(
+                p,
+                b"list\0".as_ptr() as *const ::core::ffi::c_char,
+                4 as size_t,
+            ) == 0 as ::core::ffi::c_int
         {
-            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize]
-                as ::core::ffi::c_int | kOptWimFlagList as ::core::ffi::c_int)
+            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
+                | kOptWimFlagList as ::core::ffi::c_int)
                 as uint8_t;
         } else if i == 8 as ::core::ffi::c_int
             && strncmp(
@@ -8802,8 +8707,8 @@ pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
                 8 as size_t,
             ) == 0 as ::core::ffi::c_int
         {
-            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize]
-                as ::core::ffi::c_int | kOptWimFlagLastused as ::core::ffi::c_int)
+            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
+                | kOptWimFlagLastused as ::core::ffi::c_int)
                 as uint8_t;
         } else if i == 8 as ::core::ffi::c_int
             && strncmp(
@@ -8812,11 +8717,11 @@ pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
                 8 as size_t,
             ) == 0 as ::core::ffi::c_int
         {
-            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize]
-                as ::core::ffi::c_int | kOptWimFlagNoselect as ::core::ffi::c_int)
+            new_wim_flags[idx as usize] = (new_wim_flags[idx as usize] as ::core::ffi::c_int
+                | kOptWimFlagNoselect as ::core::ffi::c_int)
                 as uint8_t;
         } else {
-            return FAIL
+            return FAIL;
         }
         p = p.offset(i as isize);
         if *p as ::core::ffi::c_int == NUL {
@@ -8831,8 +8736,7 @@ pub unsafe extern "C" fn check_opt_wim() -> ::core::ffi::c_int {
         p = p.offset(1);
     }
     while idx < 3 as ::core::ffi::c_int {
-        new_wim_flags[(idx + 1 as ::core::ffi::c_int) as usize] = new_wim_flags[idx
-            as usize];
+        new_wim_flags[(idx + 1 as ::core::ffi::c_int) as usize] = new_wim_flags[idx as usize];
         idx += 1;
     }
     i = 0 as ::core::ffi::c_int;
@@ -8859,9 +8763,9 @@ pub unsafe extern "C" fn text_locked_msg() {
 #[no_mangle]
 pub unsafe extern "C" fn get_text_locked_msg() -> *const ::core::ffi::c_char {
     if cmdwin_type != 0 as ::core::ffi::c_int {
-        return &raw const e_cmdwin as *const ::core::ffi::c_char
+        return &raw const e_cmdwin as *const ::core::ffi::c_char;
     } else {
-        return &raw const e_textlock as *const ::core::ffi::c_char
+        return &raw const e_textlock as *const ::core::ffi::c_char;
     };
 }
 #[no_mangle]
@@ -8875,7 +8779,9 @@ pub unsafe extern "C" fn text_or_buf_locked() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn curbuf_locked() -> bool {
     if (*curbuf).b_ro_locked > 0 as ::core::ffi::c_int {
-        emsg(gettext(&raw const e_cannot_edit_other_buf as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_cannot_edit_other_buf as *const ::core::ffi::c_char,
+        ));
         return true_0 != 0;
     }
     return allbuf_locked();
@@ -8883,19 +8789,15 @@ pub unsafe extern "C" fn curbuf_locked() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn allbuf_locked() -> bool {
     if allbuf_lock > 0 as ::core::ffi::c_int {
-        emsg(
-            gettext(
-                b"E811: Not allowed to change buffer information now\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E811: Not allowed to change buffer information now\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
         return true_0 != 0;
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn cmdline_charsize(
-    mut idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn cmdline_charsize(mut idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if cmdline_star > 0 as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
     }
@@ -8910,9 +8812,7 @@ unsafe extern "C" fn cmd_startcol() -> ::core::ffi::c_int {
         });
 }
 #[no_mangle]
-pub unsafe extern "C" fn cmd_screencol(
-    mut bytepos: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn cmd_screencol(mut bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut m: ::core::ffi::c_int = 0;
     let mut col: ::core::ffi::c_int = cmd_startcol();
     if KeyTyped {
@@ -8960,8 +8860,7 @@ pub unsafe extern "C" fn getexline(
     mut indent: ::core::ffi::c_int,
     mut do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
-    if exec_from_reg as ::core::ffi::c_int != 0 && vpeekc() == ':' as ::core::ffi::c_int
-    {
+    if exec_from_reg as ::core::ffi::c_int != 0 && vpeekc() == ':' as ::core::ffi::c_int {
         vgetc();
     }
     return getcmdline(c, 1 as ::core::ffi::c_int, indent, do_concat);
@@ -8975,8 +8874,8 @@ pub unsafe extern "C" fn cmdline_at_end() -> bool {
     return ccline.cmdpos >= ccline.cmdlen;
 }
 unsafe extern "C" fn dealloc_cmdbuff() {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut ccline.cmdbuff
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut ccline.cmdbuff as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -9005,12 +8904,13 @@ pub unsafe extern "C" fn realloc_cmdbuff(mut len: ::core::ffi::c_int) {
         ccline.cmdlen as size_t,
     );
     *ccline.cmdbuff.offset(ccline.cmdlen as isize) = NUL as ::core::ffi::c_char;
-    if !ccline.xpc.is_null() && !(*ccline.xpc).xp_pattern.is_null()
+    if !ccline.xpc.is_null()
+        && !(*ccline.xpc).xp_pattern.is_null()
         && (*ccline.xpc).xp_context != EXPAND_NOTHING as ::core::ffi::c_int
         && (*ccline.xpc).xp_context != EXPAND_UNSUCCESSFUL as ::core::ffi::c_int
     {
-        let mut i: ::core::ffi::c_int = (*ccline.xpc).xp_pattern.offset_from(p)
-            as ::core::ffi::c_int;
+        let mut i: ::core::ffi::c_int =
+            (*ccline.xpc).xp_pattern.offset_from(p) as ::core::ffi::c_int;
         if i >= 0 as ::core::ffi::c_int && i <= ccline.cmdlen {
             (*ccline.xpc).xp_pattern = ccline.cmdbuff.offset(i as isize);
         }
@@ -9048,8 +8948,8 @@ unsafe extern "C" fn color_expr_cmdline(
         .wrapping_div(::core::mem::size_of::<ParserHighlightChunk>())
         .wrapping_div(
             (::core::mem::size_of::<[ParserHighlightChunk; 16]>()
-                .wrapping_rem(::core::mem::size_of::<ParserHighlightChunk>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<ParserHighlightChunk>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     colors.size = 0 as size_t;
     colors.items = &raw mut colors.init_array as *mut ParserHighlightChunk;
@@ -9100,10 +9000,8 @@ unsafe extern "C" fn color_expr_cmdline(
         &raw mut plines_p as *mut ::core::ffi::c_void,
         &raw mut colors,
     );
-    let mut east: ExprAST = viml_pexpr_parse(
-        &raw mut pstate,
-        kExprFlagsDisallowEOC as ::core::ffi::c_int,
-    );
+    let mut east: ExprAST =
+        viml_pexpr_parse(&raw mut pstate, kExprFlagsDisallowEOC as ::core::ffi::c_int);
     viml_pexpr_free_ast(east);
     viml_parser_destroy(&raw mut pstate);
     (*ret_ccline_colors).colors.capacity = colors.size;
@@ -9117,12 +9015,12 @@ unsafe extern "C" fn color_expr_cmdline(
     while i < colors.size {
         let chunk: ParserHighlightChunk = *colors.items.offset(i as isize);
         '_c2rust_label: {
-            if chunk.start.col < 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if chunk.start.col < 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
-                    b"chunk.start.col < INT_MAX\0".as_ptr()
+                    b"chunk.start.col < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     3313 as ::core::ffi::c_uint,
                     b"void color_expr_cmdline(const CmdlineInfo *const, ColoredCmdline *const)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -9130,11 +9028,12 @@ unsafe extern "C" fn color_expr_cmdline(
             }
         };
         '_c2rust_label_0: {
-            if chunk.end_col < 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if chunk.end_col < 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"chunk.end_col < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     3314 as ::core::ffi::c_uint,
                     b"void color_expr_cmdline(const CmdlineInfo *const, ColoredCmdline *const)\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -9143,9 +9042,7 @@ unsafe extern "C" fn color_expr_cmdline(
         };
         if chunk.start.col != prev_end {
             if (*ret_ccline_colors).colors.size == (*ret_ccline_colors).colors.capacity {
-                (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors)
-                    .colors
-                    .capacity != 0
+                (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors).colors.capacity != 0
                 {
                     (*ret_ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
                 } else {
@@ -9156,23 +9053,21 @@ unsafe extern "C" fn color_expr_cmdline(
                     ::core::mem::size_of::<CmdlineColorChunk>()
                         .wrapping_mul((*ret_ccline_colors).colors.capacity),
                 ) as *mut CmdlineColorChunk;
-            } else {};
+            } else {
+            };
             let c2rust_fresh12 = (*ret_ccline_colors).colors.size;
-            (*ret_ccline_colors).colors.size = (*ret_ccline_colors)
+            (*ret_ccline_colors).colors.size = (*ret_ccline_colors).colors.size.wrapping_add(1);
+            *(*ret_ccline_colors)
                 .colors
-                .size
-                .wrapping_add(1);
-            *(*ret_ccline_colors).colors.items.offset(c2rust_fresh12 as isize) = CmdlineColorChunk {
+                .items
+                .offset(c2rust_fresh12 as isize) = CmdlineColorChunk {
                 start: prev_end as ::core::ffi::c_int,
                 end: chunk.start.col as ::core::ffi::c_int,
                 hl_id: 0 as ::core::ffi::c_int,
             };
         }
         if (*ret_ccline_colors).colors.size == (*ret_ccline_colors).colors.capacity {
-            (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors)
-                .colors
-                .capacity != 0
-            {
+            (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors).colors.capacity != 0 {
                 (*ret_ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
@@ -9182,13 +9077,14 @@ unsafe extern "C" fn color_expr_cmdline(
                 ::core::mem::size_of::<CmdlineColorChunk>()
                     .wrapping_mul((*ret_ccline_colors).colors.capacity),
             ) as *mut CmdlineColorChunk;
-        } else {};
+        } else {
+        };
         let c2rust_fresh13 = (*ret_ccline_colors).colors.size;
-        (*ret_ccline_colors).colors.size = (*ret_ccline_colors)
+        (*ret_ccline_colors).colors.size = (*ret_ccline_colors).colors.size.wrapping_add(1);
+        *(*ret_ccline_colors)
             .colors
-            .size
-            .wrapping_add(1);
-        *(*ret_ccline_colors).colors.items.offset(c2rust_fresh13 as isize) = CmdlineColorChunk {
+            .items
+            .offset(c2rust_fresh13 as isize) = CmdlineColorChunk {
             start: chunk.start.col as ::core::ffi::c_int,
             end: chunk.end_col as ::core::ffi::c_int,
             hl_id: syn_name2id(chunk.group),
@@ -9198,10 +9094,7 @@ unsafe extern "C" fn color_expr_cmdline(
     }
     if prev_end < (*colored_ccline).cmdlen as size_t {
         if (*ret_ccline_colors).colors.size == (*ret_ccline_colors).colors.capacity {
-            (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors)
-                .colors
-                .capacity != 0
-            {
+            (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors).colors.capacity != 0 {
                 (*ret_ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
@@ -9211,21 +9104,22 @@ unsafe extern "C" fn color_expr_cmdline(
                 ::core::mem::size_of::<CmdlineColorChunk>()
                     .wrapping_mul((*ret_ccline_colors).colors.capacity),
             ) as *mut CmdlineColorChunk;
-        } else {};
+        } else {
+        };
         let c2rust_fresh14 = (*ret_ccline_colors).colors.size;
-        (*ret_ccline_colors).colors.size = (*ret_ccline_colors)
+        (*ret_ccline_colors).colors.size = (*ret_ccline_colors).colors.size.wrapping_add(1);
+        *(*ret_ccline_colors)
             .colors
-            .size
-            .wrapping_add(1);
-        *(*ret_ccline_colors).colors.items.offset(c2rust_fresh14 as isize) = CmdlineColorChunk {
+            .items
+            .offset(c2rust_fresh14 as isize) = CmdlineColorChunk {
             start: prev_end as ::core::ffi::c_int,
             end: (*colored_ccline).cmdlen,
             hl_id: 0 as ::core::ffi::c_int,
         };
     }
     if colors.items != &raw mut colors.init_array as *mut ParserHighlightChunk {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut colors.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut colors.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -9240,8 +9134,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
     let mut ccline_colors: *mut ColoredCmdline = &raw mut (*colored_ccline).last_colors;
     if (*ccline_colors).prompt_id == (*colored_ccline).prompt_id
         && !(*ccline_colors).cmdbuff.is_null()
-        && strcmp((*ccline_colors).cmdbuff, (*colored_ccline).cmdbuff)
-            == 0 as ::core::ffi::c_int
+        && strcmp((*ccline_colors).cmdbuff, (*colored_ccline).cmdbuff) == 0 as ::core::ffi::c_int
     {
         return ret;
     }
@@ -9249,8 +9142,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
     if (*colored_ccline).cmdbuff.is_null()
         || *(*colored_ccline).cmdbuff as ::core::ffi::c_int == NUL
     {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*ccline_colors).cmdbuff
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*ccline_colors).cmdbuff as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -9281,8 +9174,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
         type_0: kErrorTypeNone,
         msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
-    let mut err_errmsg: *const ::core::ffi::c_char = &raw const e_intern2
-        as *const ::core::ffi::c_char;
+    let mut err_errmsg: *const ::core::ffi::c_char =
+        &raw const e_intern2 as *const ::core::ffi::c_char;
     let mut dgc_ret: bool = true_0 != 0;
     '_color_cmdline_end: {
         if (*colored_ccline).prompt_id != prev_prompt_id {
@@ -9295,12 +9188,12 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
             != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             '_c2rust_label: {
-                if (*colored_ccline).input_fn != 0 {} else {
+                if (*colored_ccline).input_fn != 0 {
+                } else {
                     __assert_fail(
-                        b"colored_ccline->input_fn\0".as_ptr()
+                        b"colored_ccline->input_fn\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         3408 as ::core::ffi::c_uint,
                         b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9319,13 +9212,13 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                 did_emsg: 0,
             };
             try_enter(&raw mut tstate);
-            err_errmsg = b"E5408: Unable to get g:Nvim_color_cmdline callback: %s\0"
-                .as_ptr() as *const ::core::ffi::c_char;
+            err_errmsg = b"E5408: Unable to get g:Nvim_color_cmdline callback: %s\0".as_ptr()
+                as *const ::core::ffi::c_char;
             dgc_ret = tv_dict_get_callback(
                 get_globvar_dict(),
                 b"Nvim_color_cmdline\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 19]>()
-                    .wrapping_sub(1 as usize) as ptrdiff_t,
+                ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as usize)
+                    as ptrdiff_t,
                 &raw mut color_cb,
             );
             try_leave(&raw mut tstate, &raw mut err);
@@ -9344,7 +9237,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                 } else {
                     if *(*colored_ccline)
                         .cmdbuff
-                        .offset((*colored_ccline).cmdlen as isize) as ::core::ffi::c_int
+                        .offset((*colored_ccline).cmdlen as isize)
+                        as ::core::ffi::c_int
                         != NUL
                     {
                         arg_allocated = true_0 != 0;
@@ -9365,8 +9259,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                         did_emsg: 0,
                     };
                     try_enter(&raw mut tstate_0);
-                    err_errmsg = b"E5407: Callback has thrown an exception: %s\0"
-                        .as_ptr() as *const ::core::ffi::c_char;
+                    err_errmsg = b"E5407: Callback has thrown an exception: %s\0".as_ptr()
+                        as *const ::core::ffi::c_char;
                     let saved_msg_col: ::core::ffi::c_int = msg_col;
                     msg_silent += 1;
                     cbcall_ret = callback_call(
@@ -9381,8 +9275,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                         getln_interrupted_highlight = true;
                     }
                     try_leave(&raw mut tstate_0, &raw mut err);
-                    if !(err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int || !cbcall_ret)
+                    if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
+                        || !cbcall_ret)
                     {
                         if tv.v_type as ::core::ffi::c_uint
                             != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -9392,10 +9286,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                             smsg(
                                 HLF_E as ::core::ffi::c_int,
                                 b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                gettext(
-                                    b"E5400: Callback should return list\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"E5400: Callback should return list\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                             );
                             printed_errmsg = true_0 != 0;
                         } else if tv.vval.v_list.is_null() {
@@ -9456,7 +9348,8 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                     break '_color_cmdline_error;
                                                 }
                                                 if !(prev_end <= start
-                                                    && start < (*colored_ccline).cmdlen as varnumber_T)
+                                                    && start
+                                                        < (*colored_ccline).cmdlen as varnumber_T)
                                                 {
                                                     msg_scroll = 1 as ::core::ffi::c_int;
                                                     msg_putchar('\n' as ::core::ffi::c_int);
@@ -9475,8 +9368,11 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                     break '_color_cmdline_error;
                                                 } else if utf8len_tab_zero[*(*colored_ccline)
                                                     .cmdbuff
-                                                    .offset(start as isize) as uint8_t as usize]
-                                                    as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                                                    .offset(start as isize)
+                                                    as uint8_t
+                                                    as usize]
+                                                    as ::core::ffi::c_int
+                                                    == 0 as ::core::ffi::c_int
                                                 {
                                                     msg_scroll = 1 as ::core::ffi::c_int;
                                                     msg_putchar('\n' as ::core::ffi::c_int);
@@ -9496,33 +9392,48 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                         if (*ccline_colors).colors.size
                                                             == (*ccline_colors).colors.capacity
                                                         {
-                                                            (*ccline_colors).colors.capacity = (if (*ccline_colors)
-                                                                .colors
-                                                                .capacity != 0
-                                                            {
-                                                                (*ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
-                                                            } else {
-                                                                8 as size_t
-                                                            });
+                                                            (*ccline_colors).colors.capacity =
+                                                                (if (*ccline_colors).colors.capacity
+                                                                    != 0
+                                                                {
+                                                                    (*ccline_colors).colors.capacity
+                                                                        << 1 as ::core::ffi::c_int
+                                                                } else {
+                                                                    8 as size_t
+                                                                });
                                                             (*ccline_colors).colors.items = xrealloc(
-                                                                (*ccline_colors).colors.items as *mut ::core::ffi::c_void,
-                                                                ::core::mem::size_of::<CmdlineColorChunk>()
-                                                                    .wrapping_mul((*ccline_colors).colors.capacity),
-                                                            ) as *mut CmdlineColorChunk;
-                                                        } else {};
-                                                        let c2rust_fresh9 = (*ccline_colors).colors.size;
-                                                        (*ccline_colors).colors.size = (*ccline_colors)
-                                                            .colors
-                                                            .size
-                                                            .wrapping_add(1);
+                                                                (*ccline_colors).colors.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                ::core::mem::size_of::<
+                                                                    CmdlineColorChunk,
+                                                                >(
+                                                                )
+                                                                .wrapping_mul(
+                                                                    (*ccline_colors)
+                                                                        .colors
+                                                                        .capacity,
+                                                                ),
+                                                            )
+                                                                as *mut CmdlineColorChunk;
+                                                        } else {
+                                                        };
+                                                        let c2rust_fresh9 =
+                                                            (*ccline_colors).colors.size;
+                                                        (*ccline_colors).colors.size =
+                                                            (*ccline_colors)
+                                                                .colors
+                                                                .size
+                                                                .wrapping_add(1);
                                                         *(*ccline_colors)
                                                             .colors
                                                             .items
-                                                            .offset(c2rust_fresh9 as isize) = CmdlineColorChunk {
-                                                            start: prev_end as ::core::ffi::c_int,
-                                                            end: start as ::core::ffi::c_int,
-                                                            hl_id: 0 as ::core::ffi::c_int,
-                                                        };
+                                                            .offset(c2rust_fresh9 as isize) =
+                                                            CmdlineColorChunk {
+                                                                start: prev_end
+                                                                    as ::core::ffi::c_int,
+                                                                end: start as ::core::ffi::c_int,
+                                                                hl_id: 0 as ::core::ffi::c_int,
+                                                            };
                                                     }
                                                     let end: varnumber_T = tv_get_number_chk(
                                                         &raw mut (*(*(tv_list_first
@@ -9537,7 +9448,9 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                         break '_color_cmdline_error;
                                                     }
                                                     if !(start < end
-                                                        && end <= (*colored_ccline).cmdlen as varnumber_T)
+                                                        && end
+                                                            <= (*colored_ccline).cmdlen
+                                                                as varnumber_T)
                                                     {
                                                         msg_scroll = 1 as ::core::ffi::c_int;
                                                         msg_putchar('\n' as ::core::ffi::c_int);
@@ -9554,11 +9467,15 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                         );
                                                         printed_errmsg = true;
                                                         break '_color_cmdline_error;
-                                                    } else if end < (*colored_ccline).cmdlen as varnumber_T
+                                                    } else if end
+                                                        < (*colored_ccline).cmdlen as varnumber_T
                                                         && utf8len_tab_zero[*(*colored_ccline)
                                                             .cmdbuff
-                                                            .offset(end as isize) as uint8_t as usize]
-                                                            as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                                                            .offset(end as isize)
+                                                            as uint8_t
+                                                            as usize]
+                                                            as ::core::ffi::c_int
+                                                            == 0 as ::core::ffi::c_int
                                                     {
                                                         msg_scroll = 1 as ::core::ffi::c_int;
                                                         msg_putchar('\n' as ::core::ffi::c_int);
@@ -9588,33 +9505,47 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                         if (*ccline_colors).colors.size
                                                             == (*ccline_colors).colors.capacity
                                                         {
-                                                            (*ccline_colors).colors.capacity = (if (*ccline_colors)
-                                                                .colors
-                                                                .capacity != 0
-                                                            {
-                                                                (*ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
-                                                            } else {
-                                                                8 as size_t
-                                                            });
+                                                            (*ccline_colors).colors.capacity =
+                                                                (if (*ccline_colors).colors.capacity
+                                                                    != 0
+                                                                {
+                                                                    (*ccline_colors).colors.capacity
+                                                                        << 1 as ::core::ffi::c_int
+                                                                } else {
+                                                                    8 as size_t
+                                                                });
                                                             (*ccline_colors).colors.items = xrealloc(
-                                                                (*ccline_colors).colors.items as *mut ::core::ffi::c_void,
-                                                                ::core::mem::size_of::<CmdlineColorChunk>()
-                                                                    .wrapping_mul((*ccline_colors).colors.capacity),
-                                                            ) as *mut CmdlineColorChunk;
-                                                        } else {};
-                                                        let c2rust_fresh10 = (*ccline_colors).colors.size;
-                                                        (*ccline_colors).colors.size = (*ccline_colors)
-                                                            .colors
-                                                            .size
-                                                            .wrapping_add(1);
+                                                                (*ccline_colors).colors.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                ::core::mem::size_of::<
+                                                                    CmdlineColorChunk,
+                                                                >(
+                                                                )
+                                                                .wrapping_mul(
+                                                                    (*ccline_colors)
+                                                                        .colors
+                                                                        .capacity,
+                                                                ),
+                                                            )
+                                                                as *mut CmdlineColorChunk;
+                                                        } else {
+                                                        };
+                                                        let c2rust_fresh10 =
+                                                            (*ccline_colors).colors.size;
+                                                        (*ccline_colors).colors.size =
+                                                            (*ccline_colors)
+                                                                .colors
+                                                                .size
+                                                                .wrapping_add(1);
                                                         *(*ccline_colors)
                                                             .colors
                                                             .items
-                                                            .offset(c2rust_fresh10 as isize) = CmdlineColorChunk {
-                                                            start: start as ::core::ffi::c_int,
-                                                            end: end as ::core::ffi::c_int,
-                                                            hl_id: syn_name2id(group),
-                                                        };
+                                                            .offset(c2rust_fresh10 as isize) =
+                                                            CmdlineColorChunk {
+                                                                start: start as ::core::ffi::c_int,
+                                                                end: end as ::core::ffi::c_int,
+                                                                hl_id: syn_name2id(group),
+                                                            };
                                                         i += 1;
                                                         li = (*li).li_next;
                                                     }
@@ -9625,28 +9556,26 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                 }
                             }
                             if prev_end < (*colored_ccline).cmdlen as varnumber_T {
-                                if (*ccline_colors).colors.size
-                                    == (*ccline_colors).colors.capacity
+                                if (*ccline_colors).colors.size == (*ccline_colors).colors.capacity
                                 {
-                                    (*ccline_colors).colors.capacity = (if (*ccline_colors)
-                                        .colors
-                                        .capacity != 0
-                                    {
-                                        (*ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
-                                    } else {
-                                        8 as size_t
-                                    });
+                                    (*ccline_colors).colors.capacity =
+                                        (if (*ccline_colors).colors.capacity != 0 {
+                                            (*ccline_colors).colors.capacity
+                                                << 1 as ::core::ffi::c_int
+                                        } else {
+                                            8 as size_t
+                                        });
                                     (*ccline_colors).colors.items = xrealloc(
                                         (*ccline_colors).colors.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<CmdlineColorChunk>()
                                             .wrapping_mul((*ccline_colors).colors.capacity),
-                                    ) as *mut CmdlineColorChunk;
-                                } else {};
+                                    )
+                                        as *mut CmdlineColorChunk;
+                                } else {
+                                };
                                 let c2rust_fresh11 = (*ccline_colors).colors.size;
-                                (*ccline_colors).colors.size = (*ccline_colors)
-                                    .colors
-                                    .size
-                                    .wrapping_add(1);
+                                (*ccline_colors).colors.size =
+                                    (*ccline_colors).colors.size.wrapping_add(1);
                                 *(*ccline_colors)
                                     .colors
                                     .items
@@ -9671,14 +9600,14 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
             api_clear_error(&raw mut err);
         }
         '_c2rust_label_1: {
-            if printed_errmsg {} else {
+            if printed_errmsg {
+            } else {
                 __assert_fail(
                     b"printed_errmsg\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    3557 as ::core::ffi::c_uint,
-                    b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    3557 as ::core::ffi::c_uint,
+                    b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -9688,15 +9617,14 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
         ret = false_0 != 0;
     }
     '_c2rust_label_0: {
-        if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
-        {} else {
+        if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
+        } else {
             __assert_fail(
                 b"!ERROR_SET(&err)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3538 as ::core::ffi::c_uint,
-                b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"_Bool color_cmdline(CmdlineInfo *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9716,10 +9644,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
     tv_clear(&raw mut tv);
     return ret;
 }
-unsafe extern "C" fn draw_cmdline(
-    mut start: ::core::ffi::c_int,
-    mut len: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn draw_cmdline(mut start: ::core::ffi::c_int, mut len: ::core::ffi::c_int) {
     if ccline.cmdbuff.is_null() || !color_cmdline(&raw mut ccline) {
         return;
     }
@@ -9732,19 +9657,15 @@ unsafe extern "C" fn draw_cmdline(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < len {
             msg_putchar('*' as ::core::ffi::c_int);
-            i
-                += utfc_ptr2len(ccline.cmdbuff.offset(start as isize).offset(i as isize))
-                    - 1 as ::core::ffi::c_int;
+            i += utfc_ptr2len(ccline.cmdbuff.offset(start as isize).offset(i as isize))
+                - 1 as ::core::ffi::c_int;
             i += 1;
         }
     } else if ccline.last_colors.colors.size != 0 {
         let mut i_0: size_t = 0 as size_t;
         while i_0 < ccline.last_colors.colors.size {
-            let mut chunk: CmdlineColorChunk = *ccline
-                .last_colors
-                .colors
-                .items
-                .offset(i_0 as isize);
+            let mut chunk: CmdlineColorChunk =
+                *ccline.last_colors.colors.items.offset(i_0 as isize);
             if chunk.end > start {
                 let chunk_start: ::core::ffi::c_int = if chunk.start > start {
                     chunk.start
@@ -9784,12 +9705,13 @@ unsafe extern "C" fn ui_ext_cmdline_show(mut line: *mut CmdlineInfo) {
             len = len.wrapping_add(1);
             p = p.offset(utfc_ptr2len(p) as isize);
         }
-        let mut buf: *mut ::core::ffi::c_char = arena_alloc(
-            &raw mut arena,
+        let mut buf: *mut ::core::ffi::c_char =
+            arena_alloc(&raw mut arena, len, false_0 != 0) as *mut ::core::ffi::c_char;
+        memset(
+            buf as *mut ::core::ffi::c_void,
+            '*' as ::core::ffi::c_int,
             len,
-            false_0 != 0,
-        ) as *mut ::core::ffi::c_char;
-        memset(buf as *mut ::core::ffi::c_void, '*' as ::core::ffi::c_int, len);
+        );
         let mut item: Array = arena_array(&raw mut arena, 3 as size_t);
         let c2rust_fresh17 = item.size;
         item.size = item.size.wrapping_add(1);
@@ -9804,7 +9726,10 @@ unsafe extern "C" fn ui_ext_cmdline_show(mut line: *mut CmdlineInfo) {
         *item.items.offset(c2rust_fresh18 as isize) = object {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed {
-                string: String_0 { data: buf, size: len },
+                string: String_0 {
+                    data: buf,
+                    size: len,
+                },
             },
         };
         let c2rust_fresh19 = item.size;
@@ -9825,11 +9750,7 @@ unsafe extern "C" fn ui_ext_cmdline_show(mut line: *mut CmdlineInfo) {
         content = arena_array(&raw mut arena, (*line).last_colors.colors.size);
         let mut i: size_t = 0 as size_t;
         while i < (*line).last_colors.colors.size {
-            let mut chunk: CmdlineColorChunk = *(*line)
-                .last_colors
-                .colors
-                .items
-                .offset(i as isize);
+            let mut chunk: CmdlineColorChunk = *(*line).last_colors.colors.items.offset(i as isize);
             let mut item_0: Array = arena_array(&raw mut arena, 3 as size_t);
             let c2rust_fresh21 = item_0.size;
             item_0.size = item_0.size.wrapping_add(1);
@@ -9844,12 +9765,12 @@ unsafe extern "C" fn ui_ext_cmdline_show(mut line: *mut CmdlineInfo) {
                 },
             };
             '_c2rust_label: {
-                if chunk.end >= chunk.start {} else {
+                if chunk.end >= chunk.start {
+                } else {
                     __assert_fail(
-                        b"chunk.end >= chunk.start\0".as_ptr()
+                        b"chunk.end >= chunk.start\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_getln.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         3627 as ::core::ffi::c_uint,
                         b"void ui_ext_cmdline_show(CmdlineInfo *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -9945,9 +9866,13 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
     mut indent: size_t,
     mut line: *const ::core::ffi::c_char,
 ) {
-    let mut buf: *mut ::core::ffi::c_char = xmallocz(indent.wrapping_add(strlen(line)))
-        as *mut ::core::ffi::c_char;
-    memset(buf as *mut ::core::ffi::c_void, ' ' as ::core::ffi::c_int, indent);
+    let mut buf: *mut ::core::ffi::c_char =
+        xmallocz(indent.wrapping_add(strlen(line))) as *mut ::core::ffi::c_char;
+    memset(
+        buf as *mut ::core::ffi::c_void,
+        ' ' as ::core::ffi::c_int,
+        indent,
+    );
     memcpy(
         buf.offset(indent as isize) as *mut ::core::ffi::c_void,
         line as *const ::core::ffi::c_void,
@@ -9964,7 +9889,8 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
             item.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(item.capacity),
         ) as *mut Object;
-    } else {};
+    } else {
+    };
     let c2rust_fresh2 = item.size;
     item.size = item.size.wrapping_add(1);
     *item.items.offset(c2rust_fresh2 as isize) = object {
@@ -9983,7 +9909,8 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
             item.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(item.capacity),
         ) as *mut Object;
-    } else {};
+    } else {
+    };
     let c2rust_fresh3 = item.size;
     item.size = item.size.wrapping_add(1);
     *item.items.offset(c2rust_fresh3 as isize) = object {
@@ -10002,7 +9929,8 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
             item.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(item.capacity),
         ) as *mut Object;
-    } else {};
+    } else {
+    };
     let c2rust_fresh4 = item.size;
     item.size = item.size.wrapping_add(1);
     *item.items.offset(c2rust_fresh4 as isize) = object {
@@ -10022,7 +9950,8 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
             content.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(content.capacity),
         ) as *mut Object;
-    } else {};
+    } else {
+    };
     let c2rust_fresh5 = content.size;
     content.size = content.size.wrapping_add(1);
     *content.items.offset(c2rust_fresh5 as isize) = object {
@@ -10039,7 +9968,8 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
             cmdline_block.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(cmdline_block.capacity),
         ) as *mut Object;
-    } else {};
+    } else {
+    };
     let c2rust_fresh6 = cmdline_block.size;
     cmdline_block.size = cmdline_block.size.wrapping_add(1);
     *cmdline_block.items.offset(c2rust_fresh6 as isize) = object {
@@ -10164,8 +10094,10 @@ pub unsafe extern "C" fn put_on_cmdline(
     realloc_cmdbuff(ccline.cmdlen + len + 1 as ::core::ffi::c_int);
     if ccline.overstrike == 0 {
         memmove(
-            ccline.cmdbuff.offset(ccline.cmdpos as isize).offset(len as isize)
-                as *mut ::core::ffi::c_void,
+            ccline
+                .cmdbuff
+                .offset(ccline.cmdpos as isize)
+                .offset(len as isize) as *mut ::core::ffi::c_void,
             ccline.cmdbuff.offset(ccline.cmdpos as isize) as *const ::core::ffi::c_void,
             (ccline.cmdlen - ccline.cmdpos) as size_t,
         );
@@ -10185,8 +10117,10 @@ pub unsafe extern "C" fn put_on_cmdline(
         }
         if i < ccline.cmdlen {
             memmove(
-                ccline.cmdbuff.offset(ccline.cmdpos as isize).offset(len as isize)
-                    as *mut ::core::ffi::c_void,
+                ccline
+                    .cmdbuff
+                    .offset(ccline.cmdpos as isize)
+                    .offset(len as isize) as *mut ::core::ffi::c_void,
                 ccline.cmdbuff.offset(i as isize) as *const ::core::ffi::c_void,
                 (ccline.cmdlen - i) as size_t,
             );
@@ -10202,8 +10136,8 @@ pub unsafe extern "C" fn put_on_cmdline(
     );
     *ccline.cmdbuff.offset(ccline.cmdlen as isize) = NUL as ::core::ffi::c_char;
     if ccline.cmdpos > 0 as ::core::ffi::c_int
-        && *ccline.cmdbuff.offset(ccline.cmdpos as isize) as uint8_t
-            as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
+        && *ccline.cmdbuff.offset(ccline.cmdpos as isize) as uint8_t as ::core::ffi::c_int
+            >= 0x80 as ::core::ffi::c_int
     {
         let mut i_0: ::core::ffi::c_int = utf_head_off(
             ccline.cmdbuff,
@@ -10241,8 +10175,7 @@ pub unsafe extern "C" fn put_on_cmdline(
         if ccline.cmdspos + c < m_0 {
             ccline.cmdspos += c;
         }
-        c = utfc_ptr2len(ccline.cmdbuff.offset(ccline.cmdpos as isize))
-            - 1 as ::core::ffi::c_int;
+        c = utfc_ptr2len(ccline.cmdbuff.offset(ccline.cmdpos as isize)) - 1 as ::core::ffi::c_int;
         c = if c < len - i_2 - 1 as ::core::ffi::c_int {
             c
         } else {
@@ -10275,12 +10208,14 @@ unsafe extern "C" fn cmdline_paste(
     mut literally: bool,
     mut remcr: bool,
 ) -> bool {
-    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut allocated: bool = false;
-    if regname != Ctrl_F && regname != Ctrl_P && regname != Ctrl_W && regname != Ctrl_A
-        && regname != Ctrl_L && !valid_yank_reg(regname, false_0 != 0)
+    if regname != Ctrl_F
+        && regname != Ctrl_P
+        && regname != Ctrl_W
+        && regname != Ctrl_A
+        && regname != Ctrl_L
+        && !valid_yank_reg(regname, false_0 != 0)
     {
         return FAIL != 0;
     }
@@ -10297,9 +10232,7 @@ unsafe extern "C" fn cmdline_paste(
         }
         let mut p: *mut ::core::ffi::c_char = arg;
         if p_is != 0 && regname == Ctrl_W {
-            let mut w: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut w: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut len: ::core::ffi::c_int = 0;
             w = ccline.cmdbuff.offset(ccline.cmdpos as isize);
             while w > ccline.cmdbuff {
@@ -10312,14 +10245,13 @@ unsafe extern "C" fn cmdline_paste(
                 }
                 w = w.offset(-(len as isize));
             }
-            len = ccline.cmdbuff.offset(ccline.cmdpos as isize).offset_from(w)
-                as ::core::ffi::c_int;
+            len =
+                ccline.cmdbuff.offset(ccline.cmdpos as isize).offset_from(w) as ::core::ffi::c_int;
             if if p_ic != 0 {
                 (strncasecmp(w, arg, len as size_t) == 0 as ::core::ffi::c_int)
                     as ::core::ffi::c_int
             } else {
-                (strncmp(w, arg, len as size_t) == 0 as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
+                (strncmp(w, arg, len as size_t) == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
             } != 0
             {
                 p = p.offset(len as isize);
@@ -10334,10 +10266,7 @@ unsafe extern "C" fn cmdline_paste(
     return cmdline_paste_reg(regname, literally, remcr);
 }
 #[no_mangle]
-pub unsafe extern "C" fn cmdline_paste_str(
-    mut s: *const ::core::ffi::c_char,
-    mut literally: bool,
-) {
+pub unsafe extern "C" fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, mut literally: bool) {
     if literally {
         put_on_cmdline(s, -1 as ::core::ffi::c_int, true_0 != 0);
     } else {
@@ -10349,8 +10278,13 @@ pub unsafe extern "C" fn cmdline_paste_str(
                 s = s.offset(1);
             }
             let mut c: ::core::ffi::c_int = mb_cptr2char_adv(&raw mut s);
-            if cv == Ctrl_V || c == ESC || c == Ctrl_C || c == CAR || c == NL
-                || c == Ctrl_L || c == Ctrl_BSL && *s as ::core::ffi::c_int == Ctrl_N
+            if cv == Ctrl_V
+                || c == ESC
+                || c == Ctrl_C
+                || c == CAR
+                || c == NL
+                || c == Ctrl_L
+                || c == Ctrl_BSL && *s as ::core::ffi::c_int == Ctrl_N
             {
                 stuffcharReadbuff(Ctrl_V);
             }
@@ -10427,16 +10361,15 @@ pub unsafe extern "C" fn redrawcmd() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn compute_cmdrow() {
-    if exmode_active as ::core::ffi::c_int != 0
-        || msg_scrolled != 0 as ::core::ffi::c_int
-    {
+    if exmode_active as ::core::ffi::c_int != 0 || msg_scrolled != 0 as ::core::ffi::c_int {
         cmdline_row = Rows - 1 as ::core::ffi::c_int;
     } else {
-        let mut wp: *mut win_T = lastwin_nofloating(
-            ::core::ptr::null_mut::<tabpage_T>(),
-        );
-        cmdline_row = (*wp).w_winrow + (*wp).w_height + (*wp).w_hsep_height
-            + (*wp).w_status_height + global_stl_height();
+        let mut wp: *mut win_T = lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>());
+        cmdline_row = (*wp).w_winrow
+            + (*wp).w_height
+            + (*wp).w_hsep_height
+            + (*wp).w_status_height
+            + global_stl_height();
     }
     if cmdline_row == Rows && p_ch > 0 as OptInt {
         cmdline_row -= 1;
@@ -10445,9 +10378,7 @@ pub unsafe extern "C" fn compute_cmdrow() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn cursorcmd() {
-    if cmd_silent as ::core::ffi::c_int != 0
-        || ui_has(kUICmdline) as ::core::ffi::c_int != 0
-    {
+    if cmd_silent as ::core::ffi::c_int != 0 || ui_has(kUICmdline) as ::core::ffi::c_int != 0 {
         return;
     }
     msg_row = cmdline_row + ccline.cmdspos / Columns;
@@ -10478,17 +10409,21 @@ unsafe extern "C" fn ccheck_abbr(mut c: ::core::ffi::c_int) -> ::core::ffi::c_in
     }
     while spos < ccline.cmdlen
         && ascii_iswhite(*ccline.cmdbuff.offset(spos as isize) as ::core::ffi::c_int)
-            as ::core::ffi::c_int != 0
+            as ::core::ffi::c_int
+            != 0
     {
         spos += 1;
     }
     if ccline.cmdlen - spos > 5 as ::core::ffi::c_int
-        && *ccline.cmdbuff.offset(spos as isize) as ::core::ffi::c_int
+        && *ccline.cmdbuff.offset(spos as isize) as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
+        && *ccline
+            .cmdbuff
+            .offset((spos + 2 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+            == ',' as ::core::ffi::c_int
+        && *ccline
+            .cmdbuff
+            .offset((spos + 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
             == '\'' as ::core::ffi::c_int
-        && *ccline.cmdbuff.offset((spos + 2 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-        && *ccline.cmdbuff.offset((spos + 3 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
     {
         spos += 5 as ::core::ffi::c_int;
     } else {
@@ -10512,10 +10447,8 @@ pub unsafe extern "C" fn vim_strsave_fnameescape(
         },
     );
     if what == VSE_SHELL as ::core::ffi::c_int && csh_like_shell() != 0 {
-        let mut s: *mut ::core::ffi::c_char = vim_strsave_escaped(
-            p,
-            b"!\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let mut s: *mut ::core::ffi::c_char =
+            vim_strsave_escaped(p, b"!\0".as_ptr() as *const ::core::ffi::c_char);
         xfree(p as *mut ::core::ffi::c_void);
         p = s;
     }
@@ -10529,27 +10462,18 @@ pub unsafe extern "C" fn vim_strsave_fnameescape(
     return p;
 }
 pub const PATH_ESC_CHARS: [::core::ffi::c_char; 18] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 18],
-        [::core::ffi::c_char; 18],
-    >(*b" \t\n*?[{`$\\%#'\"|!<\0")
+    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b" \t\n*?[{`$\\%#'\"|!<\0")
 };
 pub const SHELL_ESC_CHARS: [::core::ffi::c_char; 23] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 23],
-        [::core::ffi::c_char; 23],
-    >(*b" \t\n*?[{`$\\%#'\"|!<>();&\0")
+    ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b" \t\n*?[{`$\\%#'\"|!<>();&\0")
 };
 pub const BUFFER_ESC_CHARS: [::core::ffi::c_char; 17] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 17],
-        [::core::ffi::c_char; 17],
-    >(*b" \t\n*?[`$\\%#'\"|!<\0")
+    ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b" \t\n*?[`$\\%#'\"|!<\0")
 };
 #[no_mangle]
 pub unsafe extern "C" fn escape_fname(mut pp: *mut *mut ::core::ffi::c_char) {
-    let mut p: *mut ::core::ffi::c_char = xmalloc(strlen(*pp).wrapping_add(2 as size_t))
-        as *mut ::core::ffi::c_char;
+    let mut p: *mut ::core::ffi::c_char =
+        xmalloc(strlen(*pp).wrapping_add(2 as size_t)) as *mut ::core::ffi::c_char;
     *p.offset(0 as ::core::ffi::c_int as isize) = '\\' as ::core::ffi::c_char;
     strcpy(p.offset(1 as ::core::ffi::c_int as isize), *pp);
     xfree(*pp as *mut ::core::ffi::c_void);
@@ -10563,16 +10487,14 @@ pub unsafe extern "C" fn tilde_replace(
 ) {
     if *orig_pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '~' as ::core::ffi::c_int
-        && vim_ispathsep(
-            *orig_pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+        && vim_ispathsep(*orig_pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+            as ::core::ffi::c_int
+            != 0
     {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_files {
-            let mut p: *mut ::core::ffi::c_char = home_replace_save(
-                ::core::ptr::null_mut::<buf_T>(),
-                *files.offset(i as isize),
-            );
+            let mut p: *mut ::core::ffi::c_char =
+                home_replace_save(::core::ptr::null_mut::<buf_T>(), *files.offset(i as isize));
             xfree(*files.offset(i as isize) as *mut ::core::ffi::c_void);
             *files.offset(i as isize) = p;
             i += 1;
@@ -10589,13 +10511,13 @@ pub unsafe extern "C" fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
 }
 unsafe extern "C" fn get_ccline_ptr() -> *mut CmdlineInfo {
     if State & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        return ::core::ptr::null_mut::<CmdlineInfo>()
+        return ::core::ptr::null_mut::<CmdlineInfo>();
     } else if !ccline.cmdbuff.is_null() {
-        return &raw mut ccline
+        return &raw mut ccline;
     } else if !ccline.prev_ccline.is_null() && !(*ccline.prev_ccline).cmdbuff.is_null() {
-        return ccline.prev_ccline
+        return ccline.prev_ccline;
     } else {
-        return ::core::ptr::null_mut::<CmdlineInfo>()
+        return ::core::ptr::null_mut::<CmdlineInfo>();
     };
 }
 unsafe extern "C" fn get_cmdline_type() -> ::core::ffi::c_int {
@@ -10739,8 +10661,10 @@ pub unsafe extern "C" fn f_getcmdtype(
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = xmallocz(1 as size_t) as *mut ::core::ffi::c_char;
-    *(*rettv).vval.v_string.offset(0 as ::core::ffi::c_int as isize) = get_cmdline_type()
-        as ::core::ffi::c_char;
+    *(*rettv)
+        .vval
+        .v_string
+        .offset(0 as ::core::ffi::c_int as isize) = get_cmdline_type() as ::core::ffi::c_char;
 }
 unsafe extern "C" fn set_cmdline_str(
     mut str: *const ::core::ffi::c_char,
@@ -10796,7 +10720,8 @@ pub unsafe extern "C" fn f_setcmdline(
         pos = tv_get_number_chk(
             argvars.offset(1 as ::core::ffi::c_int as isize),
             &raw mut error,
-        ) as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+        ) as ::core::ffi::c_int
+            - 1 as ::core::ffi::c_int;
         if error {
             return;
         }
@@ -10816,9 +10741,9 @@ pub unsafe extern "C" fn f_setcmdpos(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let pos: ::core::ffi::c_int = tv_get_number(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+    let pos: ::core::ffi::c_int = tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize))
+        as ::core::ffi::c_int
+        - 1 as ::core::ffi::c_int;
     if pos >= 0 as ::core::ffi::c_int {
         (*rettv).vval.v_number = set_cmdline_pos(pos) as varnumber_T;
     }
@@ -10879,7 +10804,7 @@ pub unsafe extern "C" fn get_list_range(
             }
             *num2 = num as ::core::ffi::c_int;
         } else if !first {
-            return FAIL
+            return FAIL;
         }
     } else if first {
         *num2 = *num1;
@@ -10895,9 +10820,7 @@ pub unsafe extern "C" fn cmdline_init() {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_cedit(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_cedit(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if *p_cedit as ::core::ffi::c_int == NUL {
         cedit_key = -1 as ::core::ffi::c_int;
     } else {
@@ -10952,7 +10875,8 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         return -(253 as ::core::ffi::c_int
             + ((KE_IGNORE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
     }
-    if !win_valid(old_curwin) || curwin == old_curwin
+    if !win_valid(old_curwin)
+        || curwin == old_curwin
         || !bufref_valid(&raw mut old_curbuf)
         || (*old_curwin).w_buffer != old_curbuf.br_buf
     {
@@ -10970,8 +10894,11 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
     );
     let cmdwin_valid: bool = win_valid(cmdwin_win);
-    if newbuf_status == FAIL || !cmdwin_valid || curwin != cmdwin_win
-        || !win_valid(old_curwin) || !bufref_valid(&raw mut old_curbuf)
+    if newbuf_status == FAIL
+        || !cmdwin_valid
+        || curwin != cmdwin_win
+        || !win_valid(old_curwin)
+        || !bufref_valid(&raw mut old_curbuf)
         || (*old_curwin).w_buffer != old_curbuf.br_buf
     {
         if newbuf_status == OK {
@@ -11023,23 +10950,17 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     (*curbuf).b_ro_locked += 1;
     need_wait_return = false_0 != 0;
     let histtype: ::core::ffi::c_int = hist_char2type(cmdwin_type) as ::core::ffi::c_int;
-    if histtype == HIST_CMD as ::core::ffi::c_int
-        || histtype == HIST_DEBUG as ::core::ffi::c_int
-    {
+    if histtype == HIST_CMD as ::core::ffi::c_int || histtype == HIST_DEBUG as ::core::ffi::c_int {
         if p_wc == TAB as OptInt {
             add_map(
-                b"<Tab>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                b"<C-X><C-V>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"<Tab>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                b"<C-X><C-V>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 MODE_INSERT as ::core::ffi::c_int,
                 true_0 != 0,
             );
             add_map(
-                b"<Tab>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                b"a<C-X><C-V>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"<Tab>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                b"a<C-X><C-V>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 MODE_NORMAL as ::core::ffi::c_int,
                 true_0 != 0,
             );
@@ -11063,9 +10984,7 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     (*curbuf).b_ro_locked -= 1;
     (*curbuf).b_p_tw = 0 as OptInt;
     init_history();
-    if get_hislen() > 0 as ::core::ffi::c_int
-        && histtype != HIST_INVALID as ::core::ffi::c_int
-    {
+    if get_hislen() > 0 as ::core::ffi::c_int && histtype != HIST_INVALID as ::core::ffi::c_int {
         i = *get_hisidx(histtype);
         if i >= 0 as ::core::ffi::c_int {
             let mut lnum: linenr_T = 0 as linenr_T;
@@ -11074,7 +10993,10 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
                 if i == get_hislen() {
                     i = 0 as ::core::ffi::c_int;
                 }
-                if !(*get_histentry(histtype).offset(i as isize)).hisstr.is_null() {
+                if !(*get_histentry(histtype).offset(i as isize))
+                    .hisstr
+                    .is_null()
+                {
                     let c2rust_fresh31 = lnum;
                     lnum = lnum + 1;
                     ml_append(
@@ -11124,16 +11046,14 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     cmdwin_win = ::core::ptr::null_mut::<win_T>();
     cmdwin_old_curwin = ::core::ptr::null_mut::<win_T>();
     exmode_active = save_exmode;
-    if !win_valid(old_curwin) || !bufref_valid(&raw mut old_curbuf)
+    if !win_valid(old_curwin)
+        || !bufref_valid(&raw mut old_curbuf)
         || (*old_curwin).w_buffer != old_curbuf.br_buf
     {
         cmdwin_result = Ctrl_C;
-        emsg(
-            gettext(
-                &raw const e_active_window_or_buffer_changed_or_deleted
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_active_window_or_buffer_changed_or_deleted as *const ::core::ffi::c_char,
+        ));
     } else {
         let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
         if aborting() as ::core::ffi::c_int != 0
@@ -11168,8 +11088,8 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
                 3 as ::core::ffi::c_int
             }) as size_t;
             if histtype == HIST_CMD as ::core::ffi::c_int {
-                ccline.cmdbuff = xmemdupz(p as *const ::core::ffi::c_void, plen)
-                    as *mut ::core::ffi::c_char;
+                ccline.cmdbuff =
+                    xmemdupz(p as *const ::core::ffi::c_void, plen) as *mut ::core::ffi::c_char;
                 ccline.cmdlen = plen as ::core::ffi::c_int;
                 ccline.cmdbufflen = plen as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
                 cmdwin_result = CAR;
@@ -11187,8 +11107,7 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         }
         if ccline.cmdbuff.is_null() {
             ccline.cmdbuff = xmemdupz(
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-                    as *const ::core::ffi::c_void,
+                b"\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                 0 as size_t,
             ) as *mut ::core::ffi::c_char;
             ccline.cmdlen = 0 as ::core::ffi::c_int;
@@ -11218,9 +11137,7 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
         if win_valid(wp) as ::core::ffi::c_int != 0 && wp != curwin {
             win_close(wp, true_0 != 0, false_0 != 0);
         }
-        if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-            && bufref.br_buf != curbuf
-        {
+        if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0 && bufref.br_buf != curbuf {
             close_buffer(
                 ::core::ptr::null_mut::<win_T>(),
                 bufref.br_buf,
@@ -11254,7 +11171,8 @@ pub unsafe extern "C" fn script_get(
     if *cmd.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         != '<' as ::core::ffi::c_int
         || *cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            != '<' as ::core::ffi::c_int || (*eap).ea_getline.is_none()
+            != '<' as ::core::ffi::c_int
+        || (*eap).ea_getline.is_none()
     {
         *lenp = strlen((*eap).arg);
         return (if (*eap).skip != 0 {
@@ -11276,7 +11194,11 @@ pub unsafe extern "C" fn script_get(
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if (*eap).skip == 0 {
-        ga_init(&raw mut ga, 1 as ::core::ffi::c_int, 0x400 as ::core::ffi::c_int);
+        ga_init(
+            &raw mut ga,
+            1 as ::core::ffi::c_int,
+            0x400 as ::core::ffi::c_int,
+        );
     }
     let l_: *const list_T = l;
     if !l_.is_null() {
@@ -11308,20 +11230,15 @@ pub unsafe extern "C" fn get_user_input(
     if cmdpreview {
         return;
     }
-    let mut prompt: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut defstr: *const ::core::ffi::c_char = b"\0".as_ptr()
-        as *const ::core::ffi::c_char;
+    let mut prompt: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut defstr: *const ::core::ffi::c_char = b"\0".as_ptr() as *const ::core::ffi::c_char;
     let mut cancelreturn: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
     let mut cancelreturn_strarg2: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
         vval: typval_vval_union { v_number: 0 },
     };
-    let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut input_callback: Callback = Callback {
         data: C2Rust_Unnamed_5 {
             funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -11336,16 +11253,12 @@ pub unsafe extern "C" fn get_user_input(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            emsg(
-                gettext(
-                    b"E5050: {opts} must be the only argument\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E5050: {opts} must be the only argument\0".as_ptr() as *const ::core::ffi::c_char,
+            ));
             return;
         }
         let dict: *mut dict_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
@@ -11393,9 +11306,7 @@ pub unsafe extern "C" fn get_user_input(
         if xp_name.is_null() {
             return;
         }
-        if xp_name
-            == &raw mut def as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
-        {
+        if xp_name == &raw mut def as *mut ::core::ffi::c_char as *const ::core::ffi::c_char {
             xp_name = ::core::ptr::null::<::core::ffi::c_char>();
         }
         if !tv_dict_get_callback(
@@ -11415,8 +11326,7 @@ pub unsafe extern "C" fn get_user_input(
         if prompt.is_null() {
             return;
         }
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             defstr = tv_get_string_buf_chk(
@@ -11426,8 +11336,7 @@ pub unsafe extern "C" fn get_user_input(
             if defstr.is_null() {
                 return;
             }
-            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type
-                as ::core::ffi::c_uint
+            if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 let strarg2: *const ::core::ffi::c_char = tv_get_string_buf_chk(
@@ -11439,8 +11348,7 @@ pub unsafe extern "C" fn get_user_input(
                 }
                 if inputdialog {
                     cancelreturn_strarg2.v_type = VAR_STRING;
-                    cancelreturn_strarg2.vval.v_string = strarg2
-                        as *mut ::core::ffi::c_char;
+                    cancelreturn_strarg2.vval.v_string = strarg2 as *mut ::core::ffi::c_char;
                     cancelreturn = &raw mut cancelreturn_strarg2;
                 } else {
                     xp_name = strarg2;
@@ -11449,9 +11357,7 @@ pub unsafe extern "C" fn get_user_input(
         }
     }
     let mut xp_type: ::core::ffi::c_int = EXPAND_NOTHING as ::core::ffi::c_int;
-    let mut xp_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut xp_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !xp_name.is_null() {
         let xp_namelen: ::core::ffi::c_int = strlen(xp_name) as ::core::ffi::c_int;
         let mut argt: uint32_t = 0 as uint32_t;
@@ -11468,15 +11374,17 @@ pub unsafe extern "C" fn get_user_input(
     }
     let mut p: *const ::core::ffi::c_char = prompt;
     if !ui_has(kUICmdline) {
-        let mut lastnl: *const ::core::ffi::c_char = strrchr(
-            prompt,
-            '\n' as ::core::ffi::c_int,
-        );
+        let mut lastnl: *const ::core::ffi::c_char = strrchr(prompt, '\n' as ::core::ffi::c_int);
         if !lastnl.is_null() {
             p = lastnl.offset(1 as ::core::ffi::c_int as isize);
             msg_start();
             msg_clr_eos();
-            msg_puts_len(prompt, p.offset_from(prompt), get_echo_hl_id(), false_0 != 0);
+            msg_puts_len(
+                prompt,
+                p.offset_from(prompt),
+                get_echo_hl_id(),
+                false_0 != 0,
+            );
             msg_didout = false_0 != 0;
             msg_starthere();
         }
@@ -11486,7 +11394,11 @@ pub unsafe extern "C" fn get_user_input(
     let save_ex_normal_busy: ::core::ffi::c_int = ex_normal_busy;
     ex_normal_busy = 0 as ::core::ffi::c_int;
     (*rettv).vval.v_string = getcmdline_prompt(
-        if secret as ::core::ffi::c_int != 0 { NUL } else { '@' as ::core::ffi::c_int },
+        if secret as ::core::ffi::c_int != 0 {
+            NUL
+        } else {
+            '@' as ::core::ffi::c_int
+        },
         p,
         get_echo_hl_id(),
         xp_type,
@@ -11511,20 +11423,21 @@ pub unsafe extern "C" fn f_wildtrigger(
     mut fptr: EvalFuncData,
 ) {
     if State & MODE_CMDLINE as ::core::ffi::c_int == 0
-        || char_avail() as ::core::ffi::c_int != 0 || wild_menu_showing != 0
+        || char_avail() as ::core::ffi::c_int != 0
+        || wild_menu_showing != 0
         || cmdline_pum_active() as ::core::ffi::c_int != 0
     {
         return;
     }
     let mut cmd_type: ::core::ffi::c_int = get_cmdline_type();
-    if cmd_type == ':' as ::core::ffi::c_int || cmd_type == '/' as ::core::ffi::c_int
+    if cmd_type == ':' as ::core::ffi::c_int
+        || cmd_type == '/' as ::core::ffi::c_int
         || cmd_type == '?' as ::core::ffi::c_int
     {
         let mut key_string: [uint8_t; 4] = [0; 4];
         key_string[0 as ::core::ffi::c_int as usize] = K_SPECIAL as uint8_t;
         key_string[1 as ::core::ffi::c_int as usize] = KS_EXTRA as uint8_t;
-        key_string[2 as ::core::ffi::c_int as usize] = KE_WILD as ::core::ffi::c_int
-            as uint8_t;
+        key_string[2 as ::core::ffi::c_int as usize] = KE_WILD as ::core::ffi::c_int as uint8_t;
         key_string[3 as ::core::ffi::c_int as usize] = NUL as uint8_t;
         ins_typebuf(
             &raw mut key_string as *mut uint8_t as *mut ::core::ffi::c_char,
@@ -11539,43 +11452,43 @@ pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_UP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_LEFT: ::core::ffi::c_int = -27755;
 pub const K_RIGHT: ::core::ffi::c_int = -29291;
-pub const K_S_LEFT: ::core::ffi::c_int = -('#' as ::core::ffi::c_int
-    + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_RIGHT: ::core::ffi::c_int = -('%' as ::core::ffi::c_int
-    + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_LEFT: ::core::ffi::c_int =
+    -('#' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_RIGHT: ::core::ffi::c_int =
+    -('%' as ::core::ffi::c_int + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_S_HOME: ::core::ffi::c_int = -12835;
 pub const K_C_HOME: ::core::ffi::c_int = -22525;
 pub const K_S_END: ::core::ffi::c_int = -14122;
 pub const K_C_END: ::core::ffi::c_int = -22781;
-pub const K_S_TAB: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_TAB: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('B' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_BS: ::core::ffi::c_int = -25195;
 pub const K_INS: ::core::ffi::c_int = -18795;
 pub const K_KINS: ::core::ffi::c_int = -20477;
-pub const K_DEL: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DEL: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_HOME: ::core::ffi::c_int = -26731;
 pub const K_KHOME: ::core::ffi::c_int = -12619;
 pub const K_END: ::core::ffi::c_int = -14144;
 pub const K_KEND: ::core::ffi::c_int = -13387;
-pub const K_PAGEUP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEDOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEUP: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEDOWN: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEUP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEDOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEUP: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEDOWN: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KENTER: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_SELECT: ::core::ffi::c_int = -22773;
 pub const K_LEFTMOUSE: ::core::ffi::c_int = -11517;
 pub const K_LEFTDRAG: ::core::ffi::c_int = -11773;
@@ -11599,7 +11512,8 @@ pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
-    return regname == '*' as ::core::ffi::c_int || regname == '+' as ::core::ffi::c_int
+    return regname == '*' as ::core::ffi::c_int
+        || regname == '+' as ::core::ffi::c_int
         || (regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             || regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
@@ -11658,22 +11572,21 @@ unsafe extern "C" fn viml_parser_init(
         .wrapping_div(::core::mem::size_of::<ParserLine>())
         .wrapping_div(
             (::core::mem::size_of::<[ParserLine; 4]>()
-                .wrapping_rem(::core::mem::size_of::<ParserLine>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<ParserLine>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     (*ret_pstate).reader.lines.size = 0 as size_t;
-    (*ret_pstate).reader.lines.items = &raw mut (*ret_pstate).reader.lines.init_array
-        as *mut ParserLine;
+    (*ret_pstate).reader.lines.items =
+        &raw mut (*ret_pstate).reader.lines.init_array as *mut ParserLine;
     (*ret_pstate).stack.capacity = ::core::mem::size_of::<[ParserStateItem; 16]>()
         .wrapping_div(::core::mem::size_of::<ParserStateItem>())
         .wrapping_div(
             (::core::mem::size_of::<[ParserStateItem; 16]>()
-                .wrapping_rem(::core::mem::size_of::<ParserStateItem>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<ParserStateItem>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     (*ret_pstate).stack.size = 0 as size_t;
-    (*ret_pstate).stack.items = &raw mut (*ret_pstate).stack.init_array
-        as *mut ParserStateItem;
+    (*ret_pstate).stack.items = &raw mut (*ret_pstate).stack.init_array as *mut ParserStateItem;
 }
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)

@@ -39,10 +39,7 @@ extern "C" {
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn snprintf(
@@ -159,9 +156,7 @@ extern "C" {
     fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
     fn redrawWinline(wp: *mut win_T, lnum: linenr_T);
     fn status_redraw_buf(buf: *mut buf_T);
-    fn get_scriptlocal_funcname(
-        funcname: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_scriptlocal_funcname(funcname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn do_unlet(
         name: *const ::core::ffi::c_char,
         name_len: size_t,
@@ -193,10 +188,7 @@ extern "C" {
     fn schar_from_str(str: *const ::core::ffi::c_char) -> schar_T;
     fn schar_from_char(c: ::core::ffi::c_int) -> schar_T;
     fn init_highlight(both: bool, reset: bool);
-    fn get_highlight_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_highlight_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn parse_cino(buf: *mut buf_T);
     fn tabstop_set(var: *mut ::core::ffi::c_char, array: *mut *mut colnr_T) -> bool;
     fn briopt_check(briopt: *mut ::core::ffi::c_char, wp: *mut win_T) -> bool;
@@ -204,16 +196,10 @@ extern "C" {
     fn os_time() -> Timestamp;
     fn free_fmark(fm: fmark_T);
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn utfc_ptr2schar(
-        p: *const ::core::ffi::c_char,
-        firstc: *mut ::core::ffi::c_int,
-    ) -> schar_T;
+    fn utfc_ptr2schar(p: *const ::core::ffi::c_char, firstc: *mut ::core::ffi::c_int) -> schar_T;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn enc_canonize(enc: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_encoding_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_encoding_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn ml_setflags(buf: *mut buf_T);
     fn validate_virtcol(wp: *mut win_T);
     fn msg_grid_validate();
@@ -224,10 +210,7 @@ extern "C" {
     fn get_option_default(opt_idx: OptIndex, opt_flags: ::core::ffi::c_int) -> OptVal;
     fn did_set_title();
     fn redraw_titles();
-    fn valid_name(
-        val: *const ::core::ffi::c_char,
-        allowed: *const ::core::ffi::c_char,
-    ) -> bool;
+    fn valid_name(val: *const ::core::ffi::c_char, allowed: *const ::core::ffi::c_char) -> bool;
     fn parse_winhl_opt(winhl: *const ::core::ffi::c_char, wp: *mut win_T) -> bool;
     fn get_option(opt_idx: OptIndex) -> *mut vimoption_T;
     fn set_option_direct(
@@ -244,10 +227,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_void;
     fn set_iminsert_global(buf: *mut buf_T);
     fn set_imsearch_global(buf: *mut buf_T);
-    fn fill_culopt_flags(
-        val: *mut ::core::ffi::c_char,
-        wp: *mut win_T,
-    ) -> ::core::ffi::c_int;
+    fn fill_culopt_flags(val: *mut ::core::ffi::c_char, wp: *mut win_T) -> ::core::ffi::c_int;
     fn get_fileformat(buf: *const buf_T) -> ::core::ffi::c_int;
     fn skip_to_option_part(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn copy_option_part(
@@ -257,11 +237,7 @@ extern "C" {
         sep_chars: *mut ::core::ffi::c_char,
     ) -> size_t;
     fn vim_unsetenv_ext(var: *const ::core::ffi::c_char);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn get_shada_parameter(type_0: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn spell_reload();
     fn valid_spelllang(val: *const ::core::ffi::c_char) -> bool;
@@ -1883,9 +1859,8 @@ pub struct expand_T {
     pub xp_search_dir: Direction,
     pub xp_pre_incsearch_pos: pos_T,
 }
-pub type CompleteListItemGetter = Option<
-    unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
->;
+pub type CompleteListItemGetter =
+    Option<unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct regmatch_T {
@@ -2335,9 +2310,8 @@ pub struct optset_T {
     pub os_win: *mut ::core::ffi::c_void,
     pub os_buf: *mut ::core::ffi::c_void,
 }
-pub type opt_did_set_cb_T = Option<
-    unsafe extern "C" fn(*mut optset_T) -> *const ::core::ffi::c_char,
->;
+pub type opt_did_set_cb_T =
+    Option<unsafe extern "C" fn(*mut optset_T) -> *const ::core::ffi::c_char>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct optexpand_T {
@@ -2535,14 +2509,11 @@ pub struct chars_tab {
 pub const LSIZE: C2Rust_Unnamed_22 = 512;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 74] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 74],
-        [::core::ffi::c_char; 74],
-    >(*b"int opt_strings_flags(const char *, const char **, unsigned int *, _Bool)\0")
+    ::core::mem::transmute::<[u8; 74], [::core::ffi::c_char; 74]>(
+        *b"int opt_strings_flags(const char *, const char **, unsigned int *, _Bool)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -2563,86 +2534,65 @@ pub const HIGHLIGHT_INIT: [::core::ffi::c_char; 779] = unsafe {
 };
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const FO_ALL: [::core::ffi::c_char; 22] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 22],
-        [::core::ffi::c_char; 22],
-    >(*b"tcro/q2vlb1mMBn,aw]jp\0")
+    ::core::mem::transmute::<[u8; 22], [::core::ffi::c_char; 22]>(*b"tcro/q2vlb1mMBn,aw]jp\0")
 };
 pub const CPO_VI: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 47],
-        [::core::ffi::c_char; 47],
-    >(*b"aAbBcCdDeEfFiIJKlLmMnoOpPqrRsStuvWxXyZ$!%+>;~_\0")
+    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+        *b"aAbBcCdDeEfFiIJKlLmMnoOpPqrRsStuvWxXyZ$!%+>;~_\0",
+    )
 };
-pub const WW_ALL: [::core::ffi::c_char; 10] = unsafe {
-    ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"bshl<>[]~\0")
-};
-pub const MOUSE_ALL: [::core::ffi::c_char; 8] = unsafe {
-    ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"anvichr\0")
-};
+pub const WW_ALL: [::core::ffi::c_char; 10] =
+    unsafe { ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"bshl<>[]~\0") };
+pub const MOUSE_ALL: [::core::ffi::c_char; 8] =
+    unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"anvichr\0") };
 pub const MOUSESCROLL_VERT_DFLT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const MOUSESCROLL_HOR_DFLT: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const COCU_ALL: [::core::ffi::c_char; 5] = unsafe {
-    ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvic\0")
-};
-pub const COM_ALL: [::core::ffi::c_char; 11] = unsafe {
-    ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"nbsmexflrO\0")
-};
+pub const COCU_ALL: [::core::ffi::c_char; 5] =
+    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvic\0") };
+pub const COM_ALL: [::core::ffi::c_char; 11] =
+    unsafe { ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"nbsmexflrO\0") };
 pub const SCL_NO: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const STL_IN_ICON: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static mut e_illegal_character_after_chr: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E535: Illegal character after <%c>\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E535: Illegal character after <%c>\0",
+    )
 };
 static mut e_comma_required: [::core::ffi::c_char; 21] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 21],
-        [::core::ffi::c_char; 21],
-    >(*b"E536: Comma required\0")
+    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E536: Comma required\0")
 };
 static mut e_unclosed_expression_sequence: [::core::ffi::c_char; 35] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 35],
-        [::core::ffi::c_char; 35],
-    >(*b"E540: Unclosed expression sequence\0")
+    ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
+        *b"E540: Unclosed expression sequence\0",
+    )
 };
 static mut e_unbalanced_groups: [::core::ffi::c_char; 24] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 24],
-        [::core::ffi::c_char; 24],
-    >(*b"E542: Unbalanced groups\0")
+    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E542: Unbalanced groups\0")
 };
 static mut e_backupext_and_patchmode_are_equal: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E589: 'backupext' and 'patchmode' are equal\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E589: 'backupext' and 'patchmode' are equal\0",
+    )
 };
 static mut e_showbreak_contains_unprintable_or_wide_character: [::core::ffi::c_char; 57] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 57],
-        [::core::ffi::c_char; 57],
-    >(*b"E595: 'showbreak' contains unprintable or wide character\0")
+    ::core::mem::transmute::<[u8; 57], [::core::ffi::c_char; 57]>(
+        *b"E595: 'showbreak' contains unprintable or wide character\0",
+    )
 };
 static mut e_wrong_number_of_characters_for_field_str: [::core::ffi::c_char; 49] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 49],
-        [::core::ffi::c_char; 49],
-    >(*b"E1511: Wrong number of characters for field \"%s\"\0")
+    ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
+        *b"E1511: Wrong number of characters for field \"%s\"\0",
+    )
 };
 static mut e_wrong_character_width_for_field_str: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E1512: Wrong character width for field \"%s\"\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E1512: Wrong character width for field \"%s\"\0",
+    )
 };
 static mut SHM_ALL: [::core::ffi::c_char; 23] = [
     SHM_RO as ::core::ffi::c_int as ::core::ffi::c_char,
@@ -2671,29 +2621,74 @@ static mut SHM_ALL: [::core::ffi::c_char; 23] = [
 ];
 #[no_mangle]
 pub unsafe extern "C" fn didset_string_options() {
-    check_str_opt(kOptCasemap, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptBackupcopy, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptBelloff, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptCompleteopt, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
+    check_str_opt(
+        kOptCasemap,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptBackupcopy,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptBelloff,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptCompleteopt,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
     check_str_opt(
         kOptSessionoptions,
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     );
-    check_str_opt(kOptViewoptions, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptFoldopen, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptDisplay, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptJumpoptions, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptRedrawdebug, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptTagcase, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
+    check_str_opt(
+        kOptViewoptions,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptFoldopen,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptDisplay,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptJumpoptions,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptRedrawdebug,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptTagcase,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
     check_str_opt(
         kOptTermpastefilter,
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     );
-    check_str_opt(kOptVirtualedit, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptSwitchbuf, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptTabclose, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptWildoptions, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-    check_str_opt(kOptClipboard, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
+    check_str_opt(
+        kOptVirtualedit,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptSwitchbuf,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptTabclose,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptWildoptions,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
+    check_str_opt(
+        kOptClipboard,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn illegal_char(
@@ -2707,9 +2702,7 @@ pub unsafe extern "C" fn illegal_char(
     vim_snprintf(
         errbuf,
         errbuflen,
-        gettext(
-            b"E539: Illegal character <%s>\0".as_ptr() as *const ::core::ffi::c_char,
-        ),
+        gettext(b"E539: Illegal character <%s>\0".as_ptr() as *const ::core::ffi::c_char),
         transchar(c),
     );
     return errbuf;
@@ -2818,8 +2811,8 @@ pub unsafe extern "C" fn check_signcolumn(
     mut scl: *mut ::core::ffi::c_char,
     mut wp: *mut win_T,
 ) -> ::core::ffi::c_int {
-    let mut val: *mut ::core::ffi::c_char = &raw mut empty_string_option
-        as *mut ::core::ffi::c_char;
+    let mut val: *mut ::core::ffi::c_char =
+        &raw mut empty_string_option as *mut ::core::ffi::c_char;
     if !scl.is_null() {
         val = scl;
     } else if !wp.is_null() {
@@ -2838,7 +2831,11 @@ pub unsafe extern "C" fn check_signcolumn(
         if wp.is_null() {
             return OK;
         }
-        if strncmp(val, b"no\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t) == 0
+        if strncmp(
+            val,
+            b"no\0".as_ptr() as *const ::core::ffi::c_char,
+            2 as size_t,
+        ) == 0
         {
             (*wp).w_maxscwidth = SCL_NO;
             (*wp).w_minscwidth = (*wp).w_maxscwidth;
@@ -2846,7 +2843,8 @@ pub unsafe extern "C" fn check_signcolumn(
             val,
             b"nu\0".as_ptr() as *const ::core::ffi::c_char,
             2 as size_t,
-        ) == 0 && ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
+        ) == 0
+            && ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
         {
             (*wp).w_maxscwidth = SCL_NUM;
             (*wp).w_minscwidth = (*wp).w_maxscwidth;
@@ -2857,7 +2855,8 @@ pub unsafe extern "C" fn check_signcolumn(
         ) == 0
         {
             (*wp).w_maxscwidth = *val.offset(4 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
+                as ::core::ffi::c_int
+                - '0' as ::core::ffi::c_int;
             (*wp).w_minscwidth = (*wp).w_maxscwidth;
         } else if *val as ::core::ffi::c_int == 'y' as ::core::ffi::c_int {
             (*wp).w_maxscwidth = 1 as ::core::ffi::c_int;
@@ -2870,31 +2869,36 @@ pub unsafe extern "C" fn check_signcolumn(
         {
             (*wp).w_minscwidth = 0 as ::core::ffi::c_int;
             (*wp).w_maxscwidth = *val.offset(5 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
+                as ::core::ffi::c_int
+                - '0' as ::core::ffi::c_int;
         } else {
             (*wp).w_minscwidth = 0 as ::core::ffi::c_int;
             (*wp).w_maxscwidth = 1 as ::core::ffi::c_int;
         }
     } else {
-        if strncmp(val, b"auto:\0".as_ptr() as *const ::core::ffi::c_char, 5 as size_t)
-            != 0 as ::core::ffi::c_int || strlen(val) != 8 as size_t
-            || !ascii_isdigit(
-                *val.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            )
+        if strncmp(
+            val,
+            b"auto:\0".as_ptr() as *const ::core::ffi::c_char,
+            5 as size_t,
+        ) != 0 as ::core::ffi::c_int
+            || strlen(val) != 8 as size_t
+            || !ascii_isdigit(*val.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
             || *val.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != '-' as ::core::ffi::c_int
-            || !ascii_isdigit(
-                *val.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            )
+            || !ascii_isdigit(*val.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
         {
             return FAIL;
         }
         let mut min: ::core::ffi::c_int = *val.offset(5 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
+            as ::core::ffi::c_int
+            - '0' as ::core::ffi::c_int;
         let mut max: ::core::ffi::c_int = *val.offset(7 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
-        if min < 1 as ::core::ffi::c_int || max < 2 as ::core::ffi::c_int
-            || min > 8 as ::core::ffi::c_int || min >= max
+            as ::core::ffi::c_int
+            - '0' as ::core::ffi::c_int;
+        if min < 1 as ::core::ffi::c_int
+            || max < 2 as ::core::ffi::c_int
+            || min > 8 as ::core::ffi::c_int
+            || min >= max
         {
             return FAIL;
         }
@@ -2904,9 +2908,7 @@ pub unsafe extern "C" fn check_signcolumn(
         (*wp).w_minscwidth = min;
         (*wp).w_maxscwidth = max;
     }
-    let mut scwidth: ::core::ffi::c_int = if (*wp).w_minscwidth
-        <= 0 as ::core::ffi::c_int
-    {
+    let mut scwidth: ::core::ffi::c_int = if (*wp).w_minscwidth <= 0 as ::core::ffi::c_int {
         0 as ::core::ffi::c_int
     } else if (*wp).w_maxscwidth < (*wp).w_scwidth {
         (*wp).w_maxscwidth
@@ -2927,8 +2929,7 @@ pub unsafe extern "C" fn check_stl_option(
     let mut groupdepth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static mut errbuf: [::core::ffi::c_char; 80] = [0; 80];
     while *s != 0 {
-        while *s as ::core::ffi::c_int != 0
-            && *s as ::core::ffi::c_int != '%' as ::core::ffi::c_int
+        while *s as ::core::ffi::c_int != 0 && *s as ::core::ffi::c_int != '%' as ::core::ffi::c_int
         {
             s = s.offset(1);
         }
@@ -3016,10 +3017,10 @@ pub unsafe extern "C" fn check_stl_option(
                     0 as ::core::ffi::c_char,
                 ];
                 if vim_strchr(
-                        &raw mut c2rust_lvalue as *mut ::core::ffi::c_char,
-                        *s as uint8_t as ::core::ffi::c_int,
-                    )
-                    .is_null()
+                    &raw mut c2rust_lvalue as *mut ::core::ffi::c_char,
+                    *s as uint8_t as ::core::ffi::c_int,
+                )
+                .is_null()
                 {
                     return illegal_char(
                         &raw mut errbuf as *mut ::core::ffi::c_char,
@@ -3029,14 +3030,12 @@ pub unsafe extern "C" fn check_stl_option(
                 }
                 if *s as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
                     s = s.offset(1);
-                    let mut reevaluate: bool = *s as ::core::ffi::c_int
-                        == '%' as ::core::ffi::c_int;
-                    if reevaluate as ::core::ffi::c_int != 0
-                        && {
-                            s = s.offset(1);
-                            *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
-                        }
-                    {
+                    let mut reevaluate: bool =
+                        *s as ::core::ffi::c_int == '%' as ::core::ffi::c_int;
+                    if reevaluate as ::core::ffi::c_int != 0 && {
+                        s = s.offset(1);
+                        *s as ::core::ffi::c_int == '}' as ::core::ffi::c_int
+                    } {
                         return illegal_char(
                             &raw mut errbuf as *mut ::core::ffi::c_char,
                             ::core::mem::size_of::<[::core::ffi::c_char; 80]>(),
@@ -3045,8 +3044,8 @@ pub unsafe extern "C" fn check_stl_option(
                     }
                     while (*s as ::core::ffi::c_int != '}' as ::core::ffi::c_int
                         || reevaluate as ::core::ffi::c_int != 0
-                            && *s.offset(-1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int != '%' as ::core::ffi::c_int)
+                            && *s.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                != '%' as ::core::ffi::c_int)
                         && *s as ::core::ffi::c_int != 0
                     {
                         s = s.offset(1);
@@ -3071,17 +3070,20 @@ pub unsafe extern "C" fn check_illegal_path_names(
 ) -> bool {
     return flags & kOptFlagNFname as ::core::ffi::c_int as uint32_t != 0
         && !strpbrk(
-                val,
-                (if secure != 0 {
-                    b"/\\*?[|;&<>\r\n\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"/\\*?[<>\r\n\0".as_ptr() as *const ::core::ffi::c_char
-                }),
-            )
-            .is_null()
+            val,
+            (if secure != 0 {
+                b"/\\*?[|;&<>\r\n\0".as_ptr() as *const ::core::ffi::c_char
+            } else {
+                b"/\\*?[<>\r\n\0".as_ptr() as *const ::core::ffi::c_char
+            }),
+        )
+        .is_null()
         || flags & kOptFlagNDname as ::core::ffi::c_int as uint32_t != 0
-            && !strpbrk(val, b"*?[|;&<>\r\n\0".as_ptr() as *const ::core::ffi::c_char)
-                .is_null();
+            && !strpbrk(
+                val,
+                b"*?[|;&<>\r\n\0".as_ptr() as *const ::core::ffi::c_char,
+            )
+            .is_null();
 }
 unsafe extern "C" fn did_set_opt_flags(
     mut val: *mut ::core::ffi::c_char,
@@ -3098,8 +3100,7 @@ unsafe extern "C" fn opt_values(
     mut idx: OptIndex,
     mut values_len: *mut size_t,
 ) -> *mut *const ::core::ffi::c_char {
-    let mut idx1: OptIndex = (if idx as ::core::ffi::c_int
-        == kOptViewoptions as ::core::ffi::c_int
+    let mut idx1: OptIndex = (if idx as ::core::ffi::c_int == kOptViewoptions as ::core::ffi::c_int
     {
         kOptSessionoptions as ::core::ffi::c_int
     } else if idx as ::core::ffi::c_int == kOptFileformats as ::core::ffi::c_int {
@@ -3123,11 +3124,10 @@ unsafe extern "C" fn check_str_opt(
     }
     let mut list: bool = (*opt).flags
         & (kOptFlagComma as ::core::ffi::c_int | kOptFlagOneComma as ::core::ffi::c_int)
-            as uint32_t != 0;
-    let mut values: *mut *const ::core::ffi::c_char = opt_values(
-        idx,
-        ::core::ptr::null_mut::<size_t>(),
-    );
+            as uint32_t
+        != 0;
+    let mut values: *mut *const ::core::ffi::c_char =
+        opt_values(idx, ::core::ptr::null_mut::<size_t>());
     return opt_strings_flags(*varp, values, (*opt).flags_var, list);
 }
 #[no_mangle]
@@ -3137,10 +3137,8 @@ pub unsafe extern "C" fn expand_set_str_generic(
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut values_len: size_t = 0;
-    let mut values: *mut *const ::core::ffi::c_char = opt_values(
-        (*args).oe_idx,
-        &raw mut values_len,
-    );
+    let mut values: *mut *const ::core::ffi::c_char =
+        opt_values((*args).oe_idx, &raw mut values_len);
     return expand_set_opt_string(args, values, values_len, numMatches, matches);
 }
 #[no_mangle]
@@ -3187,9 +3185,7 @@ unsafe extern "C" fn expand_set_opt_string(
             .wrapping_mul(numValues.wrapping_add(1 as size_t)),
     ) as *mut *mut ::core::ffi::c_char;
     let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if include_orig_val as ::core::ffi::c_int != 0
-        && *option_val as ::core::ffi::c_int != NUL
-    {
+    if include_orig_val as ::core::ffi::c_int != 0 && *option_val as ::core::ffi::c_int != NUL {
         let c2rust_fresh0 = count;
         count = count + 1;
         let c2rust_lvalue_ptr = &raw mut *(*matches).offset(c2rust_fresh0 as isize);
@@ -3209,8 +3205,7 @@ unsafe extern "C" fn expand_set_opt_string(
                 if vim_regexec(regmatch, *val, 0 as colnr_T) {
                     let c2rust_fresh1 = count;
                     count = count + 1;
-                    let c2rust_lvalue_ptr_0 = &raw mut *(*matches)
-                        .offset(c2rust_fresh1 as isize);
+                    let c2rust_lvalue_ptr_0 = &raw mut *(*matches).offset(c2rust_fresh1 as isize);
                     *c2rust_lvalue_ptr_0 = xstrdup(*val);
                 }
             }
@@ -3218,8 +3213,7 @@ unsafe extern "C" fn expand_set_opt_string(
         val = val.offset(1);
     }
     if count == 0 as ::core::ffi::c_int {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = matches
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void = matches as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -3228,9 +3222,8 @@ unsafe extern "C" fn expand_set_opt_string(
     *numMatches = count;
     return OK;
 }
-static mut set_opt_callback_orig_option: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut set_opt_callback_orig_option: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 static mut set_opt_callback_func: Option<
     unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
 > = None;
@@ -3240,14 +3233,15 @@ unsafe extern "C" fn expand_set_opt_callback(
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
         if !set_opt_callback_orig_option.is_null() {
-            return set_opt_callback_orig_option
+            return set_opt_callback_orig_option;
         } else {
-            return b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char
+            return b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     }
-    return set_opt_callback_func
-        .expect("non-null function pointer")(xp, idx - 1 as ::core::ffi::c_int);
+    return set_opt_callback_func.expect("non-null function pointer")(
+        xp,
+        idx - 1 as ::core::ffi::c_int,
+    );
 }
 unsafe extern "C" fn expand_set_opt_generic(
     mut args: *mut optexpand_T,
@@ -3255,20 +3249,14 @@ unsafe extern "C" fn expand_set_opt_generic(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    set_opt_callback_orig_option = if (*args).oe_include_orig_val as ::core::ffi::c_int
-        != 0
-    {
+    set_opt_callback_orig_option = if (*args).oe_include_orig_val as ::core::ffi::c_int != 0 {
         (*args).oe_opt_value
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
-    set_opt_callback_func = func
-        as Option<
-            unsafe extern "C" fn(
-                *mut expand_T,
-                ::core::ffi::c_int,
-            ) -> *mut ::core::ffi::c_char,
-        >;
+    set_opt_callback_func = func as Option<
+        unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
+    >;
     ExpandGeneric(
         b"\0".as_ptr() as *const ::core::ffi::c_char,
         (*args).oe_xp,
@@ -3297,8 +3285,8 @@ unsafe extern "C" fn expand_set_opt_listflag(
     let mut option_val: *mut ::core::ffi::c_char = (*args).oe_opt_value;
     let mut cmdline_val: *mut ::core::ffi::c_char = (*args).oe_set_arg;
     let mut append: bool = (*args).oe_append;
-    let mut include_orig_val: bool = (*args).oe_include_orig_val as ::core::ffi::c_int
-        != 0 && *option_val as ::core::ffi::c_int != NUL;
+    let mut include_orig_val: bool = (*args).oe_include_orig_val as ::core::ffi::c_int != 0
+        && *option_val as ::core::ffi::c_int != NUL;
     let mut num_flags: size_t = strlen(flags);
     *matches = xmalloc(
         ::core::mem::size_of::<*mut ::core::ffi::c_char>()
@@ -3318,28 +3306,24 @@ unsafe extern "C" fn expand_set_opt_listflag(
         {
             if vim_strchr(cmdline_val, *flag as ::core::ffi::c_int).is_null() {
                 if !(include_orig_val as ::core::ffi::c_int != 0
-                    && *option_val.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == NUL
+                    && *option_val.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == NUL
                     && *flag as ::core::ffi::c_int
                         == *option_val.offset(0 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_int)
                 {
                     let c2rust_fresh8 = count;
                     count = count + 1;
-                    let c2rust_lvalue_ptr_0 = &raw mut *(*matches)
-                        .offset(c2rust_fresh8 as isize);
-                    *c2rust_lvalue_ptr_0 = xmemdupz(
-                        flag as *const ::core::ffi::c_void,
-                        1 as size_t,
-                    ) as *mut ::core::ffi::c_char;
+                    let c2rust_lvalue_ptr_0 = &raw mut *(*matches).offset(c2rust_fresh8 as isize);
+                    *c2rust_lvalue_ptr_0 = xmemdupz(flag as *const ::core::ffi::c_void, 1 as size_t)
+                        as *mut ::core::ffi::c_char;
                 }
             }
         }
         flag = flag.offset(1);
     }
     if count == 0 as ::core::ffi::c_int {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = matches
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void = matches as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -3349,9 +3333,7 @@ unsafe extern "C" fn expand_set_opt_listflag(
     return OK;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_ambiwidth(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_ambiwidth(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
@@ -3359,52 +3341,48 @@ pub unsafe extern "C" fn did_set_ambiwidth(
     return check_chars_options();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_emoji(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    if check_str_opt(kOptAmbiwidth, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
-        != OK
+pub unsafe extern "C" fn did_set_emoji(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    if check_str_opt(
+        kOptAmbiwidth,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
+    ) != OK
     {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return check_chars_options();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_background(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_background(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
-    if *(*args).os_oldval.string.data.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int == *p_bg as ::core::ffi::c_int
+    if *(*args)
+        .os_oldval
+        .string
+        .data
+        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        == *p_bg as ::core::ffi::c_int
     {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
-    let mut dark: ::core::ffi::c_int = (*p_bg as ::core::ffi::c_int
-        == 'd' as ::core::ffi::c_int) as ::core::ffi::c_int;
+    let mut dark: ::core::ffi::c_int =
+        (*p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int) as ::core::ffi::c_int;
     init_highlight(false_0 != 0, false_0 != 0);
-    if dark
-        != (*p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int)
-            as ::core::ffi::c_int
-        && !get_var_value(b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char)
-            .is_null()
+    if dark != (*p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int) as ::core::ffi::c_int
+        && !get_var_value(b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char).is_null()
     {
         do_unlet(
             b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 14]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 14]>().wrapping_sub(1 as size_t),
             true_0 != 0,
         );
         free_string_option(p_bg);
-        p_bg = xstrdup(
-            if dark != 0 {
-                b"dark\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"light\0".as_ptr() as *const ::core::ffi::c_char
-            },
-        );
+        p_bg = xstrdup(if dark != 0 {
+            b"dark\0".as_ptr() as *const ::core::ffi::c_char
+        } else {
+            b"light\0".as_ptr() as *const ::core::ffi::c_char
+        });
         check_string_option(&raw mut p_bg);
         init_highlight(false_0 != 0, false_0 != 0);
     }
@@ -3418,9 +3396,7 @@ pub unsafe extern "C" fn did_set_background(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_backspace(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_backspace(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if ascii_isdigit(*p_bs as ::core::ffi::c_int) {
         if *p_bs as ::core::ffi::c_int != '2' as ::core::ffi::c_int {
             return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -3430,9 +3406,7 @@ pub unsafe extern "C" fn did_set_backspace(
     return did_set_str_generic(args);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_backupcopy(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_backupcopy(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut oldval: *const ::core::ffi::c_char = (*args).os_oldval.string.data;
     let mut opt_flags: ::core::ffi::c_int = (*args).os_flags;
@@ -3444,9 +3418,7 @@ pub unsafe extern "C" fn did_set_backupcopy(
     } else if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
         (*buf).b_bkc_flags = 0 as ::core::ffi::c_uint;
     }
-    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && *bkc as ::core::ffi::c_int == NUL
-    {
+    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 && *bkc as ::core::ffi::c_int == NUL {
         *flags = 0 as ::core::ffi::c_uint;
     } else {
         if opt_strings_flags(
@@ -3494,15 +3466,12 @@ pub unsafe extern "C" fn did_set_backupext_or_patchmode(
         }),
     ) == 0 as ::core::ffi::c_int
     {
-        return &raw const e_backupext_and_patchmode_are_equal
-            as *const ::core::ffi::c_char;
+        return &raw const e_backupext_and_patchmode_are_equal as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_breakat(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_breakat(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 256 as ::core::ffi::c_int {
         breakat_flags[i as usize] = false_0 as ::core::ffi::c_char;
@@ -3522,8 +3491,7 @@ pub unsafe extern "C" fn did_set_breakindentopt(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if briopt_check(
         *varp,
         (if varp == &raw mut (*win).w_onebuf_opt.wo_briopt {
@@ -3531,7 +3499,8 @@ pub unsafe extern "C" fn did_set_breakindentopt(
         } else {
             ::core::ptr::null_mut::<win_T>()
         }),
-    ) as ::core::ffi::c_int == FAIL
+    ) as ::core::ffi::c_int
+        == FAIL
     {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -3541,9 +3510,7 @@ pub unsafe extern "C" fn did_set_breakindentopt(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_bufhidden(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_bufhidden(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     return did_set_opt_flags(
         (*buf).b_p_bh,
@@ -3553,17 +3520,15 @@ pub unsafe extern "C" fn did_set_bufhidden(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_buftype(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_buftype(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if !(*buf).terminal.is_null()
         && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             != 't' as ::core::ffi::c_int
         || (*buf).terminal.is_null()
-            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int == 't' as ::core::ffi::c_int
+            && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                == 't' as ::core::ffi::c_int
         || opt_strings_flags(
             (*buf).b_p_bt,
             &raw mut opt_bt_values as *mut *const ::core::ffi::c_char,
@@ -3613,8 +3578,8 @@ pub unsafe extern "C" fn did_set_buftype(
         (*win).w_redr_status = true_0 != 0;
         redraw_later(win, UPD_VALID as ::core::ffi::c_int);
     }
-    (*buf).b_help = *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int == 'h' as ::core::ffi::c_int;
+    (*buf).b_help = *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        == 'h' as ::core::ffi::c_int;
     redraw_titles();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -3626,16 +3591,13 @@ unsafe extern "C" fn did_set_global_chars_option(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut local_ptr: *mut *mut ::core::ffi::c_char = if what as ::core::ffi::c_uint
-        == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        &raw mut (*win).w_onebuf_opt.wo_lcs
-    } else {
-        &raw mut (*win).w_onebuf_opt.wo_fcs
-    };
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut local_ptr: *mut *mut ::core::ffi::c_char =
+        if what as ::core::ffi::c_uint == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint {
+            &raw mut (*win).w_onebuf_opt.wo_lcs
+        } else {
+            &raw mut (*win).w_onebuf_opt.wo_fcs
+        };
     errmsg = set_chars_option(
         win,
         val,
@@ -3653,7 +3615,11 @@ unsafe extern "C" fn did_set_global_chars_option(
     }
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             let mut opt: *mut ::core::ffi::c_char = if what as ::core::ffi::c_uint
                 == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3677,11 +3643,8 @@ pub unsafe extern "C" fn did_set_chars_option(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if varp == &raw mut p_lcs {
         errmsg = did_set_global_chars_option(
             win,
@@ -3727,10 +3690,8 @@ pub unsafe extern "C" fn expand_set_chars_option(
     mut numMatches: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).oe_varp
-        as *mut *mut ::core::ffi::c_char;
-    let mut is_lcs: bool = varp == &raw mut p_lcs
-        || varp == &raw mut (*curwin).w_onebuf_opt.wo_lcs;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).oe_varp as *mut *mut ::core::ffi::c_char;
+    let mut is_lcs: bool = varp == &raw mut p_lcs || varp == &raw mut (*curwin).w_onebuf_opt.wo_lcs;
     return expand_set_opt_generic(
         args,
         if is_lcs as ::core::ffi::c_int != 0 {
@@ -3755,9 +3716,7 @@ pub unsafe extern "C" fn expand_set_chars_option(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_cinoptions(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_cinoptions(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     parse_cino(buf);
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -3767,8 +3726,7 @@ pub unsafe extern "C" fn did_set_colorcolumn(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return check_colorcolumn(
         *varp,
         if varp == &raw mut (*win).w_onebuf_opt.wo_cc {
@@ -3779,21 +3737,15 @@ pub unsafe extern "C" fn did_set_colorcolumn(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_comments(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
-    let mut errmsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+pub unsafe extern "C" fn did_set_comments(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
+    let mut errmsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = *varp;
     while *s != 0 {
-        while *s as ::core::ffi::c_int != 0
-            && *s as ::core::ffi::c_int != ':' as ::core::ffi::c_int
+        while *s as ::core::ffi::c_int != 0 && *s as ::core::ffi::c_int != ':' as ::core::ffi::c_int
         {
-            if vim_strchr(COM_ALL.as_ptr(), *s as uint8_t as ::core::ffi::c_int)
-                .is_null() && !ascii_isdigit(*s as ::core::ffi::c_int)
+            if vim_strchr(COM_ALL.as_ptr(), *s as uint8_t as ::core::ffi::c_int).is_null()
+                && !ascii_isdigit(*s as ::core::ffi::c_int)
                 && *s as ::core::ffi::c_int != '-' as ::core::ffi::c_int
             {
                 errmsg = illegal_char(
@@ -3820,12 +3772,10 @@ pub unsafe extern "C" fn did_set_comments(
         if !errmsg.is_null() {
             break;
         }
-        while *s as ::core::ffi::c_int != 0
-            && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
+        while *s as ::core::ffi::c_int != 0 && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
         {
             if *s as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 s = s.offset(1);
             }
@@ -3839,8 +3789,7 @@ pub unsafe extern "C" fn did_set_comments(
 pub unsafe extern "C" fn did_set_commentstring(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if **varp as ::core::ffi::c_int != NUL
         && strstr(*varp, b"%s\0".as_ptr() as *const ::core::ffi::c_char).is_null()
     {
@@ -3850,11 +3799,8 @@ pub unsafe extern "C" fn did_set_commentstring(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_complete(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_complete(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut buffer: [::core::ffi::c_char; 512] = [0; 512];
     let mut char_before: uint8_t = NUL as uint8_t;
     let mut p: *mut ::core::ffi::c_char = *varp;
@@ -3864,8 +3810,7 @@ pub unsafe extern "C" fn did_set_complete(
             0 as ::core::ffi::c_int,
             LSIZE as ::core::ffi::c_int as size_t,
         );
-        let mut buf_ptr: *mut ::core::ffi::c_char = &raw mut buffer
-            as *mut ::core::ffi::c_char;
+        let mut buf_ptr: *mut ::core::ffi::c_char = &raw mut buffer as *mut ::core::ffi::c_char;
         let mut escape: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while *p as ::core::ffi::c_int != 0
             && (*p as ::core::ffi::c_int != ',' as ::core::ffi::c_int || escape != 0)
@@ -3890,36 +3835,32 @@ pub unsafe extern "C" fn did_set_complete(
         }
         *buf_ptr = NUL as ::core::ffi::c_char;
         if vim_strchr(
-                b".wbuksid]tUfFo\0".as_ptr() as *const ::core::ffi::c_char,
-                *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t
-                    as ::core::ffi::c_int,
-            )
-            .is_null()
+            b".wbuksid]tUfFo\0".as_ptr() as *const ::core::ffi::c_char,
+            *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
         {
             return illegal_char(
                 (*args).os_errbuf,
                 (*args).os_errbuflen,
-                *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t
-                    as ::core::ffi::c_int,
+                *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t as ::core::ffi::c_int,
             );
         }
         if vim_strchr(
-                b"ksF\0".as_ptr() as *const ::core::ffi::c_char,
-                *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t
-                    as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"ksF\0".as_ptr() as *const ::core::ffi::c_char,
+            *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
             && *(&raw mut buffer as *mut ::core::ffi::c_char)
-                .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+                .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                != NUL
             && *(&raw mut buffer as *mut ::core::ffi::c_char)
                 .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != '^' as ::core::ffi::c_int
         {
             char_before = *(&raw mut buffer as *mut ::core::ffi::c_char) as uint8_t;
         } else {
-            let mut t: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut t: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             t = vim_strchr(
                 &raw mut buffer as *mut ::core::ffi::c_char,
                 '^' as ::core::ffi::c_int,
@@ -4023,7 +3964,7 @@ pub unsafe extern "C" fn did_set_completeitemalign(
             seen[CPT_MENU as ::core::ffi::c_int as usize] = true_0 != 0;
             count += 1;
         } else {
-            return &raw const e_invarg as *const ::core::ffi::c_char
+            return &raw const e_invarg as *const ::core::ffi::c_char;
         }
     }
     if new_cia_flags == 0 as ::core::ffi::c_uint || count != 3 as ::core::ffi::c_int {
@@ -4060,8 +4001,7 @@ pub unsafe extern "C" fn did_set_completeopt(
 pub unsafe extern "C" fn did_set_concealcursor(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
         COCU_ALL.as_ptr() as *mut ::core::ffi::c_char,
@@ -4083,11 +4023,8 @@ pub unsafe extern "C" fn expand_set_concealcursor(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_cpoptions(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_cpoptions(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
         CPO_VI.as_ptr() as *mut ::core::ffi::c_char,
@@ -4113,8 +4050,7 @@ pub unsafe extern "C" fn did_set_cursorlineopt(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if **varp as ::core::ffi::c_int == NUL || fill_culopt_flags(*varp, win) != OK {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -4124,17 +4060,13 @@ pub unsafe extern "C" fn did_set_cursorlineopt(
 pub unsafe extern "C" fn did_set_diffanchors(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    if diffanchors_changed((*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0)
-        == FAIL
-    {
+    if diffanchors_changed((*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0) == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_diffopt(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_diffopt(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     return if diffopt_changed() == FAIL {
         &raw const e_invarg as *const ::core::ffi::c_char
     } else {
@@ -4149,12 +4081,10 @@ pub unsafe extern "C" fn expand_set_diffopt(
 ) -> ::core::ffi::c_int {
     let mut xp: *mut expand_T = (*args).oe_xp;
     if (*xp).xp_pattern > (*args).oe_set_arg
-        && *(*xp).xp_pattern.offset(-(1 as ::core::ffi::c_int as isize))
-            as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+        && *(*xp).xp_pattern.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
+            == ':' as ::core::ffi::c_int
     {
-        let algo_len: size_t = strlen(
-            b"algorithm:\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let algo_len: size_t = strlen(b"algorithm:\0".as_ptr() as *const ::core::ffi::c_char);
         if (*xp).xp_pattern.offset_from((*args).oe_set_arg)
             >= algo_len as ::core::ffi::c_int as isize
             && strncmp(
@@ -4170,18 +4100,15 @@ pub unsafe extern "C" fn expand_set_diffopt(
                     .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*const ::core::ffi::c_char; 5]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*const ::core::ffi::c_char>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
                     .wrapping_sub(1 as size_t),
                 numMatches,
                 matches,
             );
         }
-        let inline_len: size_t = strlen(
-            b"inline:\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let inline_len: size_t = strlen(b"inline:\0".as_ptr() as *const ::core::ffi::c_char);
         if (*xp).xp_pattern.offset_from((*args).oe_set_arg)
             >= inline_len as ::core::ffi::c_int as isize
             && strncmp(
@@ -4197,9 +4124,8 @@ pub unsafe extern "C" fn expand_set_diffopt(
                     .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*const ::core::ffi::c_char; 5]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*const ::core::ffi::c_char>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
                     .wrapping_sub(1 as size_t),
                 numMatches,
@@ -4211,9 +4137,7 @@ pub unsafe extern "C" fn expand_set_diffopt(
     return expand_set_str_generic(args, numMatches, matches);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_display(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_display(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
@@ -4223,12 +4147,9 @@ pub unsafe extern "C" fn did_set_display(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_encoding(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_encoding(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut opt_flags: ::core::ffi::c_int = (*args).os_flags;
     let mut gvarp: *mut *mut ::core::ffi::c_char = get_option_varp_scope_from(
         (*args).os_idx,
@@ -4282,8 +4203,7 @@ pub unsafe extern "C" fn expand_set_encoding(
 pub unsafe extern "C" fn did_set_eventignore(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if check_ei(*varp) == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -4294,11 +4214,9 @@ unsafe extern "C" fn get_eventignore_name(
     mut xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut subtract: bool = *(*xp).xp_pattern as ::core::ffi::c_int
-        == '-' as ::core::ffi::c_int;
+    let mut subtract: bool = *(*xp).xp_pattern as ::core::ffi::c_int == '-' as ::core::ffi::c_int;
     if !subtract && idx == 0 as ::core::ffi::c_int {
-        return b"all\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     let mut name: *mut ::core::ffi::c_char = get_event_name_no_group(
         xp,
@@ -4342,9 +4260,7 @@ pub unsafe extern "C" fn expand_set_eventignore(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_fileformat(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_fileformat(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut oldval: *const ::core::ffi::c_char = (*args).os_oldval.string.data;
     let mut opt_flags: ::core::ffi::c_int = (*args).os_flags;
@@ -4357,8 +4273,7 @@ pub unsafe extern "C" fn did_set_fileformat(
     }
     redraw_titles();
     ml_setflags(buf);
-    if get_fileformat(buf) == EOL_MAC
-        || *oldval as ::core::ffi::c_int == 'm' as ::core::ffi::c_int
+    if get_fileformat(buf) == EOL_MAC || *oldval as ::core::ffi::c_int == 'm' as ::core::ffi::c_int
     {
         redraw_buf_later(buf, UPD_NOT_VALID as ::core::ffi::c_int);
     }
@@ -4386,20 +4301,17 @@ pub unsafe extern "C" fn get_fileformat_name(
 pub unsafe extern "C" fn did_set_filetype_or_syntax(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if !valid_filetype(*varp) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
-    (*args).os_value_changed = strcmp((*args).os_oldval.string.data, *varp)
-        != 0 as ::core::ffi::c_int;
+    (*args).os_value_changed =
+        strcmp((*args).os_oldval.string.data, *varp) != 0 as ::core::ffi::c_int;
     (*args).os_value_checked = true_0 != 0;
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_foldexpr(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldexpr(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     did_set_optexpr(args);
     if foldmethodIsExpr(win) {
@@ -4408,9 +4320,7 @@ pub unsafe extern "C" fn did_set_foldexpr(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_foldignore(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldignore(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if foldmethodIsIndent(win) {
         foldUpdateAll(win);
@@ -4418,19 +4328,14 @@ pub unsafe extern "C" fn did_set_foldignore(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_foldmarker(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldmarker(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut p: *mut ::core::ffi::c_char = vim_strchr(*varp, ',' as ::core::ffi::c_int);
     if p.is_null() {
         return &raw const e_comma_required as *const ::core::ffi::c_char;
     }
-    if p == *varp
-        || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
+    if p == *varp || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     if foldmethodIsMarker(win) {
@@ -4439,9 +4344,7 @@ pub unsafe extern "C" fn did_set_foldmarker(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_foldmethod(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldmethod(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
@@ -4457,8 +4360,7 @@ pub unsafe extern "C" fn did_set_foldmethod(
 pub unsafe extern "C" fn did_set_formatoptions(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
         FO_ALL.as_ptr() as *mut ::core::ffi::c_char,
@@ -4480,9 +4382,7 @@ pub unsafe extern "C" fn expand_set_formatoptions(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_guicursor(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_guicursor(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = parse_shape_opt(SHAPE_CURSOR);
     if !errmsg.is_null() {
         return errmsg;
@@ -4493,9 +4393,7 @@ pub unsafe extern "C" fn did_set_guicursor(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_helpfile(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_helpfile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if didset_vim {
         vim_unsetenv_ext(b"VIM\0".as_ptr() as *const ::core::ffi::c_char);
     }
@@ -4505,18 +4403,14 @@ pub unsafe extern "C" fn did_set_helpfile(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_helplang(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_helplang(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut s: *mut ::core::ffi::c_char = p_hlg;
     while *s as ::core::ffi::c_int != NUL {
         if *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
             || (*s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != ',' as ::core::ffi::c_int
-                || *s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == NUL)
-                && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                || *s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL)
+                && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
         {
             return &raw const e_invarg as *const ::core::ffi::c_char;
         }
@@ -4528,50 +4422,38 @@ pub unsafe extern "C" fn did_set_helplang(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_highlight(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_highlight(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if strcmp(*varp, HIGHLIGHT_INIT.as_ptr()) != 0 as ::core::ffi::c_int {
         return &raw const e_unsupportedoption as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_iconstring(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_iconstring(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     return did_set_titleiconstring(args, STL_IN_ICON);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_inccommand(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_inccommand(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if cmdpreview {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return did_set_str_generic(args);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_iskeyword(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_iskeyword(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if varp == &raw mut p_isk {
         if check_isopt(*varp) == FAIL {
             return &raw const e_invarg as *const ::core::ffi::c_char;
         }
     } else {
-        return did_set_isopt(args)
+        return did_set_isopt(args);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_isopt(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_isopt(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if buf_init_chartab(buf, true_0 != 0) == FAIL {
         (*args).os_restore_chartab = true_0 != 0;
@@ -4580,12 +4462,9 @@ pub unsafe extern "C" fn did_set_isopt(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_keymap(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_keymap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut opt_flags: ::core::ffi::c_int = (*args).os_flags;
     if !valid_filetype(*varp) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -4618,9 +4497,7 @@ pub unsafe extern "C" fn did_set_keymap(
     return errmsg;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_keymodel(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_keymodel(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
@@ -4633,8 +4510,7 @@ pub unsafe extern "C" fn did_set_keymodel(
 pub unsafe extern "C" fn did_set_lispoptions(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if **varp as ::core::ffi::c_int != NUL
         && strcmp(*varp, b"expr:0\0".as_ptr() as *const ::core::ffi::c_char)
             != 0 as ::core::ffi::c_int
@@ -4646,11 +4522,8 @@ pub unsafe extern "C" fn did_set_lispoptions(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_matchpairs(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_matchpairs(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut p: *mut ::core::ffi::c_char = *varp;
     while *p as ::core::ffi::c_int != NUL {
         let mut x2: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -4665,7 +4538,8 @@ pub unsafe extern "C" fn did_set_matchpairs(
             x3 = utf_ptr2char(p);
             p = p.offset(utfc_ptr2len(p) as isize);
         }
-        if x2 != ':' as ::core::ffi::c_int || x3 == -1 as ::core::ffi::c_int
+        if x2 != ':' as ::core::ffi::c_int
+            || x3 == -1 as ::core::ffi::c_int
             || *p as ::core::ffi::c_int != NUL
                 && *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int
         {
@@ -4688,20 +4562,15 @@ pub unsafe extern "C" fn did_set_messagesopt(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_mkspellmem(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_mkspellmem(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if spell_check_msm() != OK {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_mouse(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_mouse(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
         MOUSE_ALL.as_ptr() as *mut ::core::ffi::c_char,
@@ -4730,10 +4599,7 @@ pub unsafe extern "C" fn did_set_mousescroll(
     let mut horizontal: OptInt = -1 as OptInt;
     let mut string: *mut ::core::ffi::c_char = p_mousescroll;
     loop {
-        let mut end: *mut ::core::ffi::c_char = vim_strchr(
-            string,
-            ',' as ::core::ffi::c_int,
-        );
+        let mut end: *mut ::core::ffi::c_char = vim_strchr(string, ',' as ::core::ffi::c_int);
         let mut length: size_t = if !end.is_null() {
             end.offset_from(string) as size_t
         } else {
@@ -4745,22 +4611,20 @@ pub unsafe extern "C" fn did_set_mousescroll(
         let mut direction: *mut OptInt = ::core::ptr::null_mut::<OptInt>();
         if memcmp(
             string as *const ::core::ffi::c_void,
-            b"ver:\0".as_ptr() as *const ::core::ffi::c_char
-                as *const ::core::ffi::c_void,
+            b"ver:\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
             4 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
             direction = &raw mut vertical;
         } else if memcmp(
             string as *const ::core::ffi::c_void,
-            b"hor:\0".as_ptr() as *const ::core::ffi::c_char
-                as *const ::core::ffi::c_void,
+            b"hor:\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
             4 as size_t,
         ) == 0 as ::core::ffi::c_int
         {
             direction = &raw mut horizontal;
         } else {
-            return &raw const e_invarg as *const ::core::ffi::c_char
+            return &raw const e_invarg as *const ::core::ffi::c_char;
         }
         if *direction != -1 as OptInt {
             return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -4773,11 +4637,8 @@ pub unsafe extern "C" fn did_set_mousescroll(
             i = i.wrapping_add(1);
         }
         string = string.offset(4 as ::core::ffi::c_int as isize);
-        *direction = getdigits_int(
-            &raw mut string,
-            false_0 != 0,
-            -1 as ::core::ffi::c_int,
-        ) as OptInt;
+        *direction =
+            getdigits_int(&raw mut string, false_0 != 0, -1 as ::core::ffi::c_int) as OptInt;
         if *direction == -1 as OptInt {
             return &raw const e_invarg as *const ::core::ffi::c_char;
         }
@@ -4799,11 +4660,8 @@ pub unsafe extern "C" fn did_set_mousescroll(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_optexpr(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_optexpr(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut name: *mut ::core::ffi::c_char = get_scriptlocal_funcname(*varp);
     if !name.is_null() {
         free_string_option(*varp);
@@ -4818,9 +4676,7 @@ pub unsafe extern "C" fn did_set_rulerformat(
     return did_set_statustabline_rulerformat(args, true_0 != 0, false_0 != 0);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_selection(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_selection(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
@@ -4839,8 +4695,7 @@ pub unsafe extern "C" fn did_set_sessionoptions(
         return errmsg;
     }
     if ssop_flags & kOptSsopFlagCurdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-        && ssop_flags & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
+        && ssop_flags & kOptSsopFlagSesdir as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         let mut oldval: *const ::core::ffi::c_char = (*args).os_oldval.string.data;
         opt_strings_flags(
@@ -4854,18 +4709,16 @@ pub unsafe extern "C" fn did_set_sessionoptions(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_shada(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_shada(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errbuf: *mut ::core::ffi::c_char = (*args).os_errbuf;
     let mut errbuflen: size_t = (*args).os_errbuflen;
     let mut s: *mut ::core::ffi::c_char = p_shada;
     while *s != 0 {
         if vim_strchr(
-                b"!\"%'/:<@cfhnrs\0".as_ptr() as *const ::core::ffi::c_char,
-                *s as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"!\"%'/:<@cfhnrs\0".as_ptr() as *const ::core::ffi::c_char,
+            *s as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
         {
             return illegal_char(errbuf, errbuflen, *s as uint8_t as ::core::ffi::c_int);
         }
@@ -4900,25 +4753,20 @@ pub unsafe extern "C" fn did_set_shada(
                     break;
                 }
             }
-            if !ascii_isdigit(
-                *s.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
-            ) {
+            if !ascii_isdigit(*s.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int)
+            {
                 if !errbuf.is_null() {
                     vim_snprintf(
                         errbuf,
                         errbuflen,
-                        gettext(
-                            b"E526: Missing number after <%s>\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
-                        transchar_byte(
-                            *s.offset(-(1 as ::core::ffi::c_int as isize)) as uint8_t
-                                as ::core::ffi::c_int,
-                        ),
+                        gettext(b"E526: Missing number after <%s>\0".as_ptr()
+                            as *const ::core::ffi::c_char),
+                        transchar_byte(*s.offset(-(1 as ::core::ffi::c_int as isize)) as uint8_t
+                            as ::core::ffi::c_int),
                     );
                     return errbuf;
                 } else {
-                    return b"\0".as_ptr() as *const ::core::ffi::c_char
+                    return b"\0".as_ptr() as *const ::core::ffi::c_char;
                 }
             }
         }
@@ -4926,9 +4774,9 @@ pub unsafe extern "C" fn did_set_shada(
             s = s.offset(1);
         } else if *s != 0 {
             if !errbuf.is_null() {
-                return b"E527: Missing comma\0".as_ptr() as *const ::core::ffi::c_char
+                return b"E527: Missing comma\0".as_ptr() as *const ::core::ffi::c_char;
             } else {
-                return b"\0".as_ptr() as *const ::core::ffi::c_char
+                return b"\0".as_ptr() as *const ::core::ffi::c_char;
             }
         }
     }
@@ -4966,7 +4814,7 @@ pub unsafe extern "C" fn did_set_shellpipe_redir(
                 p = p.offset(1);
             } else {
                 return &raw const e_invalid_format_string_single_percent_s
-                    as *const ::core::ffi::c_char
+                    as *const ::core::ffi::c_char;
             }
         }
         p = p.offset(1);
@@ -4974,11 +4822,8 @@ pub unsafe extern "C" fn did_set_shellpipe_redir(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_shortmess(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_shortmess(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
         &raw mut SHM_ALL as *mut ::core::ffi::c_char,
@@ -5000,11 +4845,8 @@ pub unsafe extern "C" fn expand_set_shortmess(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_showbreak(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_showbreak(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut s: *mut ::core::ffi::c_char = *varp;
     while *s != 0 {
         if ptr2cells(s) != 1 as ::core::ffi::c_int {
@@ -5016,9 +4858,7 @@ pub unsafe extern "C" fn did_set_showbreak(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_showcmdloc(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_showcmdloc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = did_set_str_generic(args);
     if errmsg.is_null() {
         comp_col();
@@ -5026,12 +4866,9 @@ pub unsafe extern "C" fn did_set_showcmdloc(
     return errmsg;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_signcolumn(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_signcolumn(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut oldval: *const ::core::ffi::c_char = (*args).os_oldval.string.data;
     if check_signcolumn(
         *varp,
@@ -5046,7 +4883,8 @@ pub unsafe extern "C" fn did_set_signcolumn(
     }
     if *oldval as ::core::ffi::c_int == 'n' as ::core::ffi::c_int
         && *oldval.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == 'u' as ::core::ffi::c_int || (*win).w_minscwidth == SCL_NUM
+            == 'u' as ::core::ffi::c_int
+        || (*win).w_minscwidth == SCL_NUM
     {
         (*win).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T;
     }
@@ -5060,22 +4898,16 @@ pub unsafe extern "C" fn did_set_spellcapcheck(
     return compile_cap_prog((*win).w_s);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_spellfile(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_spellfile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if !valid_spellfile(*varp) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return did_set_spell_option();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_spelllang(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_spelllang(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if !valid_spelllang(*varp) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -5126,9 +4958,7 @@ pub unsafe extern "C" fn did_set_statuscolumn(
     return did_set_statustabline_rulerformat(args, false_0 != 0, true_0 != 0);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_statusline(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_statusline(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     return did_set_statustabline_rulerformat(args, false_0 != 0, false_0 != 0);
 }
 unsafe extern "C" fn did_set_statustabline_rulerformat(
@@ -5137,19 +4967,16 @@ unsafe extern "C" fn did_set_statustabline_rulerformat(
     mut statuscolumn: bool,
 ) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if rulerformat {
         ru_wid = 0 as ::core::ffi::c_int;
     } else if statuscolumn {
         (*win).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T;
     }
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = *varp;
-    let mut is_stl: bool = (*args).os_idx as ::core::ffi::c_int
-        == kOptStatusline as ::core::ffi::c_int;
+    let mut is_stl: bool =
+        (*args).os_idx as ::core::ffi::c_int == kOptStatusline as ::core::ffi::c_int;
     if is_stl as ::core::ffi::c_int != 0
         && ((*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
             || (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int == 0)
@@ -5157,11 +4984,15 @@ unsafe extern "C" fn did_set_statustabline_rulerformat(
     {
         xfree(*varp as *mut ::core::ffi::c_void);
         *varp = xstrdup(
-            get_option_default((*args).os_idx, (*args).os_flags).data.string.data,
+            get_option_default((*args).os_idx, (*args).os_flags)
+                .data
+                .string
+                .data,
         );
         s = *varp;
     }
-    if is_stl as ::core::ffi::c_int != 0 && !win.is_null()
+    if is_stl as ::core::ffi::c_int != 0
+        && !win.is_null()
         && (*win).w_floating as ::core::ffi::c_int != 0
     {
         win_config_float(win, (*win).w_config);
@@ -5173,17 +5004,12 @@ unsafe extern "C" fn did_set_statustabline_rulerformat(
         if *s as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
             s = s.offset(1);
         }
-        let mut wid: ::core::ffi::c_int = getdigits_int(
-            &raw mut s,
-            true_0 != 0,
-            0 as ::core::ffi::c_int,
-        );
-        if wid != 0 && *s as ::core::ffi::c_int == '(' as ::core::ffi::c_int
-            && {
-                errmsg = check_stl_option(p_ruf);
-                errmsg.is_null()
-            }
-        {
+        let mut wid: ::core::ffi::c_int =
+            getdigits_int(&raw mut s, true_0 != 0, 0 as ::core::ffi::c_int);
+        if wid != 0 && *s as ::core::ffi::c_int == '(' as ::core::ffi::c_int && {
+            errmsg = check_stl_option(p_ruf);
+            errmsg.is_null()
+        } {
             ru_wid = wid;
         } else if *(*varp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             != '!' as ::core::ffi::c_int
@@ -5204,20 +5030,14 @@ unsafe extern "C" fn did_set_statustabline_rulerformat(
     return errmsg;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_tabline(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_tabline(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     return did_set_statustabline_rulerformat(args, false_0 != 0, false_0 != 0);
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_tagcase(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_tagcase(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut opt_flags: ::core::ffi::c_int = (*args).os_flags;
-    let mut flags: *mut ::core::ffi::c_uint = ::core::ptr::null_mut::<
-        ::core::ffi::c_uint,
-    >();
+    let mut flags: *mut ::core::ffi::c_uint = ::core::ptr::null_mut::<::core::ffi::c_uint>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
         p = (*buf).b_p_tc;
@@ -5226,9 +5046,7 @@ pub unsafe extern "C" fn did_set_tagcase(
         p = p_tc;
         flags = &raw mut tc_flags;
     }
-    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && *p as ::core::ffi::c_int == NUL
-    {
+    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 && *p as ::core::ffi::c_int == NUL {
         *flags = 0 as ::core::ffi::c_uint;
     } else if opt_strings_flags(
         p,
@@ -5237,7 +5055,7 @@ pub unsafe extern "C" fn did_set_tagcase(
         false_0 != 0,
     ) != OK
     {
-        return &raw const e_invarg as *const ::core::ffi::c_char
+        return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -5245,10 +5063,8 @@ unsafe extern "C" fn did_set_titleiconstring(
     mut args: *mut optset_T,
     mut flagval: ::core::ffi::c_int,
 ) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
-    if !vim_strchr(*varp, '%' as ::core::ffi::c_int).is_null()
-        && check_stl_option(*varp).is_null()
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
+    if !vim_strchr(*varp, '%' as ::core::ffi::c_int).is_null() && check_stl_option(*varp).is_null()
     {
         stl_syntax |= flagval;
     } else {
@@ -5268,15 +5084,14 @@ pub unsafe extern "C" fn did_set_varsofttabstop(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if *(*varp).offset(0 as ::core::ffi::c_int as isize) == 0
         || *(*varp).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '0' as ::core::ffi::c_int
             && *(*varp).offset(1 as ::core::ffi::c_int as isize) == 0
     {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*buf).b_p_vsts_array
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*buf).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -5285,7 +5100,8 @@ pub unsafe extern "C" fn did_set_varsofttabstop(
     let mut cp: *mut ::core::ffi::c_char = *varp;
     while *cp != 0 {
         if !ascii_isdigit(*cp as ::core::ffi::c_int) {
-            if !(*cp as ::core::ffi::c_int == ',' as ::core::ffi::c_int && cp > *varp
+            if !(*cp as ::core::ffi::c_int == ',' as ::core::ffi::c_int
+                && cp > *varp
                 && *cp.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                     != ',' as ::core::ffi::c_int)
             {
@@ -5298,25 +5114,22 @@ pub unsafe extern "C" fn did_set_varsofttabstop(
     if tabstop_set(*varp, &raw mut (*buf).b_p_vsts_array) {
         xfree(oldarray as *mut ::core::ffi::c_void);
     } else {
-        return &raw const e_invarg as *const ::core::ffi::c_char
+        return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_vartabstop(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_vartabstop(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if *(*varp).offset(0 as ::core::ffi::c_int as isize) == 0
         || *(*varp).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '0' as ::core::ffi::c_int
             && *(*varp).offset(1 as ::core::ffi::c_int as isize) == 0
     {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*buf).b_p_vts_array
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*buf).b_p_vts_array as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -5325,7 +5138,8 @@ pub unsafe extern "C" fn did_set_vartabstop(
     let mut cp: *mut ::core::ffi::c_char = *varp;
     while *cp != 0 {
         if !ascii_isdigit(*cp as ::core::ffi::c_int) {
-            if !(*cp as ::core::ffi::c_int == ',' as ::core::ffi::c_int && cp > *varp
+            if !(*cp as ::core::ffi::c_int == ',' as ::core::ffi::c_int
+                && cp > *varp
                 && *cp.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                     != ',' as ::core::ffi::c_int)
             {
@@ -5341,7 +5155,7 @@ pub unsafe extern "C" fn did_set_vartabstop(
             foldUpdateAll(win);
         }
     } else {
-        return &raw const e_invarg as *const ::core::ffi::c_char
+        return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -5351,8 +5165,7 @@ pub unsafe extern "C" fn did_set_verbosefile(
 ) -> *const ::core::ffi::c_char {
     verbose_stop();
     if *p_vfile as ::core::ffi::c_int != NUL && verbose_open() == FAIL {
-        return &raw const e_invarg as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return &raw const e_invarg as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
@@ -5367,9 +5180,7 @@ pub unsafe extern "C" fn did_set_virtualedit(
         ve = (*win).w_onebuf_opt.wo_ve;
         flags = &raw mut (*win).w_onebuf_opt.wo_ve_flags;
     }
-    if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && *ve as ::core::ffi::c_int == NUL
-    {
+    if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 && *ve as ::core::ffi::c_int == NUL {
         *flags = 0 as ::core::ffi::c_uint;
     } else if opt_strings_flags(
         ve,
@@ -5378,7 +5189,7 @@ pub unsafe extern "C" fn did_set_virtualedit(
         true_0 != 0,
     ) != OK
     {
-        return &raw const e_invarg as *const ::core::ffi::c_char
+        return &raw const e_invarg as *const ::core::ffi::c_char;
     } else if strcmp(ve, (*args).os_oldval.string.data) != 0 as ::core::ffi::c_int {
         validate_virtcol(win);
         coladvance(win, (*win).w_virtcol);
@@ -5386,15 +5197,11 @@ pub unsafe extern "C" fn did_set_virtualedit(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_whichwrap(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn did_set_whichwrap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     return did_set_option_listflag(
         *varp,
-        b"bshl<>[]~,\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"bshl<>[]~,\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );
@@ -5413,18 +5220,14 @@ pub unsafe extern "C" fn expand_set_whichwrap(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_wildmode(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_wildmode(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if check_opt_wim() == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_winbar(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_winbar(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     return did_set_statustabline_rulerformat(args, false_0 != 0, false_0 != 0);
 }
 unsafe extern "C" fn parse_border_opt(mut border_opt: *mut ::core::ffi::c_char) -> bool {
@@ -5484,18 +5287,14 @@ unsafe extern "C" fn parse_border_opt(mut border_opt: *mut ::core::ffi::c_char) 
     return result;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_winborder(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_winborder(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !parse_border_opt(p_winborder) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_pumborder(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_pumborder(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !parse_border_opt(p_pumborder) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -5506,8 +5305,7 @@ pub unsafe extern "C" fn did_set_winhighlight(
     mut args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if !parse_winhl_opt(
         *varp,
         if varp == &raw mut (*win).w_onebuf_opt.wo_winhl {
@@ -5556,29 +5354,22 @@ unsafe extern "C" fn opt_strings_flags(
             let mut len: size_t = strlen(*values.offset(i as isize));
             if strncmp(*values.offset(i as isize), val, len) == 0 as ::core::ffi::c_int
                 && (list as ::core::ffi::c_int != 0
-                    && *val.offset(len as isize) as ::core::ffi::c_int
-                        == ',' as ::core::ffi::c_int
+                    && *val.offset(len as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
                     || *val.offset(len as isize) as ::core::ffi::c_int == NUL)
             {
-                val = val
-                    .offset(
-                        len
-                            .wrapping_add(
-                                (*val.offset(len as isize) as ::core::ffi::c_int
-                                    == ',' as ::core::ffi::c_int) as ::core::ffi::c_int
-                                    as size_t,
-                            ) as isize,
-                    );
+                val = val.offset(len.wrapping_add(
+                    (*val.offset(len as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int)
+                        as ::core::ffi::c_int as size_t,
+                ) as isize);
                 '_c2rust_label: {
                     if (i as usize)
-                        < ::core::mem::size_of::<::core::ffi::c_uint>()
-                            .wrapping_mul(8 as usize)
-                    {} else {
+                        < ::core::mem::size_of::<::core::ffi::c_uint>().wrapping_mul(8 as usize)
+                    {
+                    } else {
                         __assert_fail(
-                            b"i < sizeof(new_flags) * 8\0".as_ptr()
+                            b"i < sizeof(new_flags) * 8\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/optionstr.c\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/optionstr.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
                             2192 as ::core::ffi::c_uint,
                             __ASSERT_FUNCTION.as_ptr(),
                         );
@@ -5600,9 +5391,7 @@ unsafe extern "C" fn opt_strings_flags(
     return OK;
 }
 #[no_mangle]
-pub unsafe extern "C" fn check_ff_value(
-    mut p: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn check_ff_value(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     return opt_strings_flags(
         p,
         &raw mut opt_ff_values as *mut *const ::core::ffi::c_char,
@@ -5611,20 +5400,16 @@ pub unsafe extern "C" fn check_ff_value(
     );
 }
 static mut e_conflicts_with_value_of_listchars: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E834: Conflicts with value of 'listchars'\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E834: Conflicts with value of 'listchars'\0",
+    )
 };
 static mut e_conflicts_with_value_of_fillchars: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E835: Conflicts with value of 'fillchars'\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E835: Conflicts with value of 'fillchars'\0",
+    )
 };
-unsafe extern "C" fn get_encoded_char_adv(
-    mut p: *mut *const ::core::ffi::c_char,
-) -> schar_T {
+unsafe extern "C" fn get_encoded_char_adv(mut p: *mut *const ::core::ffi::c_char) -> schar_T {
     let mut s: *const ::core::ffi::c_char = *p;
     if *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '\\' as ::core::ffi::c_int
@@ -5636,8 +5421,8 @@ unsafe extern "C" fn get_encoded_char_adv(
                 == 'U' as ::core::ffi::c_int)
     {
         let mut num: int64_t = 0 as int64_t;
-        let mut bytes: ::core::ffi::c_int = if *s
-            .offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        let mut bytes: ::core::ffi::c_int = if *s.offset(1 as ::core::ffi::c_int as isize)
+            as ::core::ffi::c_int
             == 'x' as ::core::ffi::c_int
         {
             1 as ::core::ffi::c_int
@@ -5756,29 +5541,28 @@ pub unsafe extern "C" fn set_chars_option(
     mut errbuf: *mut ::core::ffi::c_char,
     mut errbuflen: size_t,
 ) -> *const ::core::ffi::c_char {
-    let mut last_multispace: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut last_lmultispace: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut last_multispace: *const ::core::ffi::c_char =
+        ::core::ptr::null::<::core::ffi::c_char>();
+    let mut last_lmultispace: *const ::core::ffi::c_char =
+        ::core::ptr::null::<::core::ffi::c_char>();
     let mut multispace_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut lead_multispace_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tab: *const chars_tab = ::core::ptr::null::<chars_tab>();
     let mut entries: ::core::ffi::c_int = 0;
-    if what as ::core::ffi::c_uint
-        == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if what as ::core::ffi::c_uint == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint {
         tab = &raw const lcs_tab as *const chars_tab;
         entries = ::core::mem::size_of::<[chars_tab; 12]>()
             .wrapping_div(::core::mem::size_of::<chars_tab>())
             .wrapping_div(
                 (::core::mem::size_of::<[chars_tab; 12]>()
-                    .wrapping_rem(::core::mem::size_of::<chars_tab>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<chars_tab>())
+                    == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int;
-        if *(*wp).w_onebuf_opt.wo_lcs.offset(0 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int == NUL
+        if *(*wp)
+            .w_onebuf_opt
+            .wo_lcs
+            .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            == NUL
         {
             value = p_lcs;
         }
@@ -5788,11 +5572,14 @@ pub unsafe extern "C" fn set_chars_option(
             .wrapping_div(::core::mem::size_of::<chars_tab>())
             .wrapping_div(
                 (::core::mem::size_of::<[chars_tab; 21]>()
-                    .wrapping_rem(::core::mem::size_of::<chars_tab>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<chars_tab>())
+                    == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int;
-        if *(*wp).w_onebuf_opt.wo_fcs.offset(0 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int == NUL
+        if *(*wp)
+            .w_onebuf_opt
+            .wo_fcs
+            .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            == NUL
         {
             value = p_fcs;
         }
@@ -5813,8 +5600,7 @@ pub unsafe extern "C" fn set_chars_option(
                 if !(*tab.offset(i as isize)).cp.is_null() {
                     *(*tab.offset(i as isize)).cp = schar_from_str(
                         if !(*tab.offset(i as isize)).def.is_null()
-                            && ptr2cells((*tab.offset(i as isize)).def)
-                                == 1 as ::core::ffi::c_int
+                            && ptr2cells((*tab.offset(i as isize)).def) == 1 as ::core::ffi::c_int
                         {
                             (*tab.offset(i as isize)).def
                         } else {
@@ -5837,8 +5623,7 @@ pub unsafe extern "C" fn set_chars_option(
                             .wrapping_add(1 as size_t)
                             .wrapping_mul(::core::mem::size_of::<schar_T>()),
                     ) as *mut schar_T;
-                    *lcs_chars.multispace.offset(multispace_len as isize) = NUL
-                        as schar_T;
+                    *lcs_chars.multispace.offset(multispace_len as isize) = NUL as schar_T;
                 } else {
                     lcs_chars.multispace = ::core::ptr::null_mut::<schar_T>();
                 }
@@ -5848,8 +5633,9 @@ pub unsafe extern "C" fn set_chars_option(
                             .wrapping_add(1 as size_t)
                             .wrapping_mul(::core::mem::size_of::<schar_T>()),
                     ) as *mut schar_T;
-                    *lcs_chars.leadmultispace.offset(lead_multispace_len as isize) = NUL
-                        as schar_T;
+                    *lcs_chars
+                        .leadmultispace
+                        .offset(lead_multispace_len as isize) = NUL as schar_T;
                 } else {
                     lcs_chars.leadmultispace = ::core::ptr::null_mut::<schar_T>();
                 }
@@ -5866,7 +5652,8 @@ pub unsafe extern "C" fn set_chars_option(
                     (*tab.offset(i_0 as isize)).name.size,
                 ) == 0 as ::core::ffi::c_int
                     && *p.offset((*tab.offset(i_0 as isize)).name.size as isize)
-                        as ::core::ffi::c_int == ':' as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        == ':' as ::core::ffi::c_int)
                 {
                     i_0 += 1;
                 } else {
@@ -5908,8 +5695,7 @@ pub unsafe extern "C" fn set_chars_option(
                                 );
                             }
                         } else {
-                            let mut multispace_pos: ::core::ffi::c_int = 0
-                                as ::core::ffi::c_int;
+                            let mut multispace_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                             while *s as ::core::ffi::c_int != NUL
                                 && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
                             {
@@ -5958,8 +5744,7 @@ pub unsafe extern "C" fn set_chars_option(
                                 );
                             }
                         } else {
-                            let mut multispace_pos_0: ::core::ffi::c_int = 0
-                                as ::core::ffi::c_int;
+                            let mut multispace_pos_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                             while *s as ::core::ffi::c_int != NUL
                                 && *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
                             {
@@ -5996,8 +5781,7 @@ pub unsafe extern "C" fn set_chars_option(
                         let mut c2: schar_T = 0 as schar_T;
                         let mut c3: schar_T = 0 as schar_T;
                         if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2
-                            || (*tab.offset(i_0 as isize)).cp
-                                == &raw mut lcs_chars.leadtab2
+                            || (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.leadtab2
                         {
                             if *s as ::core::ffi::c_int == NUL {
                                 return field_value_err(
@@ -6032,8 +5816,7 @@ pub unsafe extern "C" fn set_chars_option(
                                     );
                                 }
                             }
-                            if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2
-                            {
+                            if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2 {
                                 has_tab = true_0 != 0;
                             } else {
                                 has_leadtab = true_0 != 0;
@@ -6043,8 +5826,7 @@ pub unsafe extern "C" fn set_chars_option(
                             || *s as ::core::ffi::c_int == NUL
                         {
                             if round > 0 as ::core::ffi::c_int {
-                                if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2
-                                {
+                                if (*tab.offset(i_0 as isize)).cp == &raw mut lcs_chars.tab2 {
                                     lcs_chars.tab1 = c1_3;
                                     lcs_chars.tab2 = c2;
                                     lcs_chars.tab3 = c3;
@@ -6067,7 +5849,7 @@ pub unsafe extern "C" fn set_chars_option(
                                 &raw const e_wrong_number_of_characters_for_field_str
                                     as *const ::core::ffi::c_char,
                                 (*tab.offset(i_0 as isize)).name.data,
-                            )
+                            );
                         }
                     }
                 }
@@ -6079,18 +5861,16 @@ pub unsafe extern "C" fn set_chars_option(
                 p = p.offset(1);
             }
         }
-        if what as ::core::ffi::c_uint
-            == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
-            && has_leadtab as ::core::ffi::c_int != 0 && !has_tab
+        if what as ::core::ffi::c_uint == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
+            && has_leadtab as ::core::ffi::c_int != 0
+            && !has_tab
         {
             return &raw const e_leadtab_requires_tab as *const ::core::ffi::c_char;
         }
         round += 1;
     }
     if apply {
-        if what as ::core::ffi::c_uint
-            == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if what as ::core::ffi::c_uint == kListchars as ::core::ffi::c_int as ::core::ffi::c_uint {
             xfree((*wp).w_p_lcs_chars.multispace as *mut ::core::ffi::c_void);
             xfree((*wp).w_p_lcs_chars.leadmultispace as *mut ::core::ffi::c_void);
             (*wp).w_p_lcs_chars = lcs_chars;
@@ -6111,8 +5891,8 @@ pub unsafe extern "C" fn get_fillchars_name(
                 .wrapping_div(::core::mem::size_of::<chars_tab>())
                 .wrapping_div(
                     (::core::mem::size_of::<[chars_tab; 21]>()
-                        .wrapping_rem(::core::mem::size_of::<chars_tab>()) == 0)
-                        as ::core::ffi::c_int as usize,
+                        .wrapping_rem(::core::mem::size_of::<chars_tab>())
+                        == 0) as ::core::ffi::c_int as usize,
                 ) as ::core::ffi::c_int
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6130,8 +5910,8 @@ pub unsafe extern "C" fn get_listchars_name(
                 .wrapping_div(::core::mem::size_of::<chars_tab>())
                 .wrapping_div(
                     (::core::mem::size_of::<[chars_tab; 12]>()
-                        .wrapping_rem(::core::mem::size_of::<chars_tab>()) == 0)
-                        as ::core::ffi::c_int as usize,
+                        .wrapping_rem(::core::mem::size_of::<chars_tab>())
+                        == 0) as ::core::ffi::c_int as usize,
                 ) as ::core::ffi::c_int
     {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6141,57 +5921,59 @@ pub unsafe extern "C" fn get_listchars_name(
 #[no_mangle]
 pub unsafe extern "C" fn check_chars_options() -> *const ::core::ffi::c_char {
     if !set_chars_option(
-            curwin,
-            p_lcs,
-            kListchars,
-            false_0 != 0,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            0 as size_t,
-        )
-        .is_null()
+        curwin,
+        p_lcs,
+        kListchars,
+        false_0 != 0,
+        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        0 as size_t,
+    )
+    .is_null()
     {
-        return &raw const e_conflicts_with_value_of_listchars
-            as *const ::core::ffi::c_char;
+        return &raw const e_conflicts_with_value_of_listchars as *const ::core::ffi::c_char;
     }
     if !set_chars_option(
-            curwin,
-            p_fcs,
-            kFillchars,
-            false_0 != 0,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            0 as size_t,
-        )
-        .is_null()
+        curwin,
+        p_fcs,
+        kFillchars,
+        false_0 != 0,
+        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        0 as size_t,
+    )
+    .is_null()
     {
-        return &raw const e_conflicts_with_value_of_fillchars
-            as *const ::core::ffi::c_char;
+        return &raw const e_conflicts_with_value_of_fillchars as *const ::core::ffi::c_char;
     }
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if !set_chars_option(
-                    wp,
-                    (*wp).w_onebuf_opt.wo_lcs,
-                    kListchars,
-                    true_0 != 0,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as size_t,
-                )
-                .is_null()
+                wp,
+                (*wp).w_onebuf_opt.wo_lcs,
+                kListchars,
+                true_0 != 0,
+                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                0 as size_t,
+            )
+            .is_null()
             {
                 return &raw const e_conflicts_with_value_of_listchars
                     as *const ::core::ffi::c_char;
             }
             if !set_chars_option(
-                    wp,
-                    (*wp).w_onebuf_opt.wo_fcs,
-                    kFillchars,
-                    true_0 != 0,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as size_t,
-                )
-                .is_null()
+                wp,
+                (*wp).w_onebuf_opt.wo_fcs,
+                kFillchars,
+                true_0 != 0,
+                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                0 as size_t,
+            )
+            .is_null()
             {
                 return &raw const e_conflicts_with_value_of_fillchars
                     as *const ::core::ffi::c_char;
@@ -6211,10 +5993,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.stl,
             name: String_0 {
-                data: b"stl\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"stl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
             },
             def: b" \0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6222,10 +6002,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.stlnc,
             name: String_0 {
-                data: b"stlnc\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"stlnc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
             },
             def: b" \0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6233,10 +6011,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.wbr,
             name: String_0 {
-                data: b"wbr\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"wbr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
             },
             def: b" \0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6244,10 +6020,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.horiz,
             name: String_0 {
-                data: b"horiz\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"horiz\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\x80\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6257,8 +6031,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"horizup\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\xB4\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6268,8 +6041,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"horizdown\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\xAC\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6277,10 +6049,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.vert,
             name: String_0 {
-                data: b"vert\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"vert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\x82\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6290,8 +6060,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"vertleft\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\xA4\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6301,8 +6070,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"vertright\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\x9C\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6312,8 +6080,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"verthoriz\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\xBC\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"+\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6321,10 +6088,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.fold,
             name: String_0 {
-                data: b"fold\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"fold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
             },
             def: b"\xC2\xB7\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"-\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6334,8 +6099,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"foldopen\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             },
             def: b"-\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6345,8 +6109,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"foldclose\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             },
             def: b"+\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6356,8 +6119,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"foldsep\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             },
             def: b"\xE2\x94\x82\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: b"|\0".as_ptr() as *const ::core::ffi::c_char,
@@ -6367,8 +6129,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"foldinner\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6376,10 +6137,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.diff,
             name: String_0 {
-                data: b"diff\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"diff\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
             },
             def: b"-\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6389,8 +6148,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"msgsep\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
             },
             def: b" \0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6398,10 +6156,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.eob,
             name: String_0 {
-                data: b"eob\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"eob\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
             },
             def: b"~\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6411,8 +6167,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"lastline\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             },
             def: b"@\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6420,10 +6175,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut fcs_chars.trunc,
             name: String_0 {
-                data: b"trunc\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"trunc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
             },
             def: b">\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6433,8 +6186,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"truncrl\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             },
             def: b"<\0".as_ptr() as *const ::core::ffi::c_char,
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6444,10 +6196,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut lcs_chars.eol,
             name: String_0 {
-                data: b"eol\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"eol\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6457,8 +6207,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"extends\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6466,10 +6215,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut lcs_chars.nbsp,
             name: String_0 {
-                data: b"nbsp\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"nbsp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6479,8 +6226,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"precedes\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6488,10 +6234,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut lcs_chars.space,
             name: String_0 {
-                data: b"space\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"space\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6499,10 +6243,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut lcs_chars.tab2,
             name: String_0 {
-                data: b"tab\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6512,8 +6254,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"leadtab\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6521,10 +6262,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut lcs_chars.lead,
             name: String_0 {
-                data: b"lead\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"lead\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6532,10 +6271,8 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
         chars_tab {
             cp: &raw mut lcs_chars.trail,
             name: String_0 {
-                data: b"trail\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"trail\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6545,8 +6282,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"conceal\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6556,8 +6292,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"multispace\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 11]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -6567,8 +6302,7 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
             name: String_0 {
                 data: b"leadmultispace\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 15]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 15]>().wrapping_sub(1 as size_t),
             },
             def: ::core::ptr::null::<::core::ffi::c_char>(),
             fallback: ::core::ptr::null::<::core::ffi::c_char>(),

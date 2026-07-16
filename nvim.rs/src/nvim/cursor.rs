@@ -63,11 +63,8 @@ extern "C" {
     fn ml_get_buf_mut(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_len(lnum: linenr_T) -> colnr_T;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn inc(lp: *mut pos_T) -> ::core::ffi::c_int;
     fn dec(lp: *mut pos_T) -> ::core::ffi::c_int;
     fn set_valid_virtcol(wp: *mut win_T, vcol: colnr_T);
@@ -1749,9 +1746,7 @@ pub const kOptVeFlagInsert: C2Rust_Unnamed_16 = 6;
 pub const kOptVeFlagBlock: C2Rust_Unnamed_16 = 5;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const kCharsizeRegular: C2Rust_Unnamed_17 = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
@@ -1771,10 +1766,7 @@ pub unsafe extern "C" fn getviscol() -> ::core::ffi::c_int {
     return x;
 }
 #[no_mangle]
-pub unsafe extern "C" fn getviscol2(
-    mut col: colnr_T,
-    mut coladd: colnr_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn getviscol2(mut col: colnr_T, mut coladd: colnr_T) -> ::core::ffi::c_int {
     let mut x: colnr_T = 0;
     let mut pos: pos_T = pos_T {
         lnum: 0,
@@ -1810,15 +1802,13 @@ pub unsafe extern "C" fn coladvance_force(mut wcol: colnr_T) -> ::core::ffi::c_i
     return rc;
 }
 #[no_mangle]
-pub unsafe extern "C" fn coladvance(
-    mut wp: *mut win_T,
-    mut wcol: colnr_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn coladvance(mut wp: *mut win_T, mut wcol: colnr_T) -> ::core::ffi::c_int {
     let mut rc: ::core::ffi::c_int = getvpos(wp, &raw mut (*wp).w_cursor, wcol);
     if wcol == MAXCOL as ::core::ffi::c_int || rc == FAIL {
         (*wp).w_valid &= !VALID_VIRTCOL;
-    } else if *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum)
-        .offset((*wp).w_cursor.col as isize) as ::core::ffi::c_int != TAB
+    } else if *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum).offset((*wp).w_cursor.col as isize)
+        as ::core::ffi::c_int
+        != TAB
     {
         set_valid_virtcol(curwin, wcol);
     }
@@ -1832,7 +1822,8 @@ unsafe extern "C" fn coladvance2(
     mut wcol_arg: colnr_T,
 ) -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if wp == curwin || !addspaces {} else {
+        if wp == curwin || !addspaces {
+        } else {
             __assert_fail(
                 b"wp == curwin || !addspaces\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cursor.c\0".as_ptr()
@@ -1847,13 +1838,14 @@ unsafe extern "C" fn coladvance2(
     let mut idx: ::core::ffi::c_int = 0;
     let mut col: colnr_T = 0 as colnr_T;
     let mut head: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut one_more: ::core::ffi::c_int = (State & MODE_INSERT as ::core::ffi::c_int
-        != 0 || State & MODE_TERMINAL as ::core::ffi::c_int != 0 || restart_edit != NUL
+    let mut one_more: ::core::ffi::c_int = (State & MODE_INSERT as ::core::ffi::c_int != 0
+        || State & MODE_TERMINAL as ::core::ffi::c_int != 0
+        || restart_edit != NUL
         || VIsual_active as ::core::ffi::c_int != 0
             && *p_sel as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
-        || get_ve_flags(wp)
-            & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            && wcol < MAXCOL as ::core::ffi::c_int) as ::core::ffi::c_int;
+        || get_ve_flags(wp) & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            && wcol < MAXCOL as ::core::ffi::c_int)
+        as ::core::ffi::c_int;
     let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, (*pos).lnum);
     let mut linelen: ::core::ffi::c_int = ml_get_buf_len((*wp).w_buffer, (*pos).lnum);
     if wcol >= MAXCOL as ::core::ffi::c_int {
@@ -1870,8 +1862,10 @@ unsafe extern "C" fn coladvance2(
     } else {
         let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
         let mut csize: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if finetune as ::core::ffi::c_int != 0 && (*wp).w_onebuf_opt.wo_wrap != 0
-            && (*wp).w_view_width != 0 as ::core::ffi::c_int && wcol >= width
+        if finetune as ::core::ffi::c_int != 0
+            && (*wp).w_onebuf_opt.wo_wrap != 0
+            && (*wp).w_view_width != 0 as ::core::ffi::c_int
+            && wcol >= width
             && width > 0 as ::core::ffi::c_int
         {
             csize = linetabsize_eol(wp, (*pos).lnum);
@@ -1882,8 +1876,8 @@ unsafe extern "C" fn coladvance2(
                 && (State & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
                     || wcol > csize + 1 as ::core::ffi::c_int)
             {
-                wcol = ((csize / width + 1 as ::core::ffi::c_int) * width
-                    - 1 as ::core::ffi::c_int) as colnr_T;
+                wcol = ((csize / width + 1 as ::core::ffi::c_int) * width - 1 as ::core::ffi::c_int)
+                    as colnr_T;
             }
         }
         let mut csarg: CharsizeArg = CharsizeArg {
@@ -1900,21 +1894,13 @@ unsafe extern "C" fn coladvance2(
                 lvl: 0,
                 x: ::core::ptr::null_mut::<MTNode>(),
                 i: 0,
-                s: [C2Rust_Unnamed_13 {
-                    oldcol: 0,
-                    i: 0,
-                }; 20],
+                s: [C2Rust_Unnamed_13 { oldcol: 0, i: 0 }; 20],
                 intersect_idx: 0,
                 intersect_pos: MTPos { row: 0, col: 0 },
                 intersect_pos_x: MTPos { row: 0, col: 0 },
             }; 1],
         };
-        let mut cstype: CSType = init_charsize_arg(
-            &raw mut csarg,
-            wp,
-            (*pos).lnum,
-            line,
-        );
+        let mut cstype: CSType = init_charsize_arg(&raw mut csarg, wp, (*pos).lnum, line);
         let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
         col = 0 as ::core::ffi::c_int as colnr_T;
         while col <= wcol && *ci.ptr as ::core::ffi::c_int != NUL {
@@ -1937,17 +1923,17 @@ unsafe extern "C" fn coladvance2(
             col -= csize;
         }
         if virtual_active(wp) as ::core::ffi::c_int != 0
-            && addspaces as ::core::ffi::c_int != 0 && wcol >= 0 as ::core::ffi::c_int
-            && (col != wcol
-                && col != wcol as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+            && addspaces as ::core::ffi::c_int != 0
+            && wcol >= 0 as ::core::ffi::c_int
+            && (col != wcol && col != wcol as ::core::ffi::c_int + 1 as ::core::ffi::c_int
                 || csize > 1 as ::core::ffi::c_int)
         {
             if *line.offset(idx as isize) as ::core::ffi::c_int == NUL {
-                let mut correct: ::core::ffi::c_int = wcol as ::core::ffi::c_int
-                    - col as ::core::ffi::c_int;
+                let mut correct: ::core::ffi::c_int =
+                    wcol as ::core::ffi::c_int - col as ::core::ffi::c_int;
                 let mut newline_size: size_t = 0;
-                let (c2rust_result, c2rust_overflowed) = (idx as i128)
-                    .overflowing_add(correct as i128);
+                let (c2rust_result, c2rust_overflowed) =
+                    (idx as i128).overflowing_add(correct as i128);
                 let c2rust_result_narrow = c2rust_result as size_t;
                 *&raw mut newline_size = c2rust_result_narrow;
                 if c2rust_overflowed || c2rust_result_narrow as i128 != c2rust_result {
@@ -1961,8 +1947,8 @@ unsafe extern "C" fn coladvance2(
                     );
                     abort();
                 }
-                let mut newline: *mut ::core::ffi::c_char = xmallocz(newline_size)
-                    as *mut ::core::ffi::c_char;
+                let mut newline: *mut ::core::ffi::c_char =
+                    xmallocz(newline_size) as *mut ::core::ffi::c_char;
                 memcpy(
                     newline as *mut ::core::ffi::c_void,
                     line as *const ::core::ffi::c_void,
@@ -1978,23 +1964,20 @@ unsafe extern "C" fn coladvance2(
                 idx += correct;
                 col = wcol;
             } else {
-                let mut correct_0: ::core::ffi::c_int = wcol as ::core::ffi::c_int
-                    - col as ::core::ffi::c_int - csize + 1 as ::core::ffi::c_int;
-                let mut newline_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                    ::core::ffi::c_char,
-                >();
+                let mut correct_0: ::core::ffi::c_int =
+                    wcol as ::core::ffi::c_int - col as ::core::ffi::c_int - csize
+                        + 1 as ::core::ffi::c_int;
+                let mut newline_0: *mut ::core::ffi::c_char =
+                    ::core::ptr::null_mut::<::core::ffi::c_char>();
                 if -correct_0 > csize {
                     return FAIL;
                 }
                 let mut n: size_t = 0;
-                let (c2rust_result_0, c2rust_overflowed_0) = ((linelen
-                    - 1 as ::core::ffi::c_int) as i128)
-                    .overflowing_add(csize as i128);
+                let (c2rust_result_0, c2rust_overflowed_0) =
+                    ((linelen - 1 as ::core::ffi::c_int) as i128).overflowing_add(csize as i128);
                 let c2rust_result_narrow_0 = c2rust_result_0 as size_t;
                 *&raw mut n = c2rust_result_narrow_0;
-                if c2rust_overflowed_0
-                    || c2rust_result_narrow_0 as i128 != c2rust_result_0
-                {
+                if c2rust_overflowed_0 || c2rust_result_narrow_0 as i128 != c2rust_result_0 {
                     logmsg(
                         LOGLVL_ERR,
                         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2016,13 +1999,11 @@ unsafe extern "C" fn coladvance2(
                     ' ' as ::core::ffi::c_int,
                     csize as size_t,
                 );
-                let (c2rust_result_1, c2rust_overflowed_1) = (linelen as i128)
-                    .overflowing_sub(idx as i128);
+                let (c2rust_result_1, c2rust_overflowed_1) =
+                    (linelen as i128).overflowing_sub(idx as i128);
                 let c2rust_result_narrow_1 = c2rust_result_1 as size_t;
                 *&raw mut n = c2rust_result_narrow_1;
-                if c2rust_overflowed_1
-                    || c2rust_result_narrow_1 as i128 != c2rust_result_1
-                {
+                if c2rust_overflowed_1 || c2rust_result_narrow_1 as i128 != c2rust_result_1 {
                     logmsg(
                         LOGLVL_ERR,
                         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2033,13 +2014,11 @@ unsafe extern "C" fn coladvance2(
                     );
                     abort();
                 }
-                let (c2rust_result_2, c2rust_overflowed_2) = (n as i128)
-                    .overflowing_sub(1 as ::core::ffi::c_int as i128);
+                let (c2rust_result_2, c2rust_overflowed_2) =
+                    (n as i128).overflowing_sub(1 as ::core::ffi::c_int as i128);
                 let c2rust_result_narrow_2 = c2rust_result_2 as size_t;
                 *&raw mut n = c2rust_result_narrow_2;
-                if c2rust_overflowed_2
-                    || c2rust_result_narrow_2 as i128 != c2rust_result_2
-                {
+                if c2rust_overflowed_2 || c2rust_result_narrow_2 as i128 != c2rust_result_2 {
                     logmsg(
                         LOGLVL_ERR,
                         ::core::ptr::null::<::core::ffi::c_char>(),
@@ -2053,17 +2032,13 @@ unsafe extern "C" fn coladvance2(
                 memcpy(
                     newline_0.offset(idx as isize).offset(csize as isize)
                         as *mut ::core::ffi::c_void,
-                    line.offset(idx as isize).offset(1 as ::core::ffi::c_int as isize)
+                    line.offset(idx as isize)
+                        .offset(1 as ::core::ffi::c_int as isize)
                         as *const ::core::ffi::c_void,
                     n,
                 );
                 ml_replace((*pos).lnum, newline_0, false_0 != 0);
-                inserted_bytes(
-                    (*pos).lnum,
-                    idx as colnr_T,
-                    1 as ::core::ffi::c_int,
-                    csize,
-                );
+                inserted_bytes((*pos).lnum, idx as colnr_T, 1 as ::core::ffi::c_int, csize);
                 idx += csize - 1 as ::core::ffi::c_int + correct_0;
                 col += correct_0;
             }
@@ -2092,9 +2067,7 @@ unsafe extern "C" fn coladvance2(
         } else {
             let mut b: ::core::ffi::c_int = wcol - col;
             if b > 0 as ::core::ffi::c_int
-                && b
-                    < MAXCOL as ::core::ffi::c_int
-                        - 2 as ::core::ffi::c_int * (*wp).w_view_width
+                && b < MAXCOL as ::core::ffi::c_int - 2 as ::core::ffi::c_int * (*wp).w_view_width
             {
                 (*pos).coladd = b as colnr_T;
             }
@@ -2124,10 +2097,7 @@ pub unsafe extern "C" fn dec_cursor() -> ::core::ffi::c_int {
     return dec(&raw mut (*curwin).w_cursor);
 }
 #[no_mangle]
-pub unsafe extern "C" fn get_cursor_rel_lnum(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-) -> linenr_T {
+pub unsafe extern "C" fn get_cursor_rel_lnum(mut wp: *mut win_T, mut lnum: linenr_T) -> linenr_T {
     let mut cursor: linenr_T = (*wp).w_cursor.lnum;
     if lnum == cursor || hasAnyFolding(wp) == 0 {
         return lnum - cursor;
@@ -2191,18 +2161,17 @@ pub unsafe extern "C" fn check_cursor_col(mut win: *mut win_T) {
     if len == 0 as ::core::ffi::c_int {
         (*win).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
     } else if (*win).w_cursor.col >= len {
-        if State & MODE_INSERT as ::core::ffi::c_int != 0 || restart_edit != 0
+        if State & MODE_INSERT as ::core::ffi::c_int != 0
+            || restart_edit != 0
             || State & MODE_TERMINAL as ::core::ffi::c_int != 0
             || VIsual_active as ::core::ffi::c_int != 0
                 && *p_sel as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
-            || cur_ve_flags
-                & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            || cur_ve_flags & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint != 0
             || virtual_active(win) as ::core::ffi::c_int != 0
         {
             (*win).w_cursor.col = len;
         } else {
-            (*win).w_cursor.col = (len as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                as colnr_T;
+            (*win).w_cursor.col = (len as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
             mark_mb_adjustpos((*win).w_buffer, &raw mut (*win).w_cursor);
         }
     } else if (*win).w_cursor.col < 0 as ::core::ffi::c_int {
@@ -2210,20 +2179,17 @@ pub unsafe extern "C" fn check_cursor_col(mut win: *mut win_T) {
     }
     if oldcol == MAXCOL as ::core::ffi::c_int {
         (*win).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    } else if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    } else if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint {
         if oldcoladd > (*win).w_cursor.col {
             (*win).w_cursor.coladd = oldcoladd - (*win).w_cursor.col;
-            if ((*win).w_cursor.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                < len
-            {
+            if ((*win).w_cursor.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) < len {
                 '_c2rust_label: {
-                    if (*win).w_cursor.coladd > 0 as ::core::ffi::c_int {} else {
+                    if (*win).w_cursor.coladd > 0 as ::core::ffi::c_int {
+                    } else {
                         __assert_fail(
-                            b"win->w_cursor.coladd > 0\0".as_ptr()
+                            b"win->w_cursor.coladd > 0\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/cursor.c\0".as_ptr()
                                 as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/cursor.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
                             372 as ::core::ffi::c_uint,
                             b"void check_cursor_col(win_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -2285,9 +2251,9 @@ pub unsafe extern "C" fn set_leftcol(mut leftcol: colnr_T) -> bool {
     }
     (*curwin).w_leftcol = leftcol;
     changed_cline_bef_curs(curwin);
-    let mut lastcol: int64_t = ((*curwin).w_leftcol as ::core::ffi::c_int
-        + (*curwin).w_view_width - win_col_off(curwin) - 1 as ::core::ffi::c_int)
-        as int64_t;
+    let mut lastcol: int64_t = ((*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width
+        - win_col_off(curwin)
+        - 1 as ::core::ffi::c_int) as int64_t;
     validate_virtcol(curwin);
     let mut retval: bool = false_0 != 0;
     let mut siso: int64_t = get_sidescrolloff_value(curwin);
@@ -2334,16 +2300,13 @@ pub unsafe extern "C" fn char_before_cursor() -> ::core::ffi::c_int {
     }
     let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
     let mut p: *mut ::core::ffi::c_char = line.offset((*curwin).w_cursor.col as isize);
-    let mut prev_len: ::core::ffi::c_int = utf_head_off(
-        line,
-        p.offset(-(1 as ::core::ffi::c_int as isize)),
-    ) + 1 as ::core::ffi::c_int;
+    let mut prev_len: ::core::ffi::c_int =
+        utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize))) + 1 as ::core::ffi::c_int;
     return utf_ptr2char(p.offset(-(prev_len as isize)));
 }
 #[no_mangle]
 pub unsafe extern "C" fn pchar_cursor(mut c: ::core::ffi::c_char) {
-    *ml_get_buf_mut(curbuf, (*curwin).w_cursor.lnum)
-        .offset((*curwin).w_cursor.col as isize) = c;
+    *ml_get_buf_mut(curbuf, (*curwin).w_cursor.lnum).offset((*curwin).w_cursor.col as isize) = c;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char {
@@ -2351,8 +2314,7 @@ pub unsafe extern "C" fn get_cursor_line_ptr() -> *mut ::core::ffi::c_char {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char {
-    return ml_get_buf(curbuf, (*curwin).w_cursor.lnum)
-        .offset((*curwin).w_cursor.col as isize);
+    return ml_get_buf(curbuf, (*curwin).w_cursor.lnum).offset((*curwin).w_cursor.col as isize);
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_cursor_line_len() -> colnr_T {
@@ -2370,10 +2332,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
         return CharInfo {
             value: first as int32_t,
             len: 1 as ::core::ffi::c_int,
-        }
+        };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize]
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;
@@ -2387,8 +2348,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
 #[inline(always)]
 unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint)
-        as ::core::ffi::c_int as ::core::ffi::c_long != 0
+    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
+        as ::core::ffi::c_long
+        != 0
     {
         return StrCharInfo {
             ptr: next as *mut ::core::ffi::c_char,
@@ -2401,9 +2363,7 @@ unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     return utfc_next_impl(cur);
 }
 #[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(
-    mut ptr: *mut ::core::ffi::c_char,
-) -> StrCharInfo {
+unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
     return StrCharInfo {
         ptr: ptr,
         chr: utf_ptr2CharInfo(ptr),
@@ -2418,9 +2378,9 @@ unsafe extern "C" fn win_charsize(
     mut csarg: *mut CharsizeArg,
 ) -> CharSize {
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
     } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
     };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

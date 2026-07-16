@@ -54,12 +54,7 @@ extern "C" {
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
     fn arena_string(arena: *mut Arena, str: String_0) -> String_0;
     fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     fn api_set_sctx(channel_id: uint64_t) -> sctx_T;
     fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int);
@@ -106,10 +101,7 @@ extern "C" {
         eap: *mut exarg_T,
         data: *mut Object,
     ) -> bool;
-    fn aupat_is_buflocal(
-        pat: *const ::core::ffi::c_char,
-        patlen: ::core::ffi::c_int,
-    ) -> bool;
+    fn aupat_is_buflocal(pat: *const ::core::ffi::c_char, patlen: ::core::ffi::c_int) -> bool;
     fn aupat_get_buflocal_nr(
         pat: *const ::core::ffi::c_char,
         patlen: ::core::ffi::c_int,
@@ -123,10 +115,7 @@ extern "C" {
     fn autocmd_delete_id(id: int64_t) -> bool;
     fn do_modelines(flags: ::core::ffi::c_int);
     fn callback_free(callback: *mut Callback);
-    fn callback_to_string(
-        cb: *mut Callback,
-        arena: *mut Arena,
-    ) -> *mut ::core::ffi::c_char;
+    fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char;
     static mut current_sctx: sctx_T;
     static mut curbuf: *mut buf_T;
     fn api_new_luaref(original_ref: LuaRef) -> LuaRef;
@@ -2686,12 +2675,8 @@ pub const CMD_append: CMD_index = 0;
 pub const AUGROUP_ALL: C2Rust_Unnamed_14 = -3;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_int;
 pub const AUGROUP_DELETED: C2Rust_Unnamed_14 = -4;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn _memcpy_free(
@@ -2700,44 +2685,29 @@ unsafe extern "C" fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
     return dest;
 }
-pub const KEYSET_OPTIDX_clear_autocmds__buf: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_clear_autocmds__buffer: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_create_autocmd__buf: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_create_autocmd__desc: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_create_autocmd__buffer: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_create_autocmd__command: ::core::ffi::c_int = 7
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_create_autocmd__callback: ::core::ffi::c_int = 9
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_clear_autocmds__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_clear_autocmds__buffer: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_create_autocmd__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_create_autocmd__desc: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_create_autocmd__buffer: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_create_autocmd__command: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_create_autocmd__callback: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_exec_autocmds__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_exec_autocmds__data: ::core::ffi::c_int = 2
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_exec_autocmds__buffer: ::core::ffi::c_int = 4
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_exec_autocmds__modeline: ::core::ffi::c_int = 6
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_exec_autocmds__data: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_exec_autocmds__buffer: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_exec_autocmds__modeline: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_autocmds__id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_get_autocmds__buf: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_autocmds__event: ::core::ffi::c_int = 3
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_autocmds__buffer: ::core::ffi::c_int = 5
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_autocmds__pattern: ::core::ffi::c_int = 6
-    as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_create_augroup__clear: ::core::ffi::c_int = 1
-    as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_autocmds__event: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_autocmds__buffer: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_get_autocmds__pattern: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
+pub const KEYSET_OPTIDX_create_augroup__clear: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2748,9 +2718,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Array {
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut id: ::core::ffi::c_int = 0;
     let mut has_buf: bool = false;
     let mut buf: Object = Object {
@@ -2770,15 +2738,13 @@ pub unsafe extern "C" fn nvim_get_autocmds(
     autocmd_list.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
         .wrapping_div(
-            (::core::mem::size_of::<[Object; 16]>()
-                .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                as ::core::ffi::c_int as usize,
+            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     autocmd_list.size = 0 as size_t;
     autocmd_list.items = &raw mut autocmd_list.init_array as *mut Object;
-    let mut pattern_filters: [*mut ::core::ffi::c_char; 256] = [::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >(); 256];
+    let mut pattern_filters: [*mut ::core::ffi::c_char; 256] =
+        [::core::ptr::null_mut::<::core::ffi::c_char>(); 256];
     let mut buffers: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -3020,11 +2986,8 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                         if event_v_index >= v.data.array.size {
                             break 's_299;
                         }
-                        let mut event_v: Object = *v
-                            .data
-                            .array
-                            .items
-                            .offset(event_v_index as isize);
+                        let mut event_v: Object =
+                            *v.data.array.items.offset(event_v_index as isize);
                         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                             != event_v.type_0 as ::core::ffi::c_uint
                         {
@@ -3036,9 +2999,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             );
                             break '_cleanup;
                         } else {
-                            let mut event_nr_0: event_T = event_name2nr_str(
-                                event_v.data.string,
-                            );
+                            let mut event_nr_0: event_T = event_name2nr_str(event_v.data.string);
                             if !((event_nr_0 as ::core::ffi::c_uint)
                                 < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                             {
@@ -3095,7 +3056,8 @@ pub unsafe extern "C" fn nvim_get_autocmds(
             );
         } else if !(!((*opts).is_set__get_autocmds_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << 6 as ::core::ffi::c_int
-            != 0 as ::core::ffi::c_ulonglong) || !has_buf)
+            != 0 as ::core::ffi::c_ulonglong)
+            || !has_buf)
         {
             api_err_conflict(
                 err,
@@ -3106,18 +3068,14 @@ pub unsafe extern "C" fn nvim_get_autocmds(
             pattern_filter_count = 0 as ::core::ffi::c_int;
             's_506: {
                 if (*opts).is_set__get_autocmds_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_get_autocmds__pattern
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_autocmds__pattern
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     let mut v_0: Object = (*opts).pattern;
                     if v_0.type_0 as ::core::ffi::c_uint
                         == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        pattern_filters[pattern_filter_count as usize] = v_0
-                            .data
-                            .string
-                            .data;
+                        pattern_filters[pattern_filter_count as usize] = v_0.data.string.data;
                         pattern_filter_count += 1 as ::core::ffi::c_int;
                     } else if v_0.type_0 as ::core::ffi::c_uint
                         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3137,13 +3095,10 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                 if item_index >= v_0.data.array.size {
                                     break 's_506;
                                 }
-                                let mut item: Object = *v_0
-                                    .data
-                                    .array
-                                    .items
-                                    .offset(item_index as isize);
-                                if kObjectTypeString as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint != item.type_0 as ::core::ffi::c_uint
+                                let mut item: Object =
+                                    *v_0.data.array.items.offset(item_index as isize);
+                                if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    != item.type_0 as ::core::ffi::c_uint
                                 {
                                     api_err_exp(
                                         err,
@@ -3153,10 +3108,8 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                     );
                                     break '_cleanup;
                                 } else {
-                                    pattern_filters[pattern_filter_count as usize] = item
-                                        .data
-                                        .string
-                                        .data;
+                                    pattern_filters[pattern_filter_count as usize] =
+                                        item.data.string.data;
                                     pattern_filter_count += 1 as ::core::ffi::c_int;
                                     item_index = item_index.wrapping_add(1);
                                 }
@@ -3179,13 +3132,8 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                     || buf.type_0 as ::core::ffi::c_uint
                         == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
-                    let mut b: *mut buf_T = find_buffer_by_handle(
-                        buf.data.integer as Buffer,
-                        err,
-                    );
-                    if (*err).type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    let mut b: *mut buf_T = find_buffer_by_handle(buf.data.integer as Buffer, err);
+                    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_cleanup;
                     } else {
                         let mut pat: String_0 = arena_printf(
@@ -3220,14 +3168,10 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                             if bufnr_index >= buf.data.array.size {
                                 break 's_659;
                             }
-                            let mut bufnr: Object = *buf
-                                .data
-                                .array
-                                .items
-                                .offset(bufnr_index as isize);
+                            let mut bufnr: Object =
+                                *buf.data.array.items.offset(bufnr_index as isize);
                             if !(bufnr.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeInteger as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint
+                                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
                                 || bufnr.type_0 as ::core::ffi::c_uint
                                     == kObjectTypeBuffer as ::core::ffi::c_int
                                         as ::core::ffi::c_uint)
@@ -3240,10 +3184,8 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                 );
                                 break '_cleanup;
                             } else {
-                                let mut b_0: *mut buf_T = find_buffer_by_handle(
-                                    bufnr.data.integer as Buffer,
-                                    err,
-                                );
+                                let mut b_0: *mut buf_T =
+                                    find_buffer_by_handle(bufnr.data.integer as Buffer, err);
                                 if (*err).type_0 as ::core::ffi::c_int
                                     != kErrorTypeNone as ::core::ffi::c_int
                                 {
@@ -3280,18 +3222,13 @@ pub unsafe extern "C" fn nvim_get_autocmds(
             let mut bufnr_index_0: size_t = 0 as size_t;
             while bufnr_index_0 < buffers.size {
                 let mut bufnr_0: Object = *buffers.items.offset(bufnr_index_0 as isize);
-                pattern_filters[pattern_filter_count as usize] = bufnr_0
-                    .data
-                    .string
-                    .data;
+                pattern_filters[pattern_filter_count as usize] = bufnr_0.data.string.data;
                 pattern_filter_count += 1 as ::core::ffi::c_int;
                 bufnr_index_0 = bufnr_index_0.wrapping_add(1);
             }
             let mut event: event_T = EVENT_BUFADD;
             while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-                if !(check_event as ::core::ffi::c_int != 0
-                    && !event_set[event as usize])
-                {
+                if !(check_event as ::core::ffi::c_int != 0 && !event_set[event as usize]) {
                     let mut acs: *mut AutoCmdVec = au_get_autocmds_for_event(event);
                     let mut i: size_t = 0 as size_t;
                     while i < (*acs).size {
@@ -3299,18 +3236,15 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                         let ap: *mut AutoPat = (*ac).pat;
                         's_712: {
                             if !ap.is_null() {
-                                if !(id != -1 as ::core::ffi::c_int
-                                    && (*ac).id != id as int64_t)
-                                {
-                                    if !(group != 0 as ::core::ffi::c_int
-                                        && (*ap).group != group)
-                                    {
+                                if !(id != -1 as ::core::ffi::c_int && (*ac).id != id as int64_t) {
+                                    if !(group != 0 as ::core::ffi::c_int && (*ap).group != group) {
                                         if pattern_filter_count > 0 as ::core::ffi::c_int {
                                             let mut passed: bool = false_0 != 0;
                                             let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                                             while j < pattern_filter_count {
                                                 '_c2rust_label: {
-                                                    if j < 256 as ::core::ffi::c_int {} else {
+                                                    if j < 256 as ::core::ffi::c_int {
+                                                    } else {
                                                         __assert_fail(
                                                             b"j < AUCMD_MAX_PATTERNS\0".as_ptr()
                                                                 as *const ::core::ffi::c_char,
@@ -3323,7 +3257,8 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                     }
                                                 };
                                                 '_c2rust_label_0: {
-                                                    if !pattern_filters[j as usize].is_null() {} else {
+                                                    if !pattern_filters[j as usize].is_null() {
+                                                    } else {
                                                         __assert_fail(
                                                             b"pattern_filters[j]\0".as_ptr()
                                                                 as *const ::core::ffi::c_char,
@@ -3335,14 +3270,16 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                         );
                                                     }
                                                 };
-                                                let mut pat_0: *mut ::core::ffi::c_char = pattern_filters[j
-                                                    as usize];
-                                                let mut patlen: ::core::ffi::c_int = strlen(pat_0)
-                                                    as ::core::ffi::c_int;
-                                                let mut pattern_buflocal: [::core::ffi::c_char; 25] = [0; 25];
+                                                let mut pat_0: *mut ::core::ffi::c_char =
+                                                    pattern_filters[j as usize];
+                                                let mut patlen: ::core::ffi::c_int =
+                                                    strlen(pat_0) as ::core::ffi::c_int;
+                                                let mut pattern_buflocal: [::core::ffi::c_char;
+                                                    25] = [0; 25];
                                                 if aupat_is_buflocal(pat_0, patlen) {
                                                     aupat_normalize_buflocal_pat(
-                                                        &raw mut pattern_buflocal as *mut ::core::ffi::c_char,
+                                                        &raw mut pattern_buflocal
+                                                            as *mut ::core::ffi::c_char,
                                                         pat_0,
                                                         patlen,
                                                         aupat_get_buflocal_nr(pat_0, patlen),
@@ -3361,105 +3298,109 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                 break 's_712;
                                             }
                                         }
-                                        let mut autocmd_info: Dict = arena_dict(
-                                            arena,
-                                            12 as size_t,
-                                        );
+                                        let mut autocmd_info: Dict =
+                                            arena_dict(arena, 12 as size_t);
                                         if (*ap).group != AUGROUP_DEFAULT as ::core::ffi::c_int {
                                             let c2rust_fresh2 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh2 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"group\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeInteger,
-                                                    data: C2Rust_Unnamed {
-                                                        integer: (*ap).group as Integer,
+                                            *autocmd_info.items.offset(c2rust_fresh2 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"group\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeInteger,
+                                                        data: C2Rust_Unnamed {
+                                                            integer: (*ap).group as Integer,
+                                                        },
                                                     },
-                                                },
-                                            };
+                                                };
                                             let c2rust_fresh3 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"group_name\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeString,
-                                                    data: C2Rust_Unnamed {
-                                                        string: cstr_as_string(augroup_name((*ap).group)),
+                                            *autocmd_info.items.offset(c2rust_fresh3 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"group_name\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeString,
+                                                        data: C2Rust_Unnamed {
+                                                            string: cstr_as_string(augroup_name(
+                                                                (*ap).group,
+                                                            )),
+                                                        },
                                                     },
-                                                },
-                                            };
+                                                };
                                         }
                                         if (*ac).id > 0 as int64_t {
                                             let c2rust_fresh4 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"id\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeInteger,
-                                                    data: C2Rust_Unnamed {
-                                                        integer: (*ac).id,
+                                            *autocmd_info.items.offset(c2rust_fresh4 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"id\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeInteger,
+                                                        data: C2Rust_Unnamed { integer: (*ac).id },
                                                     },
-                                                },
-                                            };
+                                                };
                                         }
                                         if !(*ac).desc.is_null() {
                                             let c2rust_fresh5 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"desc\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeString,
-                                                    data: C2Rust_Unnamed {
-                                                        string: cstr_as_string((*ac).desc),
+                                            *autocmd_info.items.offset(c2rust_fresh5 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"desc\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeString,
+                                                        data: C2Rust_Unnamed {
+                                                            string: cstr_as_string((*ac).desc),
+                                                        },
                                                     },
-                                                },
-                                            };
+                                                };
                                         }
                                         if !(*ac).handler_cmd.is_null() {
                                             let c2rust_fresh6 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh6 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"command\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeString,
-                                                    data: C2Rust_Unnamed {
-                                                        string: cstr_as_string((*ac).handler_cmd),
+                                            *autocmd_info.items.offset(c2rust_fresh6 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"command\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeString,
+                                                        data: C2Rust_Unnamed {
+                                                            string: cstr_as_string(
+                                                                (*ac).handler_cmd,
+                                                            ),
+                                                        },
                                                     },
-                                                },
-                                            };
+                                                };
                                         } else {
                                             let c2rust_fresh7 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"command\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeString,
-                                                    data: C2Rust_Unnamed {
-                                                        string: String_0 {
-                                                            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                                            size: 0 as size_t,
+                                            *autocmd_info.items.offset(c2rust_fresh7 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"command\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeString,
+                                                        data: C2Rust_Unnamed {
+                                                            string: String_0 {
+                                                                data: ::core::ptr::null_mut::<
+                                                                    ::core::ffi::c_char,
+                                                                >(
+                                                                ),
+                                                                size: 0 as size_t,
+                                                            },
                                                         },
                                                     },
-                                                },
-                                            };
+                                                };
                                             let mut cb: *mut Callback = &raw mut (*ac).handler_fn;
                                             match (*cb).type_0 as ::core::ffi::c_uint {
                                                 3 => {
                                                     if nlua_ref_is_function((*cb).data.luaref) {
                                                         let c2rust_fresh8 = autocmd_info.size;
-                                                        autocmd_info.size = autocmd_info.size.wrapping_add(1);
+                                                        autocmd_info.size =
+                                                            autocmd_info.size.wrapping_add(1);
                                                         *autocmd_info.items.offset(c2rust_fresh8 as isize) = key_value_pair {
                                                             key: cstr_as_string(
                                                                 b"callback\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3475,18 +3416,27 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                 }
                                                 1 | 2 => {
                                                     let c2rust_fresh9 = autocmd_info.size;
-                                                    autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                                    *autocmd_info.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                                                        key: cstr_as_string(
-                                                            b"callback\0".as_ptr() as *const ::core::ffi::c_char,
-                                                        ),
-                                                        value: object {
-                                                            type_0: kObjectTypeString,
-                                                            data: C2Rust_Unnamed {
-                                                                string: cstr_as_string(callback_to_string(cb, arena)),
+                                                    autocmd_info.size =
+                                                        autocmd_info.size.wrapping_add(1);
+                                                    *autocmd_info
+                                                        .items
+                                                        .offset(c2rust_fresh9 as isize) =
+                                                        key_value_pair {
+                                                            key: cstr_as_string(
+                                                                b"callback\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char,
+                                                            ),
+                                                            value: object {
+                                                                type_0: kObjectTypeString,
+                                                                data: C2Rust_Unnamed {
+                                                                    string: cstr_as_string(
+                                                                        callback_to_string(
+                                                                            cb, arena,
+                                                                        ),
+                                                                    ),
+                                                                },
                                                             },
-                                                        },
-                                                    };
+                                                        };
                                                 }
                                                 0 => {
                                                     abort();
@@ -3496,93 +3446,95 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                         }
                                         let c2rust_fresh10 = autocmd_info.size;
                                         autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                        *autocmd_info.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-                                            key: cstr_as_string(
-                                                b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ),
-                                            value: object {
-                                                type_0: kObjectTypeString,
-                                                data: C2Rust_Unnamed {
-                                                    string: cstr_as_string((*ap).pat),
+                                        *autocmd_info.items.offset(c2rust_fresh10 as isize) =
+                                            key_value_pair {
+                                                key: cstr_as_string(b"pattern\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
+                                                value: object {
+                                                    type_0: kObjectTypeString,
+                                                    data: C2Rust_Unnamed {
+                                                        string: cstr_as_string((*ap).pat),
+                                                    },
                                                 },
-                                            },
-                                        };
+                                            };
                                         let c2rust_fresh11 = autocmd_info.size;
                                         autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                        *autocmd_info.items.offset(c2rust_fresh11 as isize) = key_value_pair {
-                                            key: cstr_as_string(
-                                                b"event\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ),
-                                            value: object {
-                                                type_0: kObjectTypeString,
-                                                data: C2Rust_Unnamed {
-                                                    string: cstr_as_string(event_nr2name(event)),
+                                        *autocmd_info.items.offset(c2rust_fresh11 as isize) =
+                                            key_value_pair {
+                                                key: cstr_as_string(b"event\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
+                                                value: object {
+                                                    type_0: kObjectTypeString,
+                                                    data: C2Rust_Unnamed {
+                                                        string: cstr_as_string(event_nr2name(
+                                                            event,
+                                                        )),
+                                                    },
                                                 },
-                                            },
-                                        };
+                                            };
                                         let c2rust_fresh12 = autocmd_info.size;
                                         autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                        *autocmd_info.items.offset(c2rust_fresh12 as isize) = key_value_pair {
-                                            key: cstr_as_string(
-                                                b"once\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ),
-                                            value: object {
-                                                type_0: kObjectTypeBoolean,
-                                                data: C2Rust_Unnamed {
-                                                    boolean: (*ac).once,
+                                        *autocmd_info.items.offset(c2rust_fresh12 as isize) =
+                                            key_value_pair {
+                                                key: cstr_as_string(b"once\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
+                                                value: object {
+                                                    type_0: kObjectTypeBoolean,
+                                                    data: C2Rust_Unnamed {
+                                                        boolean: (*ac).once,
+                                                    },
                                                 },
-                                            },
-                                        };
+                                            };
                                         if (*ap).buflocal_nr != 0 {
                                             let c2rust_fresh13 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh13 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"buflocal\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeBoolean,
-                                                    data: C2Rust_Unnamed { boolean: true },
-                                                },
-                                            };
+                                            *autocmd_info.items.offset(c2rust_fresh13 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"buflocal\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeBoolean,
+                                                        data: C2Rust_Unnamed { boolean: true },
+                                                    },
+                                                };
                                             let c2rust_fresh14 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh14 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"buf\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeInteger,
-                                                    data: C2Rust_Unnamed {
-                                                        integer: (*ap).buflocal_nr as Integer,
+                                            *autocmd_info.items.offset(c2rust_fresh14 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"buf\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeInteger,
+                                                        data: C2Rust_Unnamed {
+                                                            integer: (*ap).buflocal_nr as Integer,
+                                                        },
                                                     },
-                                                },
-                                            };
+                                                };
                                             let c2rust_fresh15 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh15 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"buffer\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeInteger,
-                                                    data: C2Rust_Unnamed {
-                                                        integer: (*ap).buflocal_nr as Integer,
+                                            *autocmd_info.items.offset(c2rust_fresh15 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"buffer\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeInteger,
+                                                        data: C2Rust_Unnamed {
+                                                            integer: (*ap).buflocal_nr as Integer,
+                                                        },
                                                     },
-                                                },
-                                            };
+                                                };
                                         } else {
                                             let c2rust_fresh16 = autocmd_info.size;
                                             autocmd_info.size = autocmd_info.size.wrapping_add(1);
-                                            *autocmd_info.items.offset(c2rust_fresh16 as isize) = key_value_pair {
-                                                key: cstr_as_string(
-                                                    b"buflocal\0".as_ptr() as *const ::core::ffi::c_char,
-                                                ),
-                                                value: object {
-                                                    type_0: kObjectTypeBoolean,
-                                                    data: C2Rust_Unnamed { boolean: false },
-                                                },
-                                            };
+                                            *autocmd_info.items.offset(c2rust_fresh16 as isize) =
+                                                key_value_pair {
+                                                    key: cstr_as_string(b"buflocal\0".as_ptr()
+                                                        as *const ::core::ffi::c_char),
+                                                    value: object {
+                                                        type_0: kObjectTypeBoolean,
+                                                        data: C2Rust_Unnamed { boolean: false },
+                                                    },
+                                                };
                                         }
                                         if autocmd_list.size == autocmd_list.capacity {
                                             autocmd_list.capacity = (if autocmd_list.capacity
@@ -3591,18 +3543,27 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                     .wrapping_div(::core::mem::size_of::<Object>())
                                                     .wrapping_div(
                                                         (::core::mem::size_of::<[Object; 16]>()
-                                                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                            as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                Object,
+                                                            >(
+                                                            ))
+                                                            == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                 autocmd_list.capacity << 1 as ::core::ffi::c_int
                                             } else {
                                                 ::core::mem::size_of::<[Object; 16]>()
                                                     .wrapping_div(::core::mem::size_of::<Object>())
                                                     .wrapping_div(
                                                         (::core::mem::size_of::<[Object; 16]>()
-                                                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                            as ::core::ffi::c_int as size_t,
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                Object,
+                                                            >(
+                                                            ))
+                                                            == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
                                                     )
                                             });
                                             autocmd_list.items = (if autocmd_list.capacity
@@ -3610,57 +3571,68 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                     .wrapping_div(::core::mem::size_of::<Object>())
                                                     .wrapping_div(
                                                         (::core::mem::size_of::<[Object; 16]>()
-                                                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                                            as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                Object,
+                                                            >(
+                                                            ))
+                                                            == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                 (if autocmd_list.items
-                                                    == &raw mut autocmd_list.init_array as *mut Object
+                                                    == &raw mut autocmd_list.init_array
+                                                        as *mut Object
                                                 {
                                                     autocmd_list.items as *mut ::core::ffi::c_void
                                                 } else {
                                                     _memcpy_free(
-                                                        &raw mut autocmd_list.init_array as *mut Object
+                                                        &raw mut autocmd_list.init_array
+                                                            as *mut Object
                                                             as *mut ::core::ffi::c_void,
-                                                        autocmd_list.items as *mut ::core::ffi::c_void,
-                                                        autocmd_list
-                                                            .size
-                                                            .wrapping_mul(::core::mem::size_of::<Object>()),
+                                                        autocmd_list.items
+                                                            as *mut ::core::ffi::c_void,
+                                                        autocmd_list.size.wrapping_mul(
+                                                            ::core::mem::size_of::<Object>(),
+                                                        ),
                                                     )
                                                 })
                                             } else {
                                                 (if autocmd_list.items
-                                                    == &raw mut autocmd_list.init_array as *mut Object
+                                                    == &raw mut autocmd_list.init_array
+                                                        as *mut Object
                                                 {
                                                     memcpy(
                                                         xmalloc(
-                                                            autocmd_list
-                                                                .capacity
-                                                                .wrapping_mul(::core::mem::size_of::<Object>()),
+                                                            autocmd_list.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<Object>(),
+                                                            ),
                                                         ),
-                                                        autocmd_list.items as *const ::core::ffi::c_void,
-                                                        autocmd_list
-                                                            .size
-                                                            .wrapping_mul(::core::mem::size_of::<Object>()),
+                                                        autocmd_list.items
+                                                            as *const ::core::ffi::c_void,
+                                                        autocmd_list.size.wrapping_mul(
+                                                            ::core::mem::size_of::<Object>(),
+                                                        ),
                                                     )
                                                 } else {
                                                     xrealloc(
-                                                        autocmd_list.items as *mut ::core::ffi::c_void,
-                                                        autocmd_list
-                                                            .capacity
-                                                            .wrapping_mul(::core::mem::size_of::<Object>()),
+                                                        autocmd_list.items
+                                                            as *mut ::core::ffi::c_void,
+                                                        autocmd_list.capacity.wrapping_mul(
+                                                            ::core::mem::size_of::<Object>(),
+                                                        ),
                                                     )
                                                 })
-                                            }) as *mut Object;
-                                        } else {};
+                                            })
+                                                as *mut Object;
+                                        } else {
+                                        };
                                         let c2rust_fresh17 = autocmd_list.size;
                                         autocmd_list.size = autocmd_list.size.wrapping_add(1);
-                                        *autocmd_list.items.offset(c2rust_fresh17 as isize) = object {
-                                            type_0: kObjectTypeDict,
-                                            data: C2Rust_Unnamed {
-                                                dict: autocmd_info,
-                                            },
-                                        };
+                                        *autocmd_list.items.offset(c2rust_fresh17 as isize) =
+                                            object {
+                                                type_0: kObjectTypeDict,
+                                                data: C2Rust_Unnamed { dict: autocmd_info },
+                                            };
                                     }
                                 }
                             }
@@ -3668,8 +3640,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                         i = i.wrapping_add(1);
                     }
                 }
-                event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                    as event_T;
+                event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
             }
         }
     }
@@ -3692,12 +3663,8 @@ pub unsafe extern "C" fn nvim_create_autocmd(
         items: ::core::ptr::null_mut::<Object>(),
     };
     let mut autocmd_id: int64_t = -1 as int64_t;
-    let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut handler_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut handler_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut handler_fn: Callback = Callback {
         data: C2Rust_Unnamed_5 {
             funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -3727,8 +3694,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                 );
             } else {
                 if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_create_autocmd__callback
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__callback
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     let mut callback: *mut Object = &raw mut (*opts).callback;
@@ -3747,8 +3713,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                 api_err_invalid(
                                     err,
                                     b"callback\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"<not a function>\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"<not a function>\0".as_ptr() as *const ::core::ffi::c_char,
                                     0 as int64_t,
                                     true_0 != 0,
                                 );
@@ -3761,9 +3726,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                         }
                         4 => {
                             handler_fn.type_0 = kCallbackFuncref;
-                            handler_fn.data.funcref = string_to_cstr(
-                                (*callback).data.string,
-                            );
+                            handler_fn.data.funcref = string_to_cstr((*callback).data.string);
                         }
                         _ => {
                             if true {
@@ -3779,32 +3742,28 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                         }
                     }
                 } else if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                    & (1 as ::core::ffi::c_ulonglong)
-                        << KEYSET_OPTIDX_create_autocmd__command
+                    & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__command
                     != 0 as ::core::ffi::c_ulonglong
                 {
                     handler_cmd = string_to_cstr((*opts).command);
                 } else if true {
                     api_err_required(
                         err,
-                        b"'command' or 'callback'\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"'command' or 'callback'\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                     break '_cleanup;
                 }
                 au_group = get_augroup_from_object((*opts).group, err);
                 if au_group != AUGROUP_ERROR as ::core::ffi::c_int {
                     has_buf = (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_create_autocmd__buf
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__buf
                         != 0 as ::core::ffi::c_ulonglong
                         || (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
                             & (1 as ::core::ffi::c_ulonglong)
                                 << KEYSET_OPTIDX_create_autocmd__buffer
                             != 0 as ::core::ffi::c_ulonglong;
                     buf = if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
-                        & (1 as ::core::ffi::c_ulonglong)
-                            << KEYSET_OPTIDX_create_autocmd__buf
+                        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_autocmd__buf
                         != 0 as ::core::ffi::c_ulonglong
                     {
                         (*opts).buf
@@ -3823,10 +3782,10 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                             b"buf\0".as_ptr() as *const ::core::ffi::c_char,
                             b"buffer\0".as_ptr() as *const ::core::ffi::c_char,
                         );
-                    } else if !(!((*opts).is_set__create_autocmd_
-                        as ::core::ffi::c_ulonglong
+                    } else if !(!((*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
                         & (1 as ::core::ffi::c_ulonglong) << 8 as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_ulonglong) || !has_buf)
+                        != 0 as ::core::ffi::c_ulonglong)
+                        || !has_buf)
                     {
                         api_err_conflict(
                             err,
@@ -3846,8 +3805,7 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                         if (*err).type_0 as ::core::ffi::c_int
                             == kErrorTypeNone as ::core::ffi::c_int
                         {
-                            if (*opts).is_set__create_autocmd_
-                                as ::core::ffi::c_ulonglong
+                            if (*opts).is_set__create_autocmd_ as ::core::ffi::c_ulonglong
                                 & (1 as ::core::ffi::c_ulonglong)
                                     << KEYSET_OPTIDX_create_autocmd__desc
                                 != 0 as ::core::ffi::c_ulonglong
@@ -3868,12 +3826,10 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                     if event_str_index >= event_array.size {
                                         break '_cleanup;
                                     }
-                                    let mut event_str: Object = *event_array
-                                        .items
-                                        .offset(event_str_index as isize);
-                                    let mut event_nr: event_T = event_name2nr_str(
-                                        event_str.data.string,
-                                    );
+                                    let mut event_str: Object =
+                                        *event_array.items.offset(event_str_index as isize);
+                                    let mut event_nr: event_T =
+                                        event_name2nr_str(event_str.data.string);
                                     if !((event_nr as ::core::ffi::c_uint)
                                         < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                                     {
@@ -3889,10 +3845,10 @@ pub unsafe extern "C" fn nvim_create_autocmd(
                                         let mut retval: ::core::ffi::c_int = 0;
                                         let mut pat_index: size_t = 0 as size_t;
                                         while pat_index < patterns.size {
-                                            let mut pat: Object = *patterns
-                                                .items
-                                                .offset(pat_index as isize);
-                                            let save_current_sctx: sctx_T = api_set_sctx(channel_id);
+                                            let mut pat: Object =
+                                                *patterns.items.offset(pat_index as isize);
+                                            let save_current_sctx: sctx_T =
+                                                api_set_sctx(channel_id);
                                             retval = autocmd_register(
                                                 autocmd_id,
                                                 event_nr,
@@ -3929,8 +3885,8 @@ pub unsafe extern "C" fn nvim_create_autocmd(
         }
     }
     if !handler_cmd.is_null() {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut handler_cmd
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut handler_cmd as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -3981,8 +3937,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         || (*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buffer
             != 0 as ::core::ffi::c_ulonglong;
-    let mut buf: ::core::ffi::c_int = if (*opts).is_set__clear_autocmds_
-        as ::core::ffi::c_ulonglong
+    let mut buf: ::core::ffi::c_int = if (*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buf
         != 0 as ::core::ffi::c_ulonglong
     {
@@ -4006,7 +3961,8 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
     }
     if !(!((*opts).is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << 5 as ::core::ffi::c_int
-        != 0 as ::core::ffi::c_ulonglong) || !has_buf)
+        != 0 as ::core::ffi::c_ulonglong)
+        || !has_buf)
     {
         api_err_conflict(
             err,
@@ -4035,9 +3991,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
         while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
             let mut pat_object_index: size_t = 0 as size_t;
             while pat_object_index < patterns.size {
-                let mut pat_object: Object = *patterns
-                    .items
-                    .offset(pat_object_index as isize);
+                let mut pat_object: Object = *patterns.items.offset(pat_object_index as isize);
                 let mut pat: *mut ::core::ffi::c_char = pat_object.data.string.data;
                 if !clear_autocmd(event, pat, au_group, err) {
                     return;
@@ -4049,9 +4003,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
     } else {
         let mut event_str_index: size_t = 0 as size_t;
         while event_str_index < event_array.size {
-            let mut event_str: Object = *event_array
-                .items
-                .offset(event_str_index as isize);
+            let mut event_str: Object = *event_array.items.offset(event_str_index as isize);
             let mut event_nr: event_T = event_name2nr_str(event_str.data.string);
             if !((event_nr as ::core::ffi::c_uint)
                 < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
@@ -4067,9 +4019,7 @@ pub unsafe extern "C" fn nvim_clear_autocmds(
             }
             let mut pat_object_index_0: size_t = 0 as size_t;
             while pat_object_index_0 < patterns.size {
-                let mut pat_object_0: Object = *patterns
-                    .items
-                    .offset(pat_object_index_0 as isize);
+                let mut pat_object_0: Object = *patterns.items.offset(pat_object_index_0 as isize);
                 let mut pat_0: *mut ::core::ffi::c_char = pat_object_0.data.string.data;
                 if !clear_autocmd(event_nr, pat_0, au_group, err) {
                     return;
@@ -4088,8 +4038,7 @@ pub unsafe extern "C" fn nvim_create_augroup(
     mut err: *mut Error,
 ) -> Integer {
     let mut augroup_name_0: *mut ::core::ffi::c_char = name.data;
-    let mut clear_autocmds: bool = if (*opts).is_set__create_augroup_
-        as ::core::ffi::c_ulonglong
+    let mut clear_autocmds: bool = if (*opts).is_set__create_augroup_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
         != 0 as ::core::ffi::c_ulonglong
     {
@@ -4139,10 +4088,7 @@ pub unsafe extern "C" fn nvim_del_augroup_by_id(mut id: Integer, mut err: *mut E
     try_leave(&raw mut tstate, err);
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_del_augroup_by_name(
-    mut name: String_0,
-    mut err: *mut Error,
-) {
+pub unsafe extern "C" fn nvim_del_augroup_by_name(mut name: String_0, mut err: *mut Error) {
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -4177,9 +4123,7 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return;
     }
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match (*opts).group.type_0 as ::core::ffi::c_uint {
         0 => {}
         4 => {
@@ -4330,7 +4274,8 @@ pub unsafe extern "C" fn nvim_exec_autocmds(
                     b,
                     ::core::ptr::null_mut::<exarg_T>(),
                     data,
-                ) as ::core::ffi::c_int != 0;
+                ) as ::core::ffi::c_int
+                != 0;
             pat_index = pat_index.wrapping_add(1);
         }
         event_str_index = event_str_index.wrapping_add(1);
@@ -4392,9 +4337,7 @@ unsafe extern "C" fn get_augroup_from_object(
     mut err: *mut Error,
 ) -> ::core::ffi::c_int {
     let mut au_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match group.type_0 as ::core::ffi::c_uint {
         0 => return AUGROUP_DEFAULT as ::core::ffi::c_int,
         4 => {
@@ -4464,9 +4407,8 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
     patterns.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
         .wrapping_div(
-            (::core::mem::size_of::<[Object; 16]>()
-                .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                as ::core::ffi::c_int as usize,
+            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     patterns.size = 0 as size_t;
     patterns.items = &raw mut patterns.init_array as *mut Object;
@@ -4485,18 +4427,19 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[Object; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
+                                    .wrapping_rem(::core::mem::size_of::<Object>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
                         patterns.capacity << 1 as ::core::ffi::c_int
                     } else {
                         ::core::mem::size_of::<[Object; 16]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[Object; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                    as ::core::ffi::c_int as size_t,
+                                    .wrapping_rem(::core::mem::size_of::<Object>())
+                                    == 0) as ::core::ffi::c_int
+                                    as size_t,
                             )
                     });
                     patterns.items = (if patterns.capacity
@@ -4504,12 +4447,11 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[Object; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
-                        (if patterns.items == &raw mut patterns.init_array as *mut Object
-                        {
+                                    .wrapping_rem(::core::mem::size_of::<Object>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
+                        (if patterns.items == &raw mut patterns.init_array as *mut Object {
                             patterns.items as *mut ::core::ffi::c_void
                         } else {
                             _memcpy_free(
@@ -4520,8 +4462,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             )
                         })
                     } else {
-                        (if patterns.items == &raw mut patterns.init_array as *mut Object
-                        {
+                        (if patterns.items == &raw mut patterns.init_array as *mut Object {
                             memcpy(
                                 xmalloc(
                                     patterns
@@ -4540,7 +4481,8 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             )
                         })
                     }) as *mut Object;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh19 = patterns.size;
                 patterns.size = patterns.size.wrapping_add(1);
                 *patterns.items.offset(c2rust_fresh19 as isize) = object {
@@ -4562,8 +4504,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
         {
             if !check_string_array(
                 pattern.data.array,
-                b"pattern\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"pattern\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 true_0 != 0,
                 err,
             ) {
@@ -4581,24 +4522,26 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                 let mut patlen_0: size_t = aucmd_span_pattern(pat_0, &raw mut pat_0);
                 while patlen_0 != 0 {
                     if patterns.size == patterns.capacity {
-                        patterns.capacity = (if patterns.capacity
-                            << 1 as ::core::ffi::c_int
+                        patterns.capacity = (if patterns.capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[Object; 16]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                        as ::core::ffi::c_int as usize,
-                                )
-                        {
+                                        .wrapping_rem(::core::mem::size_of::<Object>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as usize,
+                                ) {
                             patterns.capacity << 1 as ::core::ffi::c_int
                         } else {
                             ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[Object; 16]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                        as ::core::ffi::c_int as size_t,
+                                        .wrapping_rem(::core::mem::size_of::<Object>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as size_t,
                                 )
                         });
                         patterns.items = (if patterns.capacity
@@ -4606,13 +4549,12 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
                                     (::core::mem::size_of::<[Object; 16]>()
-                                        .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                                        as ::core::ffi::c_int as usize,
-                                )
-                        {
-                            (if patterns.items
-                                == &raw mut patterns.init_array as *mut Object
-                            {
+                                        .wrapping_rem(::core::mem::size_of::<Object>())
+                                        == 0)
+                                        as ::core::ffi::c_int
+                                        as usize,
+                                ) {
+                            (if patterns.items == &raw mut patterns.init_array as *mut Object {
                                 patterns.items as *mut ::core::ffi::c_void
                             } else {
                                 _memcpy_free(
@@ -4623,9 +4565,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                 )
                             })
                         } else {
-                            (if patterns.items
-                                == &raw mut patterns.init_array as *mut Object
-                            {
+                            (if patterns.items == &raw mut patterns.init_array as *mut Object {
                                 memcpy(
                                     xmalloc(
                                         patterns
@@ -4644,7 +4584,8 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                 )
                             })
                         }) as *mut Object;
-                    } else {};
+                    } else {
+                    };
                     let c2rust_fresh20 = patterns.size;
                     patterns.size = patterns.size.wrapping_add(1);
                     *patterns.items.offset(c2rust_fresh20 as isize) = object {
@@ -4659,10 +4600,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             ),
                         },
                     };
-                    patlen_0 = aucmd_span_pattern(
-                        pat_0.offset(patlen_0 as isize),
-                        &raw mut pat_0,
-                    );
+                    patlen_0 = aucmd_span_pattern(pat_0.offset(patlen_0 as isize), &raw mut pat_0);
                 }
                 entry_index = entry_index.wrapping_add(1);
             }
@@ -4694,18 +4632,17 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
                         (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<Object>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 patterns.capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
                         (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                            as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<Object>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             patterns.items = (if patterns.capacity
@@ -4713,16 +4650,14 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
                         (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<Object>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if patterns.items == &raw mut patterns.init_array as *mut Object {
                     patterns.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
-                        &raw mut patterns.init_array as *mut Object
-                            as *mut ::core::ffi::c_void,
+                        &raw mut patterns.init_array as *mut Object as *mut ::core::ffi::c_void,
                         patterns.items as *mut ::core::ffi::c_void,
                         patterns.size.wrapping_mul(::core::mem::size_of::<Object>()),
                     )
@@ -4741,11 +4676,14 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                 } else {
                     xrealloc(
                         patterns.items as *mut ::core::ffi::c_void,
-                        patterns.capacity.wrapping_mul(::core::mem::size_of::<Object>()),
+                        patterns
+                            .capacity
+                            .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
                 })
             }) as *mut Object;
-        } else {};
+        } else {
+        };
         let c2rust_fresh21 = patterns.size;
         patterns.size = patterns.size.wrapping_add(1);
         *patterns.items.offset(c2rust_fresh21 as isize) = object {
@@ -4766,18 +4704,17 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
                         (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<Object>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 patterns.capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
                         (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                            as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<Object>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             patterns.items = (if patterns.capacity
@@ -4785,16 +4722,14 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
                         (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
-                            as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<Object>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if patterns.items == &raw mut patterns.init_array as *mut Object {
                     patterns.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
-                        &raw mut patterns.init_array as *mut Object
-                            as *mut ::core::ffi::c_void,
+                        &raw mut patterns.init_array as *mut Object as *mut ::core::ffi::c_void,
                         patterns.items as *mut ::core::ffi::c_void,
                         patterns.size.wrapping_mul(::core::mem::size_of::<Object>()),
                     )
@@ -4813,11 +4748,14 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                 } else {
                     xrealloc(
                         patterns.items as *mut ::core::ffi::c_void,
-                        patterns.capacity.wrapping_mul(::core::mem::size_of::<Object>()),
+                        patterns
+                            .capacity
+                            .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
                 })
             }) as *mut Object;
-        } else {};
+        } else {
+        };
         let c2rust_fresh22 = patterns.size;
         patterns.size = patterns.size.wrapping_add(1);
         *patterns.items.offset(c2rust_fresh22 as isize) = object {

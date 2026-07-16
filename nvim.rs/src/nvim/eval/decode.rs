@@ -26,10 +26,7 @@ extern "C" {
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn mpack_unpack_boolean(t: mpack_token_t) -> bool;
     fn mpack_unpack_uint(t: mpack_token_t) -> mpack_uintmax_t;
     fn mpack_unpack_sint(t: mpack_token_t) -> mpack_sintmax_t;
@@ -67,10 +64,7 @@ extern "C" {
     fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
     fn tv_list_append_number(l: *mut list_T, n: varnumber_T);
-    fn tv_dict_item_alloc_len(
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-    ) -> *mut dictitem_T;
+    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
     fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T;
     fn tv_dict_alloc() -> *mut dict_T;
     fn tv_dict_find(
@@ -86,10 +80,7 @@ extern "C" {
     fn utf_ptr2char(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_ptr2len(p_in: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
 }
 pub type ptrdiff_t = isize;
 pub type size_t = usize;
@@ -177,9 +168,7 @@ pub struct mpack_parser_t {
     pub tokbuf: mpack_tokbuf_t,
     pub items: [mpack_node_t; 33],
 }
-pub type mpack_walk_cb = Option<
-    unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
->;
+pub type mpack_walk_cb = Option<unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> ()>;
 pub type LuaRef = ::core::ffi::c_int;
 pub type float_T = ::core::ffi::c_double;
 pub type proftime_T = uint64_t;
@@ -475,9 +464,7 @@ pub struct ValuesStack {
     pub capacity: size_t,
     pub items: *mut ValuesStackItem,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const BS: ::core::ffi::c_int = '\u{8}' as ::core::ffi::c_int;
@@ -511,8 +498,7 @@ unsafe extern "C" fn create_special_dict(
     );
     (*type_di).di_tv.v_type = VAR_LIST;
     (*type_di).di_tv.v_lock = VAR_UNLOCKED;
-    (*type_di).di_tv.vval.v_list = eval_msgpack_type_lists[type_0 as usize]
-        as *mut list_T;
+    (*type_di).di_tv.vval.v_list = eval_msgpack_type_lists[type_0 as usize] as *mut list_T;
     tv_list_ref((*type_di).di_tv.vval.v_list);
     tv_dict_add(dict, type_di);
     let val_di: *mut dictitem_T = tv_dict_item_alloc_len(
@@ -549,18 +535,19 @@ unsafe extern "C" fn json_decoder_pop(
                 (*stack).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<ValuesStackItem>().wrapping_mul((*stack).capacity),
             ) as *mut ValuesStackItem;
-        } else {};
+        } else {
+        };
         let c2rust_fresh4 = (*stack).size;
         (*stack).size = (*stack).size.wrapping_add(1);
         *(*stack).items.offset(c2rust_fresh4 as isize) = obj;
         return OK;
     }
-    let mut last_container: ContainerStackItem = *(*container_stack)
-        .items
-        .offset(
-            (*container_stack).size.wrapping_sub(0 as size_t).wrapping_sub(1 as size_t)
-                as isize,
-        );
+    let mut last_container: ContainerStackItem = *(*container_stack).items.offset(
+        (*container_stack)
+            .size
+            .wrapping_sub(0 as size_t)
+            .wrapping_sub(1 as size_t) as isize,
+    );
     let mut val_location: *const ::core::ffi::c_char = *pp;
     if obj.val.v_type as ::core::ffi::c_uint
         == last_container.container.v_type as ::core::ffi::c_uint
@@ -569,14 +556,12 @@ unsafe extern "C" fn json_decoder_pop(
     {
         (*container_stack).size = (*container_stack).size.wrapping_sub(1);
         val_location = last_container.s;
-        last_container = *(*container_stack)
-            .items
-            .offset(
-                (*container_stack)
-                    .size
-                    .wrapping_sub(0 as size_t)
-                    .wrapping_sub(1 as size_t) as isize,
-            );
+        last_container = *(*container_stack).items.offset(
+            (*container_stack)
+                .size
+                .wrapping_sub(0 as size_t)
+                .wrapping_sub(1 as size_t) as isize,
+        );
     }
     if last_container.container.v_type as ::core::ffi::c_uint
         == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -585,17 +570,16 @@ unsafe extern "C" fn json_decoder_pop(
             && !obj.didcomma
         {
             semsg(
-                gettext(
-                    b"E474: Expected comma before list item: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E474: Expected comma before list item: %s\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 val_location,
             );
             tv_clear(&raw mut obj.val);
             return FAIL;
         }
         '_c2rust_label: {
-            if last_container.special_val.is_null() {} else {
+            if last_container.special_val.is_null() {
+            } else {
                 __assert_fail(
                     b"last_container.special_val == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -626,7 +610,8 @@ unsafe extern "C" fn json_decoder_pop(
             '_c2rust_label_0: {
                 if !(key.is_special_string as ::core::ffi::c_int != 0
                     || key.val.vval.v_string.is_null())
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"!(key.is_special_string || key.val.vval.v_string == NULL)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -656,24 +641,18 @@ unsafe extern "C" fn json_decoder_pop(
                 != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             semsg(
-                gettext(
-                    b"E474: Expected string key: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E474: Expected string key: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 *pp,
             );
             tv_clear(&raw mut obj.val);
             return FAIL;
         } else if !obj.didcomma
             && (last_container.special_val.is_null()
-                && (*last_container.container.vval.v_dict).dv_hashtab.ht_used
-                    != 0 as size_t)
+                && (*last_container.container.vval.v_dict).dv_hashtab.ht_used != 0 as size_t)
         {
             semsg(
-                gettext(
-                    b"E474: Expected comma before dictionary key: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E474: Expected comma before dictionary key: %s\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 val_location,
             );
             tv_clear(&raw mut obj.val);
@@ -683,17 +662,16 @@ unsafe extern "C" fn json_decoder_pop(
             && (obj.is_special_string as ::core::ffi::c_int != 0
                 || obj.val.vval.v_string.is_null()
                 || !tv_dict_find(
-                        last_container.container.vval.v_dict,
-                        obj.val.vval.v_string,
-                        -1 as ptrdiff_t,
-                    )
-                    .is_null())
+                    last_container.container.vval.v_dict,
+                    obj.val.vval.v_string,
+                    -1 as ptrdiff_t,
+                )
+                .is_null())
         {
             tv_clear(&raw mut obj.val);
             (*container_stack).size = (*container_stack).size.wrapping_sub(1);
-            let mut last_container_val: ValuesStackItem = *(*stack)
-                .items
-                .offset(last_container.stack_index as isize);
+            let mut last_container_val: ValuesStackItem =
+                *(*stack).items.offset(last_container.stack_index as isize);
             while (*stack).size > last_container.stack_index {
                 (*stack).size = (*stack).size.wrapping_sub(1);
                 tv_clear(&raw mut (*(*stack).items.offset((*stack).size as isize)).val);
@@ -714,7 +692,8 @@ unsafe extern "C" fn json_decoder_pop(
                 (*stack).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<ValuesStackItem>().wrapping_mul((*stack).capacity),
             ) as *mut ValuesStackItem;
-        } else {};
+        } else {
+        };
         let c2rust_fresh5 = (*stack).size;
         (*stack).size = (*stack).size.wrapping_add(1);
         *(*stack).items.offset(c2rust_fresh5 as isize) = obj;
@@ -747,11 +726,12 @@ pub unsafe extern "C" fn decode_string(
     s_allocated: bool,
 ) -> typval_T {
     '_c2rust_label: {
-        if !s.is_null() || len == 0 as size_t {} else {
+        if !s.is_null() || len == 0 as size_t {
+        } else {
             __assert_fail(
                 b"s != NULL || len == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 261 as ::core::ffi::c_uint,
                 b"typval_T decode_string(const char *const, const size_t, _Bool, const _Bool)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -800,13 +780,9 @@ unsafe extern "C" fn parse_json_string(
     didcomma: *mut bool,
     didcolon: *mut bool,
 ) -> ::core::ffi::c_int {
-    let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut fst_in_pair: ::core::ffi::c_int = 0;
-    let mut str_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut str_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut obj: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -825,10 +801,8 @@ unsafe extern "C" fn parse_json_string(
                     p = p.offset(1);
                     if p == e {
                         semsg(
-                            gettext(
-                                b"E474: Unfinished escape sequence: %.*s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E474: Unfinished escape sequence: %.*s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             buf_len as ::core::ffi::c_int,
                             buf,
                         );
@@ -839,7 +813,8 @@ unsafe extern "C" fn parse_json_string(
                                 if p.offset(4 as ::core::ffi::c_int as isize) >= e {
                                     semsg(
                                         gettext(
-                                            b"E474: Unfinished unicode escape sequence: %.*s\0".as_ptr()
+                                            b"E474: Unfinished unicode escape sequence: %.*s\0"
+                                                .as_ptr()
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         buf_len as ::core::ffi::c_int,
@@ -849,23 +824,20 @@ unsafe extern "C" fn parse_json_string(
                                 } else if !ascii_isxdigit(
                                     *p.offset(1 as ::core::ffi::c_int as isize)
                                         as ::core::ffi::c_int,
-                                )
-                                    || !ascii_isxdigit(
-                                        *p.offset(2 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int,
-                                    )
-                                    || !ascii_isxdigit(
-                                        *p.offset(3 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int,
-                                    )
-                                    || !ascii_isxdigit(
-                                        *p.offset(4 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int,
-                                    )
-                                {
+                                ) || !ascii_isxdigit(
+                                    *p.offset(2 as ::core::ffi::c_int as isize)
+                                        as ::core::ffi::c_int,
+                                ) || !ascii_isxdigit(
+                                    *p.offset(3 as ::core::ffi::c_int as isize)
+                                        as ::core::ffi::c_int,
+                                ) || !ascii_isxdigit(
+                                    *p.offset(4 as ::core::ffi::c_int as isize)
+                                        as ::core::ffi::c_int,
+                                ) {
                                     semsg(
                                         gettext(
-                                            b"E474: Expected four hex digits after \\u: %.*s\0".as_ptr()
+                                            b"E474: Expected four hex digits after \\u: %.*s\0"
+                                                .as_ptr()
                                                 as *const ::core::ffi::c_char,
                                         ),
                                         e.offset_from(p.offset(-(1 as ::core::ffi::c_int as isize)))
@@ -884,10 +856,8 @@ unsafe extern "C" fn parse_json_string(
                             }
                             _ => {
                                 semsg(
-                                    gettext(
-                                        b"E474: Unknown escape sequence: %.*s\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                    ),
+                                    gettext(b"E474: Unknown escape sequence: %.*s\0".as_ptr()
+                                        as *const ::core::ffi::c_char),
                                     e.offset_from(p.offset(-(1 as ::core::ffi::c_int as isize)))
                                         as ::core::ffi::c_int,
                                     p.offset(-(1 as ::core::ffi::c_int as isize)),
@@ -915,13 +885,12 @@ unsafe extern "C" fn parse_json_string(
                             && !(ch == 0xc3 as ::core::ffi::c_int
                                 && p.offset(1 as ::core::ffi::c_int as isize) < e
                                 && *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                                    as ::core::ffi::c_int == 0x83 as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    == 0x83 as ::core::ffi::c_int)
                         {
                             semsg(
-                                gettext(
-                                    b"E474: Only UTF-8 strings allowed: %.*s\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(b"E474: Only UTF-8 strings allowed: %.*s\0".as_ptr()
+                                    as *const ::core::ffi::c_char),
                                 e.offset_from(p) as ::core::ffi::c_int,
                                 p,
                             );
@@ -945,7 +914,8 @@ unsafe extern "C" fn parse_json_string(
                                     } else {
                                         1 as ::core::ffi::c_int
                                     }) as size_t
-                                {} else {
+                                {
+                                } else {
                                     __assert_fail(
                                         b"ch_len == (size_t)(ch ? utf_ptr2len(p) : 1)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -966,8 +936,7 @@ unsafe extern "C" fn parse_json_string(
             if p == e || *p as ::core::ffi::c_int != '"' as ::core::ffi::c_int {
                 semsg(
                     gettext(
-                        b"E474: Expected string end: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"E474: Expected string end: %.*s\0".as_ptr() as *const ::core::ffi::c_char
                     ),
                     buf_len as ::core::ffi::c_int,
                     buf,
@@ -980,12 +949,11 @@ unsafe extern "C" fn parse_json_string(
                 while t < p {
                     if *t.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         != '\\' as ::core::ffi::c_int
-                        || *t.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int != 'u' as ::core::ffi::c_int
+                        || *t.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            != 'u' as ::core::ffi::c_int
                     {
                         if fst_in_pair != 0 as ::core::ffi::c_int {
-                            str_end = str_end
-                                .offset(utf_char2bytes(fst_in_pair, str_end) as isize);
+                            str_end = str_end.offset(utf_char2bytes(fst_in_pair, str_end) as isize);
                             fst_in_pair = 0 as ::core::ffi::c_int;
                         }
                     }
@@ -1017,8 +985,10 @@ unsafe extern "C" fn parse_json_string(
                                     && ch_0 <= SURROGATE_HI_END as uvarnumber_T
                                 {
                                     if fst_in_pair != 0 as ::core::ffi::c_int {
-                                        str_end = str_end
-                                            .offset(utf_char2bytes(fst_in_pair, str_end) as isize);
+                                        str_end =
+                                            str_end.offset(
+                                                utf_char2bytes(fst_in_pair, str_end) as isize
+                                            );
                                         fst_in_pair = 0 as ::core::ffi::c_int;
                                     }
                                     fst_in_pair = ch_0 as ::core::ffi::c_int;
@@ -1030,20 +1000,24 @@ unsafe extern "C" fn parse_json_string(
                                         .wrapping_sub(SURROGATE_LO_START as uvarnumber_T)
                                         as ::core::ffi::c_int
                                         + (fst_in_pair - SURROGATE_HI_START
-                                            << 10 as ::core::ffi::c_int) + SURROGATE_FIRST_CHAR;
-                                    str_end = str_end
-                                        .offset(utf_char2bytes(full_char, str_end) as isize);
+                                            << 10 as ::core::ffi::c_int)
+                                        + SURROGATE_FIRST_CHAR;
+                                    str_end =
+                                        str_end.offset(utf_char2bytes(full_char, str_end) as isize);
                                     fst_in_pair = 0 as ::core::ffi::c_int;
                                 } else {
                                     if fst_in_pair != 0 as ::core::ffi::c_int {
-                                        str_end = str_end
-                                            .offset(utf_char2bytes(fst_in_pair, str_end) as isize);
+                                        str_end =
+                                            str_end.offset(
+                                                utf_char2bytes(fst_in_pair, str_end) as isize
+                                            );
                                         fst_in_pair = 0 as ::core::ffi::c_int;
                                     }
-                                    str_end = str_end
-                                        .offset(
-                                            utf_char2bytes(ch_0 as ::core::ffi::c_int, str_end) as isize,
-                                        );
+                                    str_end = str_end.offset(utf_char2bytes(
+                                        ch_0 as ::core::ffi::c_int,
+                                        str_end,
+                                    )
+                                        as isize);
                                 }
                             }
                             92 | 47 | 34 | 116 | 98 | 110 | 114 | 102 => {
@@ -1182,8 +1156,7 @@ unsafe extern "C" fn parse_json_string(
                     t = t.offset(1);
                 }
                 if fst_in_pair != 0 as ::core::ffi::c_int {
-                    str_end = str_end
-                        .offset(utf_char2bytes(fst_in_pair, str_end) as isize);
+                    str_end = str_end.offset(utf_char2bytes(fst_in_pair, str_end) as isize);
                     fst_in_pair = 0 as ::core::ffi::c_int;
                 }
                 *str_end = NUL as ::core::ffi::c_char;
@@ -1243,18 +1216,10 @@ unsafe extern "C" fn parse_json_number(
     let mut p: *const ::core::ffi::c_char = *pp;
     let mut ret: ::core::ffi::c_int = OK;
     let s: *const ::core::ffi::c_char = p;
-    let mut ints: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut fracs: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut exps: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
-    let mut exps_s: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut ints: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut fracs: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut exps: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut exps_s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if *p as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
         p = p.offset(1);
     }
@@ -1264,8 +1229,7 @@ unsafe extern "C" fn parse_json_number(
             '_parse_json_number_check: {
                 if p < e {
                     while p < e
-                        && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int
-                            != 0
+                        && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
                     {
                         p = p.offset(1);
                     }
@@ -1273,10 +1237,8 @@ unsafe extern "C" fn parse_json_number(
                         && *ints as ::core::ffi::c_int == '0' as ::core::ffi::c_int
                     {
                         semsg(
-                            gettext(
-                                b"E474: Leading zeroes are not allowed: %.*s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E474: Leading zeroes are not allowed: %.*s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             e.offset_from(s) as ::core::ffi::c_int,
                             s,
                         );
@@ -1286,8 +1248,8 @@ unsafe extern "C" fn parse_json_number(
                             p = p.offset(1);
                             fracs = p;
                             while p < e
-                                && ascii_isdigit(*p as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int != 0
+                                && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int
+                                    != 0
                             {
                                 p = p.offset(1);
                             }
@@ -1308,8 +1270,8 @@ unsafe extern "C" fn parse_json_number(
                             }
                             exps = p;
                             while p < e
-                                && ascii_isdigit(*p as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int != 0
+                                && ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int
+                                    != 0
                             {
                                 p = p.offset(1);
                             }
@@ -1319,30 +1281,24 @@ unsafe extern "C" fn parse_json_number(
             }
             if p == ints {
                 semsg(
-                    gettext(
-                        b"E474: Missing number after minus sign: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"E474: Missing number after minus sign: %.*s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     e.offset_from(s) as ::core::ffi::c_int,
                     s,
                 );
             } else if p == fracs
-                || !fracs.is_null()
-                    && exps_s == fracs.offset(1 as ::core::ffi::c_int as isize)
+                || !fracs.is_null() && exps_s == fracs.offset(1 as ::core::ffi::c_int as isize)
             {
                 semsg(
-                    gettext(
-                        b"E474: Missing number after decimal dot: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"E474: Missing number after decimal dot: %.*s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     e.offset_from(s) as ::core::ffi::c_int,
                     s,
                 );
             } else if p == exps {
                 semsg(
                     gettext(
-                        b"E474: Missing exponent: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"E474: Missing exponent: %.*s\0".as_ptr() as *const ::core::ffi::c_char
                     ),
                     e.offset_from(s) as ::core::ffi::c_int,
                     s,
@@ -1436,18 +1392,16 @@ pub unsafe extern "C" fn json_decode_string(
     let e: *const ::core::ffi::c_char = buf.offset(buf_len as isize);
     while p < e
         && (*p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-            || *p as ::core::ffi::c_int == TAB || *p as ::core::ffi::c_int == NL
+            || *p as ::core::ffi::c_int == TAB
+            || *p as ::core::ffi::c_int == NL
             || *p as ::core::ffi::c_int == CAR)
     {
         p = p.offset(1);
     }
     if p == e {
-        emsg(
-            gettext(
-                b"E474: Attempt to decode a blank string\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E474: Attempt to decode a blank string\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
     let mut ret: ::core::ffi::c_int = OK;
@@ -1472,9 +1426,9 @@ pub unsafe extern "C" fn json_decode_string(
                     loop {
                         '_c2rust_label: {
                             if *p as ::core::ffi::c_int == '{' as ::core::ffi::c_int
-                                || next_map_special as ::core::ffi::c_int
-                                    == 0 as ::core::ffi::c_int
-                            {} else {
+                                || next_map_special as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                            {
+                            } else {
                                 __assert_fail(
                                     b"*p == '{' || next_map_special == false\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -1490,22 +1444,20 @@ pub unsafe extern "C" fn json_decode_string(
                             125 | 93 => {
                                 if container_stack.size == 0 as size_t {
                                     semsg(
-                                        gettext(
-                                            b"E474: No container to close: %.*s\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                        ),
+                                        gettext(b"E474: No container to close: %.*s\0".as_ptr()
+                                            as *const ::core::ffi::c_char),
                                         e.offset_from(p) as ::core::ffi::c_int,
                                         p,
                                     );
                                     break '_json_decode_string_fail;
                                 } else {
-                                    let mut last_container: ContainerStackItem = *container_stack
-                                        .items
-                                        .offset(
+                                    let mut last_container: ContainerStackItem =
+                                        *container_stack.items.offset(
                                             container_stack
                                                 .size
                                                 .wrapping_sub(0 as size_t)
-                                                .wrapping_sub(1 as size_t) as isize,
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
                                         );
                                     if *p as ::core::ffi::c_int == '}' as ::core::ffi::c_int
                                         && last_container.container.v_type as ::core::ffi::c_uint
@@ -1513,15 +1465,15 @@ pub unsafe extern "C" fn json_decode_string(
                                     {
                                         semsg(
                                             gettext(
-                                                b"E474: Closing list with curly bracket: %.*s\0".as_ptr()
+                                                b"E474: Closing list with curly bracket: %.*s\0"
+                                                    .as_ptr()
                                                     as *const ::core::ffi::c_char,
                                             ),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
                                         break '_json_decode_string_fail;
-                                    } else if *p as ::core::ffi::c_int
-                                        == ']' as ::core::ffi::c_int
+                                    } else if *p as ::core::ffi::c_int == ']' as ::core::ffi::c_int
                                         && last_container.container.v_type as ::core::ffi::c_uint
                                             != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
@@ -1536,10 +1488,8 @@ pub unsafe extern "C" fn json_decode_string(
                                         break '_json_decode_string_fail;
                                     } else if didcomma {
                                         semsg(
-                                            gettext(
-                                                b"E474: Trailing comma: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Trailing comma: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
@@ -1560,7 +1510,8 @@ pub unsafe extern "C" fn json_decode_string(
                                         '_c2rust_label_0: {
                                             if last_container.stack_index
                                                 < stack.size.wrapping_sub(1 as size_t)
-                                            {} else {
+                                            {
+                                            } else {
                                                 __assert_fail(
                                                     b"last_container.stack_index < kv_size(stack) - 1\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
@@ -1573,10 +1524,8 @@ pub unsafe extern "C" fn json_decode_string(
                                             }
                                         };
                                         semsg(
-                                            gettext(
-                                                b"E474: Expected value: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Expected value: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
@@ -1600,7 +1549,8 @@ pub unsafe extern "C" fn json_decode_string(
                                             break '_json_decode_string_fail;
                                         }
                                         '_c2rust_label_1: {
-                                            if !next_map_special {} else {
+                                            if !next_map_special {
+                                            } else {
                                                 __assert_fail(
                                                     b"!next_map_special\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -1628,30 +1578,26 @@ pub unsafe extern "C" fn json_decode_string(
                                     );
                                     break '_json_decode_string_fail;
                                 } else {
-                                    let mut last_container_0: ContainerStackItem = *container_stack
-                                        .items
-                                        .offset(
+                                    let mut last_container_0: ContainerStackItem =
+                                        *container_stack.items.offset(
                                             container_stack
                                                 .size
                                                 .wrapping_sub(0 as size_t)
-                                                .wrapping_sub(1 as size_t) as isize,
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
                                         );
                                     if didcomma {
                                         semsg(
-                                            gettext(
-                                                b"E474: Duplicate comma: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Duplicate comma: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
                                         break '_json_decode_string_fail;
                                     } else if didcolon {
                                         semsg(
-                                            gettext(
-                                                b"E474: Comma after colon: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Comma after colon: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
@@ -1664,7 +1610,8 @@ pub unsafe extern "C" fn json_decode_string(
                                     {
                                         semsg(
                                             gettext(
-                                                b"E474: Using comma in place of colon: %.*s\0".as_ptr()
+                                                b"E474: Using comma in place of colon: %.*s\0"
+                                                    .as_ptr()
                                                     as *const ::core::ffi::c_char,
                                             ),
                                             e.offset_from(p) as ::core::ffi::c_int,
@@ -1677,21 +1624,23 @@ pub unsafe extern "C" fn json_decode_string(
                                         {
                                             ((*last_container_0.container.vval.v_dict)
                                                 .dv_hashtab
-                                                .ht_used == 0 as size_t) as ::core::ffi::c_int
+                                                .ht_used
+                                                == 0 as size_t)
+                                                as ::core::ffi::c_int
                                         } else {
                                             (tv_list_len(last_container_0.container.vval.v_list)
-                                                == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                                == 0 as ::core::ffi::c_int)
+                                                as ::core::ffi::c_int
                                         }
                                     } else {
                                         (tv_list_len(last_container_0.special_val)
-                                            == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
+                                            == 0 as ::core::ffi::c_int)
+                                            as ::core::ffi::c_int
                                     } != 0
                                     {
                                         semsg(
-                                            gettext(
-                                                b"E474: Leading comma: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Leading comma: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
@@ -1714,20 +1663,21 @@ pub unsafe extern "C" fn json_decode_string(
                                     );
                                     break '_json_decode_string_fail;
                                 } else {
-                                    let mut last_container_1: ContainerStackItem = *container_stack
-                                        .items
-                                        .offset(
+                                    let mut last_container_1: ContainerStackItem =
+                                        *container_stack.items.offset(
                                             container_stack
                                                 .size
                                                 .wrapping_sub(0 as size_t)
-                                                .wrapping_sub(1 as size_t) as isize,
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
                                         );
                                     if last_container_1.container.v_type as ::core::ffi::c_uint
                                         != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
                                         semsg(
                                             gettext(
-                                                b"E474: Using colon not in dictionary: %.*s\0".as_ptr()
+                                                b"E474: Using colon not in dictionary: %.*s\0"
+                                                    .as_ptr()
                                                     as *const ::core::ffi::c_char,
                                             ),
                                             e.offset_from(p) as ::core::ffi::c_int,
@@ -1738,30 +1688,24 @@ pub unsafe extern "C" fn json_decode_string(
                                         != stack.size.wrapping_sub(2 as size_t)
                                     {
                                         semsg(
-                                            gettext(
-                                                b"E474: Unexpected colon: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Unexpected colon: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
                                         break '_json_decode_string_fail;
                                     } else if didcomma {
                                         semsg(
-                                            gettext(
-                                                b"E474: Colon after comma: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Colon after comma: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
                                         break '_json_decode_string_fail;
                                     } else if didcolon {
                                         semsg(
-                                            gettext(
-                                                b"E474: Duplicate colon: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E474: Duplicate colon: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             e.offset_from(p) as ::core::ffi::c_int,
                                             p,
                                         );
@@ -1784,10 +1728,8 @@ pub unsafe extern "C" fn json_decode_string(
                                     ) != 0 as ::core::ffi::c_int
                                 {
                                     semsg(
-                                        gettext(
-                                            b"E474: Expected null: %.*s\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                        ),
+                                        gettext(b"E474: Expected null: %.*s\0".as_ptr()
+                                            as *const ::core::ffi::c_char),
                                         e.offset_from(p) as ::core::ffi::c_int,
                                         p,
                                     );
@@ -1831,10 +1773,8 @@ pub unsafe extern "C" fn json_decode_string(
                                     ) != 0 as ::core::ffi::c_int
                                 {
                                     semsg(
-                                        gettext(
-                                            b"E474: Expected true: %.*s\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                        ),
+                                        gettext(b"E474: Expected true: %.*s\0".as_ptr()
+                                            as *const ::core::ffi::c_char),
                                         e.offset_from(p) as ::core::ffi::c_int,
                                         p,
                                     );
@@ -1878,10 +1818,8 @@ pub unsafe extern "C" fn json_decode_string(
                                     ) != 0 as ::core::ffi::c_int
                                 {
                                     semsg(
-                                        gettext(
-                                            b"E474: Expected false: %.*s\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                        ),
+                                        gettext(b"E474: Expected false: %.*s\0".as_ptr()
+                                            as *const ::core::ffi::c_char),
                                         e.offset_from(p) as ::core::ffi::c_int,
                                         p,
                                     );
@@ -1962,8 +1900,7 @@ pub unsafe extern "C" fn json_decode_string(
                                     vval: typval_vval_union { v_list: list },
                                 };
                                 if container_stack.size == container_stack.capacity {
-                                    container_stack.capacity = (if container_stack.capacity != 0
-                                    {
+                                    container_stack.capacity = (if container_stack.capacity != 0 {
                                         container_stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
@@ -1972,16 +1909,19 @@ pub unsafe extern "C" fn json_decode_string(
                                         container_stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ContainerStackItem>()
                                             .wrapping_mul(container_stack.capacity),
-                                    ) as *mut ContainerStackItem;
-                                } else {};
+                                    )
+                                        as *mut ContainerStackItem;
+                                } else {
+                                };
                                 let c2rust_fresh0 = container_stack.size;
                                 container_stack.size = container_stack.size.wrapping_add(1);
-                                *container_stack.items.offset(c2rust_fresh0 as isize) = ContainerStackItem {
-                                    stack_index: stack.size,
-                                    special_val: ::core::ptr::null_mut::<list_T>(),
-                                    s: p,
-                                    container: tv,
-                                };
+                                *container_stack.items.offset(c2rust_fresh0 as isize) =
+                                    ContainerStackItem {
+                                        stack_index: stack.size,
+                                        special_val: ::core::ptr::null_mut::<list_T>(),
+                                        s: p,
+                                        container: tv,
+                                    };
                                 if stack.size == stack.capacity {
                                     stack.capacity = (if stack.capacity != 0 {
                                         stack.capacity << 1 as ::core::ffi::c_int
@@ -1992,8 +1932,10 @@ pub unsafe extern "C" fn json_decode_string(
                                         stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ValuesStackItem>()
                                             .wrapping_mul(stack.capacity),
-                                    ) as *mut ValuesStackItem;
-                                } else {};
+                                    )
+                                        as *mut ValuesStackItem;
+                                } else {
+                                };
                                 let c2rust_fresh1 = stack.size;
                                 stack.size = stack.size.wrapping_add(1);
                                 *stack.items.offset(c2rust_fresh1 as isize) = ValuesStackItem {
@@ -2010,9 +1952,7 @@ pub unsafe extern "C" fn json_decode_string(
                                     v_lock: VAR_UNLOCKED,
                                     vval: typval_vval_union { v_number: 0 },
                                 };
-                                let mut val_list: *mut list_T = ::core::ptr::null_mut::<
-                                    list_T,
-                                >();
+                                let mut val_list: *mut list_T = ::core::ptr::null_mut::<list_T>();
                                 if next_map_special {
                                     next_map_special = false_0 != 0;
                                     val_list = decode_create_map_special_dict(
@@ -2029,8 +1969,7 @@ pub unsafe extern "C" fn json_decode_string(
                                     };
                                 }
                                 if container_stack.size == container_stack.capacity {
-                                    container_stack.capacity = (if container_stack.capacity != 0
-                                    {
+                                    container_stack.capacity = (if container_stack.capacity != 0 {
                                         container_stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
@@ -2039,16 +1978,19 @@ pub unsafe extern "C" fn json_decode_string(
                                         container_stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ContainerStackItem>()
                                             .wrapping_mul(container_stack.capacity),
-                                    ) as *mut ContainerStackItem;
-                                } else {};
+                                    )
+                                        as *mut ContainerStackItem;
+                                } else {
+                                };
                                 let c2rust_fresh2 = container_stack.size;
                                 container_stack.size = container_stack.size.wrapping_add(1);
-                                *container_stack.items.offset(c2rust_fresh2 as isize) = ContainerStackItem {
-                                    stack_index: stack.size,
-                                    special_val: val_list,
-                                    s: p,
-                                    container: tv_0,
-                                };
+                                *container_stack.items.offset(c2rust_fresh2 as isize) =
+                                    ContainerStackItem {
+                                        stack_index: stack.size,
+                                        special_val: val_list,
+                                        s: p,
+                                        container: tv_0,
+                                    };
                                 if stack.size == stack.capacity {
                                     stack.capacity = (if stack.capacity != 0 {
                                         stack.capacity << 1 as ::core::ffi::c_int
@@ -2059,8 +2001,10 @@ pub unsafe extern "C" fn json_decode_string(
                                         stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ValuesStackItem>()
                                             .wrapping_mul(stack.capacity),
-                                    ) as *mut ValuesStackItem;
-                                } else {};
+                                    )
+                                        as *mut ValuesStackItem;
+                                } else {
+                                };
                                 let c2rust_fresh3 = stack.size;
                                 stack.size = stack.size.wrapping_add(1);
                                 *stack.items.offset(c2rust_fresh3 as isize) = ValuesStackItem {
@@ -2073,10 +2017,8 @@ pub unsafe extern "C" fn json_decode_string(
                             }
                             _ => {
                                 semsg(
-                                    gettext(
-                                        b"E474: Unidentified byte: %.*s\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                    ),
+                                    gettext(b"E474: Unidentified byte: %.*s\0".as_ptr()
+                                        as *const ::core::ffi::c_char),
                                     e.offset_from(p) as ::core::ffi::c_int,
                                     p,
                                 );
@@ -2100,10 +2042,8 @@ pub unsafe extern "C" fn json_decode_string(
                     }
                     _ => {
                         semsg(
-                            gettext(
-                                b"E474: Trailing characters: %.*s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E474: Trailing characters: %.*s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             e.offset_from(p) as ::core::ffi::c_int,
                             p,
                         );
@@ -2117,10 +2057,8 @@ pub unsafe extern "C" fn json_decode_string(
                 break '_json_decode_string_ret;
             } else {
                 semsg(
-                    gettext(
-                        b"E474: Unexpected end of input: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"E474: Unexpected end of input: %.*s\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     buf_len as ::core::ffi::c_int,
                     buf,
                 );
@@ -2183,9 +2121,8 @@ unsafe extern "C" fn typval_parse_enter(
     mut node: *mut mpack_node_t,
 ) {
     let mut result: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-    let mut parent: *mut mpack_node_t = if (*node
-        .offset(-(1 as ::core::ffi::c_int as isize)))
-        .pos == -1 as ::core::ffi::c_int as size_t
+    let mut parent: *mut mpack_node_t = if (*node.offset(-(1 as ::core::ffi::c_int as isize))).pos
+        == -1 as ::core::ffi::c_int as size_t
     {
         ::core::ptr::null_mut::<mpack_node_t>()
     } else {
@@ -2194,9 +2131,8 @@ unsafe extern "C" fn typval_parse_enter(
     if !parent.is_null() {
         match (*parent).tok.type_0 as ::core::ffi::c_uint {
             7 => {
-                let mut list: *mut list_T = (*parent)
-                    .data[1 as ::core::ffi::c_int as usize]
-                    .p as *mut list_T;
+                let mut list: *mut list_T =
+                    (*parent).data[1 as ::core::ffi::c_int as usize].p as *mut list_T;
                 result = tv_list_append_owned_tv(
                     list,
                     typval_T {
@@ -2207,26 +2143,25 @@ unsafe extern "C" fn typval_parse_enter(
                 );
             }
             8 => {
-                let mut items: *mut [typval_T; 2] = (*parent)
-                    .data[1 as ::core::ffi::c_int as usize]
-                    .p as *mut [typval_T; 2];
-                result = (&raw mut *items.offset((*parent).pos as isize)
-                    as *mut typval_T)
+                let mut items: *mut [typval_T; 2] =
+                    (*parent).data[1 as ::core::ffi::c_int as usize].p as *mut [typval_T; 2];
+                result = (&raw mut *items.offset((*parent).pos as isize) as *mut typval_T)
                     .offset((*parent).key_visited as isize);
             }
             10 | 9 | 11 => {
                 '_c2rust_label: {
                     if (*node).tok.type_0 as ::core::ffi::c_uint
                         == MPACK_TOKEN_CHUNK as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
                             b"node->tok.type == MPACK_TOKEN_CHUNK\0".as_ptr()
                                 as *const ::core::ffi::c_char,
                             b"/home/overlord/projects/neovim/neovim/src/nvim/eval/decode.c\0"
                                 .as_ptr() as *const ::core::ffi::c_char,
                             932 as ::core::ffi::c_uint,
-                            b"void typval_parse_enter(mpack_parser_t *, mpack_node_t *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"void typval_parse_enter(mpack_parser_t *, mpack_node_t *)\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         );
                     }
                 };
@@ -2238,8 +2173,7 @@ unsafe extern "C" fn typval_parse_enter(
     } else {
         result = (*parser).data.p as *mut typval_T;
     }
-    (*node).data[0 as ::core::ffi::c_int as usize].p = result
-        as *mut ::core::ffi::c_void;
+    (*node).data[0 as ::core::ffi::c_int as usize].p = result as *mut ::core::ffi::c_void;
     (*node).data[1 as ::core::ffi::c_int as usize].p = NULL;
     match (*node).tok.type_0 as ::core::ffi::c_uint {
         1 => {
@@ -2256,9 +2190,7 @@ unsafe extern "C" fn typval_parse_enter(
                 v_type: VAR_BOOL,
                 v_lock: VAR_UNLOCKED,
                 vval: typval_vval_union {
-                    v_bool: (if mpack_unpack_boolean((*node).tok) as ::core::ffi::c_int
-                        != 0
-                    {
+                    v_bool: (if mpack_unpack_boolean((*node).tok) as ::core::ffi::c_int != 0 {
                         kBoolVarTrue as ::core::ffi::c_int
                     } else {
                         kBoolVarFalse as ::core::ffi::c_int
@@ -2276,10 +2208,7 @@ unsafe extern "C" fn typval_parse_enter(
             };
         }
         3 => {
-            positive_integer_to_special_typval(
-                result,
-                mpack_unpack_uint((*node).tok) as uint64_t,
-            );
+            positive_integer_to_special_typval(result, mpack_unpack_uint((*node).tok) as uint64_t);
         }
         5 => {
             *result = typval_T {
@@ -2291,14 +2220,12 @@ unsafe extern "C" fn typval_parse_enter(
             };
         }
         9 | 10 | 11 => {
-            (*node).data[1 as ::core::ffi::c_int as usize].p = xmallocz(
-                (*node).tok.length as size_t,
-            );
+            (*node).data[1 as ::core::ffi::c_int as usize].p =
+                xmallocz((*node).tok.length as size_t);
         }
         6 => {
-            let mut data: *mut ::core::ffi::c_char = (*parent)
-                .data[1 as ::core::ffi::c_int as usize]
-                .p as *mut ::core::ffi::c_char;
+            let mut data: *mut ::core::ffi::c_char =
+                (*parent).data[1 as ::core::ffi::c_int as usize].p as *mut ::core::ffi::c_char;
             memcpy(
                 data.offset((*parent).pos as isize) as *mut ::core::ffi::c_void,
                 (*node).tok.data.chunk_ptr as *const ::core::ffi::c_void,
@@ -2311,12 +2238,9 @@ unsafe extern "C" fn typval_parse_enter(
             *result = typval_T {
                 v_type: VAR_LIST,
                 v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union {
-                    v_list: list_0,
-                },
+                vval: typval_vval_union { v_list: list_0 },
             };
-            (*node).data[1 as ::core::ffi::c_int as usize].p = list_0
-                as *mut ::core::ffi::c_void;
+            (*node).data[1 as ::core::ffi::c_int as usize].p = list_0 as *mut ::core::ffi::c_void;
         }
         8 => {
             (*node).data[1 as ::core::ffi::c_int as usize].p = xmallocz(
@@ -2331,14 +2255,14 @@ unsafe extern "C" fn typval_parse_enter(
 pub unsafe extern "C" fn typval_parser_error_free(mut parser: *mut mpack_parser_t) {
     let mut i: uint32_t = 0 as uint32_t;
     while i < (*parser).size as uint32_t {
-        let mut node: *mut mpack_node_t = (&raw mut (*parser).items as *mut mpack_node_t)
-            .offset(i as isize);
+        let mut node: *mut mpack_node_t =
+            (&raw mut (*parser).items as *mut mpack_node_t).offset(i as isize);
         match (*node).tok.type_0 as ::core::ffi::c_uint {
             9 | 10 | 11 | 8 => {
-                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node)
-                    .data as *mut mpack_data_t)
+                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node).data
+                    as *mut mpack_data_t)
                     .offset(1 as ::core::ffi::c_int as isize))
-                    .p;
+                .p;
                 xfree(*ptr_);
                 *ptr_ = NULL;
                 *ptr_;
@@ -2353,14 +2277,13 @@ unsafe extern "C" fn typval_parse_exit(
     mut node: *mut mpack_node_t,
 ) {
     let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-    let mut result: *mut typval_T = (*node).data[0 as ::core::ffi::c_int as usize].p
-        as *mut typval_T;
+    let mut result: *mut typval_T =
+        (*node).data[0 as ::core::ffi::c_int as usize].p as *mut typval_T;
     's_308: {
         match (*node).tok.type_0 as ::core::ffi::c_uint {
             9 | 10 => {
                 *result = decode_string(
-                    (*node).data[1 as ::core::ffi::c_int as usize].p
-                        as *const ::core::ffi::c_char,
+                    (*node).data[1 as ::core::ffi::c_int as usize].p as *const ::core::ffi::c_char,
                     (*node).tok.length as size_t,
                     false_0 != 0,
                     true_0 != 0,
@@ -2371,9 +2294,8 @@ unsafe extern "C" fn typval_parse_exit(
                 let list: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
                 tv_list_ref(list);
                 tv_list_append_number(list, (*node).tok.data.ext_type as varnumber_T);
-                let ext_val_list: *mut list_T = tv_list_alloc(
-                    kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-                );
+                let ext_val_list: *mut list_T =
+                    tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
                 tv_list_append_list(list, ext_val_list);
                 create_special_dict(
                     result,
@@ -2386,22 +2308,20 @@ unsafe extern "C" fn typval_parse_exit(
                 );
                 encode_list_write(
                     ext_val_list as *mut ::core::ffi::c_void,
-                    (*node).data[1 as ::core::ffi::c_int as usize].p
-                        as *const ::core::ffi::c_char,
+                    (*node).data[1 as ::core::ffi::c_int as usize].p as *const ::core::ffi::c_char,
                     (*node).tok.length as size_t,
                 );
-                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node)
-                    .data as *mut mpack_data_t)
+                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node).data
+                    as *mut mpack_data_t)
                     .offset(1 as ::core::ffi::c_int as isize))
-                    .p;
+                .p;
                 xfree(*ptr_);
                 *ptr_ = NULL;
                 *ptr_;
             }
             8 => {
-                let mut items: *mut [typval_T; 2] = (*node)
-                    .data[1 as ::core::ffi::c_int as usize]
-                    .p as *mut [typval_T; 2];
+                let mut items: *mut [typval_T; 2] =
+                    (*node).data[1 as ::core::ffi::c_int as usize].p as *mut [typval_T; 2];
                 let mut i: size_t = 0 as size_t;
                 's_251: {
                     while i < (*node).tok.length as size_t {
@@ -2415,7 +2335,8 @@ unsafe extern "C" fn typval_parse_exit(
                                 .vval
                                 .v_string
                                 .offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == NUL
+                                as ::core::ffi::c_int
+                                == NUL
                         {
                             break 's_251;
                         }
@@ -2430,14 +2351,13 @@ unsafe extern "C" fn typval_parse_exit(
                     };
                     let mut i_0: size_t = 0 as size_t;
                     while i_0 < (*node).tok.length as size_t {
-                        let mut key_0: *mut ::core::ffi::c_char = (*items
-                            .offset(i_0 as isize))[0 as ::core::ffi::c_int as usize]
+                        let mut key_0: *mut ::core::ffi::c_char = (*items.offset(i_0 as isize))
+                            [0 as ::core::ffi::c_int as usize]
                             .vval
                             .v_string;
                         let mut keylen: size_t = strlen(key_0);
-                        let di: *mut dictitem_T = xmallocz(
-                            (17 as size_t).wrapping_add(keylen),
-                        ) as *mut dictitem_T;
+                        let di: *mut dictitem_T =
+                            xmallocz((17 as size_t).wrapping_add(keylen)) as *mut dictitem_T;
                         memcpy(
                             (&raw mut (*di).di_key as *mut ::core::ffi::c_char)
                                 .offset(0 as ::core::ffi::c_int as isize)
@@ -2468,34 +2388,31 @@ unsafe extern "C" fn typval_parse_exit(
                             xfree(di as *mut ::core::ffi::c_void);
                             break 's_251;
                         } else {
-                            (*di).di_tv = (*items
-                                .offset(i_0 as isize))[1 as ::core::ffi::c_int as usize];
+                            (*di).di_tv =
+                                (*items.offset(i_0 as isize))[1 as ::core::ffi::c_int as usize];
                             i_0 = i_0.wrapping_add(1);
                         }
                     }
                     let mut i_1: size_t = 0 as size_t;
                     while i_1 < (*node).tok.length as size_t {
                         xfree(
-                            (*items
-                                .offset(i_1 as isize))[0 as ::core::ffi::c_int as usize]
+                            (*items.offset(i_1 as isize))[0 as ::core::ffi::c_int as usize]
                                 .vval
                                 .v_string as *mut ::core::ffi::c_void,
                         );
                         i_1 = i_1.wrapping_add(1);
                     }
-                    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node)
-                        .data as *mut mpack_data_t)
-                        .offset(1 as ::core::ffi::c_int as isize))
+                    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                        &raw mut (*(&raw mut (*node).data as *mut mpack_data_t)
+                            .offset(1 as ::core::ffi::c_int as isize))
                         .p;
                     xfree(*ptr__0);
                     *ptr__0 = NULL;
                     *ptr__0;
                     break 's_308;
                 }
-                let list_0: *mut list_T = decode_create_map_special_dict(
-                    result,
-                    (*node).tok.length as ptrdiff_t,
-                );
+                let list_0: *mut list_T =
+                    decode_create_map_special_dict(result, (*node).tok.length as ptrdiff_t);
                 let mut i_2: size_t = 0 as size_t;
                 while i_2 < (*node).tok.length as size_t {
                     let kv_pair: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
@@ -2510,10 +2427,10 @@ unsafe extern "C" fn typval_parse_exit(
                     );
                     i_2 = i_2.wrapping_add(1);
                 }
-                let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node)
-                    .data as *mut mpack_data_t)
+                let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut (*(&raw mut (*node).data
+                    as *mut mpack_data_t)
                     .offset(1 as ::core::ffi::c_int as isize))
-                    .p;
+                .p;
                 xfree(*ptr__1);
                 *ptr__1 = NULL;
                 *ptr__1;
@@ -2537,8 +2454,7 @@ pub unsafe extern "C" fn mpack_parse_typval(
                 as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
         ),
         Some(
-            typval_parse_exit
-                as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
+            typval_parse_exit as unsafe extern "C" fn(*mut mpack_parser_t, *mut mpack_node_t) -> (),
         ),
     );
 }

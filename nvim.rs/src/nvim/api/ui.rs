@@ -55,12 +55,7 @@ extern "C" {
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn arena_array(arena: *mut Arena, max_size: size_t) -> Array;
     fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict;
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn api_typename(t: ObjectType) -> *mut ::core::ffi::c_char;
     static mut ui_ext_names: [*const ::core::ffi::c_char; 0];
     fn may_trigger_vim_suspend_resume(suspend: bool);
@@ -98,10 +93,7 @@ extern "C" {
     fn utf_ambiguous_width(p: *const ::core::ffi::c_char) -> bool;
     fn rpc_write_raw(id: uint64_t, buffer: *mut WBuffer) -> bool;
     fn mpack_object_array(arr: Array, packer: *mut PackerBuffer);
-    fn set_tty_option(
-        name: *const ::core::ffi::c_char,
-        value: *mut ::core::ffi::c_char,
-    ) -> bool;
+    fn set_tty_option(name: *const ::core::ffi::c_char, value: *mut ::core::ffi::c_char) -> bool;
     fn ui_call_ui_send(content: String_0);
     fn ui_active() -> size_t;
     fn ui_refresh();
@@ -677,9 +669,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -706,9 +697,7 @@ pub struct C2Rust_Unnamed_3 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_4 {
@@ -804,12 +793,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -862,12 +849,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -894,9 +879,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -907,9 +891,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -934,15 +917,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_11 {
@@ -1080,9 +1058,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1325,16 +1302,10 @@ pub struct wbuffer {
     pub data: *mut ::core::ffi::c_char,
     pub cb: wbuffer_data_finalizer,
 }
-pub type wbuffer_data_finalizer = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void) -> (),
->;
+pub type wbuffer_data_finalizer = Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()>;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const ARENA_EMPTY: Arena = Arena {
     cur_blk: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -1362,10 +1333,7 @@ pub const MAP_INIT: Map_uint64_t_ptr_t = Map_uint64_t_ptr_t {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_has_uint64_t(
-    mut set: *mut Set_uint64_t,
-    mut key: uint64_t,
-) -> bool {
+unsafe extern "C" fn set_has_uint64_t(mut set: *mut Set_uint64_t, mut key: uint64_t) -> bool {
     return mh_get_uint64_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 #[inline]
@@ -1397,12 +1365,9 @@ unsafe extern "C" fn map_get_uint64_t_ptr_t(
 pub const UI_BUF_SIZE: ::core::ffi::c_int = ARENA_BLOCK_SIZE;
 pub const EVENT_BUF_SIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 static mut connected_uis: Map_uint64_t_ptr_t = MAP_INIT;
-unsafe extern "C" fn get_ui_or_err(
-    mut chan_id: uint64_t,
-    mut err: *mut Error,
-) -> *mut RemoteUI {
-    let mut ui: *mut RemoteUI = map_get_uint64_t_ptr_t(&raw mut connected_uis, chan_id)
-        as *mut RemoteUI;
+unsafe extern "C" fn get_ui_or_err(mut chan_id: uint64_t, mut err: *mut Error) -> *mut RemoteUI {
+    let mut ui: *mut RemoteUI =
+        map_get_uint64_t_ptr_t(&raw mut connected_uis, chan_id) as *mut RemoteUI;
     if ui.is_null() && !err.is_null() {
         api_set_error(
             err,
@@ -1429,7 +1394,8 @@ unsafe extern "C" fn mpack_str_small(
     mut len: size_t,
 ) {
     '_c2rust_label: {
-        if len < 0x20 as size_t {} else {
+        if len < 0x20 as size_t {
+        } else {
             __assert_fail(
                 b"len < 0x20\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/api/ui.c\0".as_ptr()
@@ -1443,13 +1409,17 @@ unsafe extern "C" fn mpack_str_small(
     let c2rust_fresh3 = *buf;
     *buf = (*buf).offset(1);
     *c2rust_fresh3 = (0xa0 as size_t | len) as ::core::ffi::c_char;
-    memcpy(*buf as *mut ::core::ffi::c_void, str as *const ::core::ffi::c_void, len);
+    memcpy(
+        *buf as *mut ::core::ffi::c_void,
+        str as *const ::core::ffi::c_void,
+        len,
+    );
     *buf = (*buf).offset(len as isize);
 }
 unsafe extern "C" fn remote_ui_destroy(mut ui: *mut RemoteUI) {
     xfree((*ui).packer.startptr as *mut ::core::ffi::c_void);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*ui).term_name
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*ui).term_name as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -1485,7 +1455,11 @@ pub unsafe extern "C" fn remote_ui_disconnect(
                 integer: 0 as Integer,
             },
         };
-        push_call(ui, b"error_exit\0".as_ptr() as *const ::core::ffi::c_char, args);
+        push_call(
+            ui,
+            b"error_exit\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
         ui_flush_buf(ui, false_0 != 0);
     }
     map_del_uint64_t_ptr_t(
@@ -1521,8 +1495,7 @@ pub unsafe extern "C" fn remote_ui_wait_for_attach() {
             continue;
         }
         let mut now: uint64_t = os_hrtime();
-        remaining
-            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
+        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
         before = now;
         if remaining <= 0 as int64_t {
             break;
@@ -1541,8 +1514,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
         api_set_error(
             err,
             kErrorTypeException,
-            b"UI already attached to channel: %ld\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"UI already attached to channel: %ld\0".as_ptr() as *const ::core::ffi::c_char,
             channel_id,
         );
         return;
@@ -1563,8 +1535,8 @@ pub unsafe extern "C" fn nvim_ui_attach(
         );
         return;
     }
-    let mut ui: *mut RemoteUI = xcalloc(1 as size_t, ::core::mem::size_of::<RemoteUI>())
-        as *mut RemoteUI;
+    let mut ui: *mut RemoteUI =
+        xcalloc(1 as size_t, ::core::mem::size_of::<RemoteUI>()) as *mut RemoteUI;
     (*ui).channel_id = channel_id;
     (*ui).width = width as ::core::ffi::c_int;
     (*ui).height = height as ::core::ffi::c_int;
@@ -1592,8 +1564,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
         i = i.wrapping_add(1);
     }
     if (*ui).ui_ext[kUIHlState as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-        || (*ui).ui_ext[kUIMultigrid as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int != 0
+        || (*ui).ui_ext[kUIMultigrid as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
     {
         (*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] = true_0 != 0;
     }
@@ -1617,9 +1588,7 @@ pub unsafe extern "C" fn nvim_ui_attach(
         endptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         anydata: ui as *mut ::core::ffi::c_void,
         anyint: 0,
-        packer_flush: Some(
-            ui_flush_callback as unsafe extern "C" fn(*mut PackerBuffer) -> (),
-        ),
+        packer_flush: Some(ui_flush_callback as unsafe extern "C" fn(*mut PackerBuffer) -> ()),
     };
     (*ui).wildmenu_active = false_0 != 0;
     map_put_uint64_t_ptr_t(&raw mut connected_uis, channel_id, ui as ptr_t);
@@ -1717,7 +1686,11 @@ pub unsafe extern "C" fn remote_ui_connect(
             string: cstr_as_string(server_addr),
         },
     };
-    push_call(ui, b"connect\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"connect\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_stop(mut ui: *mut RemoteUI) {}
@@ -1764,7 +1737,10 @@ unsafe extern "C" fn ui_set_option(
     mut value: Object,
     mut err: *mut Error,
 ) {
-    if strequal(name.data, b"override\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(
+        name.data,
+        b"override\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         if kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -1797,7 +1773,10 @@ unsafe extern "C" fn ui_set_option(
         }
         return;
     }
-    if strequal(name.data, b"term_name\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(
+        name.data,
+        b"term_name\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -1816,7 +1795,10 @@ unsafe extern "C" fn ui_set_option(
         (*ui).term_name = string_to_cstr(value.data.string);
         return;
     }
-    if strequal(name.data, b"term_colors\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(
+        name.data,
+        b"term_colors\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         if kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -1832,7 +1814,10 @@ unsafe extern "C" fn ui_set_option(
         (*ui).term_colors = value.data.integer as ::core::ffi::c_int;
         return;
     }
-    if strequal(name.data, b"stdin_fd\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(
+        name.data,
+        b"stdin_fd\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         if kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -1867,7 +1852,10 @@ unsafe extern "C" fn ui_set_option(
         stdin_fd = value.data.integer as ::core::ffi::c_int;
         return;
     }
-    if strequal(name.data, b"stdin_tty\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(
+        name.data,
+        b"stdin_tty\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         if kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -1885,7 +1873,10 @@ unsafe extern "C" fn ui_set_option(
         (*ui).stdin_tty = value.data.boolean as bool;
         return;
     }
-    if strequal(name.data, b"stdout_tty\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(
+        name.data,
+        b"stdout_tty\0".as_ptr() as *const ::core::ffi::c_char,
+    ) {
         if kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
             != value.type_0 as ::core::ffi::c_uint
         {
@@ -1908,16 +1899,13 @@ unsafe extern "C" fn ui_set_option(
         b"popupmenu_external\0".as_ptr() as *const ::core::ffi::c_char,
     );
     let mut i: UIExtension = kUICmdline;
-    while (i as ::core::ffi::c_uint)
-        < kUIExtCount as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    while (i as ::core::ffi::c_uint) < kUIExtCount as ::core::ffi::c_int as ::core::ffi::c_uint {
         if strequal(
             name.data,
-            *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char)
-                .offset(i as isize),
-        ) as ::core::ffi::c_int != 0
-            || i as ::core::ffi::c_uint
-                == kUIPopupmenu as ::core::ffi::c_int as ::core::ffi::c_uint
+            *(&raw mut ui_ext_names as *mut *const ::core::ffi::c_char).offset(i as isize),
+        ) as ::core::ffi::c_int
+            != 0
+            || i as ::core::ffi::c_uint == kUIPopupmenu as ::core::ffi::c_int as ::core::ffi::c_uint
                 && is_popupmenu as ::core::ffi::c_int != 0
         {
             if !(value.type_0 as ::core::ffi::c_uint
@@ -1935,8 +1923,7 @@ unsafe extern "C" fn ui_set_option(
             if !init
                 && i as ::core::ffi::c_uint
                     == kUILinegrid as ::core::ffi::c_int as ::core::ffi::c_uint
-                && boolval as ::core::ffi::c_int
-                    != (*ui).ui_ext[i as usize] as ::core::ffi::c_int
+                && boolval as ::core::ffi::c_int != (*ui).ui_ext[i as usize] as ::core::ffi::c_int
             {
                 api_set_error(
                     err,
@@ -2008,8 +1995,7 @@ pub unsafe extern "C" fn nvim_ui_pum_set_height(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"UI must support the ext_popupmenu option\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"UI must support the ext_popupmenu option\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2032,8 +2018,7 @@ pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
         api_set_error(
             err,
             kErrorTypeValidation,
-            b"UI must support the ext_popupmenu option\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"UI must support the ext_popupmenu option\0".as_ptr() as *const ::core::ffi::c_char,
         );
         return;
     }
@@ -2060,7 +2045,10 @@ pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
 }
 unsafe extern "C" fn flush_event(mut ui: *mut RemoteUI) {
     if !(*ui).cur_event.is_null() {
-        mpack_w2(&raw mut (*ui).ncalls_pos, (1 as uint32_t).wrapping_add((*ui).ncalls));
+        mpack_w2(
+            &raw mut (*ui).ncalls_pos,
+            (1 as uint32_t).wrapping_add((*ui).ncalls),
+        );
         (*ui).cur_event = ::core::ptr::null::<::core::ffi::c_char>();
         (*ui).ncalls_pos = ::core::ptr::null_mut::<::core::ffi::c_char>();
         (*ui).ncalls = 0 as uint32_t;
@@ -2071,10 +2059,7 @@ unsafe extern "C" fn ui_alloc_buf(mut ui: *mut RemoteUI) {
     (*ui).packer.ptr = (*ui).packer.startptr;
     (*ui).packer.endptr = (*ui).packer.startptr.offset(UI_BUF_SIZE as isize);
 }
-unsafe extern "C" fn prepare_call(
-    mut ui: *mut RemoteUI,
-    mut name: *const ::core::ffi::c_char,
-) {
+unsafe extern "C" fn prepare_call(mut ui: *mut RemoteUI, mut name: *const ::core::ffi::c_char) {
     if !(*ui).packer.startptr.is_null()
         && ((*ui).packer.ptr.offset_from((*ui).packer.startptr) as size_t
             > (UI_BUF_SIZE - EVENT_BUF_SIZE) as size_t
@@ -2093,17 +2078,16 @@ unsafe extern "C" fn prepare_call(
             mpack_str_small(
                 buf,
                 b"redraw\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
             );
             (*ui).nevents_pos = mpack_array_dyn16(buf);
             '_c2rust_label: {
-                if (*ui).cur_event.is_null() {} else {
+                if (*ui).cur_event.is_null() {
+                } else {
                     __assert_fail(
-                        b"ui->cur_event == NULL\0".as_ptr()
+                        b"ui->cur_event == NULL\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/ui.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/api/ui.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         549 as ::core::ffi::c_uint,
                         b"void prepare_call(RemoteUI *, const char *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2155,13 +2139,12 @@ pub unsafe extern "C" fn remote_ui_grid_clear(mut ui: *mut RemoteUI, mut grid: I
             data: C2Rust_Unnamed { integer: grid },
         };
     }
-    let mut name: *const ::core::ffi::c_char = if (*ui)
-        .ui_ext[kUILinegrid as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-    {
-        b"grid_clear\0".as_ptr() as *const ::core::ffi::c_char
-    } else {
-        b"clear\0".as_ptr() as *const ::core::ffi::c_char
-    };
+    let mut name: *const ::core::ffi::c_char =
+        if (*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0 {
+            b"grid_clear\0".as_ptr() as *const ::core::ffi::c_char
+        } else {
+            b"clear\0".as_ptr() as *const ::core::ffi::c_char
+        };
     push_call(ui, name, args);
 }
 #[no_mangle]
@@ -2204,13 +2187,12 @@ pub unsafe extern "C" fn remote_ui_grid_resize(
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed { integer: height },
     };
-    let mut name: *const ::core::ffi::c_char = if (*ui)
-        .ui_ext[kUILinegrid as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0
-    {
-        b"grid_resize\0".as_ptr() as *const ::core::ffi::c_char
-    } else {
-        b"resize\0".as_ptr() as *const ::core::ffi::c_char
-    };
+    let mut name: *const ::core::ffi::c_char =
+        if (*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0 {
+            b"grid_resize\0".as_ptr() as *const ::core::ffi::c_char
+        } else {
+            b"resize\0".as_ptr() as *const ::core::ffi::c_char
+        };
     push_call(ui, name, args);
 }
 #[no_mangle]
@@ -2278,7 +2260,11 @@ pub unsafe extern "C" fn remote_ui_grid_scroll(
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed { integer: cols },
         };
-        push_call(ui, b"grid_scroll\0".as_ptr() as *const ::core::ffi::c_char, args);
+        push_call(
+            ui,
+            b"grid_scroll\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
     } else {
         let mut args_0: Array = Array {
             size: 0 as size_t,
@@ -2331,7 +2317,11 @@ pub unsafe extern "C" fn remote_ui_grid_scroll(
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed { integer: rows },
         };
-        push_call(ui, b"scroll\0".as_ptr() as *const ::core::ffi::c_char, args_0);
+        push_call(
+            ui,
+            b"scroll\0".as_ptr() as *const ::core::ffi::c_char,
+            args_0,
+        );
         args_0.size = 0 as size_t;
         let c2rust_fresh35 = args_0.size;
         args_0.size = args_0.size.wrapping_add(1);
@@ -2401,7 +2391,11 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
                 0xffffff as ::core::ffi::c_int
             }) as Integer
         };
-        rgb_sp = if rgb_sp != -1 as Integer { rgb_sp } else { 0xff0000 as Integer };
+        rgb_sp = if rgb_sp != -1 as Integer {
+            rgb_sp
+        } else {
+            0xff0000 as Integer
+        };
     }
     let mut args: Array = Array {
         size: 0 as size_t,
@@ -2436,19 +2430,19 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh42 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: cterm_fg,
-        },
+        data: C2Rust_Unnamed { integer: cterm_fg },
     };
     let c2rust_fresh43 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh43 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: cterm_bg,
-        },
+        data: C2Rust_Unnamed { integer: cterm_bg },
     };
-    push_call(ui, b"default_colors_set\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"default_colors_set\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
     if !(*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] {
         args.size = 0 as size_t;
         let c2rust_fresh44 = args.size;
@@ -2463,7 +2457,11 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
                 },
             },
         };
-        push_call(ui, b"update_fg\0".as_ptr() as *const ::core::ffi::c_char, args);
+        push_call(
+            ui,
+            b"update_fg\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
         args.size = 0 as size_t;
         let c2rust_fresh45 = args.size;
         args.size = args.size.wrapping_add(1);
@@ -2477,7 +2475,11 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
                 },
             },
         };
-        push_call(ui, b"update_bg\0".as_ptr() as *const ::core::ffi::c_char, args);
+        push_call(
+            ui,
+            b"update_bg\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
         args.size = 0 as size_t;
         let c2rust_fresh46 = args.size;
         args.size = args.size.wrapping_add(1);
@@ -2491,7 +2493,11 @@ pub unsafe extern "C" fn remote_ui_default_colors_set(
                 },
             },
         };
-        push_call(ui, b"update_sp\0".as_ptr() as *const ::core::ffi::c_char, args);
+        push_call(
+            ui,
+            b"update_sp\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
     }
 }
 #[no_mangle]
@@ -2617,7 +2623,11 @@ pub unsafe extern "C" fn remote_ui_hl_attr_define(
             },
         };
     }
-    push_call(ui, b"hl_attr_define\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"hl_attr_define\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_highlight_set(
@@ -2669,7 +2679,11 @@ pub unsafe extern "C" fn remote_ui_highlight_set(
         type_0: kObjectTypeDict,
         data: C2Rust_Unnamed { dict: dict },
     };
-    push_call(ui, b"highlight_set\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"highlight_set\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_grid_cursor_goto(
@@ -2753,7 +2767,11 @@ pub unsafe extern "C" fn remote_ui_cursor_goto(
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed { integer: col },
     };
-    push_call(ui, b"cursor_goto\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"cursor_goto\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_put(
@@ -2812,26 +2830,23 @@ pub unsafe extern "C" fn remote_ui_raw_line(
         while i < ncells {
             repeat = repeat.wrapping_add(1);
             if i == ncells.wrapping_sub(1 as size_t)
-                || *attrs.offset(i as isize)
-                    != *attrs.offset(i.wrapping_add(1 as size_t) as isize)
-                || *chunk.offset(i as isize)
-                    != *chunk.offset(i.wrapping_add(1 as size_t) as isize)
+                || *attrs.offset(i as isize) != *attrs.offset(i.wrapping_add(1 as size_t) as isize)
+                || *chunk.offset(i as isize) != *chunk.offset(i.wrapping_add(1 as size_t) as isize)
             {
                 if (UI_BUF_SIZE as size_t)
-                    .wrapping_sub(
-                        (*ui).packer.ptr.offset_from((*ui).packer.startptr) as size_t,
-                    )
+                    .wrapping_sub((*ui).packer.ptr.offset_from((*ui).packer.startptr) as size_t)
                     < (2 as ::core::ffi::c_int
-                        * (1 as ::core::ffi::c_int + 2 as ::core::ffi::c_int
-                            + MAX_SCHAR_SIZE + 5 as ::core::ffi::c_int
-                            + 5 as ::core::ffi::c_int) + 1 as ::core::ffi::c_int)
-                        as size_t || (*ui).ncells_pending >= 500 as size_t
+                        * (1 as ::core::ffi::c_int
+                            + 2 as ::core::ffi::c_int
+                            + MAX_SCHAR_SIZE
+                            + 5 as ::core::ffi::c_int
+                            + 5 as ::core::ffi::c_int)
+                        + 1 as ::core::ffi::c_int) as size_t
+                    || (*ui).ncells_pending >= 500 as size_t
                 {
                     if was_space {
                         nelem = nelem.wrapping_add(1);
-                        (*ui).ncells_pending = (*ui)
-                            .ncells_pending
-                            .wrapping_add(1 as size_t);
+                        (*ui).ncells_pending = (*ui).ncells_pending.wrapping_add(1 as size_t);
                         mpack_array(buf, 3 as uint32_t);
                         mpack_str_small(
                             buf,
@@ -2845,10 +2860,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
                     mpack_w2(&raw mut lenpos, nelem);
                     mpack_bool(buf, false_0 != 0);
                     ui_flush_buf(ui, false_0 != 0);
-                    prepare_call(
-                        ui,
-                        b"grid_line\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    prepare_call(ui, b"grid_line\0".as_ptr() as *const ::core::ffi::c_char);
                     mpack_array(buf, 5 as uint32_t);
                     mpack_uint(buf, grid as uint32_t);
                     mpack_uint(buf, row as uint32_t);
@@ -2883,16 +2895,16 @@ pub unsafe extern "C" fn remote_ui_raw_line(
                         mpack_uint(buf, repeat);
                     }
                 }
-                (*ui).ncells_pending = (*ui)
-                    .ncells_pending
-                    .wrapping_add(
-                        (if repeat < 2 as uint32_t { repeat } else { 2 as uint32_t })
-                            as size_t,
-                    );
+                (*ui).ncells_pending = (*ui).ncells_pending.wrapping_add(
+                    (if repeat < 2 as uint32_t {
+                        repeat
+                    } else {
+                        2 as uint32_t
+                    }) as size_t,
+                );
                 last_hl = *attrs.offset(i as isize) as ::core::ffi::c_int;
                 repeat = 0 as uint32_t;
-                was_space = *chunk.offset(i as isize)
-                    == ' ' as ::core::ffi::c_int as schar_T;
+                was_space = *chunk.offset(i as isize) == ' ' as ::core::ffi::c_int as schar_T;
             }
             i = i.wrapping_add(1);
         }
@@ -2903,8 +2915,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
             mpack_str_small(
                 buf,
                 b" \0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
             );
             mpack_uint(buf, clearattr as uint32_t);
             mpack_uint(buf, (clearcol - endcol) as uint32_t);
@@ -2918,10 +2929,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (i_0 as Integer) < endcol - startcol {
             remote_ui_cursor_goto(ui, row, startcol + i_0 as Integer);
-            remote_ui_highlight_set(
-                ui,
-                *attrs.offset(i_0 as isize) as ::core::ffi::c_int,
-            );
+            remote_ui_highlight_set(ui, *attrs.offset(i_0 as isize) as ::core::ffi::c_int);
             let mut sc_buf: [::core::ffi::c_char; 32] = [0; 32];
             schar_get(
                 &raw mut sc_buf as *mut ::core::ffi::c_char,
@@ -3002,10 +3010,7 @@ pub unsafe extern "C" fn remote_ui_flush(mut ui: *mut RemoteUI) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn remote_ui_ui_send(
-    mut ui: *mut RemoteUI,
-    mut content: String_0,
-) {
+pub unsafe extern "C" fn remote_ui_ui_send(mut ui: *mut RemoteUI, mut content: String_0) {
     if !(*ui).stdout_tty {
         return;
     }
@@ -3026,7 +3031,11 @@ pub unsafe extern "C" fn remote_ui_ui_send(
         type_0: kObjectTypeString,
         data: C2Rust_Unnamed { string: content },
     };
-    push_call(ui, b"ui_send\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"ui_send\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_flush_pending_data(mut ui: *mut RemoteUI) {
@@ -3042,16 +3051,12 @@ unsafe extern "C" fn translate_contents(
     while i < contents.size {
         let mut item: Array = (*contents.items.offset(i as isize)).data.array;
         let mut new_item: Array = arena_array(arena, 2 as size_t);
-        let mut attr: ::core::ffi::c_int = (*item
-            .items
-            .offset(0 as ::core::ffi::c_int as isize))
+        let mut attr: ::core::ffi::c_int = (*item.items.offset(0 as ::core::ffi::c_int as isize))
             .data
             .integer as ::core::ffi::c_int;
         if attr != 0 {
-            let mut rgb_attrs: Dict = arena_dict(
-                arena,
-                HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t,
-            );
+            let mut rgb_attrs: Dict =
+                arena_dict(arena, HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t);
             hlattrs2dict(
                 &raw mut rgb_attrs,
                 ::core::ptr::null_mut::<Dict>(),
@@ -3081,9 +3086,8 @@ unsafe extern "C" fn translate_contents(
         }
         let c2rust_fresh72 = new_item.size;
         new_item.size = new_item.size.wrapping_add(1);
-        *new_item.items.offset(c2rust_fresh72 as isize) = *item
-            .items
-            .offset(1 as ::core::ffi::c_int as isize);
+        *new_item.items.offset(c2rust_fresh72 as isize) =
+            *item.items.offset(1 as ::core::ffi::c_int as isize);
         let c2rust_fresh73 = new_contents.size;
         new_contents.size = new_contents.size.wrapping_add(1);
         *new_contents.items.offset(c2rust_fresh73 as isize) = object {
@@ -3129,7 +3133,10 @@ pub unsafe extern "C" fn remote_ui_event(
     let mut arena: Arena = ARENA_EMPTY;
     '_free_ret: {
         if !(*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] {
-            if strequal(name, b"cmdline_show\0".as_ptr() as *const ::core::ffi::c_char) {
+            if strequal(
+                name,
+                b"cmdline_show\0".as_ptr() as *const ::core::ffi::c_char,
+            ) {
                 let mut new_args: Array = translate_firstarg(ui, args, &raw mut arena);
                 push_call(ui, name, new_args);
                 break '_free_ret;
@@ -3137,9 +3144,7 @@ pub unsafe extern "C" fn remote_ui_event(
                 name,
                 b"cmdline_block_show\0".as_ptr() as *const ::core::ffi::c_char,
             ) {
-                let mut block: Array = (*args
-                    .items
-                    .offset(0 as ::core::ffi::c_int as isize))
+                let mut block: Array = (*args.items.offset(0 as ::core::ffi::c_int as isize))
                     .data
                     .array;
                 let mut new_block: Array = arena_array(&raw mut arena, block.size);
@@ -3192,16 +3197,13 @@ pub unsafe extern "C" fn remote_ui_event(
                 name,
                 b"popupmenu_show\0".as_ptr() as *const ::core::ffi::c_char,
             ) {
-                (*ui).wildmenu_active = (*args
-                    .items
-                    .offset(4 as ::core::ffi::c_int as isize))
+                (*ui).wildmenu_active = (*args.items.offset(4 as ::core::ffi::c_int as isize))
                     .data
-                    .integer == -1 as Integer
+                    .integer
+                    == -1 as Integer
                     || !(*ui).ui_ext[kUIPopupmenu as ::core::ffi::c_int as usize];
                 if (*ui).wildmenu_active {
-                    let mut items: Array = (*args
-                        .items
-                        .offset(0 as ::core::ffi::c_int as isize))
+                    let mut items: Array = (*args.items.offset(0 as ::core::ffi::c_int as isize))
                         .data
                         .array;
                     let mut new_items: Array = arena_array(&raw mut arena, items.size);
@@ -3209,13 +3211,12 @@ pub unsafe extern "C" fn remote_ui_event(
                     while i_0 < items.size {
                         let c2rust_fresh65 = new_items.size;
                         new_items.size = new_items.size.wrapping_add(1);
-                        *new_items.items.offset(c2rust_fresh65 as isize) = *(*items
-                            .items
-                            .offset(i_0 as isize))
-                            .data
-                            .array
-                            .items
-                            .offset(0 as ::core::ffi::c_int as isize);
+                        *new_items.items.offset(c2rust_fresh65 as isize) =
+                            *(*items.items.offset(i_0 as isize))
+                                .data
+                                .array
+                                .items
+                                .offset(0 as ::core::ffi::c_int as isize);
                         i_0 = i_0.wrapping_add(1);
                     }
                     let mut new_args_2: Array = Array {
@@ -3242,14 +3243,14 @@ pub unsafe extern "C" fn remote_ui_event(
                     );
                     if (*args.items.offset(1 as ::core::ffi::c_int as isize))
                         .data
-                        .integer != -1 as Integer
+                        .integer
+                        != -1 as Integer
                     {
                         new_args_2.size = 0 as size_t;
                         let c2rust_fresh67 = new_args_2.size;
                         new_args_2.size = new_args_2.size.wrapping_add(1);
-                        *new_args_2.items.offset(c2rust_fresh67 as isize) = *args
-                            .items
-                            .offset(1 as ::core::ffi::c_int as isize);
+                        *new_args_2.items.offset(c2rust_fresh67 as isize) =
+                            *args.items.offset(1 as ::core::ffi::c_int as isize);
                         push_call(
                             ui,
                             b"wildmenu_select\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3320,27 +3321,51 @@ pub unsafe extern "C" fn remote_ui_mode_info_set(
             array: cursor_styles,
         },
     };
-    push_call(ui, b"mode_info_set\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"mode_info_set\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_update_menu(mut ui: *mut RemoteUI) {
-    push_call(ui, b"update_menu\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"update_menu\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_busy_start(mut ui: *mut RemoteUI) {
-    push_call(ui, b"busy_start\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"busy_start\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_busy_stop(mut ui: *mut RemoteUI) {
-    push_call(ui, b"busy_stop\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"busy_stop\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_mouse_on(mut ui: *mut RemoteUI) {
-    push_call(ui, b"mouse_on\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"mouse_on\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_mouse_off(mut ui: *mut RemoteUI) {
-    push_call(ui, b"mouse_off\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"mouse_off\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_mode_change(
@@ -3369,11 +3394,13 @@ pub unsafe extern "C" fn remote_ui_mode_change(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh77 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: mode_idx,
-        },
+        data: C2Rust_Unnamed { integer: mode_idx },
     };
-    push_call(ui, b"mode_change\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"mode_change\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_bell(mut ui: *mut RemoteUI) {
@@ -3381,17 +3408,22 @@ pub unsafe extern "C" fn remote_ui_bell(mut ui: *mut RemoteUI) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_visual_bell(mut ui: *mut RemoteUI) {
-    push_call(ui, b"visual_bell\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"visual_bell\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_suspend(mut ui: *mut RemoteUI) {
-    push_call(ui, b"suspend\0".as_ptr() as *const ::core::ffi::c_char, noargs);
+    push_call(
+        ui,
+        b"suspend\0".as_ptr() as *const ::core::ffi::c_char,
+        noargs,
+    );
 }
 #[no_mangle]
-pub unsafe extern "C" fn remote_ui_set_title(
-    mut ui: *mut RemoteUI,
-    mut title: String_0,
-) {
+pub unsafe extern "C" fn remote_ui_set_title(mut ui: *mut RemoteUI, mut title: String_0) {
     let mut args: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -3409,7 +3441,11 @@ pub unsafe extern "C" fn remote_ui_set_title(
         type_0: kObjectTypeString,
         data: C2Rust_Unnamed { string: title },
     };
-    push_call(ui, b"set_title\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"set_title\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_set_icon(mut ui: *mut RemoteUI, mut icon: String_0) {
@@ -3430,13 +3466,14 @@ pub unsafe extern "C" fn remote_ui_set_icon(mut ui: *mut RemoteUI, mut icon: Str
         type_0: kObjectTypeString,
         data: C2Rust_Unnamed { string: icon },
     };
-    push_call(ui, b"set_icon\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"set_icon\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
-pub unsafe extern "C" fn remote_ui_screenshot(
-    mut ui: *mut RemoteUI,
-    mut path: String_0,
-) {
+pub unsafe extern "C" fn remote_ui_screenshot(mut ui: *mut RemoteUI, mut path: String_0) {
     let mut args: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -3454,7 +3491,11 @@ pub unsafe extern "C" fn remote_ui_screenshot(
         type_0: kObjectTypeString,
         data: C2Rust_Unnamed { string: path },
     };
-    push_call(ui, b"screenshot\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"screenshot\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_option_set(
@@ -3482,7 +3523,11 @@ pub unsafe extern "C" fn remote_ui_option_set(
     let c2rust_fresh82 = args.size;
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh82 as isize) = value;
-    push_call(ui, b"option_set\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"option_set\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_chdir(mut ui: *mut RemoteUI, mut path: String_0) {
@@ -3534,7 +3579,11 @@ pub unsafe extern "C" fn remote_ui_hl_group_set(
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed { integer: id },
     };
-    push_call(ui, b"hl_group_set\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"hl_group_set\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_msg_set_pos(
@@ -3573,9 +3622,7 @@ pub unsafe extern "C" fn remote_ui_msg_set_pos(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh88 as isize) = object {
         type_0: kObjectTypeBoolean,
-        data: C2Rust_Unnamed {
-            boolean: scrolled,
-        },
+        data: C2Rust_Unnamed { boolean: scrolled },
     };
     let c2rust_fresh89 = args.size;
     args.size = args.size.wrapping_add(1);
@@ -3593,11 +3640,13 @@ pub unsafe extern "C" fn remote_ui_msg_set_pos(
     args.size = args.size.wrapping_add(1);
     *args.items.offset(c2rust_fresh91 as isize) = object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: compindex,
-        },
+        data: C2Rust_Unnamed { integer: compindex },
     };
-    push_call(ui, b"msg_set_pos\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"msg_set_pos\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_win_viewport(
@@ -3676,7 +3725,11 @@ pub unsafe extern "C" fn remote_ui_win_viewport(
             integer: scroll_delta,
         },
     };
-    push_call(ui, b"win_viewport\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"win_viewport\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn remote_ui_win_viewport_margins(
@@ -3744,10 +3797,7 @@ pub unsafe extern "C" fn remote_ui_win_viewport_margins(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn remote_ui_error_exit(
-    mut ui: *mut RemoteUI,
-    mut status: Integer,
-) {
+pub unsafe extern "C" fn remote_ui_error_exit(mut ui: *mut RemoteUI, mut status: Integer) {
     let mut args: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -3765,7 +3815,11 @@ pub unsafe extern "C" fn remote_ui_error_exit(
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed { integer: status },
     };
-    push_call(ui, b"error_exit\0".as_ptr() as *const ::core::ffi::c_char, args);
+    push_call(
+        ui,
+        b"error_exit\0".as_ptr() as *const ::core::ffi::c_char,
+        args,
+    );
 }
 pub const CHAN_STDIO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -3773,8 +3827,7 @@ pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh1 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh1 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh1 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh2 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh2 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
@@ -3783,25 +3836,19 @@ unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint3
 unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
     let c2rust_fresh10 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh10 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh10 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh11 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh11 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh11 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh12 = *b;
     *b = (*b).offset(1);
-    *c2rust_fresh12 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t)
-        as ::core::ffi::c_char;
+    *c2rust_fresh12 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
     let c2rust_fresh13 = *b;
     *b = (*b).offset(1);
     *c2rust_fresh13 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_uint(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut val: uint32_t,
-) {
+unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
     if val > 0xffff as uint32_t {
         let c2rust_fresh5 = *buf;
         *buf = (*buf).offset(1);
@@ -3837,10 +3884,7 @@ unsafe extern "C" fn mpack_bool(mut buf: *mut *mut ::core::ffi::c_char, mut val:
         })) as ::core::ffi::c_char;
 }
 #[inline]
-unsafe extern "C" fn mpack_array(
-    mut buf: *mut *mut ::core::ffi::c_char,
-    mut len: uint32_t,
-) {
+unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
     if len < 0x10 as uint32_t {
         let c2rust_fresh14 = *buf;
         *buf = (*buf).offset(1);

@@ -34,21 +34,14 @@ extern "C" {
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
     fn xmallocz(size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn memchrsub(
         data: *mut ::core::ffi::c_void,
         c: ::core::ffi::c_char,
         x: ::core::ffi::c_char,
         len: size_t,
     );
-    fn memcnt(
-        data: *const ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        len: size_t,
-    ) -> size_t;
+    fn memcnt(data: *const ::core::ffi::c_void, c: ::core::ffi::c_char, len: size_t) -> size_t;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
@@ -109,10 +102,7 @@ extern "C" {
         xtra: linenr_T,
         do_buf_event: bool,
     );
-    fn del_chars(
-        count: ::core::ffi::c_int,
-        fixpos: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn del_chars(count: ::core::ffi::c_int, fixpos: ::core::ffi::c_int) -> ::core::ffi::c_int;
     static mut p_ch: OptInt;
     static mut p_cpo: *mut ::core::ffi::c_char;
     static mut p_report: OptInt;
@@ -154,11 +144,7 @@ extern "C" {
         quiet: bool,
         writing: bool,
     ) -> *mut yankreg_T;
-    fn get_clipboard(
-        name: ::core::ffi::c_int,
-        target: *mut *mut yankreg_T,
-        quiet: bool,
-    ) -> bool;
+    fn get_clipboard(name: ::core::ffi::c_int, target: *mut *mut yankreg_T, quiet: bool) -> bool;
     fn set_clipboard(name: ::core::ffi::c_int, reg: *mut yankreg_T);
     fn update_screen() -> ::core::ffi::c_int;
     fn showmode() -> ::core::ffi::c_int;
@@ -185,11 +171,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_char;
     static mut msg_ext_skip_flush: bool;
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn emsg_invreg(name: ::core::ffi::c_int);
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
@@ -207,11 +189,7 @@ extern "C" {
     fn msg_puts_hl(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int, hist: bool);
     fn message_filtered(msg_0: *const ::core::ffi::c_char) -> bool;
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char);
     fn tv_dict_add_list(
         d: *mut dict_T,
@@ -272,11 +250,7 @@ extern "C" {
         lastp: *mut linenr_T,
     ) -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_set_growsize(gap: *mut garray_T, growsize: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
@@ -311,11 +285,7 @@ extern "C" {
     static mut last_cmdline: *mut ::core::ffi::c_char;
     static mut new_last_cmdline: *mut ::core::ffi::c_char;
     static mut redir_reg: ::core::ffi::c_int;
-    fn tabstop_padding(
-        col: colnr_T,
-        ts_arg: OptInt,
-        vts: *const colnr_T,
-    ) -> ::core::ffi::c_int;
+    fn tabstop_padding(col: colnr_T, ts_arg: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int;
     fn get_indent() -> ::core::ffi::c_int;
     fn set_indent(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> bool;
     fn preprocs_left() -> bool;
@@ -360,11 +330,8 @@ extern "C" {
         len: colnr_T,
         newfile: bool,
     ) -> ::core::ffi::c_int;
-    fn ml_replace(
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-        copy: bool,
-    ) -> ::core::ffi::c_int;
+    fn ml_replace(lnum: linenr_T, line: *mut ::core::ffi::c_char, copy: bool)
+        -> ::core::ffi::c_int;
     fn decl(lp: *mut pos_T) -> ::core::ffi::c_int;
     fn update_topline(wp: *mut win_T);
     fn changed_cline_bef_curs(wp: *mut win_T);
@@ -3174,12 +3141,8 @@ pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const RE_LAST: C2Rust_Unnamed_29 = 2;
 pub const RE_BOTH: C2Rust_Unnamed_29 = 2;
 pub const RE_SUBST: C2Rust_Unnamed_29 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_REGAPPEND: ::core::ffi::c_int = '>' as ::core::ffi::c_int;
@@ -3187,16 +3150,16 @@ pub const CPO_REGAPPEND: ::core::ffi::c_int = '>' as ::core::ffi::c_int;
 unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     if l.is_null() {
         '_c2rust_label: {
-            if lock as ::core::ffi::c_uint
-                == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {} else {
+            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+            } else {
                 __assert_fail(
                     b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/eval/typval.h\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -3233,10 +3196,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
         return CharInfo {
             value: first as int32_t,
             len: 1 as ::core::ffi::c_int,
-        }
+        };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize]
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;
@@ -3250,8 +3212,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
 #[inline(always)]
 unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint)
-        as ::core::ffi::c_int as ::core::ffi::c_long != 0
+    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
+        as ::core::ffi::c_long
+        != 0
     {
         return StrCharInfo {
             ptr: next as *mut ::core::ffi::c_char,
@@ -3264,9 +3227,7 @@ unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     return utfc_next_impl(cur);
 }
 #[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(
-    mut ptr: *mut ::core::ffi::c_char,
-) -> StrCharInfo {
+unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
     return StrCharInfo {
         ptr: ptr,
         chr: utf_ptr2CharInfo(ptr),
@@ -3281,14 +3242,12 @@ unsafe extern "C" fn win_charsize(
     mut csarg: *mut CharsizeArg,
 ) -> CharSize {
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
     } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
     };
 }
-static mut expr_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut expr_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 static mut execreg_lastc: ::core::ffi::c_int = NUL;
 static mut y_regs: [yankreg_T; 39] = [
     yankreg_T {
@@ -3605,11 +3564,9 @@ static mut y_regs: [yankreg_T; 39] = [
     },
 ];
 static mut y_previous: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-static mut e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines: [::core::ffi::c_char; 79] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 79],
-        [::core::ffi::c_char; 79],
-    >(
+static mut e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
+    [::core::ffi::c_char; 79] = unsafe {
+    ::core::mem::transmute::<[u8; 79], [::core::ffi::c_char; 79]>(
         *b"E883: Search pattern and expression register may not contain two or more lines\0",
     )
 };
@@ -3618,11 +3575,9 @@ pub unsafe extern "C" fn get_unname_register() -> ::core::ffi::c_int {
     return if y_previous.is_null() {
         -1 as ::core::ffi::c_int
     } else {
-        y_previous
-            .offset_from(
-                (&raw mut y_regs as *mut yankreg_T)
-                    .offset(0 as ::core::ffi::c_int as isize),
-            ) as ::core::ffi::c_int
+        y_previous.offset_from(
+            (&raw mut y_regs as *mut yankreg_T).offset(0 as ::core::ffi::c_int as isize),
+        ) as ::core::ffi::c_int
     };
 }
 #[no_mangle]
@@ -3667,11 +3622,7 @@ pub unsafe extern "C" fn get_expr_line() -> *mut ::core::ffi::c_char {
         return expr_copy;
     }
     nested += 1;
-    let mut rv: *mut ::core::ffi::c_char = eval_to_string(
-        expr_copy,
-        true_0 != 0,
-        false_0 != 0,
-    );
+    let mut rv: *mut ::core::ffi::c_char = eval_to_string(expr_copy, true_0 != 0, false_0 != 0);
     nested -= 1;
     xfree(expr_copy as *mut ::core::ffi::c_void);
     return rv;
@@ -3695,10 +3646,12 @@ pub unsafe extern "C" fn valid_yank_reg(
                 && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
             || ascii_isdigit(regname) as ::core::ffi::c_int != 0)
         || !writing
-            && !vim_strchr(b"/.%:=\0".as_ptr() as *const ::core::ffi::c_char, regname)
-                .is_null() || regname == '#' as ::core::ffi::c_int
-        || regname == '"' as ::core::ffi::c_int || regname == '-' as ::core::ffi::c_int
-        || regname == '_' as ::core::ffi::c_int || regname == '*' as ::core::ffi::c_int
+            && !vim_strchr(b"/.%:=\0".as_ptr() as *const ::core::ffi::c_char, regname).is_null()
+        || regname == '#' as ::core::ffi::c_int
+        || regname == '"' as ::core::ffi::c_int
+        || regname == '-' as ::core::ffi::c_int
+        || regname == '_' as ::core::ffi::c_int
+        || regname == '*' as ::core::ffi::c_int
         || regname == '+' as ::core::ffi::c_int
     {
         return true_0 != 0;
@@ -3737,9 +3690,8 @@ pub unsafe extern "C" fn op_reg_iter(
     {
         return ::core::ptr::null::<::core::ffi::c_void>();
     }
-    let mut iter_off: ::core::ffi::c_int = iter_reg
-        .offset_from(regs.offset(0 as ::core::ffi::c_int as isize))
-        as ::core::ffi::c_int;
+    let mut iter_off: ::core::ffi::c_int =
+        iter_reg.offset_from(regs.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
     *name = get_register_name(iter_off) as ::core::ffi::c_char;
     *reg = *iter_reg;
     *is_unnamed = iter_reg == y_previous as *const yankreg_T;
@@ -3763,7 +3715,13 @@ pub unsafe extern "C" fn op_global_reg_iter(
     reg: *mut yankreg_T,
     mut is_unnamed: *mut bool,
 ) -> *const ::core::ffi::c_void {
-    return op_reg_iter(iter, &raw mut y_regs as *mut yankreg_T, name, reg, is_unnamed);
+    return op_reg_iter(
+        iter,
+        &raw mut y_regs as *mut yankreg_T,
+        name,
+        reg,
+        is_unnamed,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_reg_amount() -> size_t {
@@ -3825,19 +3783,19 @@ pub unsafe extern "C" fn update_yankreg_width(mut reg: *mut yankreg_T) {
             i = i.wrapping_add(1);
         }
         '_c2rust_label: {
-            if maxlen <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if maxlen <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"maxlen <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     295 as ::core::ffi::c_uint,
                     b"void update_yankreg_width(yankreg_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
                 );
             }
         };
-        (*reg).y_width = (if (*reg).y_width
-            > maxlen as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+        (*reg).y_width = (if (*reg).y_width > maxlen as ::core::ffi::c_int - 1 as ::core::ffi::c_int
         {
             (*reg).y_width as ::core::ffi::c_int
         } else {
@@ -3851,11 +3809,10 @@ pub unsafe extern "C" fn get_yank_register(
     mut mode: ::core::ffi::c_int,
 ) -> *mut yankreg_T {
     let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-    if (mode == YREG_PASTE as ::core::ffi::c_int
-        || mode == YREG_PUT as ::core::ffi::c_int)
+    if (mode == YREG_PASTE as ::core::ffi::c_int || mode == YREG_PUT as ::core::ffi::c_int)
         && get_clipboard(regname, &raw mut reg, false_0 != 0) as ::core::ffi::c_int != 0
     {
-        return reg
+        return reg;
     } else if mode == YREG_PUT as ::core::ffi::c_int
         && (regname == '*' as ::core::ffi::c_int || regname == '+' as ::core::ffi::c_int)
     {
@@ -3869,11 +3826,13 @@ pub unsafe extern "C" fn get_yank_register(
         };
         return &raw mut empty_reg;
     } else if mode != YREG_YANK as ::core::ffi::c_int
-        && (regname == 0 as ::core::ffi::c_int || regname == '"' as ::core::ffi::c_int
+        && (regname == 0 as ::core::ffi::c_int
+            || regname == '"' as ::core::ffi::c_int
             || regname == '*' as ::core::ffi::c_int
-            || regname == '+' as ::core::ffi::c_int) && !y_previous.is_null()
+            || regname == '+' as ::core::ffi::c_int)
+        && !y_previous.is_null()
     {
-        return y_previous
+        return y_previous;
     }
     let mut i: ::core::ffi::c_int = op_reg_index(regname);
     if i == -1 as ::core::ffi::c_int {
@@ -3902,18 +3861,14 @@ pub unsafe extern "C" fn yank_register_mline(
 }
 #[no_mangle]
 pub unsafe extern "C" fn copy_register(mut name: ::core::ffi::c_int) -> *mut yankreg_T {
-    let mut reg: *mut yankreg_T = get_yank_register(
-        name,
-        YREG_PASTE as ::core::ffi::c_int,
-    );
-    let mut copy: *mut yankreg_T = xmalloc(::core::mem::size_of::<yankreg_T>())
-        as *mut yankreg_T;
+    let mut reg: *mut yankreg_T = get_yank_register(name, YREG_PASTE as ::core::ffi::c_int);
+    let mut copy: *mut yankreg_T = xmalloc(::core::mem::size_of::<yankreg_T>()) as *mut yankreg_T;
     *copy = *reg;
     if (*copy).y_size == 0 as size_t {
         (*copy).y_array = ::core::ptr::null_mut::<String_0>();
     } else {
-        (*copy).y_array = xcalloc((*copy).y_size, ::core::mem::size_of::<String_0>())
-            as *mut String_0;
+        (*copy).y_array =
+            xcalloc((*copy).y_size, ::core::mem::size_of::<String_0>()) as *mut String_0;
         let mut i: size_t = 0 as size_t;
         while i < (*copy).y_size {
             *(*copy).y_array.offset(i as isize) = copy_string(
@@ -3938,19 +3893,14 @@ unsafe extern "C" fn stuff_yank(
         return OK;
     }
     let plen: size_t = strlen(p);
-    let mut reg: *mut yankreg_T = get_yank_register(
-        regname,
-        YREG_YANK as ::core::ffi::c_int,
-    );
-    if is_append_register(regname) as ::core::ffi::c_int != 0
-        && !(*reg).y_array.is_null()
-    {
+    let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_YANK as ::core::ffi::c_int);
+    if is_append_register(regname) as ::core::ffi::c_int != 0 && !(*reg).y_array.is_null() {
         let mut pp: *mut String_0 = (*reg)
             .y_array
             .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize);
         let tmplen: size_t = (*pp).size.wrapping_add(plen);
-        let mut tmp: *mut ::core::ffi::c_char = xmalloc(tmplen.wrapping_add(1 as size_t))
-            as *mut ::core::ffi::c_char;
+        let mut tmp: *mut ::core::ffi::c_char =
+            xmalloc(tmplen.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
         memcpy(
             tmp as *mut ::core::ffi::c_void,
             (*pp).data as *const ::core::ffi::c_void,
@@ -4032,8 +3982,7 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
             tv_dict_add_str(
                 dict,
                 b"regcontents\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
                 p,
             );
         }
@@ -4060,7 +4009,10 @@ pub unsafe extern "C" fn do_record(mut c: ::core::ffi::c_int) -> ::core::ffi::c_
         if p_ch == 0 as OptInt || ui_has(kUIMessages) as ::core::ffi::c_int != 0 {
             showmode();
         } else {
-            msg(b"\0".as_ptr() as *const ::core::ffi::c_char, 0 as ::core::ffi::c_int);
+            msg(
+                b"\0".as_ptr() as *const ::core::ffi::c_char,
+                0 as ::core::ffi::c_int,
+            );
         }
         if p.is_null() {
             retval = FAIL;
@@ -4090,9 +4042,7 @@ unsafe extern "C" fn put_in_typebuf(
         );
     }
     if retval == OK {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if esc {
             p = vim_strsave_escape_ks(s);
         } else {
@@ -4138,9 +4088,7 @@ unsafe extern "C" fn put_reedit_in_typebuf(mut silent: ::core::ffi::c_int) {
         buf[1 as ::core::ffi::c_int as usize] = 'R' as uint8_t;
         buf[2 as ::core::ffi::c_int as usize] = NUL as uint8_t;
     } else {
-        buf[0 as ::core::ffi::c_int as usize] = (if restart_edit
-            == 'I' as ::core::ffi::c_int
-        {
+        buf[0 as ::core::ffi::c_int as usize] = (if restart_edit == 'I' as ::core::ffi::c_int {
             'i' as ::core::ffi::c_int
         } else {
             restart_edit
@@ -4164,7 +4112,8 @@ unsafe extern "C" fn execreg_line_continuation(
 ) -> *mut ::core::ffi::c_char {
     let mut cmd_start: size_t = *idx;
     '_c2rust_label: {
-        if cmd_start > 0 as size_t {} else {
+        if cmd_start > 0 as size_t {
+        } else {
             __assert_fail(
                 b"cmd_start > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
@@ -4193,9 +4142,7 @@ unsafe extern "C" fn execreg_line_continuation(
         if cmd_start <= 0 as size_t {
             break;
         }
-        let mut p: *mut ::core::ffi::c_char = skipwhite(
-            (*lines.offset(cmd_start as isize)).data,
-        );
+        let mut p: *mut ::core::ffi::c_char = skipwhite((*lines.offset(cmd_start as isize)).data);
         if *p as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
             && (*p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != '"' as ::core::ffi::c_int
@@ -4234,8 +4181,8 @@ unsafe extern "C" fn execreg_line_continuation(
         j = j.wrapping_add(1);
     }
     ga_append(&raw mut ga, NUL as uint8_t);
-    let mut str: *mut ::core::ffi::c_char = xmemdupz(ga.ga_data, ga.ga_len as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut str: *mut ::core::ffi::c_char =
+        xmemdupz(ga.ga_data, ga.ga_len as size_t) as *mut ::core::ffi::c_char;
     ga_clear(&raw mut ga);
     *idx = cmd_start;
     return str;
@@ -4250,17 +4197,15 @@ pub unsafe extern "C" fn do_execreg(
     let mut retval: ::core::ffi::c_int = OK;
     if regname == '@' as ::core::ffi::c_int {
         if execreg_lastc == NUL {
-            emsg(
-                gettext(
-                    b"E748: No previously used register\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E748: No previously used register\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             return FAIL;
         }
         regname = execreg_lastc;
     }
-    if regname == '%' as ::core::ffi::c_int || regname == '#' as ::core::ffi::c_int
+    if regname == '%' as ::core::ffi::c_int
+        || regname == '#' as ::core::ffi::c_int
         || !valid_yank_reg(regname, false_0 != 0)
     {
         emsg_invreg(regname);
@@ -4272,11 +4217,13 @@ pub unsafe extern "C" fn do_execreg(
     }
     if regname == ':' as ::core::ffi::c_int {
         if last_cmdline.is_null() {
-            emsg(gettext(&raw const e_nolastcmd as *const ::core::ffi::c_char));
+            emsg(gettext(
+                &raw const e_nolastcmd as *const ::core::ffi::c_char,
+            ));
             return FAIL;
         }
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut new_last_cmdline
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut new_last_cmdline as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -4288,8 +4235,11 @@ pub unsafe extern "C" fn do_execreg(
             false_0 != 0,
         );
         if VIsual_active as ::core::ffi::c_int != 0
-            && strncmp(p, b"'<,'>\0".as_ptr() as *const ::core::ffi::c_char, 5 as size_t)
-                == 0 as ::core::ffi::c_int
+            && strncmp(
+                p,
+                b"'<,'>\0".as_ptr() as *const ::core::ffi::c_char,
+                5 as size_t,
+            ) == 0 as ::core::ffi::c_int
         {
             retval = put_in_typebuf(
                 p.offset(5 as ::core::ffi::c_int as isize),
@@ -4311,16 +4261,15 @@ pub unsafe extern "C" fn do_execreg(
     } else if regname == '.' as ::core::ffi::c_int {
         let mut p_1: *mut ::core::ffi::c_char = get_last_insert_save();
         if p_1.is_null() {
-            emsg(gettext(&raw const e_noinstext as *const ::core::ffi::c_char));
+            emsg(gettext(
+                &raw const e_noinstext as *const ::core::ffi::c_char,
+            ));
             return FAIL;
         }
         retval = put_in_typebuf(p_1, false_0 != 0, colon != 0, silent);
         xfree(p_1 as *mut ::core::ffi::c_void);
     } else {
-        let mut reg: *mut yankreg_T = get_yank_register(
-            regname,
-            YREG_PASTE as ::core::ffi::c_int,
-        );
+        let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
         if (*reg).y_array.is_null() {
             return FAIL;
         }
@@ -4338,11 +4287,11 @@ pub unsafe extern "C" fn do_execreg(
                 break;
             }
             if (*reg).y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-                || i < (*reg).y_size.wrapping_sub(1 as size_t) || addcr != 0
+                || i < (*reg).y_size.wrapping_sub(1 as size_t)
+                || addcr != 0
             {
                 if ins_typebuf(
-                    b"\n\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"\n\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     remap,
                     0 as ::core::ffi::c_int,
                     true_0 != 0,
@@ -4352,18 +4301,17 @@ pub unsafe extern "C" fn do_execreg(
                     return FAIL;
                 }
             }
-            let mut str: *mut ::core::ffi::c_char = (*(*reg).y_array.offset(i as isize))
-                .data;
+            let mut str: *mut ::core::ffi::c_char = (*(*reg).y_array.offset(i as isize)).data;
             let mut free_str: bool = false_0 != 0;
             if colon != 0 && i > 0 as size_t {
                 let mut p_2: *mut ::core::ffi::c_char = skipwhite(str);
                 if *p_2 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                    || *p_2.offset(0 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '"' as ::core::ffi::c_int
-                        && *p_2.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                        && *p_2.offset(2 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
+                    || *p_2.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '"' as ::core::ffi::c_int
+                        && *p_2.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '\\' as ::core::ffi::c_int
+                        && *p_2.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == ' ' as ::core::ffi::c_int
                 {
                     str = execreg_line_continuation((*reg).y_array, &raw mut i);
                     free_str = true_0 != 0;
@@ -4386,8 +4334,7 @@ pub unsafe extern "C" fn do_execreg(
             }
             if colon != 0
                 && ins_typebuf(
-                    b":\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b":\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     remap,
                     0 as ::core::ffi::c_int,
                     true_0 != 0,
@@ -4423,9 +4370,7 @@ pub unsafe extern "C" fn insert_reg(
     if regname != NUL && !valid_yank_reg(regname, false_0 != 0) {
         return FAIL;
     }
-    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if regname == '.' as ::core::ffi::c_int {
         retval = stuff_inserted(NUL, 1 as ::core::ffi::c_int, true_0);
     } else if get_spec_reg(regname, &raw mut arg, &raw mut allocated, true_0 != 0) {
@@ -4446,13 +4391,10 @@ pub unsafe extern "C" fn insert_reg(
             let mut i: size_t = 0 as size_t;
             while i < (*reg).y_size {
                 if regname == '-' as ::core::ffi::c_int
-                    && (*reg).y_type as ::core::ffi::c_int
-                        == kMTCharWise as ::core::ffi::c_int
+                    && (*reg).y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
                 {
                     let mut dir: Direction = BACKWARD;
-                    if State & REPLACE_FLAG as ::core::ffi::c_int
-                        != 0 as ::core::ffi::c_int
-                    {
+                    if State & REPLACE_FLAG as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
                         let mut curpos: pos_T = pos_T {
                             lnum: 0,
                             col: 0,
@@ -4463,8 +4405,7 @@ pub unsafe extern "C" fn insert_reg(
                         }
                         del_chars(
                             mb_charlen(
-                                (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize))
-                                    .data,
+                                (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).data,
                             ),
                             true_0,
                         );
@@ -4485,8 +4426,7 @@ pub unsafe extern "C" fn insert_reg(
                     );
                 } else {
                     stuffescaped((*(*reg).y_array.offset(i as isize)).data, literally);
-                    if (*reg).y_type as ::core::ffi::c_int
-                        == kMTLineWise as ::core::ffi::c_int
+                    if (*reg).y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
                         || i < (*reg).y_size.wrapping_sub(1 as size_t)
                     {
                         stuffcharReadbuff('\n' as ::core::ffi::c_int);
@@ -4527,7 +4467,9 @@ pub unsafe extern "C" fn get_spec_reg(
         }
         58 => {
             if last_cmdline.is_null() && errmsg as ::core::ffi::c_int != 0 {
-                emsg(gettext(&raw const e_nolastcmd as *const ::core::ffi::c_char));
+                emsg(gettext(
+                    &raw const e_nolastcmd as *const ::core::ffi::c_char,
+                ));
             }
             *argp = last_cmdline;
             return true_0 != 0;
@@ -4543,7 +4485,9 @@ pub unsafe extern "C" fn get_spec_reg(
             *argp = get_last_insert_save();
             *allocated = true_0 != 0;
             if (*argp).is_null() && errmsg as ::core::ffi::c_int != 0 {
-                emsg(gettext(&raw const e_noinstext as *const ::core::ffi::c_char));
+                emsg(gettext(
+                    &raw const e_noinstext as *const ::core::ffi::c_char,
+                ));
             }
             return true_0 != 0;
         }
@@ -4552,7 +4496,8 @@ pub unsafe extern "C" fn get_spec_reg(
                 return false_0 != 0;
             }
             *argp = file_name_at_cursor(
-                FNAME_MESS as ::core::ffi::c_int | FNAME_HYP as ::core::ffi::c_int
+                FNAME_MESS as ::core::ffi::c_int
+                    | FNAME_HYP as ::core::ffi::c_int
                     | (if regname == Ctrl_P {
                         FNAME_EXP as ::core::ffi::c_int
                     } else {
@@ -4593,8 +4538,7 @@ pub unsafe extern "C" fn get_spec_reg(
             return true_0 != 0;
         }
         95 => {
-            *argp = b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            *argp = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             return true_0 != 0;
         }
         _ => {}
@@ -4609,10 +4553,7 @@ pub unsafe extern "C" fn cmdline_paste_reg(
 ) -> bool {
     let literally: bool = literally_arg as ::core::ffi::c_int != 0
         || is_literal_register(regname) as ::core::ffi::c_int != 0;
-    let mut reg: *mut yankreg_T = get_yank_register(
-        regname,
-        YREG_PASTE as ::core::ffi::c_int,
-    );
+    let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
     if (*reg).y_array.is_null() {
         return FAIL != 0;
     }
@@ -4632,26 +4573,21 @@ pub unsafe extern "C" fn cmdline_paste_reg(
 }
 #[no_mangle]
 pub unsafe extern "C" fn shift_delete_registers(mut y_append: bool) {
-    free_register(
-        (&raw mut y_regs as *mut yankreg_T).offset(9 as ::core::ffi::c_int as isize),
-    );
+    free_register((&raw mut y_regs as *mut yankreg_T).offset(9 as ::core::ffi::c_int as isize));
     let mut n: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
     while n > 1 as ::core::ffi::c_int {
         y_regs[n as usize] = y_regs[(n - 1 as ::core::ffi::c_int) as usize];
         n -= 1;
     }
     if !y_append {
-        y_previous = (&raw mut y_regs as *mut yankreg_T)
-            .offset(1 as ::core::ffi::c_int as isize);
+        y_previous = (&raw mut y_regs as *mut yankreg_T).offset(1 as ::core::ffi::c_int as isize);
     }
-    y_regs[1 as ::core::ffi::c_int as usize].y_array = ::core::ptr::null_mut::<
-        String_0,
-    >();
+    y_regs[1 as ::core::ffi::c_int as usize].y_array = ::core::ptr::null_mut::<String_0>();
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_register(mut reg: *mut yankreg_T) {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*reg).additional_data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*reg).additional_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -4665,17 +4601,15 @@ pub unsafe extern "C" fn free_register(mut reg: *mut yankreg_T) {
         if c2rust_fresh0 <= 0 as size_t {
             break;
         }
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*(*reg)
-            .y_array
-            .offset(i as isize))
-            .data as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut (*(*reg).y_array.offset(i as isize)).data as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
         *ptr__0;
         (*(*reg).y_array.offset(i as isize)).size = 0 as size_t;
     }
-    let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut (*reg).y_array
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__1: *mut *mut ::core::ffi::c_void =
+        &raw mut (*reg).y_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__1);
     *ptr__1 = NULL_0;
     *ptr__1;
@@ -4689,22 +4623,21 @@ unsafe extern "C" fn yank_copy_line(
     if exclude_trailing_space {
         (*bd).endspaces = 0 as ::core::ffi::c_int;
     }
-    let mut size: ::core::ffi::c_int = (*bd).startspaces + (*bd).endspaces
-        + (*bd).textlen;
+    let mut size: ::core::ffi::c_int = (*bd).startspaces + (*bd).endspaces + (*bd).textlen;
     '_c2rust_label: {
-        if size >= 0 as ::core::ffi::c_int {} else {
+        if size >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"size >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 985 as ::core::ffi::c_uint,
-                b"void yank_copy_line(yankreg_T *, struct block_def *, size_t, _Bool)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"void yank_copy_line(yankreg_T *, struct block_def *, size_t, _Bool)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
-    let mut pnew: *mut ::core::ffi::c_char = xmallocz(size as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut pnew: *mut ::core::ffi::c_char = xmallocz(size as size_t) as *mut ::core::ffi::c_char;
     (*(*reg).y_array.offset(y_idx as isize)).data = pnew;
     memset(
         pnew as *mut ::core::ffi::c_void,
@@ -4731,11 +4664,13 @@ unsafe extern "C" fn yank_copy_line(
                 *(*bd)
                     .textstart
                     .offset(s as isize)
-                    .offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0
+                    .offset(-(1 as ::core::ffi::c_int as isize))
+                    as ::core::ffi::c_int,
+            ) as ::core::ffi::c_int
+                != 0
         {
-            s = s
-                - utf_head_off(
+            s =
+                s - utf_head_off(
                     (*bd).textstart,
                     (*bd)
                         .textstart
@@ -4746,8 +4681,8 @@ unsafe extern "C" fn yank_copy_line(
         }
     }
     *pnew = NUL as ::core::ffi::c_char;
-    (*(*reg).y_array.offset(y_idx as isize)).size = pnew
-        .offset_from((*(*reg).y_array.offset(y_idx as isize)).data) as size_t;
+    (*(*reg).y_array.offset(y_idx as isize)).size =
+        pnew.offset_from((*(*reg).y_array.offset(y_idx as isize)).data) as size_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_yank_reg(
@@ -4790,10 +4725,11 @@ pub unsafe extern "C" fn op_yank_reg(
         free_register(reg);
     }
     if (*oap).motion_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-        && (*oap).start.col == 0 as ::core::ffi::c_int && !(*oap).inclusive
-        && (!(*oap).is_VIsual
-            || *p_sel as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
-        && (*oap).end.col == 0 as ::core::ffi::c_int && yanklines > 1 as size_t
+        && (*oap).start.col == 0 as ::core::ffi::c_int
+        && !(*oap).inclusive
+        && (!(*oap).is_VIsual || *p_sel as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
+        && (*oap).end.col == 0 as ::core::ffi::c_int
+        && yanklines > 1 as size_t
     {
         yank_type = kMTLineWise;
         yankendlnum -= 1;
@@ -4802,8 +4738,7 @@ pub unsafe extern "C" fn op_yank_reg(
     (*reg).y_size = yanklines;
     (*reg).y_type = yank_type;
     (*reg).y_width = 0 as ::core::ffi::c_int as colnr_T;
-    (*reg).y_array = xcalloc(yanklines, ::core::mem::size_of::<String_0>())
-        as *mut String_0;
+    (*reg).y_array = xcalloc(yanklines, ::core::mem::size_of::<String_0>()) as *mut String_0;
     (*reg).additional_data = ::core::ptr::null_mut::<AdditionalData>();
     (*reg).timestamp = os_time();
     let mut y_idx: size_t = 0 as size_t;
@@ -4824,10 +4759,8 @@ pub unsafe extern "C" fn op_yank_reg(
                 yank_copy_line(reg, &raw mut bd, y_idx, (*oap).excl_tr_ws);
             }
             1 => {
-                *(*reg).y_array.offset(y_idx as isize) = cbuf_to_string(
-                    ml_get(lnum),
-                    ml_get_len(lnum) as size_t,
-                );
+                *(*reg).y_array.offset(y_idx as isize) =
+                    cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as size_t);
             }
             0 => {
                 charwise_block_prep(
@@ -4874,11 +4807,9 @@ pub unsafe extern "C" fn op_yank_reg(
                 (*(*curr)
                     .y_array
                     .offset((*curr).y_size.wrapping_sub(1 as size_t) as isize))
-                    .size
-                    .wrapping_add(
-                        (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size,
-                    )
-                    .wrapping_add(1 as size_t),
+                .size
+                .wrapping_add((*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size)
+                .wrapping_add(1 as size_t),
             ) as *mut ::core::ffi::c_char;
             j = j.wrapping_sub(1);
             strcpy(pnew, (*(*curr).y_array.offset(j as isize)).data);
@@ -4886,27 +4817,21 @@ pub unsafe extern "C" fn op_yank_reg(
                 pnew.offset((*(*curr).y_array.offset(j as isize)).size as isize),
                 (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).data,
             );
-            xfree(
-                (*(*curr).y_array.offset(j as isize)).data as *mut ::core::ffi::c_void,
-            );
+            xfree((*(*curr).y_array.offset(j as isize)).data as *mut ::core::ffi::c_void);
             *(*curr).y_array.offset(j as isize) = String_0 {
                 data: pnew,
                 size: (*(*curr).y_array.offset(j as isize))
                     .size
-                    .wrapping_add(
-                        (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size,
-                    ),
+                    .wrapping_add((*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size),
             };
             j = j.wrapping_add(1);
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*(*reg)
-                .y_array
-                .offset(0 as ::core::ffi::c_int as isize))
-                .data as *mut *mut ::core::ffi::c_void;
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).data
+                    as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_0;
             *ptr_;
-            (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size = 0
-                as size_t;
+            (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size = 0 as size_t;
             y_idx = 1 as size_t;
         } else {
             y_idx = 0 as size_t;
@@ -4916,9 +4841,8 @@ pub unsafe extern "C" fn op_yank_reg(
             y_idx = y_idx.wrapping_add(1);
             let c2rust_fresh3 = j;
             j = j.wrapping_add(1);
-            *(*curr).y_array.offset(c2rust_fresh3 as isize) = *(*reg)
-                .y_array
-                .offset(c2rust_fresh2 as isize);
+            *(*curr).y_array.offset(c2rust_fresh3 as isize) =
+                *(*reg).y_array.offset(c2rust_fresh2 as isize);
         }
         (*curr).y_size = j;
         xfree((*reg).y_array as *mut ::core::ffi::c_void);
@@ -4932,8 +4856,7 @@ pub unsafe extern "C" fn op_yank_reg(
         if yanklines > p_report as size_t {
             let mut namebuf: [::core::ffi::c_char; 100] = [0; 100];
             if (*oap).regname == NUL {
-                *(&raw mut namebuf as *mut ::core::ffi::c_char) = NUL
-                    as ::core::ffi::c_char;
+                *(&raw mut namebuf as *mut ::core::ffi::c_char) = NUL as ::core::ffi::c_char;
             } else {
                 vim_snprintf(
                     &raw mut namebuf as *mut ::core::ffi::c_char,
@@ -4950,10 +4873,8 @@ pub unsafe extern "C" fn op_yank_reg(
                 smsg(
                     0 as ::core::ffi::c_int,
                     ngettext(
-                        b"block of %ld line yanked%s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"block of %ld lines yanked%s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"block of %ld line yanked%s\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"block of %ld lines yanked%s\0".as_ptr() as *const ::core::ffi::c_char,
                         yanklines as ::core::ffi::c_ulong,
                     ),
                     yanklines as int64_t,
@@ -4973,17 +4894,14 @@ pub unsafe extern "C" fn op_yank_reg(
             }
         }
     }
-    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
-        == 0 as ::core::ffi::c_int
-    {
+    if cmdmod.cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         (*curbuf).b_op_start = (*oap).start;
         (*curbuf).b_op_end = (*oap).end;
         if yank_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
             (*curbuf).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
             (*curbuf).b_op_end.col = MAXCOL as ::core::ffi::c_int as colnr_T;
         }
-        if yank_type as ::core::ffi::c_int != kMTLineWise as ::core::ffi::c_int
-            && !(*oap).inclusive
+        if yank_type as ::core::ffi::c_int != kMTLineWise as ::core::ffi::c_int && !(*oap).inclusive
         {
             decl(&raw mut (*curbuf).b_op_end);
         }
@@ -4997,7 +4915,8 @@ pub unsafe extern "C" fn format_reg_type(
     mut buf_len: size_t,
 ) {
     '_c2rust_label: {
-        if buf_len > 1 as size_t {} else {
+        if buf_len > 1 as size_t {
+        } else {
             __assert_fail(
                 b"buf_len > 1\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0".as_ptr()
@@ -5032,10 +4951,7 @@ pub unsafe extern "C" fn format_reg_type(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn do_autocmd_textyankpost(
-    mut oap: *mut oparg_T,
-    mut reg: *mut yankreg_T,
-) {
+pub unsafe extern "C" fn do_autocmd_textyankpost(mut oap: *mut oparg_T, mut reg: *mut yankreg_T) {
     static mut recursive: bool = false_0 != 0;
     if recursive as ::core::ffi::c_int != 0 || !has_event(EVENT_TEXTYANKPOST) {
         return;
@@ -5083,8 +4999,8 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(
             .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
             .wrapping_div(
                 (::core::mem::size_of::<[::core::ffi::c_char; 67]>()
-                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>()) == 0)
-                    as ::core::ffi::c_int as size_t,
+                    .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
+                    == 0) as ::core::ffi::c_int as size_t,
             ),
     );
     tv_dict_add_str(
@@ -5111,8 +5027,7 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(
             kBoolVarFalse as ::core::ffi::c_int
         }) as BoolVarValue,
     );
-    buf[0 as ::core::ffi::c_int as usize] = get_op_char((*oap).op_type)
-        as ::core::ffi::c_char;
+    buf[0 as ::core::ffi::c_int as usize] = get_op_char((*oap).op_type) as ::core::ffi::c_char;
     buf[1 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
     tv_dict_add_str(
         dict,
@@ -5145,19 +5060,15 @@ pub unsafe extern "C" fn do_autocmd_textyankpost(
 }
 #[no_mangle]
 pub unsafe extern "C" fn op_yank(mut oap: *mut oparg_T, mut message: bool) -> bool {
-    if (*oap).regname != 0 as ::core::ffi::c_int
-        && !valid_yank_reg((*oap).regname, true_0 != 0)
-    {
+    if (*oap).regname != 0 as ::core::ffi::c_int && !valid_yank_reg((*oap).regname, true_0 != 0) {
         beep_flush();
         return false_0 != 0;
     }
     if (*oap).regname == '_' as ::core::ffi::c_int {
         return true_0 != 0;
     }
-    let mut reg: *mut yankreg_T = get_yank_register(
-        (*oap).regname,
-        YREG_YANK as ::core::ffi::c_int,
-    );
+    let mut reg: *mut yankreg_T =
+        get_yank_register((*oap).regname, YREG_YANK as ::core::ffi::c_int);
     op_yank_reg(oap, message, reg, is_append_register((*oap).regname));
     set_clipboard((*oap).regname, reg);
     do_autocmd_textyankpost(oap, reg);
@@ -5192,19 +5103,18 @@ pub unsafe extern "C" fn do_put(
     (*curbuf).b_op_start = (*curwin).w_cursor;
     (*curbuf).b_op_end = (*curwin).w_cursor;
     if regname == '.' as ::core::ffi::c_int && reg.is_null() {
-        let mut non_linewise_vis: bool = VIsual_active as ::core::ffi::c_int != 0
-            && VIsual_mode != 'V' as ::core::ffi::c_int;
-        let mut command_start_char: ::core::ffi::c_char = (if non_linewise_vis
-            as ::core::ffi::c_int != 0
-        {
-            'c' as ::core::ffi::c_int
-        } else if flags & PUT_LINE as ::core::ffi::c_int != 0 {
-            'i' as ::core::ffi::c_int
-        } else if dir == FORWARD as ::core::ffi::c_int {
-            'a' as ::core::ffi::c_int
-        } else {
-            'i' as ::core::ffi::c_int
-        }) as ::core::ffi::c_char;
+        let mut non_linewise_vis: bool =
+            VIsual_active as ::core::ffi::c_int != 0 && VIsual_mode != 'V' as ::core::ffi::c_int;
+        let mut command_start_char: ::core::ffi::c_char =
+            (if non_linewise_vis as ::core::ffi::c_int != 0 {
+                'c' as ::core::ffi::c_int
+            } else if flags & PUT_LINE as ::core::ffi::c_int != 0 {
+                'i' as ::core::ffi::c_int
+            } else if dir == FORWARD as ::core::ffi::c_int {
+                'a' as ::core::ffi::c_int
+            } else {
+                'i' as ::core::ffi::c_int
+            }) as ::core::ffi::c_char;
         if flags & PUT_LINE as ::core::ffi::c_int != 0 {
             do_put(
                 '_' as ::core::ffi::c_int,
@@ -5240,19 +5150,17 @@ pub unsafe extern "C" fn do_put(
                 let mut eol: bool = false_0 != 0;
                 if !one_past_line {
                     eol = *cursor_pos.offset(utfc_ptr2len(cursor_pos) as isize)
-                        as ::core::ffi::c_int == NUL;
+                        as ::core::ffi::c_int
+                        == NUL;
                 }
                 let mut ve_allows: bool = cur_ve_flags
                     == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
                     || cur_ve_flags
-                        == kOptVeFlagOnemore as ::core::ffi::c_int
-                            as ::core::ffi::c_uint;
-                let mut eof: bool = (*curbuf).b_ml.ml_line_count
-                    == (*curwin).w_cursor.lnum
+                        == kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint;
+                let mut eof: bool = (*curbuf).b_ml.ml_line_count == (*curwin).w_cursor.lnum
                     && one_past_line as ::core::ffi::c_int != 0;
                 if ve_allows as ::core::ffi::c_int != 0
-                    || !(eol as ::core::ffi::c_int != 0
-                        || eof as ::core::ffi::c_int != 0)
+                    || !(eol as ::core::ffi::c_int != 0 || eof as ::core::ffi::c_int != 0)
                 {
                     stuffcharReadbuff('l' as ::core::ffi::c_int);
                 }
@@ -5261,8 +5169,10 @@ pub unsafe extern "C" fn do_put(
             stuffReadbuff(b"g'[\0".as_ptr() as *const ::core::ffi::c_char);
         }
         if command_start_char as ::core::ffi::c_int == 'a' as ::core::ffi::c_int {
-            if u_save((*curwin).w_cursor.lnum, (*curwin).w_cursor.lnum + 1 as linenr_T)
-                == FAIL
+            if u_save(
+                (*curwin).w_cursor.lnum,
+                (*curwin).w_cursor.lnum + 1 as linenr_T,
+            ) == FAIL
             {
                 return;
             }
@@ -5279,15 +5189,18 @@ pub unsafe extern "C" fn do_put(
             &raw mut insert_string.data,
             &raw mut allocated,
             true_0 != 0,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if insert_string.data.is_null() {
             return;
         }
     }
     if (*curbuf).terminal.is_null() {
-        if u_save((*curwin).w_cursor.lnum, (*curwin).w_cursor.lnum + 1 as linenr_T)
-            == FAIL
+        if u_save(
+            (*curwin).w_cursor.lnum,
+            (*curwin).w_cursor.lnum + 1 as linenr_T,
+        ) == FAIL
         {
             return;
         }
@@ -5305,26 +5218,23 @@ pub unsafe extern "C" fn do_put(
                         (*y_array.offset(y_size as isize)).data = ptr;
                     }
                     y_size = y_size.wrapping_add(1);
-                    let mut tmp: *mut ::core::ffi::c_char = vim_strchr(
-                        ptr,
-                        '\n' as ::core::ffi::c_int,
-                    );
+                    let mut tmp: *mut ::core::ffi::c_char =
+                        vim_strchr(ptr, '\n' as ::core::ffi::c_int);
                     if tmp.is_null() {
                         if !y_array.is_null() {
-                            (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                .size = ptrlen;
+                            (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size =
+                                ptrlen;
                         }
                     } else {
                         if !y_array.is_null() {
                             *tmp = NUL as ::core::ffi::c_char;
-                            (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                .size = tmp.offset_from(ptr) as size_t;
-                            ptrlen = ptrlen
-                                .wrapping_sub(
-                                    (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                        .size
-                                        .wrapping_add(1 as size_t),
-                                );
+                            (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size =
+                                tmp.offset_from(ptr) as size_t;
+                            ptrlen = ptrlen.wrapping_sub(
+                                (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
+                                    .size
+                                    .wrapping_add(1 as size_t),
+                            );
                         }
                         tmp = tmp.offset(1);
                         if *tmp as ::core::ffi::c_int == NUL {
@@ -5337,9 +5247,8 @@ pub unsafe extern "C" fn do_put(
                 if !y_array.is_null() {
                     break;
                 }
-                y_array = xmalloc(
-                    y_size.wrapping_mul(::core::mem::size_of::<String_0>()),
-                ) as *mut String_0;
+                y_array = xmalloc(y_size.wrapping_mul(::core::mem::size_of::<String_0>()))
+                    as *mut String_0;
             }
         } else {
             y_size = 1 as size_t;
@@ -5368,22 +5277,16 @@ pub unsafe extern "C" fn do_put(
                         let mut p: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
                         let p_orig: *mut ::core::ffi::c_char = p;
                         let plen: size_t = get_cursor_pos_len() as size_t;
-                        if dir == FORWARD as ::core::ffi::c_int
-                            && *p as ::core::ffi::c_int != NUL
-                        {
+                        if dir == FORWARD as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL {
                             p = p.offset(utfc_ptr2len(p) as isize);
                         }
                         split_pos = p.offset_from(curline) as colnr_T;
                         let mut ptr_0: *mut ::core::ffi::c_char = xmemdupz(
                             p as *const ::core::ffi::c_void,
                             plen.wrapping_sub(p.offset_from(p_orig) as size_t),
-                        ) as *mut ::core::ffi::c_char;
-                        ml_append(
-                            (*curwin).w_cursor.lnum,
-                            ptr_0,
-                            0 as colnr_T,
-                            false_0 != 0,
-                        );
+                        )
+                            as *mut ::core::ffi::c_char;
+                        ml_append((*curwin).w_cursor.lnum, ptr_0, 0 as colnr_T, false_0 != 0);
                         xfree(ptr_0 as *mut ::core::ffi::c_void);
                         ptr_0 = xmemdupz(
                             get_cursor_line_ptr() as *const ::core::ffi::c_void,
@@ -5413,8 +5316,7 @@ pub unsafe extern "C" fn do_put(
             if y_size == 0 as size_t || y_array.is_null() {
                 semsg(
                     gettext(
-                        b"E353: Nothing in register %s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"E353: Nothing in register %s\0".as_ptr() as *const ::core::ffi::c_char
                     ),
                     if regname == 0 as ::core::ffi::c_int {
                         b"\"\0".as_ptr() as *const ::core::ffi::c_char
@@ -5433,9 +5335,7 @@ pub unsafe extern "C" fn do_put(
                     if u_save((*curwin).w_cursor.lnum - 1 as linenr_T, lnum) == FAIL {
                         break '_end;
                     }
-                } else if y_type as ::core::ffi::c_int
-                    == kMTLineWise as ::core::ffi::c_int
-                {
+                } else if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
                     lnum = (*curwin).w_cursor.lnum;
                     if dir == BACKWARD as ::core::ffi::c_int {
                         hasFolding(
@@ -5473,19 +5373,16 @@ pub unsafe extern "C" fn do_put(
                 } else if u_save_cursor() == FAIL {
                     break '_end;
                 }
-                if cur_ve_flags
-                    == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
+                if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
                     && y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
                 {
                     if gchar_cursor() == TAB {
                         let mut viscol: ::core::ffi::c_int = getviscol();
                         let mut ts: OptInt = (*curbuf).b_p_ts;
                         if if dir == FORWARD as ::core::ffi::c_int {
-                            (tabstop_padding(
-                                viscol as colnr_T,
-                                ts,
-                                (*curbuf).b_p_vts_array,
-                            ) != 1 as ::core::ffi::c_int) as ::core::ffi::c_int
+                            (tabstop_padding(viscol as colnr_T, ts, (*curbuf).b_p_vts_array)
+                                != 1 as ::core::ffi::c_int)
+                                as ::core::ffi::c_int
                         } else {
                             ((*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int)
                                 as ::core::ffi::c_int
@@ -5493,16 +5390,14 @@ pub unsafe extern "C" fn do_put(
                         {
                             coladvance_force(viscol as colnr_T);
                         } else {
-                            (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int
-                                as colnr_T;
+                            (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
                         }
                     } else if (*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int
                         || gchar_cursor() == NUL
                     {
                         coladvance_force(
                             getviscol()
-                                + (dir == FORWARD as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int,
+                                + (dir == FORWARD as ::core::ffi::c_int) as ::core::ffi::c_int,
                         );
                     }
                 }
@@ -5560,28 +5455,26 @@ pub unsafe extern "C" fn do_put(
                         );
                     }
                     col += (*curwin).w_cursor.coladd;
-                    if cur_ve_flags
-                        == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
+                    if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
                         && ((*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int
                             || endcol2 == (*curwin).w_cursor.col)
                     {
                         if dir == FORWARD as ::core::ffi::c_int && c == NUL {
                             col += 1;
                         }
-                        if dir != FORWARD as ::core::ffi::c_int && c != NUL
+                        if dir != FORWARD as ::core::ffi::c_int
+                            && c != NUL
                             && (*curwin).w_cursor.coladd > 0 as ::core::ffi::c_int
                         {
                             (*curwin).w_cursor.col += 1;
                         }
                         if c == TAB {
-                            if dir == BACKWARD as ::core::ffi::c_int
-                                && (*curwin).w_cursor.col != 0
+                            if dir == BACKWARD as ::core::ffi::c_int && (*curwin).w_cursor.col != 0
                             {
                                 (*curwin).w_cursor.col -= 1;
                             }
                             if dir == FORWARD as ::core::ffi::c_int
-                                && col as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                                    == endcol2
+                                && col as ::core::ffi::c_int - 1 as ::core::ffi::c_int == endcol2
                             {
                                 (*curwin).w_cursor.col += 1;
                             }
@@ -5593,8 +5486,7 @@ pub unsafe extern "C" fn do_put(
                     while i < y_size {
                         let mut spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         let mut shortline: ::core::ffi::c_char = 0;
-                        let mut lines_appended: ::core::ffi::c_int = 0
-                            as ::core::ffi::c_int;
+                        let mut lines_appended: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         bd.startspaces = 0 as ::core::ffi::c_int;
                         bd.endspaces = 0 as ::core::ffi::c_int;
                         vcol = 0 as ::core::ffi::c_int as colnr_T;
@@ -5629,10 +5521,7 @@ pub unsafe extern "C" fn do_put(
                                 lvl: 0,
                                 x: ::core::ptr::null_mut::<MTNode>(),
                                 i: 0,
-                                s: [C2Rust_Unnamed_16 {
-                                    oldcol: 0,
-                                    i: 0,
-                                }; 20],
+                                s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
                                 intersect_idx: 0,
                                 intersect_pos: MTPos { row: 0, col: 0 },
                                 intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -5648,20 +5537,20 @@ pub unsafe extern "C" fn do_put(
                         vcol = 0 as ::core::ffi::c_int as colnr_T;
                         while vcol < col && *ci.ptr as ::core::ffi::c_int != NUL {
                             incr = win_charsize(
-                                    cstype,
-                                    vcol as ::core::ffi::c_int,
-                                    ci.ptr,
-                                    ci.chr.value,
-                                    &raw mut csarg,
-                                )
-                                .width;
+                                cstype,
+                                vcol as ::core::ffi::c_int,
+                                ci.ptr,
+                                ci.chr.value,
+                                &raw mut csarg,
+                            )
+                            .width;
                             vcol += incr;
                             ci = utfc_next(ci);
                         }
                         let mut ptr_1: *mut ::core::ffi::c_char = ci.ptr;
                         bd.textcol = ptr_1.offset_from(oldp) as colnr_T;
-                        shortline = (vcol < col || vcol == col && *ptr_1 == 0)
-                            as ::core::ffi::c_int as ::core::ffi::c_char;
+                        shortline = (vcol < col || vcol == col && *ptr_1 == 0) as ::core::ffi::c_int
+                            as ::core::ffi::c_char;
                         if vcol < col {
                             bd.startspaces = (col - vcol) as ::core::ffi::c_int;
                         } else if vcol > col {
@@ -5669,19 +5558,15 @@ pub unsafe extern "C" fn do_put(
                             bd.startspaces = incr - bd.endspaces;
                             bd.textcol -= 1;
                             delcount = 1 as ::core::ffi::c_int;
-                            bd.textcol
-                                -= utf_head_off(oldp, oldp.offset(bd.textcol as isize));
-                            if *oldp.offset(bd.textcol as isize) as ::core::ffi::c_int
-                                != TAB
-                            {
+                            bd.textcol -= utf_head_off(oldp, oldp.offset(bd.textcol as isize));
+                            if *oldp.offset(bd.textcol as isize) as ::core::ffi::c_int != TAB {
                                 delcount = 0 as ::core::ffi::c_int;
                                 bd.endspaces = 0 as ::core::ffi::c_int;
                             }
                         }
-                        let yanklen: ::core::ffi::c_int = (*y_array.offset(i as isize))
-                            .size as ::core::ffi::c_int;
-                        if flags & PUT_BLOCK_INNER as ::core::ffi::c_int
-                            == 0 as ::core::ffi::c_int
+                        let yanklen: ::core::ffi::c_int =
+                            (*y_array.offset(i as isize)).size as ::core::ffi::c_int;
+                        if flags & PUT_BLOCK_INNER as ::core::ffi::c_int == 0 as ::core::ffi::c_int
                         {
                             spaces = y_width + 1 as ::core::ffi::c_int;
                             cstype = init_charsize_arg(
@@ -5692,15 +5577,14 @@ pub unsafe extern "C" fn do_put(
                             );
                             ci = utf_ptr2StrCharInfo((*y_array.offset(i as isize)).data);
                             while *ci.ptr as ::core::ffi::c_int != NUL {
-                                spaces
-                                    -= win_charsize(
-                                            cstype,
-                                            0 as ::core::ffi::c_int,
-                                            ci.ptr,
-                                            ci.chr.value,
-                                            &raw mut csarg,
-                                        )
-                                        .width;
+                                spaces -= win_charsize(
+                                    cstype,
+                                    0 as ::core::ffi::c_int,
+                                    ci.ptr,
+                                    ci.chr.value,
+                                    &raw mut csarg,
+                                )
+                                .width;
                                 ci = utfc_next(ci);
                             }
                             spaces = if spaces > 0 as ::core::ffi::c_int {
@@ -5711,15 +5595,11 @@ pub unsafe extern "C" fn do_put(
                         }
                         if yanklen + spaces != 0 as ::core::ffi::c_int
                             && count
-                                > (INT_MAX - (bd.startspaces + bd.endspaces))
-                                    / (yanklen + spaces)
+                                > (INT_MAX - (bd.startspaces + bd.endspaces)) / (yanklen + spaces)
                         {
-                            emsg(
-                                gettext(
-                                    &raw const e_resulting_text_too_long
-                                        as *const ::core::ffi::c_char,
-                                ),
-                            );
+                            emsg(gettext(
+                                &raw const e_resulting_text_too_long as *const ::core::ffi::c_char,
+                            ));
                             break;
                         } else {
                             totlen = (count as size_t)
@@ -5730,7 +5610,8 @@ pub unsafe extern "C" fn do_put(
                                 totlen
                                     .wrapping_add(oldlen as size_t)
                                     .wrapping_add(1 as size_t),
-                            ) as *mut ::core::ffi::c_char;
+                            )
+                                as *mut ::core::ffi::c_char;
                             ptr_1 = newp;
                             memmove(
                                 ptr_1 as *mut ::core::ffi::c_void,
@@ -5773,11 +5654,13 @@ pub unsafe extern "C" fn do_put(
                                 bd.endspaces as size_t,
                             );
                             ptr_1 = ptr_1.offset(bd.endspaces as isize);
-                            let mut columns: ::core::ffi::c_int = oldlen
-                                as ::core::ffi::c_int - bd.textcol as ::core::ffi::c_int
-                                - delcount + 1 as ::core::ffi::c_int;
+                            let mut columns: ::core::ffi::c_int = oldlen as ::core::ffi::c_int
+                                - bd.textcol as ::core::ffi::c_int
+                                - delcount
+                                + 1 as ::core::ffi::c_int;
                             '_c2rust_label: {
-                                if columns >= 0 as ::core::ffi::c_int {} else {
+                                if columns >= 0 as ::core::ffi::c_int {
+                                } else {
                                     __assert_fail(
                                         b"columns >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                                         b"/home/overlord/projects/neovim/neovim/src/nvim/register.c\0"
@@ -5823,7 +5706,8 @@ pub unsafe extern "C" fn do_put(
                     (*curbuf).b_op_start.lnum = lnum;
                     (*curbuf).b_op_end.lnum = (*curwin).w_cursor.lnum - 1 as linenr_T;
                     (*curbuf).b_op_end.col = (if bd.textcol as ::core::ffi::c_int
-                        + totlen as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                        + totlen as ::core::ffi::c_int
+                        - 1 as ::core::ffi::c_int
                         > 0 as ::core::ffi::c_int
                     {
                         bd.textcol as ::core::ffi::c_int + totlen as ::core::ffi::c_int
@@ -5845,16 +5729,13 @@ pub unsafe extern "C" fn do_put(
                         (*curwin).w_cursor.lnum = lnum;
                     }
                 } else {
-                    let yanklen_0: ::core::ffi::c_int = (*y_array
-                        .offset(0 as ::core::ffi::c_int as isize))
-                        .size as ::core::ffi::c_int;
-                    if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-                    {
-                        if dir == FORWARD as ::core::ffi::c_int && gchar_cursor() != NUL
-                        {
-                            let mut bytelen: ::core::ffi::c_int = utfc_ptr2len(
-                                get_cursor_pos_ptr(),
-                            );
+                    let yanklen_0: ::core::ffi::c_int =
+                        (*y_array.offset(0 as ::core::ffi::c_int as isize)).size
+                            as ::core::ffi::c_int;
+                    if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
+                        if dir == FORWARD as ::core::ffi::c_int && gchar_cursor() != NUL {
+                            let mut bytelen: ::core::ffi::c_int =
+                                utfc_ptr2len(get_cursor_pos_ptr());
                             col += bytelen;
                             if yanklen_0 != 0 {
                                 (*curwin).w_cursor.col += bytelen;
@@ -5871,8 +5752,7 @@ pub unsafe extern "C" fn do_put(
                     {
                         let mut end_lnum: linenr_T = 0 as linenr_T;
                         let mut start_lnum: linenr_T = lnum;
-                        let mut first_byte_off: ::core::ffi::c_int = 0
-                            as ::core::ffi::c_int;
+                        let mut first_byte_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         if VIsual_active {
                             end_lnum = if (*curbuf).b_visual.vi_end.lnum
                                 > (*curbuf).b_visual.vi_start.lnum
@@ -5896,19 +5776,15 @@ pub unsafe extern "C" fn do_put(
                                 );
                             }
                         }
-                        if count == 0 as ::core::ffi::c_int
-                            || yanklen_0 == 0 as ::core::ffi::c_int
+                        if count == 0 as ::core::ffi::c_int || yanklen_0 == 0 as ::core::ffi::c_int
                         {
                             if VIsual_active {
                                 lnum = end_lnum;
                             }
                         } else if count > INT_MAX / yanklen_0 {
-                            emsg(
-                                gettext(
-                                    &raw const e_resulting_text_too_long
-                                        as *const ::core::ffi::c_char,
-                                ),
-                            );
+                            emsg(gettext(
+                                &raw const e_resulting_text_too_long as *const ::core::ffi::c_char,
+                            ));
                         } else {
                             totlen = (count as size_t).wrapping_mul(yanklen_0 as size_t);
                             loop {
@@ -5926,23 +5802,22 @@ pub unsafe extern "C" fn do_put(
                                         col = MAXCOL as ::core::ffi::c_int as colnr_T;
                                     }
                                 }
-                                if VIsual_active as ::core::ffi::c_int != 0
-                                    && col > oldlen_0
-                                {
+                                if VIsual_active as ::core::ffi::c_int != 0 && col > oldlen_0 {
                                     lnum += 1;
                                 } else {
                                     let mut newp_0: *mut ::core::ffi::c_char = xmalloc(
                                         totlen
                                             .wrapping_add(oldlen_0 as size_t)
                                             .wrapping_add(1 as size_t),
-                                    ) as *mut ::core::ffi::c_char;
+                                    )
+                                        as *mut ::core::ffi::c_char;
                                     memmove(
                                         newp_0 as *mut ::core::ffi::c_void,
                                         oldp_0 as *const ::core::ffi::c_void,
                                         col as size_t,
                                     );
-                                    let mut ptr_2: *mut ::core::ffi::c_char = newp_0
-                                        .offset(col as isize);
+                                    let mut ptr_2: *mut ::core::ffi::c_char =
+                                        newp_0.offset(col as isize);
                                     let mut i_0: size_t = 0 as size_t;
                                     while i_0 < count as size_t {
                                         memmove(
@@ -5967,8 +5842,8 @@ pub unsafe extern "C" fn do_put(
                                     if lnum == (*curwin).w_cursor.lnum {
                                         changed_cline_bef_curs(curwin);
                                         invalidate_botline_win(curwin);
-                                        (*curwin).w_cursor.col
-                                            += totlen.wrapping_sub(1 as size_t) as colnr_T;
+                                        (*curwin).w_cursor.col +=
+                                            totlen.wrapping_sub(1 as size_t) as colnr_T;
                                     }
                                     changed_bytes(lnum, col);
                                     extmark_splice_cols(
@@ -5983,9 +5858,7 @@ pub unsafe extern "C" fn do_put(
                                         lnum += 1;
                                     }
                                 }
-                                if !(VIsual_active as ::core::ffi::c_int != 0
-                                    && lnum <= end_lnum)
-                                {
+                                if !(VIsual_active as ::core::ffi::c_int != 0 && lnum <= end_lnum) {
                                     break;
                                 }
                             }
@@ -6006,10 +5879,8 @@ pub unsafe extern "C" fn do_put(
                     } else {
                         let mut new_lnum: linenr_T = new_cursor.lnum;
                         let mut indent: ::core::ffi::c_int = 0;
-                        let mut orig_indent: ::core::ffi::c_int = 0
-                            as ::core::ffi::c_int;
-                        let mut indent_diff: ::core::ffi::c_int = 0
-                            as ::core::ffi::c_int;
+                        let mut orig_indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                        let mut indent_diff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         let mut first_indent: bool = true_0 != 0;
                         let mut lendiff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         if flags & PUT_FIXINDENT as ::core::ffi::c_int != 0 {
@@ -6018,20 +5889,19 @@ pub unsafe extern "C" fn do_put(
                         let mut cnt: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
                         '_error: while cnt <= count {
                             let mut i_1: size_t = 0 as size_t;
-                            if y_type as ::core::ffi::c_int
-                                == kMTCharWise as ::core::ffi::c_int
-                            {
+                            if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
                                 lnum = new_cursor.lnum;
-                                let mut ptr_3: *mut ::core::ffi::c_char = ml_get(lnum)
-                                    .offset(col as isize);
-                                let mut ptrlen_0: size_t = (ml_get_len(lnum) as size_t)
-                                    .wrapping_sub(col as size_t);
+                                let mut ptr_3: *mut ::core::ffi::c_char =
+                                    ml_get(lnum).offset(col as isize);
+                                let mut ptrlen_0: size_t =
+                                    (ml_get_len(lnum) as size_t).wrapping_sub(col as size_t);
                                 totlen = (*y_array
                                     .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                    .size;
+                                .size;
                                 let mut newp_1: *mut ::core::ffi::c_char = xmalloc(
                                     ptrlen_0.wrapping_add(totlen).wrapping_add(1 as size_t),
-                                ) as *mut ::core::ffi::c_char;
+                                )
+                                    as *mut ::core::ffi::c_char;
                                 strcpy(
                                     newp_1,
                                     (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
@@ -6046,7 +5916,8 @@ pub unsafe extern "C" fn do_put(
                                     (col as size_t)
                                         .wrapping_add(yanklen_0 as size_t)
                                         .wrapping_add(1 as size_t),
-                                ) as *mut ::core::ffi::c_char;
+                                )
+                                    as *mut ::core::ffi::c_char;
                                 memmove(
                                     newp_1 as *mut ::core::ffi::c_void,
                                     oldp_1 as *const ::core::ffi::c_void,
@@ -6063,8 +5934,7 @@ pub unsafe extern "C" fn do_put(
                                 i_1 = 1 as size_t;
                             }
                             while i_1 < y_size {
-                                if y_type as ::core::ffi::c_int
-                                    != kMTCharWise as ::core::ffi::c_int
+                                if y_type as ::core::ffi::c_int != kMTCharWise as ::core::ffi::c_int
                                     || i_1 < y_size.wrapping_sub(1 as size_t)
                                 {
                                     if ml_append(
@@ -6112,33 +5982,27 @@ pub unsafe extern "C" fn do_put(
                                 i_1 = i_1.wrapping_add(1);
                             }
                             let mut totsize: bcount_t = 0 as bcount_t;
-                            let mut lastsize: ::core::ffi::c_int = 0
-                                as ::core::ffi::c_int;
-                            if y_type as ::core::ffi::c_int
-                                == kMTCharWise as ::core::ffi::c_int
-                                || y_type as ::core::ffi::c_int
-                                    == kMTLineWise as ::core::ffi::c_int
+                            let mut lastsize: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+                            if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
+                                || y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
                                     && flags & PUT_LINE_SPLIT as ::core::ffi::c_int != 0
                             {
                                 i_1 = 0 as size_t;
                                 while i_1 < y_size.wrapping_sub(1 as size_t) {
-                                    totsize
-                                        += (*y_array.offset(i_1 as isize)).size as bcount_t
-                                            + 1 as bcount_t;
+                                    totsize += (*y_array.offset(i_1 as isize)).size as bcount_t
+                                        + 1 as bcount_t;
                                     i_1 = i_1.wrapping_add(1);
                                 }
                                 lastsize = (*y_array
                                     .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                    .size as ::core::ffi::c_int;
+                                .size
+                                    as ::core::ffi::c_int;
                                 totsize += lastsize as bcount_t;
                             }
-                            if y_type as ::core::ffi::c_int
-                                == kMTCharWise as ::core::ffi::c_int
-                            {
+                            if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
                                 extmark_splice(
                                     curbuf,
-                                    new_cursor.lnum as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int,
+                                    new_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                                     col,
                                     0 as ::core::ffi::c_int,
                                     0 as colnr_T,
@@ -6154,8 +6018,7 @@ pub unsafe extern "C" fn do_put(
                             {
                                 extmark_splice(
                                     curbuf,
-                                    new_cursor.lnum as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int,
+                                    new_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                                     split_pos,
                                     0 as ::core::ffi::c_int,
                                     0 as colnr_T,
@@ -6171,11 +6034,8 @@ pub unsafe extern "C" fn do_put(
                             }
                             cnt += 1;
                         }
-                        if y_type as ::core::ffi::c_int
-                            == kMTLineWise as ::core::ffi::c_int
-                        {
-                            (*curbuf).b_op_start.col = 0 as ::core::ffi::c_int
-                                as colnr_T;
+                        if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
+                            (*curbuf).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
                             if dir == FORWARD as ::core::ffi::c_int {
                                 (*curbuf).b_op_start.lnum += 1;
                             }
@@ -6191,15 +6051,14 @@ pub unsafe extern "C" fn do_put(
                         mark_adjust(
                             (*curbuf).b_op_start.lnum
                                 + (y_type as ::core::ffi::c_int
-                                    == kMTCharWise as ::core::ffi::c_int) as ::core::ffi::c_int,
+                                    == kMTCharWise as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int,
                             MAXLNUM as ::core::ffi::c_int as linenr_T,
                             nr_lines,
                             0 as linenr_T,
                             kind,
                         );
-                        if y_type as ::core::ffi::c_int
-                            == kMTCharWise as ::core::ffi::c_int
-                        {
+                        if y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
                             changed_lines(
                                 curbuf,
                                 (*curwin).w_cursor.lnum,
@@ -6220,34 +6079,35 @@ pub unsafe extern "C" fn do_put(
                         }
                         (*curbuf).b_op_end.lnum = new_lnum;
                         col = (if 0 as ::core::ffi::c_int
-                            > (*y_array
-                                .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                .size as ::core::ffi::c_int - lendiff
+                            > (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size
+                                as ::core::ffi::c_int
+                                - lendiff
                         {
                             0 as ::core::ffi::c_int
                         } else {
-                            (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                .size as ::core::ffi::c_int - lendiff
+                            (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size
+                                as ::core::ffi::c_int
+                                - lendiff
                         }) as colnr_T;
                         if col > 1 as ::core::ffi::c_int {
-                            (*curbuf).b_op_end.col = (col as ::core::ffi::c_int
-                                - 1 as ::core::ffi::c_int) as colnr_T;
-                            if (*y_array
-                                .offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                .size > 0 as size_t
+                            (*curbuf).b_op_end.col =
+                                (col as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
+                            if (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize)).size
+                                > 0 as size_t
                             {
-                                (*curbuf).b_op_end.col
-                                    -= utf_head_off(
-                                        (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                            .data,
-                                        (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                            .data
-                                            .offset(
-                                                (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
-                                                    .size as isize,
-                                            )
-                                            .offset(-(1 as ::core::ffi::c_int as isize)),
-                                    );
+                                (*curbuf).b_op_end.col -= utf_head_off(
+                                    (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
+                                        .data,
+                                    (*y_array.offset(y_size.wrapping_sub(1 as size_t) as isize))
+                                        .data
+                                        .offset(
+                                            (*y_array
+                                                .offset(y_size.wrapping_sub(1 as size_t) as isize))
+                                            .size
+                                                as isize,
+                                        )
+                                        .offset(-(1 as ::core::ffi::c_int as isize)),
+                                );
                             }
                         } else {
                             (*curbuf).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
@@ -6255,13 +6115,10 @@ pub unsafe extern "C" fn do_put(
                         if flags & PUT_CURSLINE as ::core::ffi::c_int != 0 {
                             (*curwin).w_cursor.lnum = lnum;
                             beginline(
-                                BL_WHITE as ::core::ffi::c_int
-                                    | BL_FIX as ::core::ffi::c_int,
+                                BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
                             );
                         } else if flags & PUT_CURSEND as ::core::ffi::c_int != 0 {
-                            if y_type as ::core::ffi::c_int
-                                == kMTLineWise as ::core::ffi::c_int
-                            {
+                            if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
                                 if lnum >= (*curbuf).b_ml.ml_line_count {
                                     (*curwin).w_cursor.lnum = (*curbuf).b_ml.ml_line_count;
                                 } else {
@@ -6274,19 +6131,18 @@ pub unsafe extern "C" fn do_put(
                                 (*curbuf).b_op_end = (*curwin).w_cursor;
                                 if col > 1 as ::core::ffi::c_int {
                                     (*curbuf).b_op_end.col = (col as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int) as colnr_T;
+                                        - 1 as ::core::ffi::c_int)
+                                        as colnr_T;
                                 }
                             }
-                        } else if y_type as ::core::ffi::c_int
-                            == kMTLineWise as ::core::ffi::c_int
+                        } else if y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
                         {
                             (*curwin).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
                             if dir == FORWARD as ::core::ffi::c_int {
                                 (*curwin).w_cursor.lnum += 1;
                             }
                             beginline(
-                                BL_WHITE as ::core::ffi::c_int
-                                    | BL_FIX as ::core::ffi::c_int,
+                                BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
                             );
                         } else {
                             (*curwin).w_cursor = new_cursor;
@@ -6297,11 +6153,9 @@ pub unsafe extern "C" fn do_put(
                 (*curwin).w_set_curswant = true_0;
                 len_0 = get_cursor_line_len();
                 if (*curwin).w_cursor.col > len_0 {
-                    if cur_ve_flags
-                        == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        (*curwin).w_cursor.coladd = ((*curwin).w_cursor.col
-                            as ::core::ffi::c_int - len_0) as colnr_T;
+                    if cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint {
+                        (*curwin).w_cursor.coladd =
+                            ((*curwin).w_cursor.col as ::core::ffi::c_int - len_0) as colnr_T;
                     }
                     (*curwin).w_cursor.col = len_0 as colnr_T;
                 }
@@ -6326,7 +6180,8 @@ pub unsafe extern "C" fn do_put(
 unsafe extern "C" fn dis_msg(mut p: *const ::core::ffi::c_char, mut skip_esc: bool) {
     let mut n: ::core::ffi::c_int = Columns - 6 as ::core::ffi::c_int;
     while *p as ::core::ffi::c_int != NUL
-        && !(*p as ::core::ffi::c_int == ESC && skip_esc as ::core::ffi::c_int != 0
+        && !(*p as ::core::ffi::c_int == ESC
+            && skip_esc as ::core::ffi::c_int != 0
             && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL)
         && {
             n -= ptr2cells(p);
@@ -6363,16 +6218,14 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
     let mut hl_id: ::core::ffi::c_int = HLF_8 as ::core::ffi::c_int;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_ext_skip_flush = true_0 != 0;
-    msg_puts_title(
-        gettext(b"\nType Name Content\0".as_ptr() as *const ::core::ffi::c_char),
-    );
+    msg_puts_title(gettext(
+        b"\nType Name Content\0".as_ptr() as *const ::core::ffi::c_char
+    ));
     let mut i: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     while i < NUM_REGISTERS as ::core::ffi::c_int && !got_int {
         let mut name: ::core::ffi::c_int = get_register_name(i);
         if !(!arg.is_null() && vim_strchr(arg, name).is_null()) {
-            match get_reg_type(name, ::core::ptr::null_mut::<colnr_T>())
-                as ::core::ffi::c_int
-            {
+            match get_reg_type(name, ::core::ptr::null_mut::<colnr_T>()) as ::core::ffi::c_int {
                 1 => {
                     type_0 = 'l' as ::core::ffi::c_int;
                 }
@@ -6401,13 +6254,10 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
                     let mut do_show: bool = false_0 != 0;
                     let mut j: size_t = 0 as size_t;
                     while !do_show && j < (*yb).y_size {
-                        do_show = !message_filtered(
-                            (*(*yb).y_array.offset(j as isize)).data,
-                        );
+                        do_show = !message_filtered((*(*yb).y_array.offset(j as isize)).data);
                         j = j.wrapping_add(1);
                     }
-                    if do_show as ::core::ffi::c_int != 0 || (*yb).y_size == 0 as size_t
-                    {
+                    if do_show as ::core::ffi::c_int != 0 || (*yb).y_size == 0 as size_t {
                         msg_putchar('\n' as ::core::ffi::c_int);
                         msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
                         msg_putchar(type_0);
@@ -6415,8 +6265,7 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
                         msg_putchar('"' as ::core::ffi::c_int);
                         msg_putchar(name);
                         msg_puts(b"   \0".as_ptr() as *const ::core::ffi::c_char);
-                        let mut n: ::core::ffi::c_int = Columns
-                            - 11 as ::core::ffi::c_int;
+                        let mut n: ::core::ffi::c_int = Columns - 11 as ::core::ffi::c_int;
                         let mut j_0: size_t = 0 as size_t;
                         while j_0 < (*yb).y_size && n > 1 as ::core::ffi::c_int {
                             if j_0 != 0 {
@@ -6428,19 +6277,12 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
                                 n -= 2 as ::core::ffi::c_int;
                             }
                             p = (*(*yb).y_array.offset(j_0 as isize)).data;
-                            while *p as ::core::ffi::c_int != NUL
-                                && {
-                                    n -= ptr2cells(p);
-                                    n >= 0 as ::core::ffi::c_int
-                                }
-                            {
+                            while *p as ::core::ffi::c_int != NUL && {
+                                n -= ptr2cells(p);
+                                n >= 0 as ::core::ffi::c_int
+                            } {
                                 let mut clen: ::core::ffi::c_int = utfc_ptr2len(p);
-                                msg_outtrans_len(
-                                    p,
-                                    clen,
-                                    0 as ::core::ffi::c_int,
-                                    false_0 != 0,
-                                );
+                                msg_outtrans_len(p, clen, 0 as ::core::ffi::c_int, false_0 != 0);
                                 p = p.offset((clen - 1 as ::core::ffi::c_int) as isize);
                                 p = p.offset(1);
                             }
@@ -6467,34 +6309,33 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
     p = insert.data;
     if !p.is_null()
         && (arg.is_null() || !vim_strchr(arg, '.' as ::core::ffi::c_int).is_null())
-        && !got_int && !message_filtered(p)
+        && !got_int
+        && !message_filtered(p)
     {
         msg_puts(b"\n  c  \".   \0".as_ptr() as *const ::core::ffi::c_char);
         dis_msg(p, true_0 != 0);
     }
     if !last_cmdline.is_null()
         && (arg.is_null() || !vim_strchr(arg, ':' as ::core::ffi::c_int).is_null())
-        && !got_int && !message_filtered(last_cmdline)
+        && !got_int
+        && !message_filtered(last_cmdline)
     {
         msg_puts(b"\n  c  \":   \0".as_ptr() as *const ::core::ffi::c_char);
         dis_msg(last_cmdline, false_0 != 0);
     }
     if !(*curbuf).b_fname.is_null()
         && (arg.is_null() || !vim_strchr(arg, '%' as ::core::ffi::c_int).is_null())
-        && !got_int && !message_filtered((*curbuf).b_fname)
+        && !got_int
+        && !message_filtered((*curbuf).b_fname)
     {
         msg_puts(b"\n  c  \"%   \0".as_ptr() as *const ::core::ffi::c_char);
         dis_msg((*curbuf).b_fname, false_0 != 0);
     }
-    if (arg.is_null() || !vim_strchr(arg, '%' as ::core::ffi::c_int).is_null())
-        && !got_int
-    {
-        let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+    if (arg.is_null() || !vim_strchr(arg, '%' as ::core::ffi::c_int).is_null()) && !got_int {
+        let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut dummy: linenr_T = 0;
-        if buflist_name_nr(0 as ::core::ffi::c_int, &raw mut fname, &raw mut dummy)
-            != FAIL && !message_filtered(fname)
+        if buflist_name_nr(0 as ::core::ffi::c_int, &raw mut fname, &raw mut dummy) != FAIL
+            && !message_filtered(fname)
         {
             msg_puts(b"\n  c  \"#   \0".as_ptr() as *const ::core::ffi::c_char);
             dis_msg(fname, false_0 != 0);
@@ -6502,14 +6343,16 @@ pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
     }
     if !last_search_pat().is_null()
         && (arg.is_null() || !vim_strchr(arg, '/' as ::core::ffi::c_int).is_null())
-        && !got_int && !message_filtered(last_search_pat())
+        && !got_int
+        && !message_filtered(last_search_pat())
     {
         msg_puts(b"\n  c  \"/   \0".as_ptr() as *const ::core::ffi::c_char);
         dis_msg(last_search_pat(), false_0 != 0);
     }
     if !expr_line.is_null()
         && (arg.is_null() || !vim_strchr(arg, '=' as ::core::ffi::c_int).is_null())
-        && !got_int && !message_filtered(expr_line)
+        && !got_int
+        && !message_filtered(expr_line)
     {
         msg_puts(b"\n  c  \"=   \0".as_ptr() as *const ::core::ffi::c_char);
         dis_msg(expr_line, false_0 != 0);
@@ -6574,10 +6417,7 @@ pub unsafe extern "C" fn get_reg_type(
     if regname != NUL && !valid_yank_reg(regname, false_0 != 0) {
         return kMTUnknown;
     }
-    let mut reg: *mut yankreg_T = get_yank_register(
-        regname,
-        YREG_PASTE as ::core::ffi::c_int,
-    );
+    let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PASTE as ::core::ffi::c_int);
     if !(*reg).y_array.is_null() {
         if !reg_width.is_null()
             && (*reg).y_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
@@ -6619,9 +6459,7 @@ pub unsafe extern "C" fn get_reg_contents(
     if regname != NUL && !valid_yank_reg(regname, false_0 != 0) {
         return NULL_0;
     }
-    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut allocated: bool = false;
     if get_spec_reg(regname, &raw mut retval, &raw mut allocated, false_0 != 0) {
         if retval.is_null() {
@@ -6632,10 +6470,7 @@ pub unsafe extern "C" fn get_reg_contents(
         }
         return get_reg_wrap_one_line(xstrdup(retval), flags);
     }
-    let mut reg: *mut yankreg_T = get_yank_register(
-        regname,
-        YREG_PUT as ::core::ffi::c_int,
-    );
+    let mut reg: *mut yankreg_T = get_yank_register(regname, YREG_PUT as ::core::ffi::c_int);
     if (*reg).y_array.is_null() {
         return NULL_0;
     }
@@ -6646,8 +6481,7 @@ pub unsafe extern "C" fn get_reg_contents(
             tv_list_append_string(
                 list,
                 (*(*reg).y_array.offset(i as isize)).data,
-                (*(*reg).y_array.offset(i as isize)).size as ::core::ffi::c_int
-                    as ssize_t,
+                (*(*reg).y_array.offset(i as isize)).size as ::core::ffi::c_int as ssize_t,
             );
             i = i.wrapping_add(1);
         }
@@ -6668,7 +6502,10 @@ pub unsafe extern "C" fn get_reg_contents(
     len = 0 as size_t;
     let mut i_1: size_t = 0 as size_t;
     while i_1 < (*reg).y_size {
-        strcpy(retval.offset(len as isize), (*(*reg).y_array.offset(i_1 as isize)).data);
+        strcpy(
+            retval.offset(len as isize),
+            (*(*reg).y_array.offset(i_1 as isize)).data,
+        );
         len = len.wrapping_add((*(*reg).y_array.offset(i_1 as isize)).size);
         if (*reg).y_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
             || i_1 < (*reg).y_size.wrapping_sub(1 as size_t)
@@ -6692,10 +6529,7 @@ unsafe extern "C" fn init_write_reg(
         return ::core::ptr::null_mut::<yankreg_T>();
     }
     *old_y_previous = y_previous;
-    let mut reg: *mut yankreg_T = get_yank_register(
-        name,
-        YREG_YANK as ::core::ffi::c_int,
-    );
+    let mut reg: *mut yankreg_T = get_yank_register(name, YREG_YANK as ::core::ffi::c_int);
     if !is_append_register(name) && !must_append {
         free_register(reg);
     }
@@ -6715,10 +6549,9 @@ unsafe extern "C" fn str_to_reg(
     if yank_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int {
         yank_type = (if str_list as ::core::ffi::c_int != 0
             || len > 0 as size_t
-                && (*str.offset(len.wrapping_sub(1 as size_t) as isize)
-                    as ::core::ffi::c_int == NL
-                    || *str.offset(len.wrapping_sub(1 as size_t) as isize)
-                        as ::core::ffi::c_int == CAR)
+                && (*str.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int == NL
+                    || *str.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                        == CAR)
         {
             kMTLineWise as ::core::ffi::c_int
         } else {
@@ -6756,8 +6589,8 @@ unsafe extern "C" fn str_to_reg(
         }
     }
     if (*y_ptr).y_size.wrapping_add(newlines) == 0 as size_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*y_ptr).y_array
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*y_ptr).y_array as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -6774,8 +6607,7 @@ unsafe extern "C" fn str_to_reg(
     let mut lnum: size_t = (*y_ptr).y_size;
     let mut maxlen: size_t = 0 as size_t;
     if str_list {
-        let mut ss_0: *mut *mut ::core::ffi::c_char = str
-            as *mut *mut ::core::ffi::c_char;
+        let mut ss_0: *mut *mut ::core::ffi::c_char = str as *mut *mut ::core::ffi::c_char;
         while !(*ss_0).is_null() {
             *pp.offset(lnum as isize) = cstr_to_string(*ss_0);
             if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
@@ -6796,28 +6628,24 @@ unsafe extern "C" fn str_to_reg(
                 if *line_end as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
                     break;
                 }
-                if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
-                {
-                    charlen_0
-                        += utf_ptr2cells_len(
-                            line_end,
-                            end.offset_from(line_end) as ::core::ffi::c_int,
-                        );
+                if yank_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
+                    charlen_0 += utf_ptr2cells_len(
+                        line_end,
+                        end.offset_from(line_end) as ::core::ffi::c_int,
+                    );
                 }
                 if *line_end as ::core::ffi::c_int == NUL {
                     line_end = line_end.offset(1);
                 } else {
-                    line_end = line_end
-                        .offset(
-                            utf_ptr2len_len(
-                                line_end,
-                                end.offset_from(line_end) as ::core::ffi::c_int,
-                            ) as isize,
-                        );
+                    line_end = line_end.offset(utf_ptr2len_len(
+                        line_end,
+                        end.offset_from(line_end) as ::core::ffi::c_int,
+                    ) as isize);
                 }
             }
             '_c2rust_label: {
-                if line_end.offset_from(start) >= 0 as isize {} else {
+                if line_end.offset_from(start) >= 0 as isize {
+                } else {
                     __assert_fail(
                         b"line_end - start >= 0\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -6841,8 +6669,8 @@ unsafe extern "C" fn str_to_reg(
             } else {
                 0 as size_t
             };
-            let mut s: *mut ::core::ffi::c_char = xmallocz(line_len.wrapping_add(extra))
-                as *mut ::core::ffi::c_char;
+            let mut s: *mut ::core::ffi::c_char =
+                xmallocz(line_len.wrapping_add(extra)) as *mut ::core::ffi::c_char;
             if extra > 0 as size_t {
                 memcpy(
                     s as *mut ::core::ffi::c_void,
@@ -6862,7 +6690,10 @@ unsafe extern "C" fn str_to_reg(
                 xfree((*pp.offset(lnum as isize)).data as *mut ::core::ffi::c_void);
                 append = false_0 != 0;
             }
-            *pp.offset(lnum as isize) = String_0 { data: s, size: s_len };
+            *pp.offset(lnum as isize) = String_0 {
+                data: s,
+                size: s_len,
+            };
             memchrsub(
                 (*pp.offset(lnum as isize)).data as *mut ::core::ffi::c_void,
                 NUL as ::core::ffi::c_char,
@@ -6875,8 +6706,8 @@ unsafe extern "C" fn str_to_reg(
     }
     (*y_ptr).y_type = yank_type;
     (*y_ptr).y_size = lnum;
-    let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*y_ptr).additional_data
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr__0: *mut *mut ::core::ffi::c_void =
+        &raw mut (*y_ptr).additional_data as *mut *mut ::core::ffi::c_void;
     xfree(*ptr__0);
     *ptr__0 = NULL_0;
     *ptr__0;
@@ -6919,8 +6750,7 @@ pub unsafe extern "C" fn write_reg_contents_lst(
     mut block_len: colnr_T,
 ) {
     if name == '/' as ::core::ffi::c_int || name == '=' as ::core::ffi::c_int {
-        let mut s: *mut ::core::ffi::c_char = *strings
-            .offset(0 as ::core::ffi::c_int as isize);
+        let mut s: *mut ::core::ffi::c_char = *strings.offset(0 as ::core::ffi::c_int as isize);
         if (*strings.offset(0 as ::core::ffi::c_int as isize)).is_null() {
             s = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else if !(*strings.offset(1 as ::core::ffi::c_int as isize)).is_null() {
@@ -6982,15 +6812,13 @@ pub unsafe extern "C" fn write_reg_contents_ex(
                 );
             }
         } else {
-            buf = buflist_findnr(
-                buflist_findpat(
-                    str,
-                    str.offset(len as isize),
-                    true_0 != 0,
-                    false_0 != 0,
-                    false_0 != 0,
-                ),
-            );
+            buf = buflist_findnr(buflist_findpat(
+                str,
+                str.offset(len as isize),
+                true_0 != 0,
+                false_0 != 0,
+                false_0 != 0,
+            ));
         }
         if buf.is_null() {
             return;
@@ -7062,13 +6890,12 @@ pub unsafe extern "C" fn prepare_yankreg_from_object(
             return false_0 != 0;
         }
         if !ascii_isdigit(
-            *regtype.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
+            *regtype.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         ) {
             return false_0 != 0;
         }
-        let mut p: *const ::core::ffi::c_char = regtype
-            .data
-            .offset(1 as ::core::ffi::c_int as isize);
+        let mut p: *const ::core::ffi::c_char =
+            regtype.data.offset(1 as ::core::ffi::c_int as isize);
         (*reg).y_width = (getdigits_int(
             &raw mut p as *mut *mut ::core::ffi::c_char,
             false_0 != 0,
@@ -7088,8 +6915,11 @@ pub unsafe extern "C" fn finish_yankreg_from_object(
     mut clipboard_adjust: bool,
 ) {
     if (*reg).y_size > 0 as size_t
-        && (*(*reg).y_array.offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
-            .size == 0 as size_t
+        && (*(*reg)
+            .y_array
+            .offset((*reg).y_size.wrapping_sub(1 as size_t) as isize))
+        .size
+            == 0 as size_t
     {
         if (*reg).y_type as ::core::ffi::c_int != kMTCharWise as ::core::ffi::c_int {
             if (*reg).y_type as ::core::ffi::c_int == kMTUnknown as ::core::ffi::c_int
@@ -7108,7 +6938,8 @@ pub unsafe extern "C" fn finish_yankreg_from_object(
 }
 #[inline]
 unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
-    return regname == '*' as ::core::ffi::c_int || regname == '+' as ::core::ffi::c_int
+    return regname == '*' as ::core::ffi::c_int
+        || regname == '+' as ::core::ffi::c_int
         || (regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
             && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
             || regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
@@ -7118,25 +6949,25 @@ unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
 #[inline]
 unsafe extern "C" fn op_reg_index(regname: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if ascii_isdigit(regname) {
-        return regname - '0' as ::core::ffi::c_int
+        return regname - '0' as ::core::ffi::c_int;
     } else if regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
         && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
     {
         return regname as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int
-            + 10 as ::core::ffi::c_int
+            + 10 as ::core::ffi::c_int;
     } else if regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
         && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
     {
         return regname as uint8_t as ::core::ffi::c_int - 'A' as ::core::ffi::c_int
-            + 10 as ::core::ffi::c_int
+            + 10 as ::core::ffi::c_int;
     } else if regname == '-' as ::core::ffi::c_int {
-        return DELETION_REGISTER as ::core::ffi::c_int
+        return DELETION_REGISTER as ::core::ffi::c_int;
     } else if regname == '*' as ::core::ffi::c_int {
-        return STAR_REGISTER as ::core::ffi::c_int
+        return STAR_REGISTER as ::core::ffi::c_int;
     } else if regname == '+' as ::core::ffi::c_int {
-        return PLUS_REGISTER as ::core::ffi::c_int
+        return PLUS_REGISTER as ::core::ffi::c_int;
     } else {
-        return -1 as ::core::ffi::c_int
+        return -1 as ::core::ffi::c_int;
     };
 }
 #[inline]
@@ -7145,30 +6976,28 @@ unsafe extern "C" fn is_append_register(mut regname: ::core::ffi::c_int) -> bool
         && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint;
 }
 #[inline]
-unsafe extern "C" fn get_register_name(
-    mut num: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if num == -1 as ::core::ffi::c_int {
-        return '"' as ::core::ffi::c_int
+        return '"' as ::core::ffi::c_int;
     } else if num < 10 as ::core::ffi::c_int {
-        return num + '0' as ::core::ffi::c_int
+        return num + '0' as ::core::ffi::c_int;
     } else if num == DELETION_REGISTER as ::core::ffi::c_int {
-        return '-' as ::core::ffi::c_int
+        return '-' as ::core::ffi::c_int;
     } else if num == STAR_REGISTER as ::core::ffi::c_int {
-        return '*' as ::core::ffi::c_int
+        return '*' as ::core::ffi::c_int;
     } else if num == PLUS_REGISTER as ::core::ffi::c_int {
-        return '+' as ::core::ffi::c_int
+        return '+' as ::core::ffi::c_int;
     } else {
-        return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int
+        return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int;
     };
 }
 #[inline]
 unsafe extern "C" fn reg_empty(reg: *const yankreg_T) -> bool {
-    return (*reg).y_array.is_null() || (*reg).y_size == 0 as size_t
+    return (*reg).y_array.is_null()
+        || (*reg).y_size == 0 as size_t
         || (*reg).y_size == 1 as size_t
             && (*reg).y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
-            && (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size
-                == 0 as size_t;
+            && (*(*reg).y_array.offset(0 as ::core::ffi::c_int as isize)).size == 0 as size_t;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

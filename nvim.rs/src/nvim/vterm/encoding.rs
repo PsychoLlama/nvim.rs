@@ -4,9 +4,7 @@ pub type uint32_t = u32;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
-    pub init: Option<
-        unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
         unsafe extern "C" fn(
             *mut VTermEncoding,
@@ -43,14 +41,9 @@ pub struct UTF8DecoderData {
     pub bytes_total: ::core::ffi::c_int,
     pub this_cp: ::core::ffi::c_int,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UNICODE_INVALID: ::core::ffi::c_int = 0xfffd as ::core::ffi::c_int;
-unsafe extern "C" fn init_utf8(
-    mut enc: *mut VTermEncoding,
-    mut data_: *mut ::core::ffi::c_void,
-) {
+unsafe extern "C" fn init_utf8(mut enc: *mut VTermEncoding, mut data_: *mut ::core::ffi::c_void) {
     let mut data: *mut UTF8DecoderData = data_ as *mut UTF8DecoderData;
     (*data).bytes_remaining = 0 as ::core::ffi::c_int;
     (*data).bytes_total = 0 as ::core::ffi::c_int;
@@ -69,7 +62,7 @@ unsafe extern "C" fn decode_utf8(
     while *pos < bytelen && *cpi < cplen {
         let mut c: uint8_t = *bytes.offset(*pos as isize) as uint8_t;
         if (c as ::core::ffi::c_int) < 0x20 as ::core::ffi::c_int {
-            return
+            return;
         } else {
             if c as ::core::ffi::c_int >= 0x20 as ::core::ffi::c_int
                 && (c as ::core::ffi::c_int) < 0x7f as ::core::ffi::c_int
@@ -84,7 +77,7 @@ unsafe extern "C" fn decode_utf8(
                 *cp.offset(c2rust_fresh4 as isize) = c as uint32_t;
                 (*data).bytes_remaining = 0 as ::core::ffi::c_int;
             } else if c as ::core::ffi::c_int == 0x7f as ::core::ffi::c_int {
-                return
+                return;
             } else if c as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
                 && (c as ::core::ffi::c_int) < 0xc0 as ::core::ffi::c_int
             {
@@ -94,8 +87,7 @@ unsafe extern "C" fn decode_utf8(
                     *cp.offset(c2rust_fresh5 as isize) = UNICODE_INVALID as uint32_t;
                 } else {
                     (*data).this_cp <<= 6 as ::core::ffi::c_int;
-                    (*data).this_cp
-                        |= c as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int;
+                    (*data).this_cp |= c as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int;
                     (*data).bytes_remaining -= 1;
                     if (*data).bytes_remaining == 0 {
                         match (*data).bytes_total {
@@ -204,8 +196,7 @@ unsafe extern "C" fn decode_utf8(
 }
 static mut encoding_utf8: VTermEncoding = VTermEncoding {
     init: Some(
-        init_utf8
-            as unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
+        init_utf8 as unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
     ),
     decode: Some(
         decode_utf8
@@ -231,11 +222,11 @@ unsafe extern "C" fn decode_usascii(
     mut pos: *mut size_t,
     mut bytelen: size_t,
 ) {
-    let mut is_gr: ::core::ffi::c_int = *bytes.offset(*pos as isize)
-        as ::core::ffi::c_int & 0x80 as ::core::ffi::c_int;
+    let mut is_gr: ::core::ffi::c_int =
+        *bytes.offset(*pos as isize) as ::core::ffi::c_int & 0x80 as ::core::ffi::c_int;
     while *pos < bytelen && *cpi < cplen {
-        let mut c: uint8_t = (*bytes.offset(*pos as isize) as ::core::ffi::c_int ^ is_gr)
-            as uint8_t;
+        let mut c: uint8_t =
+            (*bytes.offset(*pos as isize) as ::core::ffi::c_int ^ is_gr) as uint8_t;
         if (c as ::core::ffi::c_int) < 0x20 as ::core::ffi::c_int
             || c as ::core::ffi::c_int == 0x7f as ::core::ffi::c_int
             || c as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
@@ -275,11 +266,11 @@ unsafe extern "C" fn decode_table(
     mut bytelen: size_t,
 ) {
     let mut table: *mut StaticTableEncoding = enc as *mut StaticTableEncoding;
-    let mut is_gr: ::core::ffi::c_int = *bytes.offset(*pos as isize)
-        as ::core::ffi::c_int & 0x80 as ::core::ffi::c_int;
+    let mut is_gr: ::core::ffi::c_int =
+        *bytes.offset(*pos as isize) as ::core::ffi::c_int & 0x80 as ::core::ffi::c_int;
     while *pos < bytelen && *cpi < cplen {
-        let mut c: uint8_t = (*bytes.offset(*pos as isize) as ::core::ffi::c_int ^ is_gr)
-            as uint8_t;
+        let mut c: uint8_t =
+            (*bytes.offset(*pos as isize) as ::core::ffi::c_int ^ is_gr) as uint8_t;
         if (c as ::core::ffi::c_int) < 0x20 as ::core::ffi::c_int
             || c as ::core::ffi::c_int == 0x7f as ::core::ffi::c_int
             || c as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
@@ -477,8 +468,7 @@ pub unsafe extern "C" fn vterm_lookup_encoding(
 ) -> *mut VTermEncoding {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while encodings[i as usize].designation != 0 {
-        if encodings[i as usize].type_0 as ::core::ffi::c_uint
-            == type_0 as ::core::ffi::c_uint
+        if encodings[i as usize].type_0 as ::core::ffi::c_uint == type_0 as ::core::ffi::c_uint
             && encodings[i as usize].designation as ::core::ffi::c_int
                 == designation as ::core::ffi::c_int
         {

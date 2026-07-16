@@ -169,7 +169,8 @@ pub struct ScreenPen {
     #[bitfield(name = "protected_cell", ty = "::core::ffi::c_uint", bits = "17..=17")]
     #[bitfield(name = "dwl", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "dhl", ty = "::core::ffi::c_uint", bits = "19..=20")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -221,7 +222,8 @@ pub struct VTermScreenCellAttrs {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "16..=17")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "18..=18")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "19..=19")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -248,15 +250,10 @@ pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCallbacks {
-    pub damage: Option<
-        unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub damage:
+        Option<unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub movecursor: Option<
         unsafe extern "C" fn(
@@ -273,9 +270,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -283,9 +278,8 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub sb_pushline: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -300,9 +294,7 @@ pub struct VTermScreenCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -429,10 +421,7 @@ pub struct VTermSelectionCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub query: Option<
-        unsafe extern "C" fn(
-            VTermSelectionMask,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermSelectionMask, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
@@ -500,7 +489,8 @@ pub struct VTermPen {
     #[bitfield(name = "baseline", ty = "::core::ffi::c_uint", bits = "13..=14")]
     #[bitfield(name = "dim", ty = "::core::ffi::c_uint", bits = "15..=15")]
     #[bitfield(name = "overline", ty = "::core::ffi::c_uint", bits = "16..=16")]
-    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline: [u8; 3],
+    pub bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -513,9 +503,7 @@ pub struct VTermEncodingInstance {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
-    pub init: Option<
-        unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
     pub decode: Option<
         unsafe extern "C" fn(
             *mut VTermEncoding,
@@ -552,7 +540,8 @@ pub struct C2Rust_Unnamed_7 {
         ty = "::core::ffi::c_uint",
         bits = "16..=16"
     )]
-    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output: [u8; 3],
+    pub keypad_cursor_autowrap_insert_newline_cursor_visible_cursor_blink_cursor_shape_alt_screen_origin_screen_leftrightmargin_bracketpaste_report_focus_theme_updates_synchronized_output:
+        [u8; 3],
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 1],
 }
@@ -574,9 +563,8 @@ pub struct VTermLineInfo {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub csi: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -603,22 +591,13 @@ pub struct VTermStateFallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
 #[derive(Copy, Clone)]
@@ -648,11 +627,7 @@ pub struct VTermStateCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub moverect: Option<
-        unsafe extern "C" fn(
-            VTermRect,
-            VTermRect,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermRect, VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub erase: Option<
         unsafe extern "C" fn(
@@ -661,9 +636,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub initpen: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub initpen: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setpenattr: Option<
         unsafe extern "C" fn(
             VTermAttr,
@@ -678,9 +651,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub bell: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub bell: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub resize: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -689,9 +660,8 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub theme: Option<
-        unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub theme:
+        Option<unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub setlineinfo: Option<
         unsafe extern "C" fn(
             ::core::ffi::c_int,
@@ -700,9 +670,7 @@ pub struct VTermStateCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub sb_clear: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -739,11 +707,8 @@ pub struct VTermGlyphInfo {
     #[bitfield(padding)]
     pub c2rust_padding: [u8; 3],
 }
-pub type VTermOutputCallback = unsafe extern "C" fn(
-    *const ::core::ffi::c_char,
-    size_t,
-    *mut ::core::ffi::c_void,
-) -> ();
+pub type VTermOutputCallback =
+    unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone, ::c2rust_bitfields::BitfieldStruct)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_9 {
@@ -770,9 +735,8 @@ pub struct VTermParserCallbacks {
             *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int,
     >,
-    pub control: Option<
-        unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    >,
+    pub control:
+        Option<unsafe extern "C" fn(uint8_t, *mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
     pub escape: Option<
         unsafe extern "C" fn(
             *const ::core::ffi::c_char,
@@ -806,22 +770,13 @@ pub struct VTermParserCallbacks {
         ) -> ::core::ffi::c_int,
     >,
     pub apc: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub pm: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub sos: Option<
-        unsafe extern "C" fn(
-            VTermStringFragment,
-            *mut ::core::ffi::c_void,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
     pub resize: Option<
         unsafe extern "C" fn(
@@ -881,19 +836,12 @@ pub struct C2Rust_Unnamed_14 {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermAllocatorFunctions {
-    pub malloc: Option<
-        unsafe extern "C" fn(
-            size_t,
-            *mut ::core::ffi::c_void,
-        ) -> *mut ::core::ffi::c_void,
-    >,
-    pub free: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> (),
-    >,
+    pub malloc:
+        Option<unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>,
+    pub free:
+        Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const BUFIDX_PRIMARY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const BUFIDX_ALTSCREEN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 #[inline]
@@ -908,10 +856,7 @@ unsafe extern "C" fn vterm_rect_move(
     (*rect).end_col += col_delta;
 }
 #[inline]
-unsafe extern "C" fn clearcell(
-    mut screen: *const VTermScreen,
-    mut cell: *mut ScreenCell,
-) {
+unsafe extern "C" fn clearcell(mut screen: *const VTermScreen, mut cell: *mut ScreenCell) {
     (*cell).schar = 0 as schar_T;
     (*cell).pen = (*screen).pen;
 }
@@ -927,7 +872,10 @@ pub unsafe extern "C" fn getcell(
     if col < 0 as ::core::ffi::c_int || col >= (*screen).cols {
         return ::core::ptr::null_mut::<ScreenCell>();
     }
-    return (*screen).buffer.offset(((*screen).cols * row) as isize).offset(col as isize);
+    return (*screen)
+        .buffer
+        .offset(((*screen).cols * row) as isize)
+        .offset(col as isize);
 }
 unsafe extern "C" fn alloc_buffer(
     mut screen: *mut VTermScreen,
@@ -993,8 +941,12 @@ unsafe extern "C" fn damagerect(mut screen: *mut VTermScreen, mut rect: VTermRec
         _ => return,
     }
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).damage.is_some() {
-        Some((*(*screen).callbacks).damage.expect("non-null function pointer"))
-            .expect("non-null function pointer")(emit, (*screen).cbdata);
+        Some(
+            (*(*screen).callbacks)
+                .damage
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(emit, (*screen).cbdata);
     }
 }
 unsafe extern "C" fn damagescreen(mut screen: *mut VTermScreen) {
@@ -1022,8 +974,8 @@ unsafe extern "C" fn putglyph(
     }
     let mut col: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while col < (*info).width {
-        (*getcell(screen, pos.row, pos.col + col)).schar = -1 as ::core::ffi::c_int
-            as uint32_t as schar_T;
+        (*getcell(screen, pos.row, pos.col + col)).schar =
+            -1 as ::core::ffi::c_int as uint32_t as schar_T;
         col += 1;
     }
     let mut rect: VTermRect = VTermRect {
@@ -1032,7 +984,9 @@ unsafe extern "C" fn putglyph(
         start_col: pos.col,
         end_col: pos.col + (*info).width,
     };
-    (*cell).pen.set_protected_cell((*info).protected_cell() as ::core::ffi::c_uint);
+    (*cell)
+        .pen
+        .set_protected_cell((*info).protected_cell() as ::core::ffi::c_uint);
     (*cell).pen.set_dwl((*info).dwl() as ::core::ffi::c_uint);
     (*cell).pen.set_dhl((*info).dhl() as ::core::ffi::c_uint);
     damagerect(screen, rect);
@@ -1050,9 +1004,9 @@ unsafe extern "C" fn sb_pushline_from_row(
     }
     (*(*screen).callbacks)
         .sb_pushline
-        .expect(
-            "non-null function pointer",
-        )((*screen).cols, (*screen).sb_buffer, (*screen).cbdata);
+        .expect("non-null function pointer")(
+        (*screen).cols, (*screen).sb_buffer, (*screen).cbdata
+    );
 }
 unsafe extern "C" fn moverect_internal(
     mut dest: VTermRect,
@@ -1060,9 +1014,11 @@ unsafe extern "C" fn moverect_internal(
     mut user: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_pushline.is_some()
+    if !(*screen).callbacks.is_null()
+        && (*(*screen).callbacks).sb_pushline.is_some()
         && dest.start_row == 0 as ::core::ffi::c_int
-        && dest.start_col == 0 as ::core::ffi::c_int && dest.end_col == (*screen).cols
+        && dest.start_col == 0 as ::core::ffi::c_int
+        && dest.end_col == (*screen).cols
         && (*screen).buffer == (*screen).buffers[BUFIDX_PRIMARY as usize]
     {
         let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1089,8 +1045,7 @@ unsafe extern "C" fn moverect_internal(
     while row_0 != test_row {
         memmove(
             getcell(screen, row_0, dest.start_col) as *mut ::core::ffi::c_void,
-            getcell(screen, row_0 + downward, src.start_col)
-                as *const ::core::ffi::c_void,
+            getcell(screen, row_0 + downward, src.start_col) as *const ::core::ffi::c_void,
             (cols as size_t).wrapping_mul(::core::mem::size_of::<ScreenCell>()),
         );
         row_0 += inc_row;
@@ -1109,8 +1064,13 @@ unsafe extern "C" fn moverect_user(
         {
             vterm_screen_flush_damage(screen);
         }
-        if Some((*(*screen).callbacks).moverect.expect("non-null function pointer"))
-            .expect("non-null function pointer")(dest, src, (*screen).cbdata) != 0
+        if Some(
+            (*(*screen).callbacks)
+                .moverect
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(dest, src, (*screen).cbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -1126,16 +1086,11 @@ unsafe extern "C" fn erase_internal(
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
     let mut row: ::core::ffi::c_int = rect.start_row;
     while row < (*(*screen).state).rows && row < rect.end_row {
-        let mut info: *const VTermLineInfo = vterm_state_get_lineinfo(
-            (*screen).state,
-            row,
-        );
+        let mut info: *const VTermLineInfo = vterm_state_get_lineinfo((*screen).state, row);
         let mut col: ::core::ffi::c_int = rect.start_col;
         while col < rect.end_col {
             let mut cell: *mut ScreenCell = getcell(screen, row, col);
-            if !(selective != 0
-                && (*cell).pen.protected_cell() as ::core::ffi::c_int != 0)
-            {
+            if !(selective != 0 && (*cell).pen.protected_cell() as ::core::ffi::c_int != 0) {
                 (*cell).schar = 0 as schar_T;
                 (*cell).pen = {
                     let mut init = ScreenPen {
@@ -1162,8 +1117,12 @@ unsafe extern "C" fn erase_internal(
                     init.set_dhl(0);
                     init
                 };
-                (*cell).pen.set_dwl((*info).doublewidth() as ::core::ffi::c_uint);
-                (*cell).pen.set_dhl((*info).doubleheight() as ::core::ffi::c_uint);
+                (*cell)
+                    .pen
+                    .set_dwl((*info).doublewidth() as ::core::ffi::c_uint);
+                (*cell)
+                    .pen
+                    .set_dhl((*info).doubleheight() as ::core::ffi::c_uint);
             }
             col += 1;
         }
@@ -1311,9 +1270,7 @@ unsafe extern "C" fn scrollrect(
                 (*screen).damaged.start_row = rect.end_row;
             }
         }
-        if (*screen).damaged.end_row >= rect.start_row
-            && (*screen).damaged.end_row < rect.end_row
-        {
+        if (*screen).damaged.end_row >= rect.start_row && (*screen).damaged.end_row < rect.end_row {
             (*screen).damaged.end_row -= downward;
             if (*screen).damaged.end_row < rect.start_row {
                 (*screen).damaged.end_row = rect.start_row;
@@ -1334,9 +1291,11 @@ unsafe extern "C" fn movecursor(
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).movecursor.is_some() {
         return Some(
-                (*(*screen).callbacks).movecursor.expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(pos, oldpos, visible, (*screen).cbdata);
+            (*(*screen).callbacks)
+                .movecursor
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(pos, oldpos, visible, (*screen).cbdata);
     }
     return 0 as ::core::ffi::c_int;
 }
@@ -1356,17 +1315,13 @@ unsafe extern "C" fn setpenattr(
         2 => {
             (*screen)
                 .pen
-                .set_underline(
-                    (*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_underline((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         3 => {
             (*screen)
                 .pen
-                .set_italic(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_italic((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         4 => {
@@ -1378,25 +1333,19 @@ unsafe extern "C" fn setpenattr(
         5 => {
             (*screen)
                 .pen
-                .set_reverse(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_reverse((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         6 => {
             (*screen)
                 .pen
-                .set_conceal(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_conceal((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         7 => {
             (*screen)
                 .pen
-                .set_strike(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_strike((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         8 => {
@@ -1422,9 +1371,7 @@ unsafe extern "C" fn setpenattr(
         12 => {
             (*screen)
                 .pen
-                .set_baseline(
-                    (*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_baseline((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         13 => {
@@ -1440,9 +1387,7 @@ unsafe extern "C" fn setpenattr(
         15 => {
             (*screen)
                 .pen
-                .set_overline(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_overline((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             return 1 as ::core::ffi::c_int;
         }
         16 => return 0 as ::core::ffi::c_int,
@@ -1458,9 +1403,7 @@ unsafe extern "C" fn settermprop(
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
     match prop as ::core::ffi::c_uint {
         3 => {
-            if (*val).boolean != 0
-                && (*screen).buffers[BUFIDX_ALTSCREEN as usize].is_null()
-            {
+            if (*val).boolean != 0 && (*screen).buffers[BUFIDX_ALTSCREEN as usize].is_null() {
                 return 0 as ::core::ffi::c_int;
             }
             (*screen).buffer = if (*val).boolean != 0 {
@@ -1474,26 +1417,30 @@ unsafe extern "C" fn settermprop(
         }
         6 => {
             (*screen)
-                .set_global_reverse(
-                    (*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
+                .set_global_reverse((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
             damagescreen(screen);
         }
         _ => {}
     }
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).settermprop.is_some() {
         return Some(
-                (*(*screen).callbacks).settermprop.expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(prop, val, (*screen).cbdata);
+            (*(*screen).callbacks)
+                .settermprop
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(prop, val, (*screen).cbdata);
     }
     return 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn bell(mut user: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).bell.is_some() {
-        return Some((*(*screen).callbacks).bell.expect("non-null function pointer"))
-            .expect("non-null function pointer")((*screen).cbdata);
+        return Some(
+            (*(*screen).callbacks)
+                .bell
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")((*screen).cbdata);
     }
     return 0 as ::core::ffi::c_int;
 }
@@ -1541,14 +1488,14 @@ unsafe extern "C" fn resize_buffer(
         col: -1 as ::core::ffi::c_int,
     };
     let mut final_blank_row: ::core::ffi::c_int = new_rows;
-    let mut do_reflow: bool = (*screen).reflow() as ::core::ffi::c_int != 0
-        && bufidx == BUFIDX_PRIMARY;
+    let mut do_reflow: bool =
+        (*screen).reflow() as ::core::ffi::c_int != 0 && bufidx == BUFIDX_PRIMARY;
     while old_row >= 0 as ::core::ffi::c_int {
         let mut old_row_end: ::core::ffi::c_int = old_row;
-        while do_reflow as ::core::ffi::c_int != 0 && !old_lineinfo.is_null()
+        while do_reflow as ::core::ffi::c_int != 0
+            && !old_lineinfo.is_null()
             && old_row > 0 as ::core::ffi::c_int
-            && (*old_lineinfo.offset(old_row as isize)).continuation()
-                as ::core::ffi::c_int != 0
+            && (*old_lineinfo.offset(old_row as isize)).continuation() as ::core::ffi::c_int != 0
         {
             old_row -= 1;
         }
@@ -1558,8 +1505,9 @@ unsafe extern "C" fn resize_buffer(
         while row <= old_row_end {
             if do_reflow as ::core::ffi::c_int != 0
                 && row < old_rows - 1 as ::core::ffi::c_int
-                && (*old_lineinfo.offset((row + 1 as ::core::ffi::c_int) as isize))
-                    .continuation() as ::core::ffi::c_int != 0
+                && (*old_lineinfo.offset((row + 1 as ::core::ffi::c_int) as isize)).continuation()
+                    as ::core::ffi::c_int
+                    != 0
             {
                 width += old_cols;
             } else {
@@ -1567,13 +1515,11 @@ unsafe extern "C" fn resize_buffer(
             }
             row += 1;
         }
-        if final_blank_row == new_row + 1 as ::core::ffi::c_int
-            && width == 0 as ::core::ffi::c_int
+        if final_blank_row == new_row + 1 as ::core::ffi::c_int && width == 0 as ::core::ffi::c_int
         {
             final_blank_row = new_row;
         }
-        let mut new_height: ::core::ffi::c_int = if do_reflow as ::core::ffi::c_int != 0
-        {
+        let mut new_height: ::core::ffi::c_int = if do_reflow as ::core::ffi::c_int != 0 {
             if width != 0 {
                 (width + new_cols - 1 as ::core::ffi::c_int) / new_cols
             } else {
@@ -1583,14 +1529,14 @@ unsafe extern "C" fn resize_buffer(
             1 as ::core::ffi::c_int
         };
         let mut new_row_end: ::core::ffi::c_int = new_row;
-        let mut new_row_start: ::core::ffi::c_int = new_row - new_height
-            + 1 as ::core::ffi::c_int;
+        let mut new_row_start: ::core::ffi::c_int = new_row - new_height + 1 as ::core::ffi::c_int;
         old_row = old_row_start;
         let mut old_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut spare_rows: ::core::ffi::c_int = new_rows - final_blank_row;
         if new_row_start < 0 as ::core::ffi::c_int
             && spare_rows >= 0 as ::core::ffi::c_int
-            && (!active || new_cursor.row == -1 as ::core::ffi::c_int
+            && (!active
+                || new_cursor.row == -1 as ::core::ffi::c_int
                 || new_cursor.row - new_row_start < new_rows)
         {
             let mut downwards: ::core::ffi::c_int = -new_row_start;
@@ -1599,20 +1545,16 @@ unsafe extern "C" fn resize_buffer(
             }
             let mut rowcount: ::core::ffi::c_int = new_rows - downwards;
             memmove(
-                new_buffer.offset((downwards * new_cols) as isize)
-                    as *mut ::core::ffi::c_void,
-                new_buffer.offset(0 as ::core::ffi::c_int as isize)
-                    as *const ::core::ffi::c_void,
+                new_buffer.offset((downwards * new_cols) as isize) as *mut ::core::ffi::c_void,
+                new_buffer.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
                 (rowcount as size_t)
                     .wrapping_mul(new_cols as size_t)
                     .wrapping_mul(::core::mem::size_of::<ScreenCell>()),
             );
             memmove(
                 new_lineinfo.offset(downwards as isize) as *mut ::core::ffi::c_void,
-                new_lineinfo.offset(0 as ::core::ffi::c_int as isize)
-                    as *const ::core::ffi::c_void,
-                (rowcount as size_t)
-                    .wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
+                new_lineinfo.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                (rowcount as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
             );
             new_row += downwards;
             new_row_start += downwards;
@@ -1635,16 +1577,13 @@ unsafe extern "C" fn resize_buffer(
             new_row = new_row_start;
             old_row = old_row_start;
             while new_row <= new_row_end {
-                let mut count: ::core::ffi::c_int = if width >= new_cols {
-                    new_cols
-                } else {
-                    width
-                };
+                let mut count: ::core::ffi::c_int =
+                    if width >= new_cols { new_cols } else { width };
                 width -= count;
                 let mut new_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 while count != 0 {
-                    *new_buffer.offset((new_row * new_cols + new_col) as isize) = *old_buffer
-                        .offset((old_row * old_cols + old_col) as isize);
+                    *new_buffer.offset((new_row * new_cols + new_col) as isize) =
+                        *old_buffer.offset((old_row * old_cols + old_col) as isize);
                     if old_cursor.row == old_row && old_cursor.col == old_col {
                         new_cursor.row = new_row;
                         new_cursor.col = new_col;
@@ -1676,11 +1615,10 @@ unsafe extern "C" fn resize_buffer(
                     );
                     new_col += 1;
                 }
-                (*new_lineinfo.offset(new_row as isize))
-                    .set_continuation(
-                        (new_row > new_row_start) as ::core::ffi::c_int
-                            as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                    );
+                (*new_lineinfo.offset(new_row as isize)).set_continuation(
+                    (new_row > new_row_start) as ::core::ffi::c_int as ::core::ffi::c_uint
+                        as ::core::ffi::c_uint,
+                );
                 new_row += 1;
             }
             old_row = old_row_start - 1 as ::core::ffi::c_int;
@@ -1706,8 +1644,7 @@ unsafe extern "C" fn resize_buffer(
         abort();
     }
     if old_row >= 0 as ::core::ffi::c_int && bufidx == BUFIDX_PRIMARY {
-        if !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_pushline.is_some()
-        {
+        if !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_pushline.is_some() {
             let mut row_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while row_0 <= old_row {
                 sb_pushline_from_row(screen, row_0);
@@ -1718,59 +1655,81 @@ unsafe extern "C" fn resize_buffer(
             (*statefields).pos.row -= old_row + 1 as ::core::ffi::c_int;
         }
     }
-    if new_row >= 0 as ::core::ffi::c_int && bufidx == BUFIDX_PRIMARY
-        && !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_popline.is_some()
+    if new_row >= 0 as ::core::ffi::c_int
+        && bufidx == BUFIDX_PRIMARY
+        && !(*screen).callbacks.is_null()
+        && (*(*screen).callbacks).sb_popline.is_some()
     {
         while new_row >= 0 as ::core::ffi::c_int {
             if (*(*screen).callbacks)
                 .sb_popline
-                .expect(
-                    "non-null function pointer",
-                )(old_cols, (*screen).sb_buffer, (*screen).cbdata) == 0
+                .expect("non-null function pointer")(
+                old_cols,
+                (*screen).sb_buffer,
+                (*screen).cbdata,
+            ) == 0
             {
                 break;
             }
-            let mut pos: VTermPos = VTermPos { row: new_row, col: 0 };
+            let mut pos: VTermPos = VTermPos {
+                row: new_row,
+                col: 0,
+            };
             pos.col = 0 as ::core::ffi::c_int;
             while pos.col < old_cols && pos.col < new_cols {
-                let mut src: *mut VTermScreenCell = (*screen)
-                    .sb_buffer
-                    .offset(pos.col as isize);
-                let mut dst: *mut ScreenCell = new_buffer
-                    .offset((pos.row * new_cols + pos.col) as isize);
+                let mut src: *mut VTermScreenCell = (*screen).sb_buffer.offset(pos.col as isize);
+                let mut dst: *mut ScreenCell =
+                    new_buffer.offset((pos.row * new_cols + pos.col) as isize);
                 (*dst).schar = (*src).schar;
-                (*dst).pen.set_bold((*src).attrs.bold() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_bold((*src).attrs.bold() as ::core::ffi::c_uint);
                 (*dst)
                     .pen
                     .set_underline((*src).attrs.underline() as ::core::ffi::c_uint);
-                (*dst).pen.set_italic((*src).attrs.italic() as ::core::ffi::c_uint);
-                (*dst).pen.set_blink((*src).attrs.blink() as ::core::ffi::c_uint);
                 (*dst)
                     .pen
-                    .set_reverse(
-                        ((*src).attrs.reverse() as ::core::ffi::c_int
-                            ^ (*screen).global_reverse() as ::core::ffi::c_int)
-                            as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                    );
-                (*dst).pen.set_conceal((*src).attrs.conceal() as ::core::ffi::c_uint);
-                (*dst).pen.set_strike((*src).attrs.strike() as ::core::ffi::c_uint);
-                (*dst).pen.set_font((*src).attrs.font() as ::core::ffi::c_uint);
-                (*dst).pen.set_small((*src).attrs.small() as ::core::ffi::c_uint);
-                (*dst).pen.set_baseline((*src).attrs.baseline() as ::core::ffi::c_uint);
-                (*dst).pen.set_dim((*src).attrs.dim() as ::core::ffi::c_uint);
-                (*dst).pen.set_overline((*src).attrs.overline() as ::core::ffi::c_uint);
+                    .set_italic((*src).attrs.italic() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_blink((*src).attrs.blink() as ::core::ffi::c_uint);
+                (*dst).pen.set_reverse(
+                    ((*src).attrs.reverse() as ::core::ffi::c_int
+                        ^ (*screen).global_reverse() as ::core::ffi::c_int)
+                        as ::core::ffi::c_uint as ::core::ffi::c_uint,
+                );
+                (*dst)
+                    .pen
+                    .set_conceal((*src).attrs.conceal() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_strike((*src).attrs.strike() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_font((*src).attrs.font() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_small((*src).attrs.small() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_baseline((*src).attrs.baseline() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_dim((*src).attrs.dim() as ::core::ffi::c_uint);
+                (*dst)
+                    .pen
+                    .set_overline((*src).attrs.overline() as ::core::ffi::c_uint);
                 (*dst).pen.fg = (*src).fg;
                 (*dst).pen.bg = (*src).bg;
                 (*dst).pen.uri = (*src).uri;
                 if (*src).width as ::core::ffi::c_int == 2 as ::core::ffi::c_int
                     && pos.col < new_cols - 1 as ::core::ffi::c_int
                 {
-                    (*dst.offset(1 as ::core::ffi::c_int as isize)).schar = -1
-                        as ::core::ffi::c_int as uint32_t as schar_T;
+                    (*dst.offset(1 as ::core::ffi::c_int as isize)).schar =
+                        -1 as ::core::ffi::c_int as uint32_t as schar_T;
                 }
-                pos.col
-                    += (*(*screen).sb_buffer.offset(pos.col as isize)).width
-                        as ::core::ffi::c_int;
+                pos.col +=
+                    (*(*screen).sb_buffer.offset(pos.col as isize)).width as ::core::ffi::c_int;
             }
             while pos.col < new_cols {
                 clearcell(
@@ -1786,11 +1745,9 @@ unsafe extern "C" fn resize_buffer(
         }
     }
     if new_row >= 0 as ::core::ffi::c_int {
-        let mut moverows: ::core::ffi::c_int = new_rows - new_row
-            - 1 as ::core::ffi::c_int;
+        let mut moverows: ::core::ffi::c_int = new_rows - new_row - 1 as ::core::ffi::c_int;
         memmove(
-            new_buffer.offset(0 as ::core::ffi::c_int as isize)
-                as *mut ::core::ffi::c_void,
+            new_buffer.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
             new_buffer.offset(((new_row + 1 as ::core::ffi::c_int) * new_cols) as isize)
                 as *const ::core::ffi::c_void,
             (moverows as size_t)
@@ -1798,8 +1755,7 @@ unsafe extern "C" fn resize_buffer(
                 .wrapping_mul(::core::mem::size_of::<ScreenCell>()),
         );
         memmove(
-            new_lineinfo.offset(0 as ::core::ffi::c_int as isize)
-                as *mut ::core::ffi::c_void,
+            new_lineinfo.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
             new_lineinfo.offset((new_row + 1 as ::core::ffi::c_int) as isize)
                 as *const ::core::ffi::c_void,
             (moverows as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
@@ -1843,9 +1799,9 @@ unsafe extern "C" fn resize(
     mut user: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    let mut altscreen_active: ::core::ffi::c_int = (!(*screen)
-        .buffers[BUFIDX_ALTSCREEN as usize]
-        .is_null() && (*screen).buffer == (*screen).buffers[BUFIDX_ALTSCREEN as usize])
+    let mut altscreen_active: ::core::ffi::c_int = (!(*screen).buffers[BUFIDX_ALTSCREEN as usize]
+        .is_null()
+        && (*screen).buffer == (*screen).buffers[BUFIDX_ALTSCREEN as usize])
         as ::core::ffi::c_int;
     let mut old_rows: ::core::ffi::c_int = (*screen).rows;
     let mut old_cols: ::core::ffi::c_int = (*screen).cols;
@@ -1924,8 +1880,12 @@ unsafe extern "C" fn resize(
     }
     damagescreen(screen);
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).resize.is_some() {
-        return Some((*(*screen).callbacks).resize.expect("non-null function pointer"))
-            .expect("non-null function pointer")(new_rows, new_cols, (*screen).cbdata);
+        return Some(
+            (*(*screen).callbacks)
+                .resize
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(new_rows, new_cols, (*screen).cbdata);
     }
     return 1 as ::core::ffi::c_int;
 }
@@ -1935,8 +1895,12 @@ unsafe extern "C" fn theme(
 ) -> ::core::ffi::c_int {
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).theme.is_some() {
-        return Some((*(*screen).callbacks).theme.expect("non-null function pointer"))
-            .expect("non-null function pointer")(dark, (*screen).cbdata);
+        return Some(
+            (*(*screen).callbacks)
+                .theme
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")(dark, (*screen).cbdata);
     }
     return 1 as ::core::ffi::c_int;
 }
@@ -1955,8 +1919,12 @@ unsafe extern "C" fn setlineinfo(
         let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while col < (*screen).cols {
             let mut cell: *mut ScreenCell = getcell(screen, row, col);
-            (*cell).pen.set_dwl((*newinfo).doublewidth() as ::core::ffi::c_uint);
-            (*cell).pen.set_dhl((*newinfo).doubleheight() as ::core::ffi::c_uint);
+            (*cell)
+                .pen
+                .set_dwl((*newinfo).doublewidth() as ::core::ffi::c_uint);
+            (*cell)
+                .pen
+                .set_dhl((*newinfo).doubleheight() as ::core::ffi::c_uint);
             col += 1;
         }
         let mut rect: VTermRect = VTermRect {
@@ -1981,8 +1949,13 @@ unsafe extern "C" fn setlineinfo(
 unsafe extern "C" fn sb_clear(mut user: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
     if !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_clear.is_some() {
-        if Some((*(*screen).callbacks).sb_clear.expect("non-null function pointer"))
-            .expect("non-null function pointer")((*screen).cbdata) != 0
+        if Some(
+            (*(*screen).callbacks)
+                .sb_clear
+                .expect("non-null function pointer"),
+        )
+        .expect("non-null function pointer")((*screen).cbdata)
+            != 0
         {
             return 1 as ::core::ffi::c_int;
         }
@@ -2042,9 +2015,7 @@ static mut state_cbs: VTermStateCallbacks = VTermStateCallbacks {
                 *mut ::core::ffi::c_void,
             ) -> ::core::ffi::c_int,
     ),
-    bell: Some(
-        bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
+    bell: Some(bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int),
     resize: Some(
         resize
             as unsafe extern "C" fn(
@@ -2055,11 +2026,7 @@ static mut state_cbs: VTermStateCallbacks = VTermStateCallbacks {
             ) -> ::core::ffi::c_int,
     ),
     theme: Some(
-        theme
-            as unsafe extern "C" fn(
-                *mut bool,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
+        theme as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     ),
     setlineinfo: Some(
         setlineinfo
@@ -2079,10 +2046,8 @@ unsafe extern "C" fn screen_new(mut vt: *mut VTerm) -> *mut VTermScreen {
     if state.is_null() {
         return ::core::ptr::null_mut::<VTermScreen>();
     }
-    let mut screen: *mut VTermScreen = vterm_allocator_malloc(
-        vt,
-        ::core::mem::size_of::<VTermScreen>(),
-    ) as *mut VTermScreen;
+    let mut screen: *mut VTermScreen =
+        vterm_allocator_malloc(vt, ::core::mem::size_of::<VTermScreen>()) as *mut VTermScreen;
     let mut rows: ::core::ffi::c_int = 0;
     let mut cols: ::core::ffi::c_int = 0;
     vterm_get_size(vt, &raw mut rows, &raw mut cols);
@@ -2122,7 +2087,10 @@ pub unsafe extern "C" fn vterm_screen_free(mut screen: *mut VTermScreen) {
             (*screen).buffers[BUFIDX_ALTSCREEN as usize] as *mut ::core::ffi::c_void,
         );
     }
-    vterm_allocator_free((*screen).vt, (*screen).sb_buffer as *mut ::core::ffi::c_void);
+    vterm_allocator_free(
+        (*screen).vt,
+        (*screen).sb_buffer as *mut ::core::ffi::c_void,
+    );
     vterm_allocator_free((*screen).vt, screen as *mut ::core::ffi::c_void);
 }
 #[no_mangle]
@@ -2150,26 +2118,50 @@ pub unsafe extern "C" fn vterm_screen_get_cell(
     } else {
         (*intcell).schar
     };
-    (*cell).attrs.set_bold((*intcell).pen.bold() as ::core::ffi::c_uint);
-    (*cell).attrs.set_underline((*intcell).pen.underline() as ::core::ffi::c_uint);
-    (*cell).attrs.set_italic((*intcell).pen.italic() as ::core::ffi::c_uint);
-    (*cell).attrs.set_blink((*intcell).pen.blink() as ::core::ffi::c_uint);
     (*cell)
         .attrs
-        .set_reverse(
-            ((*intcell).pen.reverse() as ::core::ffi::c_int
-                ^ (*screen).global_reverse() as ::core::ffi::c_int)
-                as ::core::ffi::c_uint as ::core::ffi::c_uint,
-        );
-    (*cell).attrs.set_conceal((*intcell).pen.conceal() as ::core::ffi::c_uint);
-    (*cell).attrs.set_strike((*intcell).pen.strike() as ::core::ffi::c_uint);
-    (*cell).attrs.set_font((*intcell).pen.font() as ::core::ffi::c_uint);
-    (*cell).attrs.set_small((*intcell).pen.small() as ::core::ffi::c_uint);
-    (*cell).attrs.set_baseline((*intcell).pen.baseline() as ::core::ffi::c_uint);
-    (*cell).attrs.set_dim((*intcell).pen.dim() as ::core::ffi::c_uint);
-    (*cell).attrs.set_overline((*intcell).pen.overline() as ::core::ffi::c_uint);
-    (*cell).attrs.set_dwl((*intcell).pen.dwl() as ::core::ffi::c_uint);
-    (*cell).attrs.set_dhl((*intcell).pen.dhl() as ::core::ffi::c_uint);
+        .set_bold((*intcell).pen.bold() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_underline((*intcell).pen.underline() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_italic((*intcell).pen.italic() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_blink((*intcell).pen.blink() as ::core::ffi::c_uint);
+    (*cell).attrs.set_reverse(
+        ((*intcell).pen.reverse() as ::core::ffi::c_int
+            ^ (*screen).global_reverse() as ::core::ffi::c_int) as ::core::ffi::c_uint
+            as ::core::ffi::c_uint,
+    );
+    (*cell)
+        .attrs
+        .set_conceal((*intcell).pen.conceal() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_strike((*intcell).pen.strike() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_font((*intcell).pen.font() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_small((*intcell).pen.small() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_baseline((*intcell).pen.baseline() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_dim((*intcell).pen.dim() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_overline((*intcell).pen.overline() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_dwl((*intcell).pen.dwl() as ::core::ffi::c_uint);
+    (*cell)
+        .attrs
+        .set_dhl((*intcell).pen.dhl() as ::core::ffi::c_uint);
     (*cell).fg = (*intcell).pen.fg;
     (*cell).bg = (*intcell).pen.bg;
     (*cell).uri = (*intcell).pen.uri;
@@ -2200,10 +2192,7 @@ pub unsafe extern "C" fn vterm_screen_enable_reflow(
     (*screen).set_reflow(reflow as ::core::ffi::c_uint as ::core::ffi::c_uint);
 }
 #[no_mangle]
-pub unsafe extern "C" fn vterm_screen_set_reflow(
-    mut screen: *mut VTermScreen,
-    mut reflow: bool,
-) {
+pub unsafe extern "C" fn vterm_screen_set_reflow(mut screen: *mut VTermScreen, mut reflow: bool) {
     vterm_screen_enable_reflow(screen, reflow);
 }
 #[no_mangle]
@@ -2264,10 +2253,12 @@ pub unsafe extern "C" fn vterm_screen_flush_damage(mut screen: *mut VTermScreen)
     }
     if (*screen).damaged.start_row != -1 as ::core::ffi::c_int {
         if !(*screen).callbacks.is_null() && (*(*screen).callbacks).damage.is_some() {
-            Some((*(*screen).callbacks).damage.expect("non-null function pointer"))
-                .expect(
-                    "non-null function pointer",
-                )((*screen).damaged, (*screen).cbdata);
+            Some(
+                (*(*screen).callbacks)
+                    .damage
+                    .expect("non-null function pointer"),
+            )
+            .expect("non-null function pointer")((*screen).damaged, (*screen).cbdata);
         }
         (*screen).damaged.start_row = -1 as ::core::ffi::c_int;
     }
@@ -2328,9 +2319,10 @@ pub unsafe extern "C" fn rect_equal(
     mut a: *mut VTermRect,
     mut b: *mut VTermRect,
 ) -> ::core::ffi::c_int {
-    return ((*a).start_row == (*b).start_row && (*a).start_col == (*b).start_col
-        && (*a).end_row == (*b).end_row && (*a).end_col == (*b).end_col)
-        as ::core::ffi::c_int;
+    return ((*a).start_row == (*b).start_row
+        && (*a).start_col == (*b).start_col
+        && (*a).end_row == (*b).end_row
+        && (*a).end_col == (*b).end_col) as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn rect_contains(

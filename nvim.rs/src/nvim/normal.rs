@@ -47,18 +47,13 @@ extern "C" {
         __s1: *const ::core::ffi::c_char,
         __s2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn strequal(a: *const ::core::ffi::c_char, b: *const ::core::ffi::c_char) -> bool;
     fn time(__timer: *mut time_t) -> time_t;
@@ -81,11 +76,7 @@ extern "C" {
         options: ::core::ffi::c_int,
         forceit: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn fileinfo(
-        fullname: ::core::ffi::c_int,
-        shorthelp: ::core::ffi::c_int,
-        dont_truncate: bool,
-    );
+    fn fileinfo(fullname: ::core::ffi::c_int, shorthelp: ::core::ffi::c_int, dont_truncate: bool);
     fn bt_prompt(buf: *mut buf_T) -> bool;
     fn bt_quickfix(buf: *const buf_T) -> bool;
     fn buf_hide(buf: *const buf_T) -> bool;
@@ -100,10 +91,7 @@ extern "C" {
     );
     fn ins_char(c: ::core::ffi::c_int);
     fn ins_char_bytes(buf: *mut ::core::ffi::c_char, charlen: size_t);
-    fn del_chars(
-        count: ::core::ffi::c_int,
-        fixpos: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn del_chars(count: ::core::ffi::c_int, fixpos: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn open_line(
         dir: ::core::ffi::c_int,
         flags: ::core::ffi::c_int,
@@ -140,10 +128,7 @@ extern "C" {
     static mut p_ttm: OptInt;
     static mut p_ww: *mut ::core::ffi::c_char;
     static mut p_ws: ::core::ffi::c_int;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strsave_shellescape(
         string: *const ::core::ffi::c_char,
         do_special: bool,
@@ -181,19 +166,12 @@ extern "C" {
     fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
     fn get_cursor_line_len() -> colnr_T;
     fn get_cursor_pos_len() -> colnr_T;
-    fn decor_conceal_line(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-        check_cursor_0: bool,
-    ) -> bool;
+    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor_0: bool) -> bool;
     fn win_lines_concealed(wp: *mut win_T) -> bool;
     fn ex_diffupdate(eap: *mut exarg_T);
     fn diff_set_topline(fromwin: *mut win_T, towin: *mut win_T);
     fn nv_diffgetput(put: bool, count: size_t);
-    fn diff_move_to(
-        dir: ::core::ffi::c_int,
-        count: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn diff_move_to(dir: ::core::ffi::c_int, count: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn get_digraph(cmdline: bool) -> ::core::ffi::c_int;
     static mut diff_need_scrollbind: bool;
     fn conceal_check_cursor_line();
@@ -205,11 +183,7 @@ extern "C" {
     fn redraw_curbuf_later(type_0: ::core::ffi::c_int);
     fn redraw_statuslines();
     fn win_cursorline_standout(wp: *const win_T) -> bool;
-    fn edit(
-        cmdchar: ::core::ffi::c_int,
-        startln: bool,
-        count: ::core::ffi::c_int,
-    ) -> bool;
+    fn edit(cmdchar: ::core::ffi::c_int, startln: bool, count: ::core::ffi::c_int) -> bool;
     fn prompt_curpos_editable() -> bool;
     fn get_literal(no_simplify: bool) -> ::core::ffi::c_int;
     fn set_last_insert(c: ::core::ffi::c_int);
@@ -224,11 +198,7 @@ extern "C" {
     static e_modifiable: [::core::ffi::c_char; 0];
     static e_noident: [::core::ffi::c_char; 0];
     fn prompt_invoke_callback();
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn set_reg_var(c: ::core::ffi::c_int);
     fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool);
     fn do_ascii(eap: *mut exarg_T);
@@ -454,11 +424,7 @@ extern "C" {
     fn setpcmark();
     fn checkpcmark();
     fn get_jumplist(win: *mut win_T, count: ::core::ffi::c_int) -> *mut fmark_T;
-    fn get_changelist(
-        buf: *mut buf_T,
-        win: *mut win_T,
-        count: ::core::ffi::c_int,
-    ) -> *mut fmark_T;
+    fn get_changelist(buf: *mut buf_T, win: *mut win_T, count: ::core::ffi::c_int) -> *mut fmark_T;
     fn mark_get(
         buf: *mut buf_T,
         win: *mut win_T,
@@ -488,10 +454,7 @@ extern "C" {
     ) -> bool;
     fn utfc_ptr2len(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn show_utf8();
     fn utf_head_off(
         base_in: *const ::core::ffi::c_char,
@@ -533,10 +496,7 @@ extern "C" {
     fn nv_mousescroll(cap: *mut cmdarg_T);
     fn nv_mouse(cap: *mut cmdarg_T);
     fn setmouse();
-    fn sms_marker_overlap(
-        wp: *mut win_T,
-        extra2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn sms_marker_overlap(wp: *mut win_T, extra2: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn update_topline(wp: *mut win_T);
     fn update_curswant_force();
     fn update_curswant();
@@ -548,11 +508,7 @@ extern "C" {
     fn win_col_off(wp: *mut win_T) -> ::core::ffi::c_int;
     fn win_col_off2(wp: *mut win_T) -> ::core::ffi::c_int;
     fn scroll_redraw(up: ::core::ffi::c_int, count: linenr_T);
-    fn scrolldown(
-        wp: *mut win_T,
-        line_count: linenr_T,
-        byfold: ::core::ffi::c_int,
-    ) -> bool;
+    fn scrolldown(wp: *mut win_T, line_count: linenr_T, byfold: ::core::ffi::c_int) -> bool;
     fn scrollup(wp: *mut win_T, line_count: linenr_T, byfold: bool) -> bool;
     fn adjust_skipcol();
     fn scroll_cursor_top(
@@ -560,24 +516,13 @@ extern "C" {
         min_scroll: ::core::ffi::c_int,
         always: ::core::ffi::c_int,
     );
-    fn scroll_cursor_bot(
-        wp: *mut win_T,
-        min_scroll: ::core::ffi::c_int,
-        set_topbot: bool,
-    );
+    fn scroll_cursor_bot(wp: *mut win_T, min_scroll: ::core::ffi::c_int, set_topbot: bool);
     fn scroll_cursor_halfway(wp: *mut win_T, atend: bool, prefer_above: bool);
     fn cursor_correct(wp: *mut win_T);
-    fn pagescroll(
-        dir: Direction,
-        count: ::core::ffi::c_int,
-        half: bool,
-    ) -> ::core::ffi::c_int;
+    fn pagescroll(dir: Direction, count: ::core::ffi::c_int, half: bool) -> ::core::ffi::c_int;
     fn do_check_cursorbind();
     static mut showcmd_buf: [::core::ffi::c_char; 41];
-    fn get_op_type(
-        char1: ::core::ffi::c_int,
-        char2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn get_op_type(char1: ::core::ffi::c_int, char2: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn op_is_change(op: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn get_op_char(optype: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn get_extra_op_char(optype: ::core::ffi::c_int) -> ::core::ffi::c_int;
@@ -593,11 +538,7 @@ extern "C" {
     fn op_addsub(oap: *mut oparg_T, Prenum1: linenr_T, g_cmd: bool);
     fn clear_oparg(oap: *mut oparg_T);
     fn cursor_pos_info(dict: *mut dict_T);
-    fn do_pending_operator(
-        cap: *mut cmdarg_T,
-        old_col: ::core::ffi::c_int,
-        gui_yank: bool,
-    );
+    fn do_pending_operator(cap: *mut cmdarg_T, old_col: ::core::ffi::c_int, gui_yank: bool);
     fn shortmess(x: ::core::ffi::c_int) -> bool;
     fn magic_isset() -> bool;
     fn get_ve_flags(wp: *mut win_T) -> ::core::ffi::c_uint;
@@ -627,16 +568,8 @@ extern "C" {
         right: *mut colnr_T,
     );
     fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn plines_win(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        limit_winheight: bool,
-    ) -> ::core::ffi::c_int;
-    fn plines_m_win_fill(
-        wp: *mut win_T,
-        first: linenr_T,
-        last: linenr_T,
-    ) -> ::core::ffi::c_int;
+    fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> ::core::ffi::c_int;
+    fn plines_m_win_fill(wp: *mut win_T, first: linenr_T, last: linenr_T) -> ::core::ffi::c_int;
     fn time_msg(mesg: *const ::core::ffi::c_char, start: *const proftime_T);
     fn time_finish();
     fn qf_view_result(split: bool);
@@ -707,27 +640,15 @@ extern "C" {
         what: ::core::ffi::c_int,
         both: bool,
     ) -> bool;
-    fn fwd_word(
-        count: ::core::ffi::c_int,
-        bigword: bool,
-        eol: bool,
-    ) -> ::core::ffi::c_int;
-    fn bck_word(
-        count: ::core::ffi::c_int,
-        bigword: bool,
-        stop: bool,
-    ) -> ::core::ffi::c_int;
+    fn fwd_word(count: ::core::ffi::c_int, bigword: bool, eol: bool) -> ::core::ffi::c_int;
+    fn bck_word(count: ::core::ffi::c_int, bigword: bool, stop: bool) -> ::core::ffi::c_int;
     fn end_word(
         count: ::core::ffi::c_int,
         bigword: bool,
         stop: bool,
         empty: bool,
     ) -> ::core::ffi::c_int;
-    fn bckend_word(
-        count: ::core::ffi::c_int,
-        bigword: bool,
-        eol: bool,
-    ) -> ::core::ffi::c_int;
+    fn bckend_word(count: ::core::ffi::c_int, bigword: bool, eol: bool) -> ::core::ffi::c_int;
     fn current_word(
         oap: *mut oparg_T,
         count: ::core::ffi::c_int,
@@ -775,11 +696,7 @@ extern "C" {
     fn anyBufIsChanged() -> bool;
     fn curbufIsChanged() -> bool;
     fn check_can_set_curbuf_disabled() -> bool;
-    fn do_window(
-        nchar: ::core::ffi::c_int,
-        Prenum: ::core::ffi::c_int,
-        xchar: ::core::ffi::c_int,
-    );
+    fn do_window(nchar: ::core::ffi::c_int, Prenum: ::core::ffi::c_int, xchar: ::core::ffi::c_int);
     fn goto_tabpage(n: ::core::ffi::c_int);
     fn goto_tabpage_lastused() -> bool;
     fn may_make_initial_scroll_size_snapshot();
@@ -3683,13 +3600,10 @@ pub struct vim_state {
     pub check: state_check_callback,
     pub execute: state_execute_callback,
 }
-pub type state_execute_callback = Option<
-    unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
->;
+pub type state_execute_callback =
+    Option<unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int>;
 pub type VimState = vim_state;
-pub type state_check_callback = Option<
-    unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
->;
+pub type state_check_callback = Option<unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int>;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const MODE_SHOWMATCH: C2Rust_Unnamed_31 = 24592;
 pub const MODE_EXTERNCMD: C2Rust_Unnamed_31 = 20480;
@@ -4014,9 +3928,7 @@ pub const DT_FIRST: C2Rust_Unnamed_46 = 5;
 pub const DT_PREV: C2Rust_Unnamed_46 = 4;
 pub const DT_NEXT: C2Rust_Unnamed_46 = 3;
 pub const DT_TAG: C2Rust_Unnamed_46 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -4029,11 +3941,11 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -4113,69 +4025,65 @@ unsafe extern "C" fn win_hl_attr(
     } else {
         hl_attr_active
     }
-        .offset(hlf as isize);
+    .offset(hlf as isize);
 }
-pub const K_ZERO: ::core::ffi::c_int = -(255 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_ZERO: ::core::ffi::c_int =
+    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_UP: ::core::ffi::c_int = -30059;
 pub const K_DOWN: ::core::ffi::c_int = -25707;
-pub const K_LEFT: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_RIGHT: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_LEFT: ::core::ffi::c_int = -('#' as ::core::ffi::c_int
-    + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_RIGHT: ::core::ffi::c_int = -('%' as ::core::ffi::c_int
-    + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_HOME: ::core::ffi::c_int = -('#' as ::core::ffi::c_int
-    + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_END: ::core::ffi::c_int = -('*' as ::core::ffi::c_int
-    + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_F1: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_HELP: ::core::ffi::c_int = -('%' as ::core::ffi::c_int
-    + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UNDO: ::core::ffi::c_int = -('&' as ::core::ffi::c_int
-    + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_LEFT: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_RIGHT: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_LEFT: ::core::ffi::c_int =
+    -('#' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_RIGHT: ::core::ffi::c_int =
+    -('%' as ::core::ffi::c_int + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_HOME: ::core::ffi::c_int =
+    -('#' as ::core::ffi::c_int + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_END: ::core::ffi::c_int =
+    -('*' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_F1: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_HELP: ::core::ffi::c_int =
+    -('%' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_UNDO: ::core::ffi::c_int =
+    -('&' as ::core::ffi::c_int + (('8' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_BS: ::core::ffi::c_int = -25195;
-pub const K_INS: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DEL: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_INS: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DEL: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_HOME: ::core::ffi::c_int = -26731;
 pub const K_KHOME: ::core::ffi::c_int = -12619;
-pub const K_END: ::core::ffi::c_int = -('@' as ::core::ffi::c_int
-    + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KEND: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEUP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEDOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEUP: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEDOWN: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_END: ::core::ffi::c_int =
+    -('@' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KEND: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEUP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PAGEDOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEUP: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KPAGEDOWN: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_KENTER: ::core::ffi::c_int = -16715;
-pub const K_PASTE_START: ::core::ffi::c_int = -('P' as ::core::ffi::c_int
-    + (('S' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_SELECT: ::core::ffi::c_int = -(245 as ::core::ffi::c_int
-    + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_PASTE_START: ::core::ffi::c_int =
+    -('P' as ::core::ffi::c_int + (('S' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_SELECT: ::core::ffi::c_int =
+    -(245 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut VIsual_mode_orig: ::core::ffi::c_int = NUL;
 static mut e_changelist_is_empty: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"E664: Changelist is empty\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E664: Changelist is empty\0")
 };
 static mut e_cmdline_window_already_open: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 43],
-        [::core::ffi::c_char; 43],
-    >(*b"E1292: Command-line window is already open\0")
+    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+        *b"E1292: Command-line window is already open\0",
+    )
 };
 #[inline]
 unsafe extern "C" fn normal_state_init(mut s: *mut NormalState) {
@@ -4184,15 +4092,12 @@ unsafe extern "C" fn normal_state_init(mut s: *mut NormalState) {
         0 as ::core::ffi::c_int,
         ::core::mem::size_of::<NormalState>(),
     );
-    (*s).state.check = Some(
-        normal_check as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
-    ) as state_check_callback;
+    (*s).state.check =
+        Some(normal_check as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int)
+            as state_check_callback;
     (*s).state.execute = Some(
         normal_execute
-            as unsafe extern "C" fn(
-                *mut VimState,
-                ::core::ffi::c_int,
-            ) -> ::core::ffi::c_int,
+            as unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
     ) as state_execute_callback;
 }
 pub const NV_NCH: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
@@ -4780,8 +4685,7 @@ static mut nv_cmds: [nv_cmd; 188] = [
         cmd_char: '^' as ::core::ffi::c_int,
         cmd_func: Some(nv_beginline as unsafe extern "C" fn(*mut cmdarg_T) -> ()),
         cmd_flags: 0 as uint16_t,
-        cmd_arg: (BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int)
-            as int16_t,
+        cmd_arg: (BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int) as int16_t,
     },
     nv_cmd {
         cmd_char: '_' as ::core::ffi::c_int,
@@ -5375,9 +5279,8 @@ static mut nv_cmds: [nv_cmd; 188] = [
 pub const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
     .wrapping_div(::core::mem::size_of::<nv_cmd>())
     .wrapping_div(
-        (::core::mem::size_of::<[nv_cmd; 188]>()
-            .wrapping_rem(::core::mem::size_of::<nv_cmd>()) == 0) as ::core::ffi::c_int
-            as usize,
+        (::core::mem::size_of::<[nv_cmd; 188]>().wrapping_rem(::core::mem::size_of::<nv_cmd>())
+            == 0) as ::core::ffi::c_int as usize,
     );
 static mut nv_cmd_idx: [int16_t; 188] = [0; 188];
 static mut nv_max_linear: ::core::ffi::c_int = 0;
@@ -5408,10 +5311,12 @@ pub unsafe extern "C" fn init_normal_cmds() {
             .wrapping_div(::core::mem::size_of::<nv_cmd>())
             .wrapping_div(
                 (::core::mem::size_of::<[nv_cmd; 188]>()
-                    .wrapping_rem(::core::mem::size_of::<nv_cmd>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) <= 32767 as usize
-        {} else {
+                    .wrapping_rem(::core::mem::size_of::<nv_cmd>())
+                    == 0) as ::core::ffi::c_int as usize,
+            )
+            <= 32767 as usize
+        {
+        } else {
             __assert_fail(
                 b"NV_CMDS_SIZE <= SHRT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
@@ -5441,18 +5346,14 @@ pub unsafe extern "C" fn init_normal_cmds() {
     let mut i_0: int16_t = 0;
     i_0 = 0 as int16_t;
     while (i_0 as ::core::ffi::c_int) < NV_CMDS_SIZE as int16_t as ::core::ffi::c_int {
-        if i_0 as ::core::ffi::c_int
-            != nv_cmds[nv_cmd_idx[i_0 as usize] as usize].cmd_char
-        {
+        if i_0 as ::core::ffi::c_int != nv_cmds[nv_cmd_idx[i_0 as usize] as usize].cmd_char {
             break;
         }
         i_0 += 1;
     }
     nv_max_linear = i_0 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn find_command(
-    mut cmdchar: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn find_command(mut cmdchar: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if cmdchar >= 0x100 as ::core::ffi::c_int {
         return -1 as ::core::ffi::c_int;
     }
@@ -5465,13 +5366,13 @@ unsafe extern "C" fn find_command(
                 .wrapping_div(::core::mem::size_of::<nv_cmd>())
                 .wrapping_div(
                     (::core::mem::size_of::<[nv_cmd; 188]>()
-                        .wrapping_rem(::core::mem::size_of::<nv_cmd>()) == 0)
-                        as ::core::ffi::c_int as usize,
+                        .wrapping_rem(::core::mem::size_of::<nv_cmd>())
+                        == 0) as ::core::ffi::c_int as usize,
                 ) as ::core::ffi::c_int
-        {} else {
+        {
+        } else {
             __assert_fail(
-                b"nv_max_linear < (int)NV_CMDS_SIZE\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"nv_max_linear < (int)NV_CMDS_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 428 as ::core::ffi::c_uint,
@@ -5483,13 +5384,11 @@ unsafe extern "C" fn find_command(
         return nv_cmd_idx[cmdchar as usize] as ::core::ffi::c_int;
     }
     let mut bot: ::core::ffi::c_int = nv_max_linear + 1 as ::core::ffi::c_int;
-    let mut top: ::core::ffi::c_int = NV_CMDS_SIZE.wrapping_sub(1 as usize)
-        as ::core::ffi::c_int;
+    let mut top: ::core::ffi::c_int = NV_CMDS_SIZE.wrapping_sub(1 as usize) as ::core::ffi::c_int;
     let mut idx: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     while bot <= top {
         let mut i: ::core::ffi::c_int = (top + bot) / 2 as ::core::ffi::c_int;
-        let mut c: ::core::ffi::c_int = nv_cmds[nv_cmd_idx[i as usize] as usize]
-            .cmd_char;
+        let mut c: ::core::ffi::c_int = nv_cmds[nv_cmd_idx[i as usize] as usize].cmd_char;
         if c < 0 as ::core::ffi::c_int {
             c = -c;
         }
@@ -5530,7 +5429,8 @@ pub unsafe extern "C" fn check_text_or_curbuf_locked(mut oap: *mut oparg_T) -> b
 static mut current_oap: *mut oparg_T = ::core::ptr::null_mut::<oparg_T>();
 #[no_mangle]
 pub unsafe extern "C" fn op_pending() -> bool {
-    return !(!current_oap.is_null() && !finish_op
+    return !(!current_oap.is_null()
+        && !finish_op
         && (*current_oap).prev_opcount == 0 as ::core::ffi::c_int
         && (*current_oap).prev_count0 == 0 as ::core::ffi::c_int
         && (*current_oap).op_type == OP_NOP as ::core::ffi::c_int
@@ -5647,15 +5547,11 @@ unsafe extern "C" fn normal_prepare(mut s: *mut NormalState) {
     }
     (*s).mapped_len = typebuf_maplen();
     State = MODE_NORMAL_BUSY as ::core::ffi::c_int;
-    if (*s).toplevel as ::core::ffi::c_int != 0
-        && readbuf1_empty() as ::core::ffi::c_int != 0
-    {
+    if (*s).toplevel as ::core::ffi::c_int != 0 && readbuf1_empty() as ::core::ffi::c_int != 0 {
         set_vcount_ca(&raw mut (*s).ca, &raw mut (*s).set_prevcount);
     }
 }
-unsafe extern "C" fn normal_handle_special_visual_command(
-    mut s: *mut NormalState,
-) -> bool {
+unsafe extern "C" fn normal_handle_special_visual_command(mut s: *mut NormalState) -> bool {
     if km_stopsel as ::core::ffi::c_int != 0
         && nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_STS != 0
         && mod_mask & MOD_MASK_SHIFT == 0
@@ -5671,8 +5567,8 @@ unsafe extern "C" fn normal_handle_special_visual_command(
                 clearopbeep(&raw mut (*s).oa);
                 return true_0 != 0;
             }
-        } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SSS
-            != 0 && mod_mask & MOD_MASK_SHIFT != 0
+        } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SSS != 0
+            && mod_mask & MOD_MASK_SHIFT != 0
         {
             mod_mask &= !MOD_MASK_SHIFT;
         }
@@ -5680,23 +5576,23 @@ unsafe extern "C" fn normal_handle_special_visual_command(
     return false_0 != 0;
 }
 unsafe extern "C" fn normal_need_additional_char(mut s: *mut NormalState) -> bool {
-    let mut flags: ::core::ffi::c_int = nv_cmds[(*s).idx as usize].cmd_flags
-        as ::core::ffi::c_int;
+    let mut flags: ::core::ffi::c_int = nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int;
     let mut pending_op: bool = (*s).oa.op_type != OP_NOP as ::core::ffi::c_int;
     let mut cmdchar: ::core::ffi::c_int = (*s).ca.cmdchar;
     return flags & NV_NCH != 0
         && (flags & NV_NCH_NOP == NV_NCH_NOP && !pending_op
             || flags & NV_NCH_ALW == NV_NCH_ALW
-            || cmdchar == 'q' as ::core::ffi::c_int && !pending_op
+            || cmdchar == 'q' as ::core::ffi::c_int
+                && !pending_op
                 && reg_recording == 0 as ::core::ffi::c_int
                 && reg_executing == 0 as ::core::ffi::c_int
-            || (cmdchar == 'a' as ::core::ffi::c_int
-                || cmdchar == 'i' as ::core::ffi::c_int)
+            || (cmdchar == 'a' as ::core::ffi::c_int || cmdchar == 'i' as ::core::ffi::c_int)
                 && (pending_op as ::core::ffi::c_int != 0
                     || VIsual_active as ::core::ffi::c_int != 0));
 }
 unsafe extern "C" fn normal_need_redraw_mode_message(mut s: *mut NormalState) -> bool {
-    return (p_smd != 0 && msg_silent == 0 as ::core::ffi::c_int
+    return (p_smd != 0
+        && msg_silent == 0 as ::core::ffi::c_int
         && (restart_edit != 0 as ::core::ffi::c_int
             || VIsual_active as ::core::ffi::c_int != 0
                 && (*s).old_pos.lnum == (*curwin).w_cursor.lnum
@@ -5704,14 +5600,20 @@ unsafe extern "C" fn normal_need_redraw_mode_message(mut s: *mut NormalState) ->
         && (clear_cmdline as ::core::ffi::c_int != 0
             || redraw_cmdline as ::core::ffi::c_int != 0)
         && (msg_didout as ::core::ffi::c_int != 0
-            || msg_didany as ::core::ffi::c_int != 0 && msg_scroll != 0) && !msg_nowait
+            || msg_didany as ::core::ffi::c_int != 0 && msg_scroll != 0)
+        && !msg_nowait
         && KeyTyped as ::core::ffi::c_int != 0
-        || restart_edit != 0 as ::core::ffi::c_int && !VIsual_active && msg_scroll != 0
+        || restart_edit != 0 as ::core::ffi::c_int
+            && !VIsual_active
+            && msg_scroll != 0
             && emsg_on_display as ::core::ffi::c_int != 0)
         && (*s).oa.regname == 0 as ::core::ffi::c_int
         && (*s).ca.retval & CA_COMMAND_BUSY as ::core::ffi::c_int == 0
-        && stuff_empty() as ::core::ffi::c_int != 0 && typebuf_typed() != 0
-        && emsg_silent == 0 as ::core::ffi::c_int && !in_assert_fails && !did_wait_return
+        && stuff_empty() as ::core::ffi::c_int != 0
+        && typebuf_typed() != 0
+        && emsg_silent == 0 as ::core::ffi::c_int
+        && !in_assert_fails
+        && !did_wait_return
         && (*s).oa.op_type == OP_NOP as ::core::ffi::c_int;
 }
 unsafe extern "C" fn normal_redraw_mode_message(mut s: *mut NormalState) {
@@ -5720,9 +5622,7 @@ unsafe extern "C" fn normal_redraw_mode_message(mut s: *mut NormalState) {
         State = MODE_INSERT as ::core::ffi::c_int;
     }
     if must_redraw != 0 && !keep_msg.is_null() && !emsg_on_display {
-        let mut kmsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut kmsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         kmsg = keep_msg;
         keep_msg = ::core::ptr::null_mut::<::core::ffi::c_char>();
         setcursor();
@@ -5753,26 +5653,30 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
     did_cursorhold = true_0 != 0;
     if (*s).ca.cmdchar == 'g' as ::core::ffi::c_int {
         (*s).ca.nchar = plain_vgetc();
-        if *p_langmap as ::core::ffi::c_int != 0 && true
+        if *p_langmap as ::core::ffi::c_int != 0
+            && true
             && (p_lrm != 0
                 || (if vgetc_busy != 0 {
                     (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                 } else {
                     KeyTyped as ::core::ffi::c_int
-                }) != 0) && KeyStuffed == 0 && (*s).ca.nchar >= 0 as ::core::ffi::c_int
+                }) != 0)
+            && KeyStuffed == 0
+            && (*s).ca.nchar >= 0 as ::core::ffi::c_int
         {
             if (*s).ca.nchar < 256 as ::core::ffi::c_int {
-                (*s).ca.nchar = langmap_mapchar[(*s).ca.nchar as usize]
-                    as ::core::ffi::c_int;
+                (*s).ca.nchar = langmap_mapchar[(*s).ca.nchar as usize] as ::core::ffi::c_int;
             } else {
                 (*s).ca.nchar = langmap_adjust_mb((*s).ca.nchar);
             }
         }
         (*s).need_flushbuf = (*s).need_flushbuf as ::core::ffi::c_int
-            | add_to_showcmd((*s).ca.nchar) as ::core::ffi::c_int != 0;
+            | add_to_showcmd((*s).ca.nchar) as ::core::ffi::c_int
+            != 0;
         if (*s).ca.nchar == 'r' as ::core::ffi::c_int
             || (*s).ca.nchar == '\'' as ::core::ffi::c_int
-            || (*s).ca.nchar == '`' as ::core::ffi::c_int || (*s).ca.nchar == Ctrl_BSL
+            || (*s).ca.nchar == '`' as ::core::ffi::c_int
+            || (*s).ca.nchar == Ctrl_BSL
         {
             cp = &raw mut (*s).ca.extra_char;
             if (*s).ca.nchar != 'r' as ::core::ffi::c_int {
@@ -5797,9 +5701,7 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
             State = MODE_REPLACE as ::core::ffi::c_int;
             ui_cursor_shape_no_check_conceal();
         }
-        if lang as ::core::ffi::c_int != 0
-            && (*curbuf).b_p_iminsert == B_IMODE_LMAP as OptInt
-        {
+        if lang as ::core::ffi::c_int != 0 && (*curbuf).b_p_iminsert == B_IMODE_LMAP as OptInt {
             no_mapping -= 1;
             allow_keys -= 1;
             if repl {
@@ -5816,11 +5718,12 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
         }
         State = MODE_NORMAL_BUSY as ::core::ffi::c_int;
         (*s).need_flushbuf = (*s).need_flushbuf as ::core::ffi::c_int
-            | add_to_showcmd(*cp) as ::core::ffi::c_int != 0;
+            | add_to_showcmd(*cp) as ::core::ffi::c_int
+            != 0;
         if !lit {
             if *cp == Ctrl_K
-                && (nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_LANG
-                    != 0 || cp == &raw mut (*s).ca.extra_char)
+                && (nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_LANG != 0
+                    || cp == &raw mut (*s).ca.extra_char)
                 && vim_strchr(p_cpo, CPO_DIGRAPH).is_null()
             {
                 (*s).c = get_digraph(false_0 != 0);
@@ -5828,17 +5731,20 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
                     *cp = (*s).c;
                     del_from_showcmd(3 as ::core::ffi::c_int);
                     (*s).need_flushbuf = (*s).need_flushbuf as ::core::ffi::c_int
-                        | add_to_showcmd(*cp) as ::core::ffi::c_int != 0;
+                        | add_to_showcmd(*cp) as ::core::ffi::c_int
+                        != 0;
                 }
             }
-            if *p_langmap as ::core::ffi::c_int != 0 && !lang
+            if *p_langmap as ::core::ffi::c_int != 0
+                && !lang
                 && (p_lrm != 0
                     || (if vgetc_busy != 0 {
-                        (typebuf_maplen() == 0 as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
+                        (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                     } else {
                         KeyTyped as ::core::ffi::c_int
-                    }) != 0) && KeyStuffed == 0 && *cp >= 0 as ::core::ffi::c_int
+                    }) != 0)
+                && KeyStuffed == 0
+                && *cp >= 0 as ::core::ffi::c_int
             {
                 if *cp < 256 as ::core::ffi::c_int {
                     *cp = langmap_mapchar[*cp as usize] as ::core::ffi::c_int;
@@ -5847,7 +5753,8 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
                 }
             }
         }
-        if cp == &raw mut (*s).ca.extra_char && (*s).ca.nchar == Ctrl_BSL
+        if cp == &raw mut (*s).ca.extra_char
+            && (*s).ca.nchar == Ctrl_BSL
             && ((*s).ca.extra_char == Ctrl_N || (*s).ca.extra_char == Ctrl_G)
         {
             (*s).ca.cmdchar = Ctrl_BSL;
@@ -5866,9 +5773,7 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
             };
             loop {
                 (*s).c = vpeekc();
-                if !((*s).c <= 0 as ::core::ffi::c_int
-                    && towait > 0 as ::core::ffi::c_int)
-                {
+                if !((*s).c <= 0 as ::core::ffi::c_int && towait > 0 as ::core::ffi::c_int) {
                     break;
                 }
                 do_sleep(
@@ -5890,11 +5795,13 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
                     (*s).ca.nchar = (*s).c;
                     (*s).idx = find_command((*s).ca.cmdchar);
                     '_c2rust_label: {
-                        if (*s).idx >= 0 as ::core::ffi::c_int {} else {
+                        if (*s).idx >= 0 as ::core::ffi::c_int {
+                        } else {
                             __assert_fail(
                                 b"s->idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 827 as ::core::ffi::c_uint,
                                 b"void normal_get_additional_char(NormalState *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -5929,22 +5836,18 @@ unsafe extern "C" fn normal_get_additional_char(mut s: *mut NormalState) {
                         );
                     }
                     if (*s).ca.nchar_len + utf_char2len((*s).c)
-                        < ::core::mem::size_of::<[::core::ffi::c_char; 32]>()
-                            as ::core::ffi::c_int
+                        < ::core::mem::size_of::<[::core::ffi::c_char; 32]>() as ::core::ffi::c_int
                     {
-                        (*s).ca.nchar_len
-                            += utf_char2bytes(
-                                (*s).c,
-                                (&raw mut (*s).ca.nchar_composing
-                                    as *mut ::core::ffi::c_char)
-                                    .offset((*s).ca.nchar_len as isize),
-                            );
+                        (*s).ca.nchar_len += utf_char2bytes(
+                            (*s).c,
+                            (&raw mut (*s).ca.nchar_composing as *mut ::core::ffi::c_char)
+                                .offset((*s).ca.nchar_len as isize),
+                        );
                     }
                     prev_code = (*s).c;
                 }
             }
-            (*s).ca.nchar_composing[(*s).ca.nchar_len as usize] = NUL
-                as ::core::ffi::c_char;
+            (*s).ca.nchar_composing[(*s).ca.nchar_len as usize] = NUL as ::core::ffi::c_char;
             no_mapping += 1;
             no_u_sync += 1;
             gotchars_ignore();
@@ -5993,9 +5896,7 @@ unsafe extern "C" fn normal_invert_horizontal(mut s: *mut NormalState) {
     (*s).idx = find_command((*s).ca.cmdchar);
 }
 unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState) -> bool {
-    if VIsual_active as ::core::ffi::c_int != 0
-        && VIsual_select as ::core::ffi::c_int != 0
-    {
+    if VIsual_active as ::core::ffi::c_int != 0 && VIsual_select as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }
     while (*s).c >= '1' as ::core::ffi::c_int && (*s).c <= '9' as ::core::ffi::c_int
@@ -6016,12 +5917,10 @@ unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState) -> bool {
         } else if (*s).ca.count0 > 99999999 as ::core::ffi::c_int {
             (*s).ca.count0 = 999999999 as ::core::ffi::c_int;
         } else {
-            (*s).ca.count0 = (*s).ca.count0 * 10 as ::core::ffi::c_int
-                + ((*s).c - '0' as ::core::ffi::c_int);
+            (*s).ca.count0 =
+                (*s).ca.count0 * 10 as ::core::ffi::c_int + ((*s).c - '0' as ::core::ffi::c_int);
         }
-        if (*s).toplevel as ::core::ffi::c_int != 0
-            && readbuf1_empty() as ::core::ffi::c_int != 0
-        {
+        if (*s).toplevel as ::core::ffi::c_int != 0 && readbuf1_empty() as ::core::ffi::c_int != 0 {
             set_vcount_ca(&raw mut (*s).ca, &raw mut (*s).set_prevcount);
         }
         if (*s).ctrl_w {
@@ -6030,13 +5929,16 @@ unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState) -> bool {
         }
         no_zero_mapping += 1;
         (*s).c = plain_vgetc();
-        if *p_langmap as ::core::ffi::c_int != 0 && true
+        if *p_langmap as ::core::ffi::c_int != 0
+            && true
             && (p_lrm != 0
                 || (if vgetc_busy != 0 {
                     (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                 } else {
                     KeyTyped as ::core::ffi::c_int
-                }) != 0) && KeyStuffed == 0 && (*s).c >= 0 as ::core::ffi::c_int
+                }) != 0)
+            && KeyStuffed == 0
+            && (*s).c >= 0 as ::core::ffi::c_int
         {
             if (*s).c < 256 as ::core::ffi::c_int {
                 (*s).c = langmap_mapchar[(*s).c as usize] as ::core::ffi::c_int;
@@ -6050,24 +5952,26 @@ unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState) -> bool {
             allow_keys -= 1;
         }
         (*s).need_flushbuf = (*s).need_flushbuf as ::core::ffi::c_int
-            | add_to_showcmd((*s).c) as ::core::ffi::c_int != 0;
+            | add_to_showcmd((*s).c) as ::core::ffi::c_int
+            != 0;
     }
-    if (*s).c == Ctrl_W && !(*s).ctrl_w
-        && (*s).oa.op_type == OP_NOP as ::core::ffi::c_int
-    {
+    if (*s).c == Ctrl_W && !(*s).ctrl_w && (*s).oa.op_type == OP_NOP as ::core::ffi::c_int {
         (*s).ctrl_w = true_0 != 0;
         (*s).ca.opcount = (*s).ca.count0;
         (*s).ca.count0 = 0 as ::core::ffi::c_int;
         no_mapping += 1;
         allow_keys += 1;
         (*s).c = plain_vgetc();
-        if *p_langmap as ::core::ffi::c_int != 0 && true
+        if *p_langmap as ::core::ffi::c_int != 0
+            && true
             && (p_lrm != 0
                 || (if vgetc_busy != 0 {
                     (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                 } else {
                     KeyTyped as ::core::ffi::c_int
-                }) != 0) && KeyStuffed == 0 && (*s).c >= 0 as ::core::ffi::c_int
+                }) != 0)
+            && KeyStuffed == 0
+            && (*s).c >= 0 as ::core::ffi::c_int
         {
             if (*s).c < 256 as ::core::ffi::c_int {
                 (*s).c = langmap_mapchar[(*s).c as usize] as ::core::ffi::c_int;
@@ -6078,7 +5982,8 @@ unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState) -> bool {
         no_mapping -= 1;
         allow_keys -= 1;
         (*s).need_flushbuf = (*s).need_flushbuf as ::core::ffi::c_int
-            | add_to_showcmd((*s).c) as ::core::ffi::c_int != 0;
+            | add_to_showcmd((*s).c) as ::core::ffi::c_int
+            != 0;
         return true_0 != 0;
     }
     return false_0 != 0;
@@ -6086,10 +5991,10 @@ unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState) -> bool {
 unsafe extern "C" fn normal_finish_command(mut s: *mut NormalState) {
     let mut did_visual_op: bool = false_0 != 0;
     if !(*s).command_finished {
-        if !finish_op && (*s).oa.op_type == 0
+        if !finish_op
+            && (*s).oa.op_type == 0
             && ((*s).idx < 0 as ::core::ffi::c_int
-                || nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int
-                    & NV_KEEPREG == 0)
+                || nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_KEEPREG == 0)
         {
             clearop(&raw mut (*s).oa);
             set_reg_var(get_default_register_name());
@@ -6149,7 +6054,8 @@ unsafe extern "C" fn normal_finish_command(mut s: *mut NormalState) {
         do_check_cursorbind();
     }
     if (*s).oa.op_type == OP_NOP as ::core::ffi::c_int
-        && (restart_edit != 0 as ::core::ffi::c_int && !VIsual_active
+        && (restart_edit != 0 as ::core::ffi::c_int
+            && !VIsual_active
             && (*s).old_mapped_len == 0 as ::core::ffi::c_int
             || restart_VIsual_select == 1 as ::core::ffi::c_int)
         && (*s).ca.retval & CA_COMMAND_BUSY as ::core::ffi::c_int == 0
@@ -6163,7 +6069,8 @@ unsafe extern "C" fn normal_finish_command(mut s: *mut NormalState) {
             showmode();
             restart_VIsual_select = 0 as ::core::ffi::c_int;
         }
-        if restart_edit != 0 as ::core::ffi::c_int && !VIsual_active
+        if restart_edit != 0 as ::core::ffi::c_int
+            && !VIsual_active
             && (*s).old_mapped_len == 0 as ::core::ffi::c_int
         {
             edit(restart_edit, false_0 != 0, 1 as ::core::ffi::c_int);
@@ -6190,7 +6097,9 @@ unsafe extern "C" fn normal_execute(
                 (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
             } else {
                 KeyTyped as ::core::ffi::c_int
-            }) != 0) && KeyStuffed == 0 && (*s).c >= 0 as ::core::ffi::c_int
+            }) != 0)
+        && KeyStuffed == 0
+        && (*s).c >= 0 as ::core::ffi::c_int
     {
         if (*s).c < 256 as ::core::ffi::c_int {
             (*s).c = langmap_mapchar[(*s).c as usize] as ::core::ffi::c_int;
@@ -6212,14 +6121,12 @@ unsafe extern "C" fn normal_execute(
     }
     if VIsual_active as ::core::ffi::c_int != 0
         && VIsual_select as ::core::ffi::c_int != 0
-        && (vim_isprintc((*s).c) as ::core::ffi::c_int != 0 || (*s).c == NL
-            || (*s).c == CAR || (*s).c == K_KENTER)
+        && (vim_isprintc((*s).c) as ::core::ffi::c_int != 0
+            || (*s).c == NL
+            || (*s).c == CAR
+            || (*s).c == K_KENTER)
     {
-        let mut len: ::core::ffi::c_int = ins_char_typebuf(
-            vgetc_char,
-            vgetc_mod_mask,
-            true_0 != 0,
-        );
+        let mut len: ::core::ffi::c_int = ins_char_typebuf(vgetc_char, vgetc_mod_mask, true_0 != 0);
         if KeyTyped {
             ungetchars(len);
         }
@@ -6256,9 +6163,7 @@ unsafe extern "C" fn normal_execute(
     } else {
         (*s).ca.count0
     };
-    if (*s).toplevel as ::core::ffi::c_int != 0
-        && readbuf1_empty() as ::core::ffi::c_int != 0
-    {
+    if (*s).toplevel as ::core::ffi::c_int != 0 && readbuf1_empty() as ::core::ffi::c_int != 0 {
         set_vcount(
             (*s).ca.count0 as int64_t,
             (*s).ca.count1 as int64_t,
@@ -6284,7 +6189,8 @@ unsafe extern "C" fn normal_execute(
     {
         (*s).command_finished = true_0 != 0;
     } else {
-        if (*curwin).w_onebuf_opt.wo_rl != 0 && KeyTyped as ::core::ffi::c_int != 0
+        if (*curwin).w_onebuf_opt.wo_rl != 0
+            && KeyTyped as ::core::ffi::c_int != 0
             && KeyStuffed == 0
             && nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_RL != 0
         {
@@ -6319,26 +6225,26 @@ unsafe extern "C" fn normal_execute(
             }
             (*s).old_pos = (*curwin).w_cursor;
             if !VIsual_active && km_startsel as ::core::ffi::c_int != 0 {
-                if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SS
-                    != 0
-                {
+                if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SS != 0 {
                     start_selection();
                     unshift_special(&raw mut (*s).ca);
                     (*s).idx = find_command((*s).ca.cmdchar);
                     '_c2rust_label: {
-                        if (*s).idx >= 0 as ::core::ffi::c_int {} else {
+                        if (*s).idx >= 0 as ::core::ffi::c_int {
+                        } else {
                             __assert_fail(
                                 b"s->idx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                    .as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 1239 as ::core::ffi::c_uint,
                                 b"int normal_execute(VimState *, int)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                             );
                         }
                     };
-                } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int
-                    & NV_SSS != 0 && mod_mask & MOD_MASK_SHIFT != 0
+                } else if nv_cmds[(*s).idx as usize].cmd_flags as ::core::ffi::c_int & NV_SSS != 0
+                    && mod_mask & MOD_MASK_SHIFT != 0
                 {
                     start_selection();
                     mod_mask &= !MOD_MASK_SHIFT;
@@ -6366,7 +6272,9 @@ unsafe extern "C" fn normal_check_stuff_buffer(mut s: *mut NormalState) {
 }
 unsafe extern "C" fn normal_check_interrupt(mut s: *mut NormalState) {
     if got_int {
-        if (*s).noexmode as ::core::ffi::c_int != 0 && global_busy != 0 && !exmode_active
+        if (*s).noexmode as ::core::ffi::c_int != 0
+            && global_busy != 0
+            && !exmode_active
             && (*s).previous_got_int as ::core::ffi::c_int != 0
         {
             exmode_active = true_0 != 0;
@@ -6388,9 +6296,9 @@ unsafe extern "C" fn normal_check_window_scrolled(mut s: *mut NormalState) {
     }
 }
 unsafe extern "C" fn normal_check_cursor_moved(mut s: *mut NormalState) {
-    if !finish_op && has_event(EVENT_CURSORMOVED) as ::core::ffi::c_int != 0
-        && (last_cursormoved_win != curwin
-            || !equalpos(last_cursormoved, (*curwin).w_cursor))
+    if !finish_op
+        && has_event(EVENT_CURSORMOVED) as ::core::ffi::c_int != 0
+        && (last_cursormoved_win != curwin || !equalpos(last_cursormoved, (*curwin).w_cursor))
     {
         apply_autocmds(
             EVENT_CURSORMOVED,
@@ -6404,7 +6312,8 @@ unsafe extern "C" fn normal_check_cursor_moved(mut s: *mut NormalState) {
     }
 }
 unsafe extern "C" fn normal_check_text_changed(mut s: *mut NormalState) {
-    if !finish_op && has_event(EVENT_TEXTCHANGED) as ::core::ffi::c_int != 0
+    if !finish_op
+        && has_event(EVENT_TEXTCHANGED) as ::core::ffi::c_int != 0
         && (*curbuf).b_last_changedtick != buf_get_changedtick(curbuf)
     {
         apply_autocmds(
@@ -6418,7 +6327,8 @@ unsafe extern "C" fn normal_check_text_changed(mut s: *mut NormalState) {
     }
 }
 unsafe extern "C" fn normal_check_buffer_modified(mut s: *mut NormalState) {
-    if !finish_op && has_event(EVENT_BUFMODIFIEDSET) as ::core::ffi::c_int != 0
+    if !finish_op
+        && has_event(EVENT_BUFMODIFIEDSET) as ::core::ffi::c_int != 0
         && (*curbuf).b_changed_invalid as ::core::ffi::c_int == true_0
     {
         apply_autocmds(
@@ -6466,9 +6376,7 @@ unsafe extern "C" fn normal_redraw(mut s: *mut NormalState) {
         msg_hist_off = false_0 != 0;
         xfree(p as *mut ::core::ffi::c_void);
     }
-    if need_fileinfo as ::core::ffi::c_int != 0
-        && !shortmess(SHM_FILEINFO as ::core::ffi::c_int)
-    {
+    if need_fileinfo as ::core::ffi::c_int != 0 && !shortmess(SHM_FILEINFO as ::core::ffi::c_int) {
         fileinfo(false_0, true_0, false_0 != 0);
         need_fileinfo = false_0 != 0;
     }
@@ -6490,13 +6398,10 @@ unsafe extern "C" fn normal_check(mut state: *mut VimState) -> ::core::ffi::c_in
     }
     quit_more = false_0 != 0;
     state_no_longer_safe(::core::ptr::null::<::core::ffi::c_char>());
-    if skip_redraw as ::core::ffi::c_int != 0 || exmode_active as ::core::ffi::c_int != 0
-    {
+    if skip_redraw as ::core::ffi::c_int != 0 || exmode_active as ::core::ffi::c_int != 0 {
         skip_redraw = false_0 != 0;
         setcursor();
-    } else if do_redraw as ::core::ffi::c_int != 0
-        || stuff_empty() as ::core::ffi::c_int != 0
-    {
+    } else if do_redraw as ::core::ffi::c_int != 0 || stuff_empty() as ::core::ffi::c_int != 0 {
         terminal_check_refresh();
         update_topline(curwin);
         validate_cursor(curwin);
@@ -6536,25 +6441,29 @@ unsafe extern "C" fn normal_check(mut state: *mut VimState) -> ::core::ffi::c_in
         do_exmode();
         return -1 as ::core::ffi::c_int;
     }
-    if (*s).cmdwin as ::core::ffi::c_int != 0 && cmdwin_result != 0 as ::core::ffi::c_int
-    {
+    if (*s).cmdwin as ::core::ffi::c_int != 0 && cmdwin_result != 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     normal_prepare(s);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn set_vcount_ca(
-    mut cap: *mut cmdarg_T,
-    mut set_prevcount: *mut bool,
-) {
+unsafe extern "C" fn set_vcount_ca(mut cap: *mut cmdarg_T, mut set_prevcount: *mut bool) {
     let mut count: int64_t = (*cap).count0 as int64_t;
     if (*cap).opcount != 0 as ::core::ffi::c_int {
         count = (*cap).opcount as int64_t
-            * (if count == 0 as int64_t { 1 as int64_t } else { count });
+            * (if count == 0 as int64_t {
+                1 as int64_t
+            } else {
+                count
+            });
     }
     set_vcount(
         count,
-        if count == 0 as int64_t { 1 as int64_t } else { count },
+        if count == 0 as int64_t {
+            1 as int64_t
+        } else {
+            count
+        },
         *set_prevcount,
     );
     *set_prevcount = false_0 != 0;
@@ -6626,22 +6535,22 @@ unsafe extern "C" fn find_is_eval_item(
     if *ptr as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
         return true_0 != 0;
     }
-    if *ptr
-        .offset(
+    if *ptr.offset(
+        (if dir == BACKWARD as ::core::ffi::c_int {
+            0 as ::core::ffi::c_int
+        } else {
+            1 as ::core::ffi::c_int
+        }) as isize,
+    ) as ::core::ffi::c_int
+        == '>' as ::core::ffi::c_int
+        && *ptr.offset(
             (if dir == BACKWARD as ::core::ffi::c_int {
-                0 as ::core::ffi::c_int
+                -1 as ::core::ffi::c_int
             } else {
-                1 as ::core::ffi::c_int
+                0 as ::core::ffi::c_int
             }) as isize,
-        ) as ::core::ffi::c_int == '>' as ::core::ffi::c_int
-        && *ptr
-            .offset(
-                (if dir == BACKWARD as ::core::ffi::c_int {
-                    -1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }) as isize,
-            ) as ::core::ffi::c_int == '-' as ::core::ffi::c_int
+        ) as ::core::ffi::c_int
+            == '-' as ::core::ffi::c_int
     {
         *colp += dir;
         return true_0 != 0;
@@ -6697,39 +6606,39 @@ pub unsafe extern "C" fn find_ident_at_pos(
         col = startcol as ::core::ffi::c_int;
         while *ptr.offset(col as isize) as ::core::ffi::c_int != NUL {
             if find_type & FIND_EVAL as ::core::ffi::c_int != 0
-                && *ptr.offset(col as isize) as ::core::ffi::c_int
-                    == ']' as ::core::ffi::c_int
+                && *ptr.offset(col as isize) as ::core::ffi::c_int == ']' as ::core::ffi::c_int
             {
                 break;
             }
             this_class = mb_get_class(ptr.offset(col as isize));
             if this_class != 0 as ::core::ffi::c_int
-                && (i == 1 as ::core::ffi::c_int
-                    || this_class != 1 as ::core::ffi::c_int)
+                && (i == 1 as ::core::ffi::c_int || this_class != 1 as ::core::ffi::c_int)
             {
                 break;
             }
             col += utfc_ptr2len(ptr.offset(col as isize));
         }
-        bn = (*ptr.offset(col as isize) as ::core::ffi::c_int
-            == ']' as ::core::ffi::c_int) as ::core::ffi::c_int;
+        bn = (*ptr.offset(col as isize) as ::core::ffi::c_int == ']' as ::core::ffi::c_int)
+            as ::core::ffi::c_int;
         if find_type & FIND_EVAL as ::core::ffi::c_int != 0
-            && *ptr.offset(col as isize) as ::core::ffi::c_int
-                == ']' as ::core::ffi::c_int
+            && *ptr.offset(col as isize) as ::core::ffi::c_int == ']' as ::core::ffi::c_int
         {
             this_class = mb_get_class(b"a\0".as_ptr() as *const ::core::ffi::c_char);
         } else {
             this_class = mb_get_class(ptr.offset(col as isize));
         }
         while col > 0 as ::core::ffi::c_int && this_class != 0 as ::core::ffi::c_int {
-            prevcol = col - 1 as ::core::ffi::c_int
+            prevcol = col
+                - 1 as ::core::ffi::c_int
                 - utf_head_off(
                     ptr,
-                    ptr.offset(col as isize).offset(-(1 as ::core::ffi::c_int as isize)),
+                    ptr.offset(col as isize)
+                        .offset(-(1 as ::core::ffi::c_int as isize)),
                 );
             prev_class = mb_get_class(ptr.offset(prevcol as isize));
             if this_class != prev_class
-                && (i == 0 as ::core::ffi::c_int || prev_class == 0 as ::core::ffi::c_int
+                && (i == 0 as ::core::ffi::c_int
+                    || prev_class == 0 as ::core::ffi::c_int
                     || find_type & FIND_IDENT as ::core::ffi::c_int != 0)
                 && (find_type & FIND_EVAL as ::core::ffi::c_int == 0
                     || prevcol == 0 as ::core::ffi::c_int
@@ -6760,12 +6669,9 @@ pub unsafe extern "C" fn find_ident_at_pos(
         || i == 0 as ::core::ffi::c_int && this_class != 2 as ::core::ffi::c_int
     {
         if find_type & FIND_STRING as ::core::ffi::c_int != 0 {
-            emsg(
-                gettext(
-                    b"E348: No string under cursor\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E348: No string under cursor\0".as_ptr() as *const ::core::ffi::c_char
+            ));
         } else {
             emsg(gettext(&raw const e_noident as *const ::core::ffi::c_char));
         }
@@ -6787,18 +6693,21 @@ pub unsafe extern "C" fn find_ident_at_pos(
             (mb_get_class(ptr.offset(col as isize)) != 0 as ::core::ffi::c_int)
                 as ::core::ffi::c_int
         }) != 0
-            || find_type & FIND_EVAL as ::core::ffi::c_int != 0 && col <= startcol
+            || find_type & FIND_EVAL as ::core::ffi::c_int != 0
+                && col <= startcol
                 && find_is_eval_item(
                     ptr.offset(col as isize),
                     &raw mut col,
                     &raw mut bn,
                     FORWARD as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
     {
         col += utfc_ptr2len(ptr.offset(col as isize));
     }
     '_c2rust_label: {
-        if col >= 0 as ::core::ffi::c_int {} else {
+        if col >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"col >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
@@ -6812,7 +6721,15 @@ pub unsafe extern "C" fn find_ident_at_pos(
     return col as size_t;
 }
 unsafe extern "C" fn prep_redo_cmd(mut cap: *mut cmdarg_T) {
-    prep_redo((*(*cap).oap).regname, (*cap).count0, NUL, (*cap).cmdchar, NUL, NUL, NUL);
+    prep_redo(
+        (*(*cap).oap).regname,
+        (*cap).count0,
+        NUL,
+        (*cap).cmdchar,
+        NUL,
+        NUL,
+        NUL,
+    );
     if (*cap).nchar_len > 0 as ::core::ffi::c_int {
         AppendToRedobuff(&raw mut (*cap).nchar_composing as *mut ::core::ffi::c_char);
     } else {
@@ -6829,7 +6746,16 @@ pub unsafe extern "C" fn prep_redo(
     mut cmd4: ::core::ffi::c_int,
     mut cmd5: ::core::ffi::c_int,
 ) {
-    prep_redo_num2(regname, num, cmd1, cmd2, 0 as ::core::ffi::c_int, cmd3, cmd4, cmd5);
+    prep_redo_num2(
+        regname,
+        num,
+        cmd1,
+        cmd2,
+        0 as ::core::ffi::c_int,
+        cmd3,
+        cmd4,
+        cmd5,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn prep_redo_num2(
@@ -6950,15 +6876,25 @@ pub unsafe extern "C" fn clear_showcmd() {
             top = (*curwin).w_cursor.lnum;
             bot = VIsual.lnum;
         }
-        hasFolding(curwin, top, &raw mut top, ::core::ptr::null_mut::<linenr_T>());
-        hasFolding(curwin, bot, ::core::ptr::null_mut::<linenr_T>(), &raw mut bot);
+        hasFolding(
+            curwin,
+            top,
+            &raw mut top,
+            ::core::ptr::null_mut::<linenr_T>(),
+        );
+        hasFolding(
+            curwin,
+            bot,
+            ::core::ptr::null_mut::<linenr_T>(),
+            &raw mut bot,
+        );
         lines = (bot - top + 1 as linenr_T) as ::core::ffi::c_int;
         if VIsual_mode == Ctrl_V {
             let saved_sbr: *mut ::core::ffi::c_char = p_sbr;
             let saved_w_sbr: *mut ::core::ffi::c_char = (*curwin).w_onebuf_opt.wo_sbr;
             p_sbr = &raw mut empty_string_option as *mut ::core::ffi::c_char;
-            (*curwin).w_onebuf_opt.wo_sbr = &raw mut empty_string_option
-                as *mut ::core::ffi::c_char;
+            (*curwin).w_onebuf_opt.wo_sbr =
+                &raw mut empty_string_option as *mut ::core::ffi::c_char;
             getvcols(
                 curwin,
                 &raw mut (*curwin).w_cursor,
@@ -6975,8 +6911,7 @@ pub unsafe extern "C" fn clear_showcmd() {
                 lines as int64_t,
                 rightcol as int64_t - leftcol as int64_t + 1 as int64_t,
             );
-        } else if VIsual_mode == 'V' as ::core::ffi::c_int
-            || VIsual.lnum != (*curwin).w_cursor.lnum
+        } else if VIsual_mode == 'V' as ::core::ffi::c_int || VIsual.lnum != (*curwin).w_cursor.lnum
         {
             snprintf(
                 &raw mut showcmd_buf as *mut ::core::ffi::c_char,
@@ -6985,12 +6920,8 @@ pub unsafe extern "C" fn clear_showcmd() {
                 lines as int64_t,
             );
         } else {
-            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
-            let mut e: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut e: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             let mut bytes: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             let mut chars: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             if cursor_bot {
@@ -7034,9 +6965,7 @@ pub unsafe extern "C" fn clear_showcmd() {
                 );
             }
         }
-        let mut limit: ::core::ffi::c_int = if ui_has(kUIMessages) as ::core::ffi::c_int
-            != 0
-        {
+        let mut limit: ::core::ffi::c_int = if ui_has(kUIMessages) as ::core::ffi::c_int != 0 {
             SHOWCMD_BUFLEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int
         } else {
             SHOWCMD_COLS as ::core::ffi::c_int
@@ -7124,13 +7053,12 @@ pub unsafe extern "C" fn add_to_showcmd(mut c: ::core::ffi::c_int) -> bool {
         if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
             strcpy(
                 p,
-                b"<20>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"<20>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
         }
     } else {
-        mbyte_buf[utf_char2bytes(c, &raw mut mbyte_buf as *mut ::core::ffi::c_char)
-            as usize] = NUL as ::core::ffi::c_char;
+        mbyte_buf[utf_char2bytes(c, &raw mut mbyte_buf as *mut ::core::ffi::c_char) as usize] =
+            NUL as ::core::ffi::c_char;
         p = &raw mut mbyte_buf as *mut ::core::ffi::c_char;
     }
     let mut old_len: size_t = strlen(&raw mut showcmd_buf as *mut ::core::ffi::c_char);
@@ -7165,9 +7093,8 @@ unsafe extern "C" fn del_from_showcmd(mut len: ::core::ffi::c_int) {
     if p_sc == 0 {
         return;
     }
-    let mut old_len: ::core::ffi::c_int = strlen(
-        &raw mut showcmd_buf as *mut ::core::ffi::c_char,
-    ) as ::core::ffi::c_int;
+    let mut old_len: ::core::ffi::c_int =
+        strlen(&raw mut showcmd_buf as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
     len = if len < old_len { len } else { old_len };
     showcmd_buf[(old_len - len) as usize] = NUL as ::core::ffi::c_char;
     if !char_avail() {
@@ -7195,8 +7122,7 @@ pub unsafe extern "C" fn pop_showcmd() {
     display_showcmd();
 }
 unsafe extern "C" fn display_showcmd() {
-    showcmd_is_clear = showcmd_buf[0 as ::core::ffi::c_int as usize]
-        as ::core::ffi::c_int == NUL;
+    showcmd_is_clear = showcmd_buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int == NUL;
     if *p_sloc as ::core::ffi::c_int == 's' as ::core::ffi::c_int {
         if showcmd_is_clear {
             (*curwin).w_redr_status = true_0 != 0;
@@ -7244,9 +7170,7 @@ unsafe extern "C" fn display_showcmd() {
             *chunk.items.offset(c2rust_fresh7 as isize) = object {
                 type_0: kObjectTypeString,
                 data: C2Rust_Unnamed_0 {
-                    string: cstr_as_string(
-                        &raw mut showcmd_buf as *mut ::core::ffi::c_char,
-                    ),
+                    string: cstr_as_string(&raw mut showcmd_buf as *mut ::core::ffi::c_char),
                 },
             };
             let c2rust_fresh8 = chunk.size;
@@ -7284,8 +7208,7 @@ unsafe extern "C" fn display_showcmd() {
     }
     grid_line_puts(
         sc_col + len,
-        (b"          \0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char)
+        (b"          \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char)
             .offset(len as isize),
         -1 as ::core::ffi::c_int,
         *hl_attr_active.offset(HLF_MSG as ::core::ffi::c_int as isize),
@@ -7308,13 +7231,11 @@ pub unsafe extern "C" fn do_check_scrollbind(mut check: bool) {
             did_syncbind = false_0 != 0;
         } else if curwin == old_curwin {
             if ((*curwin).w_buffer == old_buf || (*curwin).w_onebuf_opt.wo_diff != 0)
-                && (vtopline as linenr_T != old_vtopline
-                    || (*curwin).w_leftcol != old_leftcol)
+                && (vtopline as linenr_T != old_vtopline || (*curwin).w_leftcol != old_leftcol)
             {
                 check_scrollbind(
                     vtopline as linenr_T - old_vtopline,
-                    (*curwin).w_leftcol as ::core::ffi::c_int
-                        - old_leftcol as ::core::ffi::c_int,
+                    (*curwin).w_leftcol as ::core::ffi::c_int - old_leftcol as ::core::ffi::c_int,
                 );
             }
         } else if !vim_strchr(p_sbo, 'j' as ::core::ffi::c_int).is_null() {
@@ -7357,9 +7278,7 @@ pub unsafe extern "C" fn check_scrollbind(
         curbuf = (*curwin).w_buffer;
         if !(curwin == old_curwin || (*curwin).w_onebuf_opt.wo_scb == 0) {
             if want_ver {
-                if (*old_curwin).w_onebuf_opt.wo_diff != 0
-                    && (*curwin).w_onebuf_opt.wo_diff != 0
-                {
+                if (*old_curwin).w_onebuf_opt.wo_diff != 0 && (*curwin).w_onebuf_opt.wo_diff != 0 {
                     diff_set_topline(old_curwin, curwin);
                 } else {
                     (*curwin).w_scbind_pos += vtopline_diff as ::core::ffi::c_int;
@@ -7371,24 +7290,21 @@ pub unsafe extern "C" fn check_scrollbind(
                             (*curwin).w_topline + 1 as linenr_T,
                             (*curbuf).b_ml.ml_line_count,
                         );
-                    let mut new_vtopline: ::core::ffi::c_int = if (if ((*curwin)
-                        .w_scbind_pos as linenr_T) < max_vtopline as linenr_T
-                    {
-                        (*curwin).w_scbind_pos as linenr_T
-                    } else {
-                        max_vtopline as linenr_T
-                    }) > 1 as linenr_T
-                    {
-                        if ((*curwin).w_scbind_pos as linenr_T)
-                            < max_vtopline as linenr_T
-                        {
-                            (*curwin).w_scbind_pos
+                    let mut new_vtopline: ::core::ffi::c_int =
+                        if (if ((*curwin).w_scbind_pos as linenr_T) < max_vtopline as linenr_T {
+                            (*curwin).w_scbind_pos as linenr_T
                         } else {
-                            max_vtopline
-                        }
-                    } else {
-                        1 as ::core::ffi::c_int
-                    };
+                            max_vtopline as linenr_T
+                        }) > 1 as linenr_T
+                        {
+                            if ((*curwin).w_scbind_pos as linenr_T) < max_vtopline as linenr_T {
+                                (*curwin).w_scbind_pos
+                            } else {
+                                max_vtopline
+                            }
+                        } else {
+                            1 as ::core::ffi::c_int
+                        };
                     let mut y: ::core::ffi::c_int = new_vtopline - curr_vtopline;
                     if y > 0 as ::core::ffi::c_int {
                         scrollup(curwin, y as linenr_T, false_0 != 0);
@@ -7461,9 +7377,7 @@ unsafe extern "C" fn nv_gd(
     mut thisblock: ::core::ffi::c_int,
 ) {
     let mut len: size_t = 0;
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     len = find_ident_under_cursor(
         &raw mut ptr,
         FIND_IDENT as ::core::ffi::c_int,
@@ -7487,7 +7401,8 @@ unsafe extern "C" fn nv_gd(
     {
         foldOpenCursor();
     }
-    if messaging() as ::core::ffi::c_int != 0 && msg_silent == 0
+    if messaging() as ::core::ffi::c_int != 0
+        && msg_silent == 0
         && !shortmess(SHM_SEARCHCOUNT as ::core::ffi::c_int)
     {
         clear_cmdline = true_0 != 0;
@@ -7508,35 +7423,30 @@ unsafe extern "C" fn is_ident(
             {
                 instring = 0 as ::core::ffi::c_int;
             }
-        } else if (*line.offset(i as isize) as ::core::ffi::c_int
-            == '"' as ::core::ffi::c_int
-            || *line.offset(i as isize) as ::core::ffi::c_int
-                == '\'' as ::core::ffi::c_int) && !incomment
+        } else if (*line.offset(i as isize) as ::core::ffi::c_int == '"' as ::core::ffi::c_int
+            || *line.offset(i as isize) as ::core::ffi::c_int == '\'' as ::core::ffi::c_int)
+            && !incomment
         {
             instring = *line.offset(i as isize) as uint8_t as ::core::ffi::c_int;
         } else if incomment {
             if prev == '*' as ::core::ffi::c_int
-                && *line.offset(i as isize) as ::core::ffi::c_int
-                    == '/' as ::core::ffi::c_int
+                && *line.offset(i as isize) as ::core::ffi::c_int == '/' as ::core::ffi::c_int
             {
                 incomment = false_0 != 0;
             }
         } else if prev == '/' as ::core::ffi::c_int
-            && *line.offset(i as isize) as ::core::ffi::c_int
-                == '*' as ::core::ffi::c_int
+            && *line.offset(i as isize) as ::core::ffi::c_int == '*' as ::core::ffi::c_int
         {
             incomment = true_0 != 0;
         } else if prev == '/' as ::core::ffi::c_int
-            && *line.offset(i as isize) as ::core::ffi::c_int
-                == '/' as ::core::ffi::c_int
+            && *line.offset(i as isize) as ::core::ffi::c_int == '/' as ::core::ffi::c_int
         {
-            return false_0 != 0
+            return false_0 != 0;
         }
         prev = *line.offset(i as isize) as uint8_t as ::core::ffi::c_int;
         i += 1;
     }
-    return incomment as ::core::ffi::c_int == false_0
-        && instring == 0 as ::core::ffi::c_int;
+    return incomment as ::core::ffi::c_int == false_0 && instring == 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn find_decl(
@@ -7563,7 +7473,8 @@ pub unsafe extern "C" fn find_decl(
     let mut patsize: size_t = len.wrapping_add(7 as size_t);
     let mut pat: *mut ::core::ffi::c_char = xmalloc(patsize) as *mut ::core::ffi::c_char;
     '_c2rust_label: {
-        if patsize <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+        if patsize <= 2147483647 as ::core::ffi::c_int as size_t {
+        } else {
             __assert_fail(
                 b"patsize <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
@@ -7630,8 +7541,8 @@ pub unsafe extern "C" fn find_decl(
             t = false_0 != 0;
         }
         if thisblock as ::core::ffi::c_int != 0 && t as ::core::ffi::c_int != false_0 {
-            let maxtravel: int64_t = (old_pos.lnum - (*curwin).w_cursor.lnum
-                + 1 as linenr_T) as int64_t;
+            let maxtravel: int64_t =
+                (old_pos.lnum - (*curwin).w_cursor.lnum + 1 as linenr_T) as int64_t;
             let mut pos: *const pos_T = findmatchlimit(
                 ::core::ptr::null_mut::<oparg_T>(),
                 '}' as ::core::ffi::c_int,
@@ -7670,9 +7581,7 @@ pub unsafe extern "C" fn find_decl(
                 if valid as ::core::ffi::c_int != 0 && !locally {
                     break;
                 }
-                if valid as ::core::ffi::c_int != 0
-                    && (*curwin).w_cursor.lnum >= par_pos.lnum
-                {
+                if valid as ::core::ffi::c_int != 0 && (*curwin).w_cursor.lnum >= par_pos.lnum {
                     if found_pos.lnum != 0 as linenr_T {
                         (*curwin).w_cursor = found_pos;
                     }
@@ -7733,22 +7642,24 @@ pub unsafe extern "C" fn nv_screengo(
             } else {
                 (*curwin).w_curswant = (width1 - 1 as ::core::ffi::c_int) as colnr_T;
                 if (*curwin).w_virtcol > (*curwin).w_curswant {
-                    (*curwin).w_curswant
-                        += (((*curwin).w_virtcol as ::core::ffi::c_int
-                            - (*curwin).w_curswant as ::core::ffi::c_int
-                            - 1 as ::core::ffi::c_int) / width2
-                            + 1 as ::core::ffi::c_int) * width2;
+                    (*curwin).w_curswant += (((*curwin).w_virtcol as ::core::ffi::c_int
+                        - (*curwin).w_curswant as ::core::ffi::c_int
+                        - 1 as ::core::ffi::c_int)
+                        / width2
+                        + 1 as ::core::ffi::c_int)
+                        * width2;
                 }
             }
         } else {
             if linelen > width1 {
                 n = ((linelen - width1 - 1 as ::core::ffi::c_int) / width2
-                    + 1 as ::core::ffi::c_int) * width2 + width1;
+                    + 1 as ::core::ffi::c_int)
+                    * width2
+                    + width1;
             } else {
                 n = width1;
             }
-            (*curwin).w_curswant = (if (*curwin).w_curswant < n - 1 as ::core::ffi::c_int
-            {
+            (*curwin).w_curswant = (if (*curwin).w_curswant < n - 1 as ::core::ffi::c_int {
                 (*curwin).w_curswant as ::core::ffi::c_int
             } else {
                 n - 1 as ::core::ffi::c_int
@@ -7777,19 +7688,21 @@ pub unsafe extern "C" fn nv_screengo(
                     cursor_up_inner(curwin, 1 as linenr_T, skip_conceal);
                     linelen = linetabsize(curwin, (*curwin).w_cursor.lnum);
                     if linelen > width1 {
-                        let mut w: ::core::ffi::c_int = ((linelen - width1
-                            - 1 as ::core::ffi::c_int) / width2
-                            + 1 as ::core::ffi::c_int) * width2;
+                        let mut w: ::core::ffi::c_int =
+                            ((linelen - width1 - 1 as ::core::ffi::c_int) / width2
+                                + 1 as ::core::ffi::c_int)
+                                * width2;
                         '_c2rust_label: {
                             if w <= 0 as ::core::ffi::c_int
-                                || (*curwin).w_curswant
-                                    <= 2147483647 as ::core::ffi::c_int - w
-                            {} else {
+                                || (*curwin).w_curswant <= 2147483647 as ::core::ffi::c_int - w
+                            {
+                            } else {
                                 __assert_fail(
                                     b"w <= 0 || curwin->w_curswant <= INT_MAX - w\0".as_ptr()
                                         as *const ::core::ffi::c_char,
                                     b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
+                                        .as_ptr()
+                                        as *const ::core::ffi::c_char,
                                     2570 as ::core::ffi::c_uint,
                                     b"_Bool nv_screengo(oparg_T *, int, int, _Bool)\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -7802,7 +7715,9 @@ pub unsafe extern "C" fn nv_screengo(
             } else {
                 if linelen > width1 {
                     n = ((linelen - width1 - 1 as ::core::ffi::c_int) / width2
-                        + 1 as ::core::ffi::c_int) * width2 + width1;
+                        + 1 as ::core::ffi::c_int)
+                        * width2
+                        + width1;
                 } else {
                     n = width1;
                 }
@@ -7815,9 +7730,7 @@ pub unsafe extern "C" fn nv_screengo(
                     )
                 {
                     (*curwin).w_curswant += width2;
-                } else if (*curwin).w_cursor.lnum
-                    >= (*(*curwin).w_buffer).b_ml.ml_line_count
-                {
+                } else if (*curwin).w_cursor.lnum >= (*(*curwin).w_buffer).b_ml.ml_line_count {
                     retval = false_0 != 0;
                     break;
                 } else {
@@ -7831,33 +7744,29 @@ pub unsafe extern "C" fn nv_screengo(
             }
         }
     }
-    if virtual_active(curwin) as ::core::ffi::c_int != 0
-        && atend as ::core::ffi::c_int != 0
-    {
+    if virtual_active(curwin) as ::core::ffi::c_int != 0 && atend as ::core::ffi::c_int != 0 {
         coladvance(curwin, MAXCOL as ::core::ffi::c_int);
     } else {
         coladvance(curwin, (*curwin).w_curswant);
     }
-    if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
-        && (*curwin).w_onebuf_opt.wo_wrap != 0
-    {
+    if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int && (*curwin).w_onebuf_opt.wo_wrap != 0 {
         validate_virtcol(curwin);
         let mut virtcol: colnr_T = (*curwin).w_virtcol;
-        if virtcol > width1 && *get_showbreak_value(curwin) as ::core::ffi::c_int != NUL
-        {
+        if virtcol > width1 && *get_showbreak_value(curwin) as ::core::ffi::c_int != NUL {
             virtcol -= vim_strsize(get_showbreak_value(curwin));
         }
         let mut c: ::core::ffi::c_int = utf_ptr2char(get_cursor_pos_ptr());
-        if dir == FORWARD as ::core::ffi::c_int && virtcol < (*curwin).w_curswant
-            && (*curwin).w_curswant <= width1 && !vim_isprintc(c)
+        if dir == FORWARD as ::core::ffi::c_int
+            && virtcol < (*curwin).w_curswant
+            && (*curwin).w_curswant <= width1
+            && !vim_isprintc(c)
             && c > 255 as ::core::ffi::c_int
         {
             oneright();
         }
         if virtcol > (*curwin).w_curswant
             && (if (*curwin).w_curswant < width1 {
-                ((*curwin).w_curswant > width1 / 2 as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
+                ((*curwin).w_curswant > width1 / 2 as ::core::ffi::c_int) as ::core::ffi::c_int
             } else {
                 (((*curwin).w_curswant as ::core::ffi::c_int - width1) % width2
                     > width2 / 2 as ::core::ffi::c_int) as ::core::ffi::c_int
@@ -7891,13 +7800,16 @@ unsafe extern "C" fn nv_z_get_count(
         no_mapping += 1;
         allow_keys += 1;
         nchar = plain_vgetc();
-        if *p_langmap as ::core::ffi::c_int != 0 && true
+        if *p_langmap as ::core::ffi::c_int != 0
+            && true
             && (p_lrm != 0
                 || (if vgetc_busy != 0 {
                     (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                 } else {
                     KeyTyped as ::core::ffi::c_int
-                }) != 0) && KeyStuffed == 0 && nchar >= 0 as ::core::ffi::c_int
+                }) != 0)
+            && KeyStuffed == 0
+            && nchar >= 0 as ::core::ffi::c_int
         {
             if nchar < 256 as ::core::ffi::c_int {
                 nchar = langmap_mapchar[nchar as usize] as ::core::ffi::c_int;
@@ -7915,9 +7827,7 @@ unsafe extern "C" fn nv_z_get_count(
         {
             n /= 10 as ::core::ffi::c_int;
         } else if ascii_isdigit(nchar) {
-            if vim_append_digit_int(&raw mut n, nchar - '0' as ::core::ffi::c_int)
-                != FAIL
-            {
+            if vim_append_digit_int(&raw mut n, nchar - '0' as ::core::ffi::c_int) != FAIL {
                 continue;
             }
             clearopbeep((*cap).oap);
@@ -7926,9 +7836,15 @@ unsafe extern "C" fn nv_z_get_count(
             win_setheight(n);
             break;
         } else if nchar == 'l' as ::core::ffi::c_int
-            || nchar == 'h' as ::core::ffi::c_int || nchar == K_LEFT || nchar == K_RIGHT
+            || nchar == 'h' as ::core::ffi::c_int
+            || nchar == K_LEFT
+            || nchar == K_RIGHT
         {
-            (*cap).count1 = if n != 0 { n * (*cap).count1 } else { (*cap).count1 };
+            (*cap).count1 = if n != 0 {
+                n * (*cap).count1
+            } else {
+                (*cap).count1
+            };
             *nchar_arg = nchar;
             return true_0 != 0;
         } else {
@@ -7948,13 +7864,16 @@ unsafe extern "C" fn nv_zg_zw(
         no_mapping += 1;
         allow_keys += 1;
         nchar = plain_vgetc();
-        if *p_langmap as ::core::ffi::c_int != 0 && true
+        if *p_langmap as ::core::ffi::c_int != 0
+            && true
             && (p_lrm != 0
                 || (if vgetc_busy != 0 {
                     (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                 } else {
                     KeyTyped as ::core::ffi::c_int
-                }) != 0) && KeyStuffed == 0 && nchar >= 0 as ::core::ffi::c_int
+                }) != 0)
+            && KeyStuffed == 0
+            && nchar >= 0 as ::core::ffi::c_int
         {
             if nchar < 256 as ::core::ffi::c_int {
                 nchar = langmap_mapchar[nchar as usize] as ::core::ffi::c_int;
@@ -7965,8 +7884,7 @@ unsafe extern "C" fn nv_zg_zw(
         no_mapping -= 1;
         allow_keys -= 1;
         add_to_showcmd(nchar);
-        if vim_strchr(b"gGwW\0".as_ptr() as *const ::core::ffi::c_char, nchar).is_null()
-        {
+        if vim_strchr(b"gGwW\0".as_ptr() as *const ::core::ffi::c_char, nchar).is_null() {
             clearopbeep((*cap).oap);
             return OK;
         }
@@ -7975,12 +7893,9 @@ unsafe extern "C" fn nv_zg_zw(
     if checkclearop((*cap).oap) {
         return OK;
     }
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: size_t = 0;
-    if VIsual_active as ::core::ffi::c_int != 0
-        && !get_visual_text(cap, &raw mut ptr, &raw mut len)
+    if VIsual_active as ::core::ffi::c_int != 0 && !get_visual_text(cap, &raw mut ptr, &raw mut len)
     {
         return FAIL;
     }
@@ -8000,20 +7915,19 @@ unsafe extern "C" fn nv_zg_zw(
         }
         (*curwin).w_cursor = pos;
     }
-    if ptr.is_null()
-        && {
-            len = find_ident_under_cursor(
-                &raw mut ptr,
-                FIND_IDENT as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            );
-            len == 0 as size_t
-        }
-    {
+    if ptr.is_null() && {
+        len = find_ident_under_cursor(
+            &raw mut ptr,
+            FIND_IDENT as ::core::ffi::c_int,
+            ::core::ptr::null_mut::<::core::ffi::c_int>(),
+        );
+        len == 0 as size_t
+    } {
         return FAIL;
     }
     '_c2rust_label: {
-        if len <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+        if len <= 2147483647 as ::core::ffi::c_int as size_t {
+        } else {
             __assert_fail(
                 b"len <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
@@ -8043,30 +7957,32 @@ unsafe extern "C" fn nv_zg_zw(
 unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
     let mut col: colnr_T = 0;
     let mut nchar: ::core::ffi::c_int = (*cap).nchar;
-    let mut old_fdl: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_fdl
-        as ::core::ffi::c_int;
+    let mut old_fdl: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_fdl as ::core::ffi::c_int;
     let mut old_fen: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_fen;
     let mut siso: int64_t = get_sidescrolloff_value(curwin);
-    if ascii_isdigit(nchar) as ::core::ffi::c_int != 0
-        && !nv_z_get_count(cap, &raw mut nchar)
-    {
+    if ascii_isdigit(nchar) as ::core::ffi::c_int != 0 && !nv_z_get_count(cap, &raw mut nchar) {
         return;
     }
     if (*cap).nchar != 'f' as ::core::ffi::c_int
         && (*cap).nchar != 'F' as ::core::ffi::c_int
         && !(VIsual_active as ::core::ffi::c_int != 0
             && !vim_strchr(
-                    b"dcCoO\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*cap).nchar,
-                )
-                .is_null()) && (*cap).nchar != 'j' as ::core::ffi::c_int
+                b"dcCoO\0".as_ptr() as *const ::core::ffi::c_char,
+                (*cap).nchar,
+            )
+            .is_null())
+        && (*cap).nchar != 'j' as ::core::ffi::c_int
         && (*cap).nchar != 'k' as ::core::ffi::c_int
         && checkclearop((*cap).oap) as ::core::ffi::c_int != 0
     {
         return;
     }
-    if !vim_strchr(b"+\r\nt.z^-b\0".as_ptr() as *const ::core::ffi::c_char, nchar)
-        .is_null() && (*cap).count0 != 0
+    if !vim_strchr(
+        b"+\r\nt.z^-b\0".as_ptr() as *const ::core::ffi::c_char,
+        nchar,
+    )
+    .is_null()
+        && (*cap).count0 != 0
         && (*cap).count0 as linenr_T != (*curwin).w_cursor.lnum
     {
         setpcmark();
@@ -8120,11 +8036,11 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                             );
                                             (*curwin).w_cursor.lnum = (*curwin).w_topline;
                                         } else if (*curwin).w_topline == 1 as linenr_T {
-                                            (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int
-                                                as linenr_T;
+                                            (*curwin).w_cursor.lnum =
+                                                1 as ::core::ffi::c_int as linenr_T;
                                         } else {
-                                            (*curwin).w_cursor.lnum = (*curwin).w_topline
-                                                - 1 as linenr_T;
+                                            (*curwin).w_cursor.lnum =
+                                                (*curwin).w_topline - 1 as linenr_T;
                                         }
                                         break 'c_53192;
                                     }
@@ -8135,16 +8051,16 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                         break 'c_53195;
                                     }
                                     72 => {
-                                        (*cap).count1
-                                            *= (*curwin).w_view_width / 2 as ::core::ffi::c_int;
+                                        (*cap).count1 *=
+                                            (*curwin).w_view_width / 2 as ::core::ffi::c_int;
                                         break 'c_55198;
                                     }
                                     104 | K_LEFT => {
                                         break 'c_55198;
                                     }
                                     76 => {
-                                        (*cap).count1
-                                            *= (*curwin).w_view_width / 2 as ::core::ffi::c_int;
+                                        (*cap).count1 *=
+                                            (*curwin).w_view_width / 2 as ::core::ffi::c_int;
                                         break 'c_55145;
                                     }
                                     108 | K_RIGHT => {
@@ -8175,7 +8091,10 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                             }
                                             if (*curwin).w_leftcol != col {
                                                 (*curwin).w_leftcol = col;
-                                                redraw_later(curwin, UPD_NOT_VALID as ::core::ffi::c_int);
+                                                redraw_later(
+                                                    curwin,
+                                                    UPD_NOT_VALID as ::core::ffi::c_int,
+                                                );
                                             }
                                         }
                                         break 's_906;
@@ -8198,20 +8117,26 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                                     &raw mut col,
                                                 );
                                             }
-                                            let mut n: ::core::ffi::c_int = (*curwin).w_view_width
-                                                - win_col_off(curwin);
+                                            let mut n: ::core::ffi::c_int =
+                                                (*curwin).w_view_width - win_col_off(curwin);
                                             if col as int64_t + siso < n as int64_t {
                                                 col = 0 as ::core::ffi::c_int as colnr_T;
-                                            } else if (siso - n as int64_t) < (INT_MAX - col) as int64_t
+                                            } else if (siso - n as int64_t)
+                                                < (INT_MAX - col) as int64_t
                                             {
-                                                col = (col as int64_t + siso - n as int64_t + 1 as int64_t)
-                                                    as ::core::ffi::c_int as colnr_T;
+                                                col = (col as int64_t + siso - n as int64_t
+                                                    + 1 as int64_t)
+                                                    as ::core::ffi::c_int
+                                                    as colnr_T;
                                             } else {
                                                 col = INT_MAX as colnr_T;
                                             }
                                             if (*curwin).w_leftcol != col {
                                                 (*curwin).w_leftcol = col;
-                                                redraw_later(curwin, UPD_NOT_VALID as ::core::ffi::c_int);
+                                                redraw_later(
+                                                    curwin,
+                                                    UPD_NOT_VALID as ::core::ffi::c_int,
+                                                );
                                             }
                                         }
                                         break 's_906;
@@ -8230,7 +8155,8 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                             nv_operator(cap);
                                             (*curwin).w_onebuf_opt.wo_fen = true_0;
                                             if nchar == 'F' as ::core::ffi::c_int
-                                                && (*(*cap).oap).op_type == OP_FOLD as ::core::ffi::c_int
+                                                && (*(*cap).oap).op_type
+                                                    == OP_FOLD as ::core::ffi::c_int
                                             {
                                                 nv_operator(cap);
                                                 finish_op = true_0 != 0;
@@ -8249,7 +8175,8 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                                     curwin,
                                                     (*curwin).w_cursor.lnum,
                                                     (*curwin).w_cursor.lnum,
-                                                    (nchar == 'D' as ::core::ffi::c_int) as ::core::ffi::c_int,
+                                                    (nchar == 'D' as ::core::ffi::c_int)
+                                                        as ::core::ffi::c_int,
                                                     false_0 != 0,
                                                 );
                                             }
@@ -8287,9 +8214,9 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                         break 's_906;
                                     }
                                     105 => {
-                                        (*curwin).w_onebuf_opt.wo_fen = ((*curwin)
-                                            .w_onebuf_opt
-                                            .wo_fen == 0) as ::core::ffi::c_int;
+                                        (*curwin).w_onebuf_opt.wo_fen =
+                                            ((*curwin).w_onebuf_opt.wo_fen == 0)
+                                                as ::core::ffi::c_int;
                                         break 's_906;
                                     }
                                     97 => {
@@ -8373,15 +8300,14 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                     }
                                     109 => {
                                         if (*curwin).w_onebuf_opt.wo_fdl > 0 as OptInt {
-                                            (*curwin).w_onebuf_opt.wo_fdl -= (*cap).count1 as OptInt;
-                                            (*curwin).w_onebuf_opt.wo_fdl = if (*curwin)
-                                                .w_onebuf_opt
-                                                .wo_fdl > 0 as OptInt
-                                            {
-                                                (*curwin).w_onebuf_opt.wo_fdl
-                                            } else {
-                                                0 as OptInt
-                                            };
+                                            (*curwin).w_onebuf_opt.wo_fdl -=
+                                                (*cap).count1 as OptInt;
+                                            (*curwin).w_onebuf_opt.wo_fdl =
+                                                if (*curwin).w_onebuf_opt.wo_fdl > 0 as OptInt {
+                                                    (*curwin).w_onebuf_opt.wo_fdl
+                                                } else {
+                                                    0 as OptInt
+                                                };
                                         }
                                         old_fdl = -1 as ::core::ffi::c_int;
                                         (*curwin).w_onebuf_opt.wo_fen = true_0;
@@ -8396,19 +8322,17 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                     114 => {
                                         (*curwin).w_onebuf_opt.wo_fdl += (*cap).count1 as OptInt;
                                         let mut d: ::core::ffi::c_int = getDeepestNesting(curwin);
-                                        (*curwin).w_onebuf_opt.wo_fdl = if (*curwin)
-                                            .w_onebuf_opt
-                                            .wo_fdl < d as OptInt
-                                        {
-                                            (*curwin).w_onebuf_opt.wo_fdl
-                                        } else {
-                                            d as OptInt
-                                        };
+                                        (*curwin).w_onebuf_opt.wo_fdl =
+                                            if (*curwin).w_onebuf_opt.wo_fdl < d as OptInt {
+                                                (*curwin).w_onebuf_opt.wo_fdl
+                                            } else {
+                                                d as OptInt
+                                            };
                                         break 's_906;
                                     }
                                     82 => {
-                                        (*curwin).w_onebuf_opt.wo_fdl = getDeepestNesting(curwin)
-                                            as OptInt;
+                                        (*curwin).w_onebuf_opt.wo_fdl =
+                                            getDeepestNesting(curwin) as OptInt;
                                         old_fdl = -1 as ::core::ffi::c_int;
                                         break 's_906;
                                     }
@@ -8450,24 +8374,19 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                 break 's_906;
                             }
                             beginline(
-                                BL_WHITE as ::core::ffi::c_int
-                                    | BL_FIX as ::core::ffi::c_int,
+                                BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
                             );
                             break 'c_53178;
                         }
-                        beginline(
-                            BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int,
-                        );
+                        beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
                         break 'c_53195;
                     }
                     if (*curwin).w_onebuf_opt.wo_wrap == 0 {
-                        set_leftcol(
-                            if (*cap).count1 > (*curwin).w_leftcol {
-                                0 as colnr_T
-                            } else {
-                                (*curwin).w_leftcol - (*cap).count1
-                            },
-                        );
+                        set_leftcol(if (*cap).count1 > (*curwin).w_leftcol {
+                            0 as colnr_T
+                        } else {
+                            (*curwin).w_leftcol - (*cap).count1
+                        });
                     }
                     break 's_906;
                 }
@@ -8486,8 +8405,7 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
         set_fraction(curwin);
     }
     if old_fen != (*curwin).w_onebuf_opt.wo_fen {
-        if foldmethodIsDiff(curwin) as ::core::ffi::c_int != 0
-            && (*curwin).w_onebuf_opt.wo_scb != 0
+        if foldmethodIsDiff(curwin) as ::core::ffi::c_int != 0 && (*curwin).w_onebuf_opt.wo_scb != 0
         {
             let mut wp: *mut win_T = if curtab == curtab {
                 firstwin
@@ -8495,7 +8413,8 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                 (*curtab).tp_firstwin
             };
             while !wp.is_null() {
-                if wp != curwin && foldmethodIsDiff(wp) as ::core::ffi::c_int != 0
+                if wp != curwin
+                    && foldmethodIsDiff(wp) as ::core::ffi::c_int != 0
                     && (*wp).w_onebuf_opt.wo_scb != 0
                 {
                     (*wp).w_onebuf_opt.wo_fen = (*curwin).w_onebuf_opt.wo_fen;
@@ -8526,7 +8445,7 @@ unsafe extern "C" fn nv_regreplay(mut cap: *mut cmdarg_T) {
         } else {
             line_breakcheck();
         }
-    };
+    }
 }
 unsafe extern "C" fn nv_colon(mut cap: *mut cmdarg_T) {
     let mut cmd_result: bool = false;
@@ -8567,7 +8486,8 @@ unsafe extern "C" fn nv_colon(mut cap: *mut cmdarg_T) {
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 )
             } else {
                 Some(
@@ -8577,7 +8497,8 @@ unsafe extern "C" fn nv_colon(mut cap: *mut cmdarg_T) {
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 )
             },
             NULL,
@@ -8609,9 +8530,7 @@ unsafe extern "C" fn nv_ctrlg(mut cap: *mut cmdarg_T) {
     }
 }
 unsafe extern "C" fn nv_ctrlh(mut cap: *mut cmdarg_T) {
-    if VIsual_active as ::core::ffi::c_int != 0
-        && VIsual_select as ::core::ffi::c_int != 0
-    {
+    if VIsual_active as ::core::ffi::c_int != 0 && VIsual_select as ::core::ffi::c_int != 0 {
         (*cap).cmdchar = 'x' as ::core::ffi::c_int;
         v_visop(cap);
     } else {
@@ -8635,9 +8554,7 @@ unsafe extern "C" fn nv_clear(mut cap: *mut cmdarg_T) {
     redraw_later(curwin, UPD_CLEAR as ::core::ffi::c_int);
 }
 unsafe extern "C" fn nv_ctrlo(mut cap: *mut cmdarg_T) {
-    if VIsual_active as ::core::ffi::c_int != 0
-        && VIsual_select as ::core::ffi::c_int != 0
-    {
+    if VIsual_active as ::core::ffi::c_int != 0 && VIsual_select as ::core::ffi::c_int != 0 {
         VIsual_select = false_0 != 0;
         may_trigger_modechanged();
         showmode();
@@ -8670,9 +8587,7 @@ unsafe extern "C" fn nv_Zet(mut cap: *mut cmdarg_T) {
         }
         82 => {
             if (*cap).count0 >= 1 as ::core::ffi::c_int {
-                do_cmdline_cmd(
-                    b"restart +qall!\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                do_cmdline_cmd(b"restart +qall!\0".as_ptr() as *const ::core::ffi::c_char);
             } else {
                 do_cmdline_cmd(b"restart\0".as_ptr() as *const ::core::ffi::c_char);
             }
@@ -8683,10 +8598,7 @@ unsafe extern "C" fn nv_Zet(mut cap: *mut cmdarg_T) {
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn do_nv_ident(
-    mut c1: ::core::ffi::c_int,
-    mut c2: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn do_nv_ident(mut c1: ::core::ffi::c_int, mut c2: ::core::ffi::c_int) {
     let mut oa: oparg_T = oparg_T {
         op_type: 0,
         regname: 0,
@@ -8759,11 +8671,10 @@ unsafe extern "C" fn nv_K_getcmd(
     if kp_help {
         strcpy(
             buf,
-            b"help! \0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"help! \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
-        *buflen = ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-            .wrapping_sub(1 as usize) as size_t;
+        *buflen =
+            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize) as size_t;
         return n;
     }
     if kp_ex {
@@ -8775,15 +8686,12 @@ unsafe extern "C" fn nv_K_getcmd(
             kp,
         ) as size_t;
         if (*cap).count0 != 0 as ::core::ffi::c_int {
-            *buflen = (*buflen)
-                .wrapping_add(
-                    snprintf(
-                        buf.offset(*buflen as isize),
-                        bufsize.wrapping_sub(*buflen),
-                        b"%ld \0".as_ptr() as *const ::core::ffi::c_char,
-                        (*cap).count0 as int64_t,
-                    ) as size_t,
-                );
+            *buflen = (*buflen).wrapping_add(snprintf(
+                buf.offset(*buflen as isize),
+                bufsize.wrapping_sub(*buflen),
+                b"%ld \0".as_ptr() as *const ::core::ffi::c_char,
+                (*cap).count0 as int64_t,
+            ) as size_t);
         }
         return n;
     }
@@ -8798,12 +8706,10 @@ unsafe extern "C" fn nv_K_getcmd(
         *ptr_arg = ptr;
         return 0 as size_t;
     }
-    let mut isman: bool = strcmp(kp, b"man\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int;
-    let mut isman_s: bool = strcmp(
-        kp,
-        b"man -s\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int;
+    let mut isman: bool =
+        strcmp(kp, b"man\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int;
+    let mut isman_s: bool =
+        strcmp(kp, b"man -s\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int;
     if (*cap).count0 != 0 as ::core::ffi::c_int
         && !(isman as ::core::ffi::c_int != 0 || isman_s as ::core::ffi::c_int != 0)
     {
@@ -8815,54 +8721,40 @@ unsafe extern "C" fn nv_K_getcmd(
         ) as size_t;
     }
     do_cmdline_cmd(b"tabnew\0".as_ptr() as *const ::core::ffi::c_char);
-    *buflen = (*buflen)
-        .wrapping_add(
-            snprintf(
-                buf.offset(*buflen as isize),
-                bufsize.wrapping_sub(*buflen),
-                b"terminal \0".as_ptr() as *const ::core::ffi::c_char,
-            ) as size_t,
-        );
+    *buflen = (*buflen).wrapping_add(snprintf(
+        buf.offset(*buflen as isize),
+        bufsize.wrapping_sub(*buflen),
+        b"terminal \0".as_ptr() as *const ::core::ffi::c_char,
+    ) as size_t);
     if (*cap).count0 == 0 as ::core::ffi::c_int && isman_s as ::core::ffi::c_int != 0 {
-        *buflen = (*buflen)
-            .wrapping_add(
-                snprintf(
-                    buf.offset(*buflen as isize),
-                    bufsize.wrapping_sub(*buflen),
-                    b"man \0".as_ptr() as *const ::core::ffi::c_char,
-                ) as size_t,
-            );
+        *buflen = (*buflen).wrapping_add(snprintf(
+            buf.offset(*buflen as isize),
+            bufsize.wrapping_sub(*buflen),
+            b"man \0".as_ptr() as *const ::core::ffi::c_char,
+        ) as size_t);
     } else {
-        *buflen = (*buflen)
-            .wrapping_add(
-                snprintf(
-                    buf.offset(*buflen as isize),
-                    bufsize.wrapping_sub(*buflen),
-                    b"%s \0".as_ptr() as *const ::core::ffi::c_char,
-                    kp,
-                ) as size_t,
-            );
+        *buflen = (*buflen).wrapping_add(snprintf(
+            buf.offset(*buflen as isize),
+            bufsize.wrapping_sub(*buflen),
+            b"%s \0".as_ptr() as *const ::core::ffi::c_char,
+            kp,
+        ) as size_t);
     }
     if (*cap).count0 != 0 as ::core::ffi::c_int
         && (isman as ::core::ffi::c_int != 0 || isman_s as ::core::ffi::c_int != 0)
     {
-        *buflen = (*buflen)
-            .wrapping_add(
-                snprintf(
-                    buf.offset(*buflen as isize),
-                    bufsize.wrapping_sub(*buflen),
-                    b"%ld \0".as_ptr() as *const ::core::ffi::c_char,
-                    (*cap).count0 as int64_t,
-                ) as size_t,
-            );
+        *buflen = (*buflen).wrapping_add(snprintf(
+            buf.offset(*buflen as isize),
+            bufsize.wrapping_sub(*buflen),
+            b"%ld \0".as_ptr() as *const ::core::ffi::c_char,
+            (*cap).count0 as int64_t,
+        ) as size_t);
     }
     *ptr_arg = ptr;
     return n;
 }
 unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut n: size_t = 0 as size_t;
     let mut cmdchar: ::core::ffi::c_int = 0;
@@ -8879,12 +8771,12 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
         cmdchar = '#' as ::core::ffi::c_int;
     }
     let mut visual_sel: bool = false_0 != 0;
-    if cmdchar == ']' as ::core::ffi::c_int || cmdchar == Ctrl_RSB
+    if cmdchar == ']' as ::core::ffi::c_int
+        || cmdchar == Ctrl_RSB
         || cmdchar == 'K' as ::core::ffi::c_int
     {
         if VIsual_active as ::core::ffi::c_int != 0
-            && get_visual_text(cap, &raw mut ptr, &raw mut n) as ::core::ffi::c_int
-                == false_0
+            && get_visual_text(cap, &raw mut ptr, &raw mut n) as ::core::ffi::c_int == false_0
         {
             return;
         }
@@ -8894,43 +8786,34 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
         }
     }
     let mut ident_offset: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if ptr.is_null()
-        && {
-            n = find_ident_under_cursor(
-                &raw mut ptr,
-                (if cmdchar == '*' as ::core::ffi::c_int
-                    || cmdchar == '#' as ::core::ffi::c_int
-                {
-                    FIND_IDENT as ::core::ffi::c_int | FIND_STRING as ::core::ffi::c_int
-                } else {
-                    FIND_IDENT as ::core::ffi::c_int
-                }),
-                &raw mut ident_offset,
-            );
-            n == 0 as size_t
-        }
-    {
+    if ptr.is_null() && {
+        n = find_ident_under_cursor(
+            &raw mut ptr,
+            (if cmdchar == '*' as ::core::ffi::c_int || cmdchar == '#' as ::core::ffi::c_int {
+                FIND_IDENT as ::core::ffi::c_int | FIND_STRING as ::core::ffi::c_int
+            } else {
+                FIND_IDENT as ::core::ffi::c_int
+            }),
+            &raw mut ident_offset,
+        );
+        n == 0 as size_t
+    } {
         clearop((*cap).oap);
         return;
     }
-    let mut kp: *mut ::core::ffi::c_char = if *(*curbuf).b_p_kp as ::core::ffi::c_int
-        == NUL
-    {
+    let mut kp: *mut ::core::ffi::c_char = if *(*curbuf).b_p_kp as ::core::ffi::c_int == NUL {
         p_kp
     } else {
         (*curbuf).b_p_kp
     };
-    let mut kp_helpbang: bool = strequal(
-        kp,
-        b":help!\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut kp_helpbang: bool = strequal(kp, b":help!\0".as_ptr() as *const ::core::ffi::c_char);
     let mut kp_help: bool = kp_helpbang as ::core::ffi::c_int != 0
         || *kp as ::core::ffi::c_int == NUL
-        || strequal(kp, b":he\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0
-        || strequal(kp, b":help\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int != 0;
-    if kp_help as ::core::ffi::c_int != 0 && !kp_helpbang
+        || strequal(kp, b":he\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int != 0
+        || strequal(kp, b":help\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+            != 0;
+    if kp_help as ::core::ffi::c_int != 0
+        && !kp_helpbang
         && *skipwhite(ptr) as ::core::ffi::c_int == NUL
     {
         emsg(gettext(&raw const e_noident as *const ::core::ffi::c_char));
@@ -8951,11 +8834,10 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
             if !g_cmd && vim_iswordp(ptr) as ::core::ffi::c_int != 0 {
                 strcpy(
                     buf,
-                    b"\\<\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"\\<\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
-                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                    .wrapping_sub(1 as usize) as size_t;
+                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
+                    as size_t;
             }
             no_smartcase = true_0 != 0;
         }
@@ -8979,38 +8861,34 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
             tag_cmd = true_0 != 0;
             strcpy(
                 buf,
-                b"tselect \0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"tselect \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
-            buflen = ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                .wrapping_sub(1 as usize) as size_t;
+            buflen = ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
+                as size_t;
         }
         _ => {
             tag_cmd = true_0 != 0;
             if (*curbuf).b_help {
                 strcpy(
                     buf,
-                    b"help! \0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"help! \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
-                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                    .wrapping_sub(1 as usize) as size_t;
+                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize)
+                    as size_t;
             } else if g_cmd {
                 strcpy(
                     buf,
-                    b"tjump \0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"tjump \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
-                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                    .wrapping_sub(1 as usize) as size_t;
+                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize)
+                    as size_t;
             } else if (*cap).count0 == 0 as ::core::ffi::c_int {
                 strcpy(
                     buf,
-                    b"tag \0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"tag \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 );
-                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                    .wrapping_sub(1 as usize) as size_t;
+                buflen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
+                    as size_t;
             } else {
                 buflen = snprintf(
                     buf,
@@ -9021,15 +8899,14 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
             }
         }
     }
-    if cmdchar == 'K' as ::core::ffi::c_int && kp_helpbang as ::core::ffi::c_int != 0
-        && !visual_sel
+    if cmdchar == 'K' as ::core::ffi::c_int && kp_helpbang as ::core::ffi::c_int != 0 && !visual_sel
     {
         strcpy(
             buf,
             b"help!\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
-        buflen = ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
-            .wrapping_sub(1 as usize) as size_t;
+        buflen =
+            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as size_t;
     } else if cmdchar == 'K' as ::core::ffi::c_int && !kp_help {
         ptr = xstrnsave(ptr, n);
         if kp_ex {
@@ -9048,9 +8925,7 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
         buflen = buflen.wrapping_add(plen);
         xfree(p as *mut ::core::ffi::c_void);
     } else {
-        let mut aux_ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut aux_ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if cmdchar == '*' as ::core::ffi::c_int {
             aux_ptr = (if magic_isset() as ::core::ffi::c_int != 0 {
                 b"/.*~[^$\\\0".as_ptr() as *const ::core::ffi::c_char
@@ -9064,18 +8939,19 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
                 b"/?^$\\\0".as_ptr() as *const ::core::ffi::c_char
             }) as *mut ::core::ffi::c_char;
         } else if tag_cmd {
-            if strcmp((*curbuf).b_p_ft, b"help\0".as_ptr() as *const ::core::ffi::c_char)
-                == 0 as ::core::ffi::c_int
+            if strcmp(
+                (*curbuf).b_p_ft,
+                b"help\0".as_ptr() as *const ::core::ffi::c_char,
+            ) == 0 as ::core::ffi::c_int
             {
-                aux_ptr = b"\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                aux_ptr = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else {
                 aux_ptr = b"\\|\"\n[\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char;
             }
         } else {
-            aux_ptr = b"\\|\"\n*?[\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            aux_ptr =
+                b"\\|\"\n*?[\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         p = buf.offset(buflen as isize);
         loop {
@@ -9110,23 +8986,25 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
         buflen = p.offset_from(buf) as size_t;
     }
     if cmdchar == '*' as ::core::ffi::c_int || cmdchar == '#' as ::core::ffi::c_int {
-        if !g_cmd
-            && vim_iswordp(mb_prevptr(get_cursor_line_ptr(), ptr)) as ::core::ffi::c_int
-                != 0
+        if !g_cmd && vim_iswordp(mb_prevptr(get_cursor_line_ptr(), ptr)) as ::core::ffi::c_int != 0
         {
             strcpy(
                 buf.offset(buflen as isize),
-                b"\\>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"\\>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
-            buflen = (buflen as ::core::ffi::c_ulong)
-                .wrapping_add(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                        .wrapping_sub(1 as usize) as ::core::ffi::c_ulong,
-                ) as size_t;
+            buflen = (buflen as ::core::ffi::c_ulong).wrapping_add(
+                ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
+                    as ::core::ffi::c_ulong,
+            ) as size_t;
         }
         init_history();
-        add_to_history(HIST_SEARCH as ::core::ffi::c_int, buf, buflen, true_0 != 0, NUL);
+        add_to_history(
+            HIST_SEARCH as ::core::ffi::c_int,
+            buf,
+            buflen,
+            true_0 != 0,
+            NUL,
+        );
         normal_search(
             cap,
             if cmdchar == '*' as ::core::ffi::c_int {
@@ -9146,8 +9024,7 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
         if cmdchar == 'K' as ::core::ffi::c_int && !kp_ex && !kp_help {
             restart_edit = 'i' as ::core::ffi::c_int;
             add_map(
-                b"<esc>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"<esc>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"<Cmd>bdelete!<CR>\0".as_ptr() as *const ::core::ffi::c_char
                     as *mut ::core::ffi::c_char,
                 MODE_TERMINAL as ::core::ffi::c_int,
@@ -9191,12 +9068,10 @@ pub unsafe extern "C" fn get_visual_text(
             *lenp = 0 as size_t;
         }
         if *lenp > 0 as size_t {
-            *lenp = (*lenp)
-                .wrapping_add(
-                    (utfc_ptr2len(
-                        (*pp).offset((*lenp).wrapping_sub(1 as size_t) as isize),
-                    ) - 1 as ::core::ffi::c_int) as size_t,
-                );
+            *lenp = (*lenp).wrapping_add(
+                (utfc_ptr2len((*pp).offset((*lenp).wrapping_sub(1 as size_t) as isize))
+                    - 1 as ::core::ffi::c_int) as size_t,
+            );
         }
     }
     reset_VIsual_and_resel();
@@ -9225,21 +9100,18 @@ unsafe extern "C" fn nv_scroll(mut cap: *mut cmdarg_T) {
             (*curwin).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
         } else if win_lines_concealed(curwin) {
             n = (*cap).count1 - 1 as ::core::ffi::c_int;
-            while n > 0 as ::core::ffi::c_int
-                && (*curwin).w_cursor.lnum > (*curwin).w_topline
-            {
+            while n > 0 as ::core::ffi::c_int && (*curwin).w_cursor.lnum > (*curwin).w_topline {
                 hasFolding(
                     curwin,
                     (*curwin).w_cursor.lnum,
                     &raw mut (*curwin).w_cursor.lnum,
                     ::core::ptr::null_mut::<linenr_T>(),
                 );
-                n
-                    += decor_conceal_line(
-                        curwin,
-                        (*curwin).w_cursor.lnum as ::core::ffi::c_int,
-                        true_0 != 0,
-                    ) as ::core::ffi::c_int;
+                n += decor_conceal_line(
+                    curwin,
+                    (*curwin).w_cursor.lnum as ::core::ffi::c_int,
+                    true_0 != 0,
+                ) as ::core::ffi::c_int;
                 if (*curwin).w_cursor.lnum > (*curwin).w_topline {
                     (*curwin).w_cursor.lnum -= 1;
                 }
@@ -9247,32 +9119,29 @@ unsafe extern "C" fn nv_scroll(mut cap: *mut cmdarg_T) {
             }
         } else {
             (*curwin).w_cursor.lnum = ((*curwin).w_cursor.lnum as ::core::ffi::c_int
-                - ((*cap).count1 - 1 as ::core::ffi::c_int)) as linenr_T;
+                - ((*cap).count1 - 1 as ::core::ffi::c_int))
+                as linenr_T;
         }
     } else {
         if (*cap).cmdchar == 'M' as ::core::ffi::c_int {
             let mut used: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             used -= win_get_fill(curwin, (*curwin).w_topline) - (*curwin).w_topfill;
             validate_botline_win(curwin);
-            let mut half: ::core::ffi::c_int = ((*curwin).w_view_height
-                - (*curwin).w_empty_rows + 1 as ::core::ffi::c_int)
+            let mut half: ::core::ffi::c_int = ((*curwin).w_view_height - (*curwin).w_empty_rows
+                + 1 as ::core::ffi::c_int)
                 / 2 as ::core::ffi::c_int;
             n = 0 as ::core::ffi::c_int;
             while ((*curwin).w_topline + n as linenr_T) < (*curbuf).b_ml.ml_line_count {
                 if n > 0 as ::core::ffi::c_int
                     && used
                         + win_get_fill(curwin, (*curwin).w_topline + n as linenr_T)
-                            / 2 as ::core::ffi::c_int >= half
+                            / 2 as ::core::ffi::c_int
+                        >= half
                 {
                     n -= 1;
                     break;
                 } else {
-                    used
-                        += plines_win(
-                            curwin,
-                            (*curwin).w_topline + n as linenr_T,
-                            true_0 != 0,
-                        );
+                    used += plines_win(curwin, (*curwin).w_topline + n as linenr_T, true_0 != 0);
                     if used >= half {
                         break;
                     }
@@ -9298,12 +9167,14 @@ unsafe extern "C" fn nv_scroll(mut cap: *mut cmdarg_T) {
                     curwin,
                     lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                     true_0 != 0,
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
                     || {
                         let c2rust_fresh12 = n;
                         n = n - 1;
                         c2rust_fresh12 > 0 as ::core::ffi::c_int
-                    }) && lnum < (*curwin).w_botline - 1 as linenr_T
+                    })
+                    && lnum < (*curwin).w_botline - 1 as linenr_T
                 {
                     hasFolding(
                         curwin,
@@ -9316,13 +9187,12 @@ unsafe extern "C" fn nv_scroll(mut cap: *mut cmdarg_T) {
                 n = (lnum - (*curwin).w_topline) as ::core::ffi::c_int;
             }
         }
-        (*curwin).w_cursor.lnum = if ((*curwin).w_topline + n as linenr_T)
-            < (*curbuf).b_ml.ml_line_count
-        {
-            (*curwin).w_topline + n as linenr_T
-        } else {
-            (*curbuf).b_ml.ml_line_count
-        };
+        (*curwin).w_cursor.lnum =
+            if ((*curwin).w_topline + n as linenr_T) < (*curbuf).b_ml.ml_line_count {
+                (*curwin).w_topline + n as linenr_T
+            } else {
+                (*curbuf).b_ml.ml_line_count
+            };
     }
     if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int {
         cursor_correct(curwin);
@@ -9376,9 +9246,7 @@ unsafe extern "C" fn nv_right(mut cap: *mut cmdarg_T) {
                     if n == (*cap).count1 {
                         beep_flush();
                     }
-                } else if !(*ml_get((*curwin).w_cursor.lnum) as ::core::ffi::c_int
-                    == NUL)
-                {
+                } else if !(*ml_get((*curwin).w_cursor.lnum) as ::core::ffi::c_int == NUL) {
                     (*(*cap).oap).inclusive = true_0 != 0;
                 }
                 break;
@@ -9437,9 +9305,7 @@ unsafe extern "C" fn nv_left(mut cap: *mut cmdarg_T) {
                     (*cap).retval |= CA_NO_ADJ_OP_END as ::core::ffi::c_int;
                 }
             } else {
-                if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
-                    && n == (*cap).count1
-                {
+                if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int && n == (*cap).count1 {
                     beep_flush();
                 }
                 break;
@@ -9480,7 +9346,8 @@ unsafe extern "C" fn nv_down(mut cap: *mut cmdarg_T) {
         qf_view_result(false_0 != 0);
     } else if cmdwin_type != 0 as ::core::ffi::c_int && (*cap).cmdchar == CAR {
         cmdwin_result = CAR;
-    } else if bt_prompt(curbuf) as ::core::ffi::c_int != 0 && (*cap).cmdchar == CAR
+    } else if bt_prompt(curbuf) as ::core::ffi::c_int != 0
+        && (*cap).cmdchar == CAR
         && (*curwin).w_cursor.lnum == (*curbuf).b_ml.ml_line_count
     {
         prompt_invoke_callback();
@@ -9511,7 +9378,8 @@ unsafe extern "C" fn nv_gotofile(mut cap: *mut cmdarg_T) {
     let mut ptr: *mut ::core::ffi::c_char = grab_file_name((*cap).count1, &raw mut lnum);
     if !ptr.is_null() {
         if curbufIsChanged() as ::core::ffi::c_int != 0
-            && (*curbuf).b_nwindows <= 1 as ::core::ffi::c_int && !buf_hide(curbuf)
+            && (*curbuf).b_nwindows <= 1 as ::core::ffi::c_int
+            && !buf_hide(curbuf)
         {
             autowrite(curbuf, false_0 != 0);
         }
@@ -9528,7 +9396,9 @@ unsafe extern "C" fn nv_gotofile(mut cap: *mut cmdarg_T) {
                 0 as ::core::ffi::c_int
             }),
             curwin,
-        ) == OK && (*cap).nchar == 'F' as ::core::ffi::c_int && lnum >= 0 as linenr_T
+        ) == OK
+            && (*cap).nchar == 'F' as ::core::ffi::c_int
+            && lnum >= 0 as linenr_T
         {
             (*curwin).w_cursor.lnum = lnum;
             check_cursor_lnum(curwin);
@@ -9550,7 +9420,8 @@ unsafe extern "C" fn nv_end(mut cap: *mut cmdarg_T) {
 unsafe extern "C" fn nv_dollar(mut cap: *mut cmdarg_T) {
     (*(*cap).oap).motion_type = kMTCharWise;
     (*(*cap).oap).inclusive = true_0 != 0;
-    if !virtual_active(curwin) || gchar_cursor() != NUL
+    if !virtual_active(curwin)
+        || gchar_cursor() != NUL
         || (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
     {
         (*curwin).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
@@ -9561,8 +9432,8 @@ unsafe extern "C" fn nv_dollar(mut cap: *mut cmdarg_T) {
     ) == false_0
     {
         clearopbeep((*cap).oap);
-    } else if fdo_flags & kOptFdoFlagHor as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0 && KeyTyped as ::core::ffi::c_int != 0
+    } else if fdo_flags & kOptFdoFlagHor as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && KeyTyped as ::core::ffi::c_int != 0
         && (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
     {
         foldOpenCursor();
@@ -9613,7 +9484,8 @@ unsafe extern "C" fn nv_next(mut cap: *mut cmdarg_T) {
         SEARCH_MARK as ::core::ffi::c_int | (*cap).arg,
         &raw mut wrapped,
     );
-    if i == 1 as ::core::ffi::c_int && wrapped == 0
+    if i == 1 as ::core::ffi::c_int
+        && wrapped == 0
         && equalpos(old, (*curwin).w_cursor) as ::core::ffi::c_int != 0
     {
         (*cap).count1 += 1 as ::core::ffi::c_int;
@@ -9627,7 +9499,9 @@ unsafe extern "C" fn nv_next(mut cap: *mut cmdarg_T) {
         );
         (*cap).count1 -= 1 as ::core::ffi::c_int;
     }
-    if i > 0 as ::core::ffi::c_int && p_hls != 0 && !no_hlsearch
+    if i > 0 as ::core::ffi::c_int
+        && p_hls != 0
+        && !no_hlsearch
         && win_hl_attr(curwin, HLF_LC as ::core::ffi::c_int)
             != win_hl_attr(curwin, HLF_L as ::core::ffi::c_int)
     {
@@ -9665,7 +9539,8 @@ unsafe extern "C" fn normal_search(
         pat,
         patlen,
         (*cap).count1,
-        opt | SEARCH_OPT as ::core::ffi::c_int | SEARCH_ECHO as ::core::ffi::c_int
+        opt | SEARCH_OPT as ::core::ffi::c_int
+            | SEARCH_ECHO as ::core::ffi::c_int
             | SEARCH_MSG as ::core::ffi::c_int,
         &raw mut sia,
     );
@@ -9680,13 +9555,15 @@ unsafe extern "C" fn normal_search(
         }
         (*curwin).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
         if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
-            && fdo_flags & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0 && KeyTyped as ::core::ffi::c_int != 0
+            && fdo_flags & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            && KeyTyped as ::core::ffi::c_int != 0
         {
             foldOpenCursor();
         }
     }
-    if !equalpos((*curwin).w_cursor, prev_cursor) && p_hls != 0 && !no_hlsearch
+    if !equalpos((*curwin).w_cursor, prev_cursor)
+        && p_hls != 0
+        && !no_hlsearch
         && win_hl_attr(curwin, HLF_LC as ::core::ffi::c_int)
             != win_hl_attr(curwin, HLF_L as ::core::ffi::c_int)
     {
@@ -9705,8 +9582,8 @@ unsafe extern "C" fn nv_csearch(mut cap: *mut cmdarg_T) {
         unadjust_for_sel();
         cursor_dec = true_0 != 0;
     }
-    let mut t_cmd: bool = (*cap).cmdchar == 't' as ::core::ffi::c_int
-        || (*cap).cmdchar == 'T' as ::core::ffi::c_int;
+    let mut t_cmd: bool =
+        (*cap).cmdchar == 't' as ::core::ffi::c_int || (*cap).cmdchar == 'T' as ::core::ffi::c_int;
     (*(*cap).oap).motion_type = kMTCharWise;
     if (*cap).nchar < 0 as ::core::ffi::c_int || searchc(cap, t_cmd) == false_0 {
         clearopbeep((*cap).oap);
@@ -9716,7 +9593,8 @@ unsafe extern "C" fn nv_csearch(mut cap: *mut cmdarg_T) {
         return;
     }
     (*curwin).w_set_curswant = true_0;
-    if gchar_cursor() == TAB && virtual_active(curwin) as ::core::ffi::c_int != 0
+    if gchar_cursor() == TAB
+        && virtual_active(curwin) as ::core::ffi::c_int != 0
         && (*cap).arg == FORWARD as ::core::ffi::c_int
         && (t_cmd as ::core::ffi::c_int != 0
             || (*(*cap).oap).op_type != OP_NOP as ::core::ffi::c_int)
@@ -9742,10 +9620,7 @@ unsafe extern "C" fn nv_csearch(mut cap: *mut cmdarg_T) {
         foldOpenCursor();
     }
 }
-unsafe extern "C" fn nv_bracket_block(
-    mut cap: *mut cmdarg_T,
-    mut old_pos: *const pos_T,
-) {
+unsafe extern "C" fn nv_bracket_block(mut cap: *mut cmdarg_T, mut old_pos: *const pos_T) {
     let mut new_pos: pos_T = pos_T {
         lnum: 0 as linenr_T,
         col: 0 as colnr_T,
@@ -9763,9 +9638,7 @@ unsafe extern "C" fn nv_bracket_block(
         (*cap).nchar = '/' as ::core::ffi::c_int;
     }
     prev_pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
-    if (*cap).nchar == 'm' as ::core::ffi::c_int
-        || (*cap).nchar == 'M' as ::core::ffi::c_int
-    {
+    if (*cap).nchar == 'm' as ::core::ffi::c_int || (*cap).nchar == 'M' as ::core::ffi::c_int {
         if (*cap).cmdchar == '[' as ::core::ffi::c_int {
             findc = '{' as ::core::ffi::c_int;
         } else {
@@ -9806,9 +9679,7 @@ unsafe extern "C" fn nv_bracket_block(
         }
     }
     (*curwin).w_cursor = *old_pos;
-    if (*cap).nchar == 'm' as ::core::ffi::c_int
-        || (*cap).nchar == 'M' as ::core::ffi::c_int
-    {
+    if (*cap).nchar == 'm' as ::core::ffi::c_int || (*cap).nchar == 'M' as ::core::ffi::c_int {
         let mut c: ::core::ffi::c_int = 0;
         let mut norm: bool = (findc == '{' as ::core::ffi::c_int) as ::core::ffi::c_int
             == ((*cap).nchar == 'm' as ::core::ffi::c_int) as ::core::ffi::c_int;
@@ -9837,9 +9708,7 @@ unsafe extern "C" fn nv_bracket_block(
                     break;
                 } else {
                     c = gchar_cursor();
-                    if !(c == '{' as ::core::ffi::c_int
-                        || c == '}' as ::core::ffi::c_int)
-                    {
+                    if !(c == '{' as ::core::ffi::c_int || c == '}' as ::core::ffi::c_int) {
                         continue;
                     }
                     if c == findc && norm as ::core::ffi::c_int != 0
@@ -9900,14 +9769,12 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
     if (*cap).nchar == 'f' as ::core::ffi::c_int {
         nv_gotofile(cap);
     } else if !vim_strchr(
-            b"iI\tdD\x04\0".as_ptr() as *const ::core::ffi::c_char,
-            (*cap).nchar,
-        )
-        .is_null()
+        b"iI\tdD\x04\0".as_ptr() as *const ::core::ffi::c_char,
+        (*cap).nchar,
+    )
+    .is_null()
     {
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut len: size_t = 0;
         len = find_ident_under_cursor(
             &raw mut ptr,
@@ -9917,18 +9784,17 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
         if len == 0 as size_t {
             clearop((*cap).oap);
         } else {
-            ptr = xmemdupz(ptr as *const ::core::ffi::c_void, len)
-                as *mut ::core::ffi::c_char;
+            ptr = xmemdupz(ptr as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
             find_pattern_in_path(
                 ptr,
                 kDirectionNotSet,
                 len,
                 true_0 != 0,
                 if (*cap).count0 == 0 as ::core::ffi::c_int {
-                    (*(*__ctype_b_loc()).offset((*cap).nchar as isize)
-                        as ::core::ffi::c_int
+                    (*(*__ctype_b_loc()).offset((*cap).nchar as isize) as ::core::ffi::c_int
                         & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int == 0) as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                        == 0) as ::core::ffi::c_int
                 } else {
                     false_0
                 } != 0,
@@ -9940,16 +9806,14 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
                     FIND_ANY as ::core::ffi::c_int
                 },
                 (*cap).count1,
-                if *(*__ctype_b_loc()).offset((*cap).nchar as isize)
-                    as ::core::ffi::c_int
-                    & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                        as ::core::ffi::c_int != 0
+                if *(*__ctype_b_loc()).offset((*cap).nchar as isize) as ::core::ffi::c_int
+                    & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                    != 0
                 {
                     ACTION_SHOW_ALL as ::core::ffi::c_int
-                } else if *(*__ctype_b_loc()).offset((*cap).nchar as isize)
-                    as ::core::ffi::c_int
-                    & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort
-                        as ::core::ffi::c_int != 0
+                } else if *(*__ctype_b_loc()).offset((*cap).nchar as isize) as ::core::ffi::c_int
+                    & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
+                    != 0
                 {
                     ACTION_SHOW as ::core::ffi::c_int
                 } else {
@@ -9968,18 +9832,20 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
             (*curwin).w_set_curswant = true_0;
         }
     } else if (*cap).cmdchar == '[' as ::core::ffi::c_int
-        && !vim_strchr(b"{(*/#mM\0".as_ptr() as *const ::core::ffi::c_char, (*cap).nchar)
-            .is_null()
+        && !vim_strchr(
+            b"{(*/#mM\0".as_ptr() as *const ::core::ffi::c_char,
+            (*cap).nchar,
+        )
+        .is_null()
         || (*cap).cmdchar == ']' as ::core::ffi::c_int
             && !vim_strchr(
-                    b"})*/#mM\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*cap).nchar,
-                )
-                .is_null()
+                b"})*/#mM\0".as_ptr() as *const ::core::ffi::c_char,
+                (*cap).nchar,
+            )
+            .is_null()
     {
         nv_bracket_block(cap, &raw mut old_pos);
-    } else if (*cap).nchar == '[' as ::core::ffi::c_int
-        || (*cap).nchar == ']' as ::core::ffi::c_int
+    } else if (*cap).nchar == '[' as ::core::ffi::c_int || (*cap).nchar == ']' as ::core::ffi::c_int
     {
         if (*cap).nchar == (*cap).cmdchar {
             flag = '{' as ::core::ffi::c_int;
@@ -10001,15 +9867,14 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
             if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int {
                 beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
             }
-            if fdo_flags & kOptFdoFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0 && KeyTyped as ::core::ffi::c_int != 0
+            if fdo_flags & kOptFdoFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                && KeyTyped as ::core::ffi::c_int != 0
                 && (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
             {
                 foldOpenCursor();
             }
         }
-    } else if (*cap).nchar == 'p' as ::core::ffi::c_int
-        || (*cap).nchar == 'P' as ::core::ffi::c_int
+    } else if (*cap).nchar == 'p' as ::core::ffi::c_int || (*cap).nchar == 'P' as ::core::ffi::c_int
     {
         nv_put_opt(cap, true_0 != 0);
     } else if (*cap).nchar == '\'' as ::core::ffi::c_int
@@ -10021,14 +9886,14 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
             (*curwin).w_cursor,
         );
         '_c2rust_label: {
-            if !fm.is_null() {} else {
+            if !fm.is_null() {
+            } else {
                 __assert_fail(
                     b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     4311 as ::core::ffi::c_uint,
-                    b"void nv_brackets(cmdarg_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"void nv_brackets(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -10139,8 +10004,8 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
             }
         }
         if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
-            && fdo_flags & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0 && KeyTyped as ::core::ffi::c_int != 0
+            && fdo_flags & kOptFdoFlagSearch as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            && KeyTyped as ::core::ffi::c_int != 0
         {
             foldOpenCursor();
         }
@@ -10159,10 +10024,12 @@ unsafe extern "C" fn nv_percent(mut cap: *mut cmdarg_T) {
             setpcmark();
             if (*curbuf).b_ml.ml_line_count >= 21474836 as linenr_T {
                 (*curwin).w_cursor.lnum = ((*curbuf).b_ml.ml_line_count + 99 as linenr_T)
-                    / 100 as linenr_T * (*cap).count0 as linenr_T;
+                    / 100 as linenr_T
+                    * (*cap).count0 as linenr_T;
             } else {
-                (*curwin).w_cursor.lnum = ((*curbuf).b_ml.ml_line_count
-                    * (*cap).count0 as linenr_T + 99 as linenr_T) / 100 as linenr_T;
+                (*curwin).w_cursor.lnum =
+                    ((*curbuf).b_ml.ml_line_count * (*cap).count0 as linenr_T + 99 as linenr_T)
+                        / 100 as linenr_T;
             }
             (*curwin).w_cursor.lnum = if (if (*curwin).w_cursor.lnum > 1 as linenr_T {
                 (*curwin).w_cursor.lnum
@@ -10197,8 +10064,8 @@ unsafe extern "C" fn nv_percent(mut cap: *mut cmdarg_T) {
     }
     if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
         && lnum != (*curwin).w_cursor.lnum
-        && fdo_flags & kOptFdoFlagPercent as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0 && KeyTyped as ::core::ffi::c_int != 0
+        && fdo_flags & kOptFdoFlagPercent as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && KeyTyped as ::core::ffi::c_int != 0
     {
         foldOpenCursor();
     }
@@ -10313,15 +10180,14 @@ unsafe extern "C" fn nv_replace(mut cap: *mut cmdarg_T) {
         if gchar_cursor() == NUL {
             coladvance_force(getviscol() + (*cap).count1);
             '_c2rust_label: {
-                if (*cap).count1 <= 2147483647 as ::core::ffi::c_int {} else {
+                if (*cap).count1 <= 2147483647 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
-                        b"cap->count1 <= INT_MAX\0".as_ptr()
+                        b"cap->count1 <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         4553 as ::core::ffi::c_uint,
-                        b"void nv_replace(cmdarg_T *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"void nv_replace(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -10336,7 +10202,8 @@ unsafe extern "C" fn nv_replace(mut cap: *mut cmdarg_T) {
         clearopbeep((*cap).oap);
         return;
     }
-    if had_ctrl_v != Ctrl_V && (*cap).nchar == '\t' as ::core::ffi::c_int
+    if had_ctrl_v != Ctrl_V
+        && (*cap).nchar == '\t' as ::core::ffi::c_int
         && ((*curbuf).b_p_et != 0 || p_sta != 0)
     {
         stuffnumReadbuff((*cap).count1);
@@ -10369,9 +10236,7 @@ unsafe extern "C" fn nv_replace(mut cap: *mut cmdarg_T) {
         (*curbuf).b_op_start = (*curwin).w_cursor;
         let old_State: ::core::ffi::c_int = State;
         if (*cap).nchar_len > 0 as ::core::ffi::c_int {
-            AppendToRedobuff(
-                &raw mut (*cap).nchar_composing as *mut ::core::ffi::c_char,
-            );
+            AppendToRedobuff(&raw mut (*cap).nchar_composing as *mut ::core::ffi::c_char);
         } else {
             AppendCharToRedobuff((*cap).nchar);
         }
@@ -10435,8 +10300,7 @@ unsafe extern "C" fn v_swap_corners(mut cmdchar: ::core::ffi::c_int) {
         }
         coladvance(curwin, (*curwin).w_curswant);
         if (*curwin).w_cursor.col == old_cursor.col
-            && (!virtual_active(curwin)
-                || (*curwin).w_cursor.coladd == old_cursor.coladd)
+            && (!virtual_active(curwin) || (*curwin).w_cursor.coladd == old_cursor.coladd)
         {
             (*curwin).w_cursor.lnum = VIsual.lnum;
             if old_cursor.lnum <= VIsual.lnum
@@ -10470,7 +10334,9 @@ unsafe extern "C" fn nv_Replace(mut cap: *mut cmdarg_T) {
         return;
     }
     if (*curbuf).b_p_ma == 0 {
-        emsg(gettext(&raw const e_modifiable as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_modifiable as *const ::core::ffi::c_char,
+        ));
     } else {
         if virtual_active(curwin) {
             coladvance(curwin, getviscol());
@@ -10498,7 +10364,9 @@ unsafe extern "C" fn nv_vreplace(mut cap: *mut cmdarg_T) {
         return;
     }
     if (*curbuf).b_p_ma == 0 {
-        emsg(gettext(&raw const e_modifiable as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_modifiable as *const ::core::ffi::c_char,
+        ));
     } else {
         if (*cap).extra_char == Ctrl_V || (*cap).extra_char == Ctrl_Q {
             (*cap).extra_char = get_literal(false_0 != 0);
@@ -10533,8 +10401,8 @@ unsafe extern "C" fn n_swapchar(mut cap: *mut cmdarg_T) {
     let mut n: ::core::ffi::c_int = (*cap).count1;
     while n > 0 as ::core::ffi::c_int {
         did_change = did_change as ::core::ffi::c_int
-            | swapchar((*(*cap).oap).op_type, &raw mut (*curwin).w_cursor)
-                as ::core::ffi::c_int != 0;
+            | swapchar((*(*cap).oap).op_type, &raw mut (*curwin).w_cursor) as ::core::ffi::c_int
+            != 0;
         inc_cursor();
         if gchar_cursor() == NUL {
             if !(!vim_strchr(p_ww, '~' as ::core::ffi::c_int).is_null()
@@ -10577,13 +10445,14 @@ unsafe extern "C" fn nv_mark_move_to(
     mut fm: *mut fmark_T,
 ) -> MarkMoveRes {
     let mut res: MarkMoveRes = mark_move_to(fm, flags);
-    if res as ::core::ffi::c_uint
-        & kMarkMoveFailed as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+    if res as ::core::ffi::c_uint & kMarkMoveFailed as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0
     {
         clearop((*cap).oap);
     }
     (*(*cap).oap).motion_type = (if flags as ::core::ffi::c_uint
-        & kMarkBeginLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        & kMarkBeginLine as ::core::ffi::c_int as ::core::ffi::c_uint
+        != 0
     {
         kMTLineWise as ::core::ffi::c_int
     } else {
@@ -10598,10 +10467,7 @@ unsafe extern "C" fn nv_mark_move_to(
 }
 unsafe extern "C" fn v_visop(mut cap: *mut cmdarg_T) {
     static mut trans: [::core::ffi::c_char; 17] = unsafe {
-        ::core::mem::transmute::<
-            [u8; 17],
-            [::core::ffi::c_char; 17],
-        >(*b"YyDdCcxdXdAAIIrr\0")
+        ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"YyDdCcxdXdAAIIrr\0")
     };
     if *(*__ctype_b_loc()).offset((*cap).cmdchar as isize) as ::core::ffi::c_int
         & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
@@ -10616,11 +10482,9 @@ unsafe extern "C" fn v_visop(mut cap: *mut cmdarg_T) {
             (*curwin).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
         }
     }
-    (*cap).cmdchar = *vim_strchr(
-            &raw mut trans as *mut ::core::ffi::c_char,
-            (*cap).cmdchar,
-        )
-        .offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int;
+    (*cap).cmdchar = *vim_strchr(&raw mut trans as *mut ::core::ffi::c_char, (*cap).cmdchar)
+        .offset(1 as ::core::ffi::c_int as isize) as uint8_t
+        as ::core::ffi::c_int;
     nv_operator(cap);
 }
 unsafe extern "C" fn nv_subst(mut cap: *mut cmdarg_T) {
@@ -10664,28 +10528,30 @@ unsafe extern "C" fn nv_optrans(mut cap: *mut cmdarg_T) {
         b"yy\0".as_ptr() as *const ::core::ffi::c_char,
         b":s\r\0".as_ptr() as *const ::core::ffi::c_char,
     ];
-    static mut str: *const ::core::ffi::c_char = b"xXDCsSY&\0".as_ptr()
-        as *const ::core::ffi::c_char;
+    static mut str: *const ::core::ffi::c_char =
+        b"xXDCsSY&\0".as_ptr() as *const ::core::ffi::c_char;
     if !checkclearopq((*cap).oap) {
         if (*cap).count0 != 0 {
             stuffnumReadbuff((*cap).count0);
         }
         stuffReadbuff(
-            ar[strchr(str, (*cap).cmdchar as ::core::ffi::c_char as ::core::ffi::c_int)
-                .offset_from(str) as usize] as *const ::core::ffi::c_char,
+            ar[strchr(
+                str,
+                (*cap).cmdchar as ::core::ffi::c_char as ::core::ffi::c_int,
+            )
+            .offset_from(str) as usize] as *const ::core::ffi::c_char,
         );
     }
     (*cap).opcount = 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn nv_gomark(mut cap: *mut cmdarg_T) {
     let mut name: ::core::ffi::c_int = 0;
-    let mut flags: MarkMove = (if jop_flags
-        & kOptJopFlagView as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-    {
-        kMarkSetView as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    }) as MarkMove;
+    let mut flags: MarkMove =
+        (if jop_flags & kOptJopFlagView as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+            kMarkSetView as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        }) as MarkMove;
     if (*(*cap).oap).op_type != OP_NOP as ::core::ffi::c_int {
         flags = 0 as MarkMove;
     }
@@ -10694,11 +10560,13 @@ unsafe extern "C" fn nv_gomark(mut cap: *mut cmdarg_T) {
     if (*cap).cmdchar == 'g' as ::core::ffi::c_int {
         name = (*cap).extra_char;
         flags = (flags as ::core::ffi::c_uint
-            | KMarkNoContext as ::core::ffi::c_int as ::core::ffi::c_uint) as MarkMove;
+            | KMarkNoContext as ::core::ffi::c_int as ::core::ffi::c_uint)
+            as MarkMove;
     } else {
         name = (*cap).nchar;
         flags = (flags as ::core::ffi::c_uint
-            | kMarkContext as ::core::ffi::c_int as ::core::ffi::c_uint) as MarkMove;
+            | kMarkContext as ::core::ffi::c_int as ::core::ffi::c_uint)
+            as MarkMove;
     }
     flags = (flags as ::core::ffi::c_uint
         | (if (*cap).arg != 0 {
@@ -10725,11 +10593,14 @@ unsafe extern "C" fn nv_gomark(mut cap: *mut cmdarg_T) {
     }
     if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
         && move_res as ::core::ffi::c_uint
-            & kMarkMoveSuccess as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            & kMarkMoveSuccess as ::core::ffi::c_int as ::core::ffi::c_uint
+            != 0
         && (move_res as ::core::ffi::c_uint
-            & kMarkSwitchedBuf as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            & kMarkSwitchedBuf as ::core::ffi::c_int as ::core::ffi::c_uint
+            != 0
             || move_res as ::core::ffi::c_uint
-                & kMarkChangedCursor as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
+                & kMarkChangedCursor as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0)
         && fdo_flags & kOptFdoFlagMark as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && old_KeyTyped as ::core::ffi::c_int != 0
     {
@@ -10738,13 +10609,12 @@ unsafe extern "C" fn nv_gomark(mut cap: *mut cmdarg_T) {
 }
 unsafe extern "C" fn nv_pcmark(mut cap: *mut cmdarg_T) {
     let mut fm: *mut fmark_T = ::core::ptr::null_mut::<fmark_T>();
-    let mut flags: MarkMove = (if jop_flags
-        & kOptJopFlagView as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-    {
-        kMarkSetView as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    }) as MarkMove;
+    let mut flags: MarkMove =
+        (if jop_flags & kOptJopFlagView as ::core::ffi::c_int as ::core::ffi::c_uint != 0 {
+            kMarkSetView as ::core::ffi::c_int
+        } else {
+            0 as ::core::ffi::c_int
+        }) as MarkMove;
     let mut move_res: MarkMoveRes = 0 as MarkMoveRes;
     let old_KeyTyped: bool = KeyTyped;
     if checkclearopq((*cap).oap) {
@@ -10761,40 +10631,35 @@ unsafe extern "C" fn nv_pcmark(mut cap: *mut cmdarg_T) {
     } else {
         fm = get_jumplist(curwin, (*cap).count1);
         flags = (flags as ::core::ffi::c_uint
-            | (KMarkNoContext as ::core::ffi::c_int
-                | kMarkJumpList as ::core::ffi::c_int) as ::core::ffi::c_uint)
-            as MarkMove;
+            | (KMarkNoContext as ::core::ffi::c_int | kMarkJumpList as ::core::ffi::c_int)
+                as ::core::ffi::c_uint) as MarkMove;
     }
     if !fm.is_null() {
         move_res = nv_mark_move_to(cap, flags, fm);
     } else if (*cap).cmdchar == 'g' as ::core::ffi::c_int {
         if (*curbuf).b_changelistlen == 0 as ::core::ffi::c_int {
-            emsg(
-                gettext(&raw const e_changelist_is_empty as *const ::core::ffi::c_char),
-            );
+            emsg(gettext(
+                &raw const e_changelist_is_empty as *const ::core::ffi::c_char,
+            ));
         } else if (*cap).count1 < 0 as ::core::ffi::c_int {
-            emsg(
-                gettext(
-                    b"E662: At start of changelist\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E662: At start of changelist\0".as_ptr() as *const ::core::ffi::c_char
+            ));
         } else {
-            emsg(
-                gettext(
-                    b"E663: At end of changelist\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E663: At end of changelist\0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     } else {
         clearopbeep((*cap).oap);
     }
     if (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
         && (move_res as ::core::ffi::c_uint
-            & kMarkSwitchedBuf as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            & kMarkSwitchedBuf as ::core::ffi::c_int as ::core::ffi::c_uint
+            != 0
             || move_res as ::core::ffi::c_uint
-                & kMarkChangedLine as ::core::ffi::c_int as ::core::ffi::c_uint != 0)
+                & kMarkChangedLine as ::core::ffi::c_int as ::core::ffi::c_uint
+                != 0)
         && fdo_flags & kOptFdoFlagMark as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && old_KeyTyped as ::core::ffi::c_int != 0
     {
@@ -10808,8 +10673,7 @@ unsafe extern "C" fn nv_regname(mut cap: *mut cmdarg_T) {
     if (*cap).nchar == '=' as ::core::ffi::c_int {
         (*cap).nchar = get_expr_register();
     }
-    if (*cap).nchar != NUL
-        && valid_yank_reg((*cap).nchar, false_0 != 0) as ::core::ffi::c_int != 0
+    if (*cap).nchar != NUL && valid_yank_reg((*cap).nchar, false_0 != 0) as ::core::ffi::c_int != 0
     {
         (*(*cap).oap).regname = (*cap).nchar;
         (*cap).opcount = (*cap).count0;
@@ -10849,8 +10713,7 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
         if p_smd != 0 && msg_silent == 0 as ::core::ffi::c_int {
             redraw_cmdline = true_0 != 0;
         }
-        if resel_VIsual_mode != 'v' as ::core::ffi::c_int
-            || resel_VIsual_line_count > 1 as linenr_T
+        if resel_VIsual_mode != 'v' as ::core::ffi::c_int || resel_VIsual_line_count > 1 as linenr_T
         {
             (*curwin).w_cursor.lnum = ((*curwin).w_cursor.lnum as ::core::ffi::c_int
                 + (resel_VIsual_line_count * (*cap).count0 as linenr_T - 1 as linenr_T)
@@ -10862,23 +10725,21 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
             if resel_VIsual_line_count <= 1 as linenr_T {
                 update_curswant_force();
                 '_c2rust_label: {
-                    if (*cap).count0
-                        >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                    if (*cap).count0 >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                         && (*cap).count0 <= 2147483647 as ::core::ffi::c_int
-                    {} else {
+                    {
+                    } else {
                         __assert_fail(
-                            b"cap->count0 >= INT_MIN && cap->count0 <= INT_MAX\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            5057 as ::core::ffi::c_uint,
-                            b"void nv_visual(cmdarg_T *)\0".as_ptr()
+                            b"cap->count0 >= INT_MIN && cap->count0 <= INT_MAX\0".as_ptr()
                                 as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
+                            5057 as ::core::ffi::c_uint,
+                            b"void nv_visual(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                         );
                     }
                 };
-                (*curwin).w_curswant
-                    += resel_VIsual_vcol as ::core::ffi::c_int * (*cap).count0;
+                (*curwin).w_curswant += resel_VIsual_vcol as ::core::ffi::c_int * (*cap).count0;
                 if *p_sel as ::core::ffi::c_int != 'e' as ::core::ffi::c_int {
                     (*curwin).w_curswant -= 1;
                 }
@@ -10895,24 +10756,22 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
             (*curwin).w_cursor.lnum = VIsual.lnum;
             update_curswant_force();
             '_c2rust_label_0: {
-                if (*cap).count0
-                    >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
+                if (*cap).count0 >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
                     && (*cap).count0 <= 2147483647 as ::core::ffi::c_int
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"cap->count0 >= INT_MIN && cap->count0 <= INT_MAX\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        5075 as ::core::ffi::c_uint,
-                        b"void nv_visual(cmdarg_T *)\0".as_ptr()
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
+                        5075 as ::core::ffi::c_uint,
+                        b"void nv_visual(cmdarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
-            (*curwin).w_curswant
-                += resel_VIsual_vcol as ::core::ffi::c_int * (*cap).count0
-                    - 1 as ::core::ffi::c_int;
+            (*curwin).w_curswant +=
+                resel_VIsual_vcol as ::core::ffi::c_int * (*cap).count0 - 1 as ::core::ffi::c_int;
             (*curwin).w_cursor.lnum = lnum;
             if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
                 (*curwin).w_curswant += 1;
@@ -10934,12 +10793,10 @@ unsafe extern "C" fn nv_visual(mut cap: *mut cmdarg_T) {
         } else {
             VIsual_select_exclu_adj = false_0 != 0;
         }
-        if (*cap).count0 > 0 as ::core::ffi::c_int
-            && {
-                (*cap).count1 -= 1;
-                (*cap).count1 > 0 as ::core::ffi::c_int
-            }
-        {
+        if (*cap).count0 > 0 as ::core::ffi::c_int && {
+            (*cap).count1 -= 1;
+            (*cap).count1 > 0 as ::core::ffi::c_int
+        } {
             if VIsual_mode == 'v' as ::core::ffi::c_int || VIsual_mode == Ctrl_V {
                 nv_right(cap);
             } else if VIsual_mode == 'V' as ::core::ffi::c_int {
@@ -10964,8 +10821,7 @@ unsafe extern "C" fn n_start_visual_mode(mut c: ::core::ffi::c_int) {
     VIsual_active = true_0 != 0;
     VIsual_reselect = true_0;
     if c == Ctrl_V
-        && get_ve_flags(curwin)
-            & kOptVeFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && get_ve_flags(curwin) & kOptVeFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && gchar_cursor() == TAB
     {
         validate_virtcol(curwin);
@@ -11055,25 +10911,19 @@ pub unsafe extern "C" fn nv_g_home_m_cmd(mut cap: *mut cmdarg_T) {
     let flag: bool = (*cap).nchar == '^' as ::core::ffi::c_int;
     (*(*cap).oap).motion_type = kMTCharWise;
     (*(*cap).oap).inclusive = false_0 != 0;
-    if (*curwin).w_onebuf_opt.wo_wrap != 0
-        && (*curwin).w_view_width != 0 as ::core::ffi::c_int
-    {
-        let mut width1: ::core::ffi::c_int = (*curwin).w_view_width
-            - win_col_off(curwin);
+    if (*curwin).w_onebuf_opt.wo_wrap != 0 && (*curwin).w_view_width != 0 as ::core::ffi::c_int {
+        let mut width1: ::core::ffi::c_int = (*curwin).w_view_width - win_col_off(curwin);
         let mut width2: ::core::ffi::c_int = width1 + win_col_off2(curwin);
         validate_virtcol(curwin);
         i = 0 as ::core::ffi::c_int;
         if (*curwin).w_virtcol >= width1 && width2 > 0 as ::core::ffi::c_int {
-            i = ((*curwin).w_virtcol as ::core::ffi::c_int - width1) / width2 * width2
-                + width1;
+            i = ((*curwin).w_virtcol as ::core::ffi::c_int - width1) / width2 * width2 + width1;
         }
         if (*curwin).w_skipcol > 0 as ::core::ffi::c_int
             && (*curwin).w_cursor.lnum == (*curwin).w_topline
         {
-            let mut overlap: ::core::ffi::c_int = sms_marker_overlap(
-                curwin,
-                (*curwin).w_view_width - width2,
-            );
+            let mut overlap: ::core::ffi::c_int =
+                sms_marker_overlap(curwin, (*curwin).w_view_width - width2);
             if overlap > 0 as ::core::ffi::c_int && i == (*curwin).w_skipcol {
                 i += overlap;
             }
@@ -11082,14 +10932,13 @@ pub unsafe extern "C" fn nv_g_home_m_cmd(mut cap: *mut cmdarg_T) {
         i = (*curwin).w_leftcol as ::core::ffi::c_int;
     }
     if (*cap).nchar == 'm' as ::core::ffi::c_int {
-        i
-            += ((*curwin).w_view_width - win_col_off(curwin)
-                + (if (*curwin).w_onebuf_opt.wo_wrap != 0 && i > 0 as ::core::ffi::c_int
-                {
-                    win_col_off2(curwin)
-                } else {
-                    0 as ::core::ffi::c_int
-                })) / 2 as ::core::ffi::c_int;
+        i += ((*curwin).w_view_width - win_col_off(curwin)
+            + (if (*curwin).w_onebuf_opt.wo_wrap != 0 && i > 0 as ::core::ffi::c_int {
+                win_col_off2(curwin)
+            } else {
+                0 as ::core::ffi::c_int
+            }))
+            / 2 as ::core::ffi::c_int;
     }
     coladvance(curwin, i);
     if flag {
@@ -11129,9 +10978,9 @@ unsafe extern "C" fn nv_g_underscore_cmd(mut cap: *mut cmdarg_T) {
         (*curwin).w_cursor.col -= 1;
     }
     while (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
-        && ascii_iswhite(
-            *ptr.offset((*curwin).w_cursor.col as isize) as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+        && ascii_iswhite(*ptr.offset((*curwin).w_cursor.col as isize) as ::core::ffi::c_int)
+            as ::core::ffi::c_int
+            != 0
     {
         (*curwin).w_cursor.col -= 1;
     }
@@ -11145,9 +10994,7 @@ unsafe extern "C" fn nv_g_dollar_cmd(mut cap: *mut cmdarg_T) {
     let flag: bool = (*cap).nchar == K_END || (*cap).nchar == K_KEND;
     (*oap).motion_type = kMTCharWise;
     (*oap).inclusive = true_0 != 0;
-    if (*curwin).w_onebuf_opt.wo_wrap != 0
-        && (*curwin).w_view_width != 0 as ::core::ffi::c_int
-    {
+    if (*curwin).w_onebuf_opt.wo_wrap != 0 && (*curwin).w_view_width != 0 as ::core::ffi::c_int {
         (*curwin).w_curswant = MAXCOL as ::core::ffi::c_int as colnr_T;
         if (*cap).count1 == 1 as ::core::ffi::c_int {
             let mut width1: ::core::ffi::c_int = (*curwin).w_view_width - col_off;
@@ -11155,9 +11002,9 @@ unsafe extern "C" fn nv_g_dollar_cmd(mut cap: *mut cmdarg_T) {
             validate_virtcol(curwin);
             i = width1 - 1 as ::core::ffi::c_int;
             if (*curwin).w_virtcol >= width1 {
-                i
-                    += (((*curwin).w_virtcol as ::core::ffi::c_int - width1) / width2
-                        + 1 as ::core::ffi::c_int) * width2;
+                i += (((*curwin).w_virtcol as ::core::ffi::c_int - width1) / width2
+                    + 1 as ::core::ffi::c_int)
+                    * width2;
             }
             coladvance(curwin, i);
             update_curswant_force();
@@ -11173,7 +11020,8 @@ unsafe extern "C" fn nv_g_dollar_cmd(mut cap: *mut cmdarg_T) {
             FORWARD as ::core::ffi::c_int,
             (*cap).count1 - 1 as ::core::ffi::c_int,
             false_0 != 0,
-        ) as ::core::ffi::c_int == false_0
+        ) as ::core::ffi::c_int
+            == false_0
         {
             clearopbeep(oap);
         }
@@ -11181,7 +11029,8 @@ unsafe extern "C" fn nv_g_dollar_cmd(mut cap: *mut cmdarg_T) {
         if (*cap).count1 > 1 as ::core::ffi::c_int {
             cursor_down((*cap).count1 - 1 as ::core::ffi::c_int, false_0 != 0);
         }
-        i = (*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width - col_off
+        i = (*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width
+            - col_off
             - 1 as ::core::ffi::c_int;
         coladvance(curwin, i);
         if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
@@ -11195,9 +11044,7 @@ unsafe extern "C" fn nv_g_dollar_cmd(mut cap: *mut cmdarg_T) {
                 ::core::ptr::null_mut::<colnr_T>(),
                 &raw mut vcol,
             );
-            if vcol
-                >= (*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width
-                    - col_off
+            if vcol >= (*curwin).w_leftcol as ::core::ffi::c_int + (*curwin).w_view_width - col_off
             {
                 (*curwin).w_cursor.col -= 1;
             }
@@ -11221,8 +11068,7 @@ unsafe extern "C" fn nv_gi_cmd(mut cap: *mut cmdarg_T) {
         let mut i: ::core::ffi::c_int = get_cursor_line_len();
         if (*curwin).w_cursor.col > i {
             if virtual_active(curwin) {
-                (*curwin).w_cursor.coladd
-                    += (*curwin).w_cursor.col as ::core::ffi::c_int - i;
+                (*curwin).w_cursor.coladd += (*curwin).w_cursor.col as ::core::ffi::c_int - i;
             }
             (*curwin).w_cursor.col = i as colnr_T;
         }
@@ -11258,9 +11104,7 @@ unsafe extern "C" fn nv_g_cmd(mut cap: *mut cmdarg_T) {
                         break 's_650;
                     }
                     38 => {
-                        do_cmdline_cmd(
-                            b"%s//~/&\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        do_cmdline_cmd(b"%s//~/&\0".as_ptr() as *const ::core::ffi::c_char);
                         break 's_650;
                     }
                     118 => {
@@ -11276,10 +11120,8 @@ unsafe extern "C" fn nv_g_cmd(mut cap: *mut cmdarg_T) {
                     }
                     104 | 72 | Ctrl_H => {}
                     78 | 110 => {
-                        if current_search(
-                            (*cap).count1,
-                            (*cap).nchar == 'n' as ::core::ffi::c_int,
-                        ) == 0
+                        if current_search((*cap).count1, (*cap).nchar == 'n' as ::core::ffi::c_int)
+                            == 0
                         {
                             clearopbeep(oap);
                         }
@@ -11340,10 +11182,7 @@ unsafe extern "C" fn nv_g_cmd(mut cap: *mut cmdarg_T) {
                         if (*cap).count0 > 0 as ::core::ffi::c_int
                             && (*cap).count0 <= 100 as ::core::ffi::c_int
                         {
-                            coladvance(
-                                curwin,
-                                i * (*cap).count0 / 100 as ::core::ffi::c_int,
-                            );
+                            coladvance(curwin, i * (*cap).count0 / 100 as ::core::ffi::c_int);
                         } else {
                             coladvance(curwin, i / 2 as ::core::ffi::c_int);
                         }
@@ -11387,12 +11226,7 @@ unsafe extern "C" fn nv_g_cmd(mut cap: *mut cmdarg_T) {
                     73 => {
                         beginline(0 as ::core::ffi::c_int);
                         if !checkclearopq(oap) {
-                            invoke_edit(
-                                cap,
-                                false_0,
-                                'g' as ::core::ffi::c_int,
-                                false_0,
-                            );
+                            invoke_edit(cap, false_0, 'g' as ::core::ffi::c_int, false_0);
                         }
                         break 's_650;
                     }
@@ -11447,8 +11281,7 @@ unsafe extern "C" fn nv_g_cmd(mut cap: *mut cmdarg_T) {
                         break 's_650;
                     }
                     -12285 | -12541 | -12797 | -11517 | -11773 | -12029 | -25853 | -13053
-                    | -13309 | -13565 | -23037 | -23293 | -23549 | -23805 | -24061
-                    | -24317 => {
+                    | -13309 | -13565 | -23037 | -23293 | -23549 | -23805 | -24061 | -24317 => {
                         mod_mask = MOD_MASK_CTRL;
                         do_mouse(
                             oap,
@@ -11524,8 +11357,8 @@ unsafe extern "C" fn nv_g_cmd(mut cap: *mut cmdarg_T) {
                         break 's_650;
                     }
                 }
-                (*cap).cmdchar = (*cap).nchar
-                    + ('v' as ::core::ffi::c_int - 'h' as ::core::ffi::c_int);
+                (*cap).cmdchar =
+                    (*cap).nchar + ('v' as ::core::ffi::c_int - 'h' as ::core::ffi::c_int);
                 (*cap).arg = true_0;
                 nv_visual(cap);
                 break 's_650;
@@ -11583,7 +11416,8 @@ unsafe extern "C" fn n_opencmd(mut cap: *mut cmdarg_T) {
             }),
             0 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<bool>(),
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if win_cursorline_standout(curwin) {
             (*curwin).w_valid &= !VALID_CROW;
@@ -11595,25 +11429,28 @@ unsafe extern "C" fn nv_dot(mut cap: *mut cmdarg_T) {
     if checkclearopq((*cap).oap) {
         return;
     }
-    if start_redo((*cap).count0, restart_edit != 0 as ::core::ffi::c_int && !arrow_used)
-        == false_0
+    if start_redo(
+        (*cap).count0,
+        restart_edit != 0 as ::core::ffi::c_int && !arrow_used,
+    ) == false_0
     {
         clearopbeep((*cap).oap);
     }
 }
 unsafe extern "C" fn nv_redo_or_register(mut cap: *mut cmdarg_T) {
-    if VIsual_select as ::core::ffi::c_int != 0
-        && VIsual_active as ::core::ffi::c_int != 0
-    {
+    if VIsual_select as ::core::ffi::c_int != 0 && VIsual_active as ::core::ffi::c_int != 0 {
         no_mapping += 1;
         let mut reg: ::core::ffi::c_int = plain_vgetc();
-        if *p_langmap as ::core::ffi::c_int != 0 && true
+        if *p_langmap as ::core::ffi::c_int != 0
+            && true
             && (p_lrm != 0
                 || (if vgetc_busy != 0 {
                     (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
                 } else {
                     KeyTyped as ::core::ffi::c_int
-                }) != 0) && KeyStuffed == 0 && reg >= 0 as ::core::ffi::c_int
+                }) != 0)
+            && KeyStuffed == 0
+            && reg >= 0 as ::core::ffi::c_int
         {
             if reg < 256 as ::core::ffi::c_int {
                 reg = langmap_mapchar[reg as usize] as ::core::ffi::c_int;
@@ -11625,9 +11462,7 @@ unsafe extern "C" fn nv_redo_or_register(mut cap: *mut cmdarg_T) {
         if reg == '"' as ::core::ffi::c_int {
             reg = 0 as ::core::ffi::c_int;
         }
-        VIsual_select_reg = if valid_yank_reg(reg, true_0 != 0) as ::core::ffi::c_int
-            != 0
-        {
+        VIsual_select_reg = if valid_yank_reg(reg, true_0 != 0) as ::core::ffi::c_int != 0 {
             reg
         } else {
             0 as ::core::ffi::c_int
@@ -11656,9 +11491,7 @@ unsafe extern "C" fn nv_Undo(mut cap: *mut cmdarg_T) {
     (*curwin).w_set_curswant = true_0;
 }
 unsafe extern "C" fn nv_tilde(mut cap: *mut cmdarg_T) {
-    if p_to == 0 && !VIsual_active
-        && (*(*cap).oap).op_type != OP_TILDE as ::core::ffi::c_int
-    {
+    if p_to == 0 && !VIsual_active && (*(*cap).oap).op_type != OP_TILDE as ::core::ffi::c_int {
         if bt_prompt(curbuf) as ::core::ffi::c_int != 0 && !prompt_curpos_editable() {
             clearopbeep((*cap).oap);
             return;
@@ -11670,7 +11503,8 @@ unsafe extern "C" fn nv_tilde(mut cap: *mut cmdarg_T) {
 }
 unsafe extern "C" fn nv_operator(mut cap: *mut cmdarg_T) {
     let mut op_type: ::core::ffi::c_int = get_op_type((*cap).cmdchar, (*cap).nchar);
-    if bt_prompt(curbuf) as ::core::ffi::c_int != 0 && op_is_change(op_type) != 0
+    if bt_prompt(curbuf) as ::core::ffi::c_int != 0
+        && op_is_change(op_type) != 0
         && !prompt_curpos_editable()
     {
         clearopbeep((*cap).oap);
@@ -11697,9 +11531,9 @@ unsafe extern "C" fn set_op_var(mut optype: ::core::ffi::c_int) {
         '_c2rust_label: {
             if opchar0 >= 0 as ::core::ffi::c_int
                 && opchar0
-                    <= 127 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int
-            {} else {
+                    <= 127 as ::core::ffi::c_int * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+            {
+            } else {
                 __assert_fail(
                     b"opchar0 >= 0 && opchar0 <= UCHAR_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -11715,9 +11549,9 @@ unsafe extern "C" fn set_op_var(mut optype: ::core::ffi::c_int) {
         '_c2rust_label_0: {
             if opchar1 >= 0 as ::core::ffi::c_int
                 && opchar1
-                    <= 127 as ::core::ffi::c_int * 2 as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int
-            {} else {
+                    <= 127 as ::core::ffi::c_int * 2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+            {
+            } else {
                 __assert_fail(
                     b"opchar1 >= 0 && opchar1 <= UCHAR_MAX\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -11783,8 +11617,8 @@ unsafe extern "C" fn nv_bck_word(mut cap: *mut cmdarg_T) {
     (*curwin).w_set_curswant = true_0;
     if bck_word((*cap).count1, (*cap).arg != 0, false_0 != 0) == false_0 {
         clearopbeep((*cap).oap);
-    } else if fdo_flags & kOptFdoFlagHor as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0 && KeyTyped as ::core::ffi::c_int != 0
+    } else if fdo_flags & kOptFdoFlagHor as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        && KeyTyped as ::core::ffi::c_int != 0
         && (*(*cap).oap).op_type == OP_NOP as ::core::ffi::c_int
     {
         foldOpenCursor();
@@ -11795,9 +11629,7 @@ unsafe extern "C" fn nv_wordcmd(mut cap: *mut cmdarg_T) {
     let mut word_end: bool = false;
     let mut flag: bool = false_0 != 0;
     let mut startpos: pos_T = (*curwin).w_cursor;
-    if (*cap).cmdchar == 'e' as ::core::ffi::c_int
-        || (*cap).cmdchar == 'E' as ::core::ffi::c_int
-    {
+    if (*cap).cmdchar == 'e' as ::core::ffi::c_int || (*cap).cmdchar == 'E' as ::core::ffi::c_int {
         word_end = true_0 != 0;
     } else {
         word_end = false_0 != 0;
@@ -11840,11 +11672,11 @@ unsafe extern "C" fn nv_wordcmd(mut cap: *mut cmdarg_T) {
     };
 }
 unsafe extern "C" fn adjust_cursor(mut oap: *mut oparg_T) {
-    if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int && gchar_cursor() == NUL
+    if (*curwin).w_cursor.col > 0 as ::core::ffi::c_int
+        && gchar_cursor() == NUL
         && (!VIsual_active || *p_sel as ::core::ffi::c_int == 'o' as ::core::ffi::c_int)
         && !virtual_active(curwin)
-        && get_ve_flags(curwin)
-            & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint
+        && get_ve_flags(curwin) & kOptVeFlagOnemore as ::core::ffi::c_int as ::core::ffi::c_uint
             == 0 as ::core::ffi::c_uint
     {
         (*curwin).w_cursor.col -= 1;
@@ -11940,10 +11772,17 @@ unsafe extern "C" fn nv_goto(mut cap: *mut cmdarg_T) {
     if (*cap).count0 != 0 as ::core::ffi::c_int {
         lnum = (*cap).count0 as linenr_T;
     }
-    lnum = if (if lnum > 1 as linenr_T { lnum } else { 1 as linenr_T })
-        < (*curbuf).b_ml.ml_line_count
+    lnum = if (if lnum > 1 as linenr_T {
+        lnum
+    } else {
+        1 as linenr_T
+    }) < (*curbuf).b_ml.ml_line_count
     {
-        if lnum > 1 as linenr_T { lnum } else { 1 as linenr_T }
+        if lnum > 1 as linenr_T {
+            lnum
+        } else {
+            1 as linenr_T
+        }
     } else {
         (*curbuf).b_ml.ml_line_count
     };
@@ -11959,9 +11798,7 @@ unsafe extern "C" fn nv_goto(mut cap: *mut cmdarg_T) {
 unsafe extern "C" fn nv_normal(mut cap: *mut cmdarg_T) {
     if (*cap).nchar == Ctrl_N || (*cap).nchar == Ctrl_G {
         clearop((*cap).oap);
-        if restart_edit != 0 as ::core::ffi::c_int
-            && mode_displayed as ::core::ffi::c_int != 0
-        {
+        if restart_edit != 0 as ::core::ffi::c_int && mode_displayed as ::core::ffi::c_int != 0 {
             clear_cmdline = true_0 != 0;
         }
         restart_edit = 0 as ::core::ffi::c_int;
@@ -11983,7 +11820,8 @@ unsafe extern "C" fn nv_esc(mut cap: *mut cmdarg_T) {
         && (*(*cap).oap).regname == 0 as ::core::ffi::c_int;
     if (*cap).arg != 0 {
         if restart_edit == 0 as ::core::ffi::c_int
-            && cmdwin_type == 0 as ::core::ffi::c_int && !VIsual_active
+            && cmdwin_type == 0 as ::core::ffi::c_int
+            && !VIsual_active
             && no_reason as ::core::ffi::c_int != 0
         {
             if anyBufIsChanged() {
@@ -11996,10 +11834,8 @@ unsafe extern "C" fn nv_esc(mut cap: *mut cmdarg_T) {
                 );
             } else {
                 msg(
-                    gettext(
-                        b"Type  :qa  and press <Enter> to exit Nvim\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"Type  :qa  and press <Enter> to exit Nvim\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     0 as ::core::ffi::c_int,
                 );
             }
@@ -12014,7 +11850,8 @@ unsafe extern "C" fn nv_esc(mut cap: *mut cmdarg_T) {
             got_int = false_0 != 0;
             return;
         }
-    } else if cmdwin_type != 0 as ::core::ffi::c_int && ex_normal_busy != 0
+    } else if cmdwin_type != 0 as ::core::ffi::c_int
+        && ex_normal_busy != 0
         && typebuf_was_empty as ::core::ffi::c_int != 0
     {
         cmdwin_result = -(253 as ::core::ffi::c_int
@@ -12034,8 +11871,7 @@ unsafe extern "C" fn nv_esc(mut cap: *mut cmdarg_T) {
 #[no_mangle]
 pub unsafe extern "C" fn set_cursor_for_append_to_line() {
     (*curwin).w_set_curswant = true_0;
-    if get_ve_flags(curwin) == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if get_ve_flags(curwin) == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint {
         let save_State: ::core::ffi::c_int = State;
         State = MODE_INSERT as ::core::ffi::c_int;
         coladvance(curwin, MAXCOL as ::core::ffi::c_int);
@@ -12064,7 +11900,9 @@ unsafe extern "C" fn nv_edit(mut cap: *mut cmdarg_T) {
     {
         nv_object(cap);
     } else if (*curbuf).b_p_ma == 0 && (*curbuf).terminal.is_null() {
-        emsg(gettext(&raw const e_modifiable as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_modifiable as *const ::core::ffi::c_char,
+        ));
         clearop((*cap).oap);
     } else if !checkclearopq((*cap).oap) {
         match (*cap).cmdchar {
@@ -12087,8 +11925,7 @@ unsafe extern "C" fn nv_edit(mut cap: *mut cmdarg_T) {
             }
             _ => {}
         }
-        if (*curwin).w_cursor.coladd != 0 && (*cap).cmdchar != 'A' as ::core::ffi::c_int
-        {
+        if (*curwin).w_cursor.coladd != 0 && (*cap).cmdchar != 'A' as ::core::ffi::c_int {
             let mut save_State: ::core::ffi::c_int = State;
             State = MODE_INSERT as ::core::ffi::c_int;
             coladvance(curwin, getviscol());
@@ -12110,9 +11947,7 @@ unsafe extern "C" fn invoke_edit(
         restart_edit_save = 0 as ::core::ffi::c_int;
     }
     restart_edit = 0 as ::core::ffi::c_int;
-    if (*cap).cmdchar != 'O' as ::core::ffi::c_int
-        && (*cap).cmdchar != 'o' as ::core::ffi::c_int
-    {
+    if (*cap).cmdchar != 'O' as ::core::ffi::c_int && (*cap).cmdchar != 'o' as ::core::ffi::c_int {
         (*curbuf).b_last_changedtick_i = buf_get_changedtick(curbuf);
     }
     if edit(cmd, startln != 0, (*cap).count1) {
@@ -12131,8 +11966,8 @@ unsafe extern "C" fn nv_object(mut cap: *mut cmdarg_T) {
         include = true_0 != 0;
     }
     let mut mps_save: *mut ::core::ffi::c_char = (*curbuf).b_p_mps;
-    (*curbuf).b_p_mps = b"(:),{:},[:],<:>\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char;
+    (*curbuf).b_p_mps =
+        b"(:),{:},[:],<:>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     match (*cap).nchar {
         119 => {
             flag = current_word((*cap).oap, (*cap).count1, include, false_0 != 0) != 0;
@@ -12220,12 +12055,9 @@ unsafe extern "C" fn nv_record(mut cap: *mut cmdarg_T) {
         || (*cap).nchar == '?' as ::core::ffi::c_int
     {
         if cmdwin_type != 0 as ::core::ffi::c_int {
-            emsg(
-                gettext(
-                    &raw const e_cmdline_window_already_open
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                &raw const e_cmdline_window_already_open as *const ::core::ffi::c_char,
+            ));
             return;
         }
         stuffcharReadbuff((*cap).nchar);
@@ -12233,8 +12065,7 @@ unsafe extern "C" fn nv_record(mut cap: *mut cmdarg_T) {
             -(253 as ::core::ffi::c_int
                 + ((KE_CMDWIN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
         );
-    } else if reg_executing == 0 as ::core::ffi::c_int && do_record((*cap).nchar) == FAIL
-    {
+    } else if reg_executing == 0 as ::core::ffi::c_int && do_record((*cap).nchar) == FAIL {
         clearopbeep((*cap).oap);
     }
 }
@@ -12259,7 +12090,7 @@ unsafe extern "C" fn nv_at(mut cap: *mut cmdarg_T) {
         } else {
             line_breakcheck();
         }
-    };
+    }
 }
 unsafe extern "C" fn nv_halfpage(mut cap: *mut cmdarg_T) {
     if !checkclearop((*cap).oap) {
@@ -12294,8 +12125,8 @@ unsafe extern "C" fn nv_join(mut cap: *mut cmdarg_T) {
             clearopbeep((*cap).oap);
             return;
         }
-        (*cap).count0 = ((*curbuf).b_ml.ml_line_count - (*curwin).w_cursor.lnum
-            + 1 as linenr_T) as ::core::ffi::c_int;
+        (*cap).count0 = ((*curbuf).b_ml.ml_line_count - (*curwin).w_cursor.lnum + 1 as linenr_T)
+            as ::core::ffi::c_int;
     }
     prep_redo(
         (*(*cap).oap).regname,
@@ -12330,11 +12161,12 @@ unsafe extern "C" fn nv_put_opt(mut cap: *mut cmdarg_T, mut fix_indent: bool) {
         {
             clearop((*cap).oap);
             '_c2rust_label: {
-                if (*cap).opcount >= 0 as ::core::ffi::c_int {} else {
+                if (*cap).opcount >= 0 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
                         b"cap->opcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         6502 as ::core::ffi::c_uint,
                         b"void nv_put_opt(cmdarg_T *, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -12390,9 +12222,11 @@ unsafe extern "C" fn nv_put_opt(mut cap: *mut cmdarg_T, mut fix_indent: bool) {
             || regname == '*' as ::core::ffi::c_int)
             && cb_flags
                 & (kOptCbFlagUnnamed as ::core::ffi::c_int
-                    | kOptCbFlagUnnamedplus as ::core::ffi::c_int) as ::core::ffi::c_uint
+                    | kOptCbFlagUnnamedplus as ::core::ffi::c_int)
+                    as ::core::ffi::c_uint
                 != 0;
-        if regname == 0 as ::core::ffi::c_int || regname == '"' as ::core::ffi::c_int
+        if regname == 0 as ::core::ffi::c_int
+            || regname == '"' as ::core::ffi::c_int
             || clipoverwrite as ::core::ffi::c_int != 0
             || ascii_isdigit(regname) as ::core::ffi::c_int != 0
             || regname == '-' as ::core::ffi::c_int
@@ -12400,7 +12234,8 @@ unsafe extern "C" fn nv_put_opt(mut cap: *mut cmdarg_T, mut fix_indent: bool) {
             savereg = copy_register(regname);
         }
         (*curwin).w_onebuf_opt.wo_fen = false_0;
-        if !VIsual_active || VIsual_mode == 'V' as ::core::ffi::c_int
+        if !VIsual_active
+            || VIsual_mode == 'V' as ::core::ffi::c_int
             || regname != '.' as ::core::ffi::c_int
         {
             (*cap).cmdchar = 'd' as ::core::ffi::c_int;
@@ -12471,7 +12306,8 @@ unsafe extern "C" fn nv_open(mut cap: *mut cmdarg_T) {
     {
         clearop((*cap).oap);
         '_c2rust_label: {
-            if (*cap).opcount >= 0 as ::core::ffi::c_int {} else {
+            if (*cap).opcount >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"cap->opcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/normal.c\0".as_ptr()
@@ -12497,8 +12333,8 @@ unsafe extern "C" fn nv_paste(mut cap: *mut cmdarg_T) {
 }
 unsafe extern "C" fn nv_event(mut cap: *mut cmdarg_T) {
     may_garbage_collect = false_0 != 0;
-    let mut may_restart: bool = restart_edit != 0 as ::core::ffi::c_int
-        || restart_VIsual_select != 0 as ::core::ffi::c_int;
+    let mut may_restart: bool =
+        restart_edit != 0 as ::core::ffi::c_int || restart_VIsual_select != 0 as ::core::ffi::c_int;
     state_handle_k_event();
     finish_op = false_0 != 0;
     if may_restart {

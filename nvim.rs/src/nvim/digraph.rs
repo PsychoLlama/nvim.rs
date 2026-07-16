@@ -12,10 +12,7 @@ extern "C" {
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     static mut p_enc: *mut ::core::ffi::c_char;
     static mut p_cpo: *mut ::core::ffi::c_char;
@@ -54,11 +51,7 @@ extern "C" {
     fn msg_advance(col: ::core::ffi::c_int);
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn tv_list_alloc_ret(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T;
     fn tv_get_bool(tv: *const typval_T) -> varnumber_T;
     fn tv_check_for_opt_bool_arg(
@@ -78,15 +71,8 @@ extern "C" {
     ) -> bool;
     fn putcmdline(c: ::core::ffi::c_char, shift: bool);
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
-    fn ga_append_via_ptr(
-        gap: *mut garray_T,
-        item_size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
+    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn plain_vgetc() -> ::core::ffi::c_int;
     static mut Columns: ::core::ffi::c_int;
     static mut cmdline_star: ::core::ffi::c_int;
@@ -105,10 +91,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn mb_cptr2char_adv(pp: *mut *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn utf_iscomposing_first(c: ::core::ffi::c_int) -> bool;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn add_to_showcmd(c: ::core::ffi::c_int) -> bool;
     fn fast_breakcheck();
     fn source_runtime(
@@ -185,9 +168,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -2536,9 +2518,7 @@ pub const MODE_NORMAL: C2Rust_Unnamed_15 = 1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const MAPTYPE_UNMAP_LHS: C2Rust_Unnamed_16 = 3;
 pub const MAPTYPE_NOREMAP: C2Rust_Unnamed_16 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_H: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
@@ -2549,22 +2529,20 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut e_digraph_must_be_just_two_characters_str: [::core::ffi::c_char; 47] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 47],
-        [::core::ffi::c_char; 47],
-    >(*b"E1214: Digraph must be just two characters: %s\0")
+    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
+        *b"E1214: Digraph must be just two characters: %s\0",
+    )
 };
 static mut e_digraph_argument_must_be_one_character_str: [::core::ffi::c_char; 41] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 41],
-        [::core::ffi::c_char; 41],
-    >(*b"E1215: Digraph must be one character: %s\0")
+    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
+        *b"E1215: Digraph must be one character: %s\0",
+    )
 };
-static mut e_digraph_setlist_argument_must_be_list_of_lists_with_two_items: [::core::ffi::c_char; 73] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 73],
-        [::core::ffi::c_char; 73],
-    >(*b"E1216: digraph_setlist() argument must be a list of lists with two items\0")
+static mut e_digraph_setlist_argument_must_be_list_of_lists_with_two_items: [::core::ffi::c_char;
+    73] = unsafe {
+    ::core::mem::transmute::<[u8; 73], [::core::ffi::c_char; 73]>(
+        *b"E1216: digraph_setlist() argument must be a list of lists with two items\0",
+    )
 };
 static mut user_digraphs: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
@@ -9502,7 +9480,8 @@ pub unsafe extern "C" fn get_digraph(mut cmdline: bool) -> ::core::ffi::c_int {
         return c;
     }
     if cmdline {
-        if char2cells(c) == 1 as ::core::ffi::c_int && c < 128 as ::core::ffi::c_int
+        if char2cells(c) == 1 as ::core::ffi::c_int
+            && c < 128 as ::core::ffi::c_int
             && cmdline_star == 0 as ::core::ffi::c_int
         {
             putcmdline(c as ::core::ffi::c_char, true_0 != 0);
@@ -9532,8 +9511,7 @@ unsafe extern "C" fn getexactdigraph(
     let mut dp: *const digr_T = user_digraphs.ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < user_digraphs.ga_len {
-        if (*dp).char1 as ::core::ffi::c_int == char1
-            && (*dp).char2 as ::core::ffi::c_int == char2
+        if (*dp).char1 as ::core::ffi::c_int == char1 && (*dp).char2 as ::core::ffi::c_int == char2
         {
             retval = (*dp).result as ::core::ffi::c_int;
             break;
@@ -9571,12 +9549,10 @@ pub unsafe extern "C" fn digraph_get(
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = 0;
     retval = getexactdigraph(char1, char2, meta_char);
-    if retval == char2 && char1 != char2
-        && {
-            retval = getexactdigraph(char2, char1, meta_char);
-            retval == char1
-        }
-    {
+    if retval == char2 && char1 != char2 && {
+        retval = getexactdigraph(char2, char1, meta_char);
+        retval == char1
+    } {
         return char2;
     }
     return retval;
@@ -9589,8 +9565,7 @@ unsafe extern "C" fn registerdigraph(
     let mut dp: *mut digr_T = user_digraphs.ga_data as *mut digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < user_digraphs.ga_len {
-        if (*dp).char1 as ::core::ffi::c_int == char1
-            && (*dp).char2 as ::core::ffi::c_int == char2
+        if (*dp).char1 as ::core::ffi::c_int == char1 && (*dp).char2 as ::core::ffi::c_int == char2
         {
             (*dp).result = n as result_T;
             return;
@@ -9598,8 +9573,7 @@ unsafe extern "C" fn registerdigraph(
         dp = dp.offset(1);
         i += 1;
     }
-    dp = ga_append_via_ptr(&raw mut user_digraphs, ::core::mem::size_of::<digr_T>())
-        as *mut digr_T;
+    dp = ga_append_via_ptr(&raw mut user_digraphs, ::core::mem::size_of::<digr_T>()) as *mut digr_T;
     (*dp).char1 = char1 as uint8_t;
     (*dp).char2 = char2 as uint8_t;
     (*dp).result = n as result_T;
@@ -9611,24 +9585,20 @@ pub unsafe extern "C" fn check_digraph_chars_valid(
 ) -> bool {
     if char2 == 0 as ::core::ffi::c_int {
         let mut msg: [::core::ffi::c_char; 7] = [0; 7];
-        msg[utf_char2bytes(char1, &raw mut msg as *mut ::core::ffi::c_char) as usize] = NUL
-            as ::core::ffi::c_char;
+        msg[utf_char2bytes(char1, &raw mut msg as *mut ::core::ffi::c_char) as usize] =
+            NUL as ::core::ffi::c_char;
         semsg(
             gettext(
-                &raw const e_digraph_must_be_just_two_characters_str
-                    as *const ::core::ffi::c_char,
+                &raw const e_digraph_must_be_just_two_characters_str as *const ::core::ffi::c_char,
             ),
             &raw mut msg as *mut ::core::ffi::c_char,
         );
         return false_0 != 0;
     }
     if char1 == ESC || char2 == ESC {
-        emsg(
-            gettext(
-                b"E104: Escape not allowed in digraph\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E104: Escape not allowed in digraph\0".as_ptr() as *const ::core::ffi::c_char
+        ));
         return false_0 != 0;
     }
     return true_0 != 0;
@@ -9646,22 +9616,18 @@ pub unsafe extern "C" fn putdigraph(mut str: *mut ::core::ffi::c_char) {
         let c2rust_fresh1 = str;
         str = str.offset(1);
         let mut char2: uint8_t = *c2rust_fresh1 as uint8_t;
-        if !check_digraph_chars_valid(
-            char1 as ::core::ffi::c_int,
-            char2 as ::core::ffi::c_int,
-        ) {
+        if !check_digraph_chars_valid(char1 as ::core::ffi::c_int, char2 as ::core::ffi::c_int) {
             return;
         }
         str = skipwhite(str);
         if !ascii_isdigit(*str as ::core::ffi::c_int) {
-            emsg(gettext(&raw const e_number_exp as *const ::core::ffi::c_char));
+            emsg(gettext(
+                &raw const e_number_exp as *const ::core::ffi::c_char,
+            ));
             return;
         }
-        let mut n: ::core::ffi::c_int = getdigits_int(
-            &raw mut str,
-            true_0 != 0,
-            0 as ::core::ffi::c_int,
-        );
+        let mut n: ::core::ffi::c_int =
+            getdigits_int(&raw mut str, true_0 != 0, 0 as ::core::ffi::c_int);
         registerdigraph(char1 as ::core::ffi::c_int, char2 as ::core::ffi::c_int, n);
     }
 }
@@ -9691,9 +9657,7 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
             tmp.char2 as ::core::ffi::c_int,
             false_0 != 0,
         ) as result_T;
-        if tmp.result != 0 as ::core::ffi::c_int
-            && tmp.result != tmp.char2 as ::core::ffi::c_int
-        {
+        if tmp.result != 0 as ::core::ffi::c_int && tmp.result != tmp.char2 as ::core::ffi::c_int {
             printdigraph(
                 &raw mut tmp,
                 if use_headers as ::core::ffi::c_int != 0 {
@@ -9709,8 +9673,7 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
     dp = user_digraphs.ga_data as *const digr_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < user_digraphs.ga_len && !got_int {
-        if previous >= 0 as ::core::ffi::c_int && use_headers as ::core::ffi::c_int != 0
-        {
+        if previous >= 0 as ::core::ffi::c_int && use_headers as ::core::ffi::c_int != 0 {
             digraph_header(gettext(b"Custom\0".as_ptr() as *const ::core::ffi::c_char));
         }
         previous = -1 as ::core::ffi::c_int as result_T;
@@ -9720,10 +9683,7 @@ pub unsafe extern "C" fn listdigraphs(mut use_headers: bool) {
         i += 1;
     }
 }
-unsafe extern "C" fn digraph_getlist_appendpair(
-    mut dp: *const digr_T,
-    mut l: *mut list_T,
-) {
+unsafe extern "C" fn digraph_getlist_appendpair(mut dp: *const digr_T, mut l: *mut list_T) {
     let mut l2: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
     tv_list_append_list(l, l2);
     let mut buf: [::core::ffi::c_char; 30] = [0; 30];
@@ -9737,14 +9697,11 @@ unsafe extern "C" fn digraph_getlist_appendpair(
     tv_list_append_string(l2, &raw mut buf as *mut ::core::ffi::c_char, -1 as ssize_t);
 }
 #[no_mangle]
-pub unsafe extern "C" fn digraph_getlist_common(
-    mut list_all: bool,
-    mut rettv: *mut typval_T,
-) {
+pub unsafe extern "C" fn digraph_getlist_common(mut list_all: bool, mut rettv: *mut typval_T) {
     tv_list_alloc_ret(
         rettv,
-        (::core::mem::size_of::<[digr_T; 1367]>() as ::core::ffi::c_int
-            + user_digraphs.ga_len) as ptrdiff_t,
+        (::core::mem::size_of::<[digr_T; 1367]>() as ::core::ffi::c_int + user_digraphs.ga_len)
+            as ptrdiff_t,
     );
     let mut dp: *const digr_T = ::core::ptr::null::<digr_T>();
     if list_all {
@@ -9865,8 +9822,7 @@ static mut header_table: [dg_header_entry; 27] = [
     },
     dg_header_entry {
         dg_start: DG_START_CJK_SYMBOLS,
-        dg_header: b"CJK symbols and punctuation\0".as_ptr()
-            as *const ::core::ffi::c_char,
+        dg_header: b"CJK symbols and punctuation\0".as_ptr() as *const ::core::ffi::c_char,
     },
     dg_header_entry {
         dg_start: DG_START_HIRAGANA,
@@ -9900,8 +9856,7 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
         while !header_table[i as usize].dg_header.is_null() {
             if *previous < header_table[i as usize].dg_start
                 && (*dp).result >= header_table[i as usize].dg_start
-                && (*dp).result
-                    < header_table[(i + 1 as ::core::ffi::c_int) as usize].dg_start
+                && (*dp).result < header_table[(i + 1 as ::core::ffi::c_int) as usize].dg_start
             {
                 digraph_header(gettext(header_table[i as usize].dg_header));
                 break;
@@ -9917,8 +9872,8 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
     if msg_col % list_width != 0 as ::core::ffi::c_int {
         msg_advance((msg_col / list_width + 1 as ::core::ffi::c_int) * list_width);
     }
-    let mut p: *mut ::core::ffi::c_char = (&raw mut buf as *mut ::core::ffi::c_char)
-        .offset(0 as ::core::ffi::c_int as isize);
+    let mut p: *mut ::core::ffi::c_char =
+        (&raw mut buf as *mut ::core::ffi::c_char).offset(0 as ::core::ffi::c_int as isize);
     let c2rust_fresh2 = p;
     p = p.offset(1);
     *c2rust_fresh2 = (*dp).char1 as ::core::ffi::c_char;
@@ -9954,7 +9909,8 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
         *c2rust_fresh6 = ' ' as ::core::ffi::c_char;
     }
     '_c2rust_label: {
-        if p >= &raw mut buf as *mut ::core::ffi::c_char {} else {
+        if p >= &raw mut buf as *mut ::core::ffi::c_char {
+        } else {
             __assert_fail(
                 b"p >= buf\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/digraph.c\0".as_ptr()
@@ -9968,9 +9924,7 @@ unsafe extern "C" fn printdigraph(mut dp: *const digr_T, mut previous: *mut resu
     vim_snprintf(
         p,
         ::core::mem::size_of::<[::core::ffi::c_char; 30]>()
-            .wrapping_sub(
-                p.offset_from(&raw mut buf as *mut ::core::ffi::c_char) as size_t,
-            ),
+            .wrapping_sub(p.offset_from(&raw mut buf as *mut ::core::ffi::c_char) as size_t),
         b" %3d\0".as_ptr() as *const ::core::ffi::c_char,
         (*dp).result,
     );
@@ -9986,10 +9940,8 @@ unsafe extern "C" fn get_digraph_chars(
     mut char2: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut buf_chars: [::core::ffi::c_char; 65] = [0; 65];
-    let mut chars: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-        arg,
-        &raw mut buf_chars as *mut ::core::ffi::c_char,
-    );
+    let mut chars: *const ::core::ffi::c_char =
+        tv_get_string_buf_chk(arg, &raw mut buf_chars as *mut ::core::ffi::c_char);
     let mut p: *const ::core::ffi::c_char = chars;
     if !p.is_null() {
         if *p as ::core::ffi::c_int != NUL {
@@ -10006,10 +9958,7 @@ unsafe extern "C" fn get_digraph_chars(
         }
     }
     semsg(
-        gettext(
-            &raw const e_digraph_must_be_just_two_characters_str
-                as *const ::core::ffi::c_char,
-        ),
+        gettext(&raw const e_digraph_must_be_just_two_characters_str as *const ::core::ffi::c_char),
         chars,
     );
     return FAIL;
@@ -10024,10 +9973,8 @@ unsafe extern "C" fn digraph_set_common(
         return false_0 != 0;
     }
     let mut buf_digraph: [::core::ffi::c_char; 65] = [0; 65];
-    let mut digraph: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-        argdigraph,
-        &raw mut buf_digraph as *mut ::core::ffi::c_char,
-    );
+    let mut digraph: *const ::core::ffi::c_char =
+        tv_get_string_buf_chk(argdigraph, &raw mut buf_digraph as *mut ::core::ffi::c_char);
     if digraph.is_null() {
         return false_0 != 0;
     }
@@ -10054,17 +10001,15 @@ pub unsafe extern "C" fn f_digraph_get(
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut digraphs: *const ::core::ffi::c_char = tv_get_string_chk(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut digraphs: *const ::core::ffi::c_char =
+        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
     if digraphs.is_null() {
         return;
     }
     if strlen(digraphs) != 2 as size_t {
         semsg(
             gettext(
-                &raw const e_digraph_must_be_just_two_characters_str
-                    as *const ::core::ffi::c_char,
+                &raw const e_digraph_must_be_just_two_characters_str as *const ::core::ffi::c_char,
             ),
             digraphs,
         );
@@ -10076,8 +10021,8 @@ pub unsafe extern "C" fn f_digraph_get(
         false_0 != 0,
     );
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
-    buf[utf_char2bytes(code, &raw mut buf as *mut ::core::ffi::c_char) as usize] = NUL
-        as ::core::ffi::c_char;
+    buf[utf_char2bytes(code, &raw mut buf as *mut ::core::ffi::c_char) as usize] =
+        NUL as ::core::ffi::c_char;
     (*rettv).vval.v_string = xstrdup(&raw mut buf as *mut ::core::ffi::c_char);
 }
 #[no_mangle]
@@ -10095,9 +10040,7 @@ pub unsafe extern "C" fn f_digraph_getlist(
     {
         flag_list_all = false_0 != 0;
     } else {
-        let mut flag: varnumber_T = tv_get_bool(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-        );
+        let mut flag: varnumber_T = tv_get_bool(argvars.offset(0 as ::core::ffi::c_int as isize));
         flag_list_all = flag != 0 as varnumber_T;
     }
     digraph_getlist_common(flag_list_all, rettv);
@@ -10129,12 +10072,10 @@ pub unsafe extern "C" fn f_digraph_setlist(
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        emsg(
-            gettext(
-                &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
+                as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut pl: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
@@ -10151,31 +10092,31 @@ pub unsafe extern "C" fn f_digraph_setlist(
             if (*pli).li_tv.v_type as ::core::ffi::c_uint
                 != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                emsg(
-                    gettext(
-                        &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
+                        as *const ::core::ffi::c_char,
+                ));
                 return;
             }
             let mut l: *mut list_T = (*pli).li_tv.vval.v_list;
             if l.is_null() || tv_list_len(l) != 2 as ::core::ffi::c_int {
-                emsg(
-                    gettext(
-                        &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    &raw const e_digraph_setlist_argument_must_be_list_of_lists_with_two_items
+                        as *const ::core::ffi::c_char,
+                ));
                 return;
             }
             if !digraph_set_common(
                 &raw mut (*(tv_list_first
-                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(l))
-                    .li_tv,
+                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
+                    l
+                ))
+                .li_tv,
                 &raw mut (*(*(tv_list_first
-                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(l))
-                    .li_next)
+                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
+                    l
+                ))
+                .li_next)
                     .li_tv,
             ) {
                 return;
@@ -10187,8 +10128,8 @@ pub unsafe extern "C" fn f_digraph_setlist(
 }
 #[no_mangle]
 pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
-    (*curbuf).b_kmap_state = ((*curbuf).b_kmap_state as ::core::ffi::c_int
-        & !KEYMAP_INIT) as int16_t;
+    (*curbuf).b_kmap_state =
+        ((*curbuf).b_kmap_state as ::core::ffi::c_int & !KEYMAP_INIT) as int16_t;
     if *(*curbuf).b_p_keymap as ::core::ffi::c_int == NUL {
         keymap_unload();
         do_cmdline_cmd(b"unlet! b:keymap_name\0".as_ptr() as *const ::core::ffi::c_char);
@@ -10196,8 +10137,7 @@ pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
         let mut buflen: size_t = strlen((*curbuf).b_p_keymap)
             .wrapping_add(strlen(p_enc))
             .wrapping_add(14 as size_t);
-        let mut buf: *mut ::core::ffi::c_char = xmalloc(buflen)
-            as *mut ::core::ffi::c_char;
+        let mut buf: *mut ::core::ffi::c_char = xmalloc(buflen) as *mut ::core::ffi::c_char;
         vim_snprintf(
             buf,
             buflen,
@@ -10214,8 +10154,8 @@ pub unsafe extern "C" fn keymap_init() -> *mut ::core::ffi::c_char {
             );
             if source_runtime(buf, 0 as ::core::ffi::c_int) == FAIL {
                 xfree(buf as *mut ::core::ffi::c_void);
-                return b"E544: Keymap file not found\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+                return b"E544: Keymap file not found\0".as_ptr() as *const ::core::ffi::c_char
+                    as *mut ::core::ffi::c_char;
             }
         }
         xfree(buf as *mut ::core::ffi::c_void);
@@ -10239,12 +10179,10 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
                 ) -> *mut ::core::ffi::c_char,
         ),
     ) {
-        emsg(
-            gettext(
-                b"E105: Using :loadkeymap not in a sourced file\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E105: Using :loadkeymap not in a sourced file\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
         return;
     }
     keymap_unload();
@@ -10256,49 +10194,38 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
     );
     p_cpo = b"C\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     loop {
-        let mut line: *mut ::core::ffi::c_char = (*eap)
-            .ea_getline
-            .expect(
-                "non-null function pointer",
-            )(
-            0 as ::core::ffi::c_int,
-            (*eap).cookie,
-            0 as ::core::ffi::c_int,
-            true_0 != 0,
-        );
+        let mut line: *mut ::core::ffi::c_char =
+            (*eap).ea_getline.expect("non-null function pointer")(
+                0 as ::core::ffi::c_int,
+                (*eap).cookie,
+                0 as ::core::ffi::c_int,
+                true_0 != 0,
+            );
         if line.is_null() {
             break;
         }
         let mut p: *mut ::core::ffi::c_char = skipwhite(line);
-        if *p as ::core::ffi::c_int != '"' as ::core::ffi::c_int
-            && *p as ::core::ffi::c_int != NUL
+        if *p as ::core::ffi::c_int != '"' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
         {
             let mut kp: *mut kmap_T = ga_append_via_ptr(
                 &raw mut (*curbuf).b_kmap_ga,
                 ::core::mem::size_of::<kmap_T>(),
             ) as *mut kmap_T;
             let mut s: *mut ::core::ffi::c_char = skiptowhite(p);
-            (*kp).from = xmemdupz(
-                p as *const ::core::ffi::c_void,
-                s.offset_from(p) as size_t,
-            ) as *mut ::core::ffi::c_char;
+            (*kp).from = xmemdupz(p as *const ::core::ffi::c_void, s.offset_from(p) as size_t)
+                as *mut ::core::ffi::c_char;
             p = skipwhite(s);
             s = skiptowhite(p);
-            (*kp).to = xmemdupz(
-                p as *const ::core::ffi::c_void,
-                s.offset_from(p) as size_t,
-            ) as *mut ::core::ffi::c_char;
+            (*kp).to = xmemdupz(p as *const ::core::ffi::c_void, s.offset_from(p) as size_t)
+                as *mut ::core::ffi::c_char;
             if strlen((*kp).from).wrapping_add(strlen((*kp).to)) >= KMAP_LLEN as size_t
                 || *(*kp).from as ::core::ffi::c_int == NUL
                 || *(*kp).to as ::core::ffi::c_int == NUL
             {
                 if *(*kp).to as ::core::ffi::c_int == NUL {
-                    emsg(
-                        gettext(
-                            b"E791: Empty keymap entry\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(
+                        b"E791: Empty keymap entry\0".as_ptr() as *const ::core::ffi::c_char
+                    ));
                 }
                 xfree((*kp).from as *mut ::core::ffi::c_void);
                 xfree((*kp).to as *mut ::core::ffi::c_void);
@@ -10325,8 +10252,8 @@ pub unsafe extern "C" fn ex_loadkeymap(mut eap: *mut exarg_T) {
         i += 1;
     }
     p_cpo = save_cpo;
-    (*curbuf).b_kmap_state = ((*curbuf).b_kmap_state as ::core::ffi::c_int
-        | KEYMAP_LOADED) as int16_t;
+    (*curbuf).b_kmap_state =
+        ((*curbuf).b_kmap_state as ::core::ffi::c_int | KEYMAP_LOADED) as int16_t;
     status_redraw_curbuf();
 }
 pub const KMAP_LLEN: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
@@ -10367,8 +10294,8 @@ unsafe extern "C" fn keymap_unload() {
     keymap_ga_clear(&raw mut (*curbuf).b_kmap_ga);
     p_cpo = save_cpo;
     ga_clear(&raw mut (*curbuf).b_kmap_ga);
-    (*curbuf).b_kmap_state = ((*curbuf).b_kmap_state as ::core::ffi::c_int
-        & !KEYMAP_LOADED) as int16_t;
+    (*curbuf).b_kmap_state =
+        ((*curbuf).b_kmap_state as ::core::ffi::c_int & !KEYMAP_LOADED) as int16_t;
     status_redraw_curbuf();
 }
 #[no_mangle]
@@ -10384,10 +10311,8 @@ pub unsafe extern "C" fn get_keymap_str(
     }
     let mut old_curbuf: *mut buf_T = curbuf;
     let mut old_curwin: *mut win_T = curwin;
-    let mut to_evaluate: [::core::ffi::c_char; 14] = ::core::mem::transmute::<
-        [u8; 14],
-        [::core::ffi::c_char; 14],
-    >(*b"b:keymap_name\0");
+    let mut to_evaluate: [::core::ffi::c_char; 14] =
+        ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"b:keymap_name\0");
     curbuf = (*wp).w_buffer;
     curwin = wp;
     emsg_skip += 1;
@@ -10404,8 +10329,7 @@ pub unsafe extern "C" fn get_keymap_str(
         if (*(*wp).w_buffer).b_kmap_state as ::core::ffi::c_int & KEYMAP_LOADED != 0 {
             p = (*(*wp).w_buffer).b_p_keymap;
         } else {
-            p = b"lang\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            p = b"lang\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     }
     let mut plen: ::core::ffi::c_int = vim_snprintf(buf, len as size_t, fmt, p);
@@ -10433,7 +10357,7 @@ unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYMAP_LOADED: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const K_BS: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_BS: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

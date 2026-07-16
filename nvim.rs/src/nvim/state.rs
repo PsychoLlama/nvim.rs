@@ -1825,9 +1825,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1854,9 +1853,7 @@ pub struct C2Rust_Unnamed_13 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_14 {
@@ -1952,12 +1949,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2010,12 +2005,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -2042,9 +2035,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2055,9 +2047,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -2082,15 +2073,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_21 {
@@ -2374,9 +2360,7 @@ pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
 pub type event_T = auto_event;
-pub type argv_callback = Option<
-    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
->;
+pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Event {
@@ -2463,13 +2447,10 @@ pub struct vim_state {
     pub check: state_check_callback,
     pub execute: state_execute_callback,
 }
-pub type state_execute_callback = Option<
-    unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
->;
+pub type state_execute_callback =
+    Option<unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int>;
 pub type VimState = vim_state;
-pub type state_check_callback = Option<
-    unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int,
->;
+pub type state_check_callback = Option<unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int>;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const MODE_SHOWMATCH: C2Rust_Unnamed_26 = 24592;
 pub const MODE_EXTERNCMD: C2Rust_Unnamed_26 = 20480;
@@ -2595,9 +2576,7 @@ pub const kOptVeFlagOnemore: C2Rust_Unnamed_27 = 8;
 pub const kOptVeFlagInsert: C2Rust_Unnamed_27 = 6;
 pub const kOptVeFlagBlock: C2Rust_Unnamed_27 = 5;
 pub const kOptVeFlagAll: C2Rust_Unnamed_27 = 4;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -2624,9 +2603,9 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
                 key = -(253 as ::core::ffi::c_int
                     + ((KE_EVENT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
             } else {
-                if must_redraw != 0 as ::core::ffi::c_int && !need_wait_return
-                    && State & MODE_CMDLINE as ::core::ffi::c_int
-                        == 0 as ::core::ffi::c_int
+                if must_redraw != 0 as ::core::ffi::c_int
+                    && !need_wait_return
+                    && State & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
                 {
                     update_screen();
                     setcursor();
@@ -2669,9 +2648,8 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
                 b"input: %s\0".as_ptr() as *const ::core::ffi::c_char,
                 keyname,
             );
-            let mut execute_result: ::core::ffi::c_int = (*s)
-                .execute
-                .expect("non-null function pointer")(s, key);
+            let mut execute_result: ::core::ffi::c_int =
+                (*s).execute.expect("non-null function pointer")(s, key);
             if execute_result == 0 {
                 break 's_132;
             }
@@ -2679,18 +2657,16 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
                 break;
             }
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn state_handle_k_event() {
     loop {
         let mut event: Event = multiqueue_get(main_loop.events);
         if event.handler.is_some() {
-            event
-                .handler
-                .expect(
-                    "non-null function pointer",
-                )(&raw mut event.argv as *mut *mut ::core::ffi::c_void);
+            event.handler.expect("non-null function pointer")(
+                &raw mut event.argv as *mut *mut ::core::ffi::c_void,
+            );
         }
         if multiqueue_empty(main_loop.events) {
             return;
@@ -2699,7 +2675,7 @@ pub unsafe extern "C" fn state_handle_k_event() {
         if input_available() != 0 || got_int as ::core::ffi::c_int != 0 {
             return;
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
@@ -2711,10 +2687,11 @@ pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
     }
     let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(wp);
     return cur_ve_flags == kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
-        || cur_ve_flags & kOptVeFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0 && VIsual_active as ::core::ffi::c_int != 0 && VIsual_mode == Ctrl_V
-        || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0 && State & MODE_INSERT as ::core::ffi::c_int != 0;
+        || cur_ve_flags & kOptVeFlagBlock as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            && VIsual_active as ::core::ffi::c_int != 0
+            && VIsual_mode == Ctrl_V
+        || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+            && State & MODE_INSERT as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_real_state() -> ::core::ffi::c_int {
@@ -2725,7 +2702,7 @@ pub unsafe extern "C" fn get_real_state() -> ::core::ffi::c_int {
             }
             return MODE_VISUAL as ::core::ffi::c_int;
         } else if finish_op {
-            return MODE_OP_PENDING as ::core::ffi::c_int
+            return MODE_OP_PENDING as ::core::ffi::c_int;
         }
     }
     return State;
@@ -2807,8 +2784,8 @@ pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
         if VIsual_select {
             let c2rust_fresh14 = i;
             i = i + 1;
-            *buf.offset(c2rust_fresh14 as isize) = (VIsual_mode
-                + 's' as ::core::ffi::c_int - 'v' as ::core::ffi::c_int)
+            *buf.offset(c2rust_fresh14 as isize) = (VIsual_mode + 's' as ::core::ffi::c_int
+                - 'v' as ::core::ffi::c_int)
                 as ::core::ffi::c_char;
         } else {
             let c2rust_fresh15 = i;
@@ -2921,13 +2898,15 @@ pub unsafe extern "C" fn may_trigger_modechanged() {
 static mut was_safe: bool = false_0 != 0;
 unsafe extern "C" fn is_safe_now() -> bool {
     return stuff_empty() as ::core::ffi::c_int != 0
-        && typebuf.tb_len == 0 as ::core::ffi::c_int && using_script() == 0
-        && global_busy == 0 && !debug_mode;
+        && typebuf.tb_len == 0 as ::core::ffi::c_int
+        && using_script() == 0
+        && global_busy == 0
+        && !debug_mode;
 }
 #[no_mangle]
 pub unsafe extern "C" fn may_trigger_safestate(mut safe: bool) {
-    let mut is_safe: bool = safe as ::core::ffi::c_int != 0
-        && is_safe_now() as ::core::ffi::c_int != 0;
+    let mut is_safe: bool =
+        safe as ::core::ffi::c_int != 0 && is_safe_now() as ::core::ffi::c_int != 0;
     if was_safe as ::core::ffi::c_int != is_safe as ::core::ffi::c_int {
         logmsg(
             LOGLVL_DBG,

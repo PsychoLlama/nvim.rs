@@ -43,9 +43,8 @@ pub struct ParserLine {
     pub size: size_t,
     pub allocated: bool,
 }
-pub type ParserLineGetter = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> (),
->;
+pub type ParserLineGetter =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ParserPosition {
@@ -121,12 +120,8 @@ pub struct C2Rust_Unnamed_5 {
     pub items: *mut ParserStateItem,
     pub init_array: [ParserStateItem; 16],
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[inline(always)]
 unsafe extern "C" fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,
@@ -134,8 +129,7 @@ unsafe extern "C" fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -159,27 +153,23 @@ pub unsafe extern "C" fn viml_parser_get_remaining_line(
     if (*pstate).pos.line == num_lines {
         viml_preader_get_line(&raw mut (*pstate).reader, ret_pline);
     } else {
-        *ret_pline = *(*pstate)
-            .reader
-            .lines
-            .items
-            .offset(
-                (*pstate)
-                    .reader
-                    .lines
-                    .size
-                    .wrapping_sub(0 as size_t)
-                    .wrapping_sub(1 as size_t) as isize,
-            );
+        *ret_pline = *(*pstate).reader.lines.items.offset(
+            (*pstate)
+                .reader
+                .lines
+                .size
+                .wrapping_sub(0 as size_t)
+                .wrapping_sub(1 as size_t) as isize,
+        );
     }
     '_c2rust_label: {
-        if (*pstate).pos.line == (*pstate).reader.lines.size.wrapping_sub(1 as size_t)
-        {} else {
+        if (*pstate).pos.line == (*pstate).reader.lines.size.wrapping_sub(1 as size_t) {
+        } else {
             __assert_fail(
                 b"pstate->pos.line == kv_size(pstate->reader.lines) - 1\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.c\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 30 as ::core::ffi::c_uint,
                 b"_Bool viml_parser_get_remaining_line(ParserState *const, ParserLine *const)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -201,9 +191,7 @@ unsafe extern "C" fn viml_preader_get_line(
         size: 0,
         allocated: false,
     };
-    (*preader)
-        .get_line
-        .expect("non-null function pointer")((*preader).cookie, &raw mut pline);
+    (*preader).get_line.expect("non-null function pointer")((*preader).cookie, &raw mut pline);
     if (*preader).conv.vc_type != CONV_NONE as ::core::ffi::c_int && pline.size != 0 {
         let mut cpline: ParserLine = ParserLine {
             data: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -221,24 +209,22 @@ unsafe extern "C" fn viml_preader_get_line(
         pline = cpline;
     }
     if (*preader).lines.size == (*preader).lines.capacity {
-        (*preader).lines.capacity = (if (*preader).lines.capacity
-            << 1 as ::core::ffi::c_int
+        (*preader).lines.capacity = (if (*preader).lines.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[ParserLine; 4]>()
                 .wrapping_div(::core::mem::size_of::<ParserLine>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ParserLine; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<ParserLine>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
+                        .wrapping_rem(::core::mem::size_of::<ParserLine>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
             (*preader).lines.capacity << 1 as ::core::ffi::c_int
         } else {
             ::core::mem::size_of::<[ParserLine; 4]>()
                 .wrapping_div(::core::mem::size_of::<ParserLine>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ParserLine; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<ParserLine>()) == 0)
-                        as ::core::ffi::c_int as size_t,
+                        .wrapping_rem(::core::mem::size_of::<ParserLine>())
+                        == 0) as ::core::ffi::c_int as size_t,
                 )
         });
         (*preader).lines.items = (if (*preader).lines.capacity
@@ -246,13 +232,10 @@ unsafe extern "C" fn viml_preader_get_line(
                 .wrapping_div(::core::mem::size_of::<ParserLine>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ParserLine; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<ParserLine>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
-            (if (*preader).lines.items
-                == &raw mut (*preader).lines.init_array as *mut ParserLine
-            {
+                        .wrapping_rem(::core::mem::size_of::<ParserLine>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
+            (if (*preader).lines.items == &raw mut (*preader).lines.init_array as *mut ParserLine {
                 (*preader).lines.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -266,9 +249,7 @@ unsafe extern "C" fn viml_preader_get_line(
                 )
             })
         } else {
-            (if (*preader).lines.items
-                == &raw mut (*preader).lines.init_array as *mut ParserLine
-            {
+            (if (*preader).lines.items == &raw mut (*preader).lines.init_array as *mut ParserLine {
                 memcpy(
                     xmalloc(
                         (*preader)
@@ -292,7 +273,8 @@ unsafe extern "C" fn viml_preader_get_line(
                 )
             })
         }) as *mut ParserLine;
-    } else {};
+    } else {
+    };
     let c2rust_fresh0 = (*preader).lines.size;
     (*preader).lines.size = (*preader).lines.size.wrapping_add(1);
     *(*preader).lines.items.offset(c2rust_fresh0 as isize) = pline;
@@ -308,22 +290,17 @@ pub unsafe extern "C" fn viml_parser_destroy(pstate: *mut ParserState) {
         }
         i = i.wrapping_add(1);
     }
-    if (*pstate).reader.lines.items
-        != &raw mut (*pstate).reader.lines.init_array as *mut ParserLine
+    if (*pstate).reader.lines.items != &raw mut (*pstate).reader.lines.init_array as *mut ParserLine
     {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*pstate)
-            .reader
-            .lines
-            .items as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*pstate).reader.lines.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
     }
-    if (*pstate).stack.items
-        != &raw mut (*pstate).stack.init_array as *mut ParserStateItem
-    {
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*pstate).stack.items
-            as *mut *mut ::core::ffi::c_void;
+    if (*pstate).stack.items != &raw mut (*pstate).stack.init_array as *mut ParserStateItem {
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut (*pstate).stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_0;
         *ptr__0;

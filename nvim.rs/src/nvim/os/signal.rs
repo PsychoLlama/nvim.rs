@@ -44,11 +44,7 @@ extern "C" {
         watcher: *mut SignalWatcher,
         data: *mut ::core::ffi::c_void,
     );
-    fn signal_watcher_start(
-        watcher: *mut SignalWatcher,
-        cb: signal_cb,
-        signum: ::core::ffi::c_int,
-    );
+    fn signal_watcher_start(watcher: *mut SignalWatcher, cb: signal_cb, signum: ::core::ffi::c_int);
     fn signal_watcher_stop(watcher: *mut SignalWatcher);
     fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb);
     fn autowrite_all();
@@ -58,11 +54,7 @@ extern "C" {
     static mut main_loop: Loop;
     fn preserve_exit(errmsg: *const ::core::ffi::c_char) -> !;
     static mut p_awa: ::core::ffi::c_int;
-    fn ml_sync_all(
-        check_file: ::core::ffi::c_int,
-        check_char: ::core::ffi::c_int,
-        do_fsync: bool,
-    );
+    fn ml_sync_all(check_file: ::core::ffi::c_int, check_char: ::core::ffi::c_int, do_fsync: bool);
 }
 pub type size_t = usize;
 pub type __time_t = ::core::ffi::c_long;
@@ -1797,9 +1789,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1826,9 +1817,7 @@ pub struct C2Rust_Unnamed_13 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_14 {
@@ -1924,12 +1913,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1982,12 +1969,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_stream_t = uv_stream_s;
 #[derive(Copy, Clone)]
@@ -2014,9 +1999,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2027,9 +2011,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_req_type = ::core::ffi::c_uint;
 pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
 pub const UV_RANDOM: uv_req_type = 10;
@@ -2054,15 +2037,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_21 {
@@ -2323,16 +2301,11 @@ pub struct signal_watcher {
     pub close_cb: signal_close_cb,
     pub events: *mut MultiQueue,
 }
-pub type signal_close_cb = Option<
-    unsafe extern "C" fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> (),
->;
+pub type signal_close_cb =
+    Option<unsafe extern "C" fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
 pub type SignalWatcher = signal_watcher;
 pub type signal_cb = Option<
-    unsafe extern "C" fn(
-        *mut SignalWatcher,
-        ::core::ffi::c_int,
-        *mut ::core::ffi::c_void,
-    ) -> (),
+    unsafe extern "C" fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
 >;
 pub type VimVarIndex = ::core::ffi::c_uint;
 pub const VV_EXITREASON: VimVarIndex = 105;
@@ -2442,19 +2415,15 @@ pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 45],
-        [::core::ffi::c_char; 45],
-    >(*b"void on_signal(SignalWatcher *, int, void *)\0")
+    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
+        *b"void on_signal(SignalWatcher *, int, void *)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SIG_SETMASK: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 static mut sint: SignalWatcher = SignalWatcher {
     uv: uv_signal_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2721,8 +2690,11 @@ static mut rejecting_deadly: bool = false;
 pub unsafe extern "C" fn signal_init() {
     let mut mask: sigset_t = sigset_t { __val: [0; 16] };
     sigemptyset(&raw mut mask);
-    if pthread_sigmask(SIG_SETMASK, &raw mut mask, ::core::ptr::null_mut::<__sigset_t>())
-        != 0 as ::core::ffi::c_int
+    if pthread_sigmask(
+        SIG_SETMASK,
+        &raw mut mask,
+        ::core::ptr::null_mut::<__sigset_t>(),
+    ) != 0 as ::core::ffi::c_int
     {
         logmsg(
             LOGLVL_ERR,
@@ -2889,49 +2861,38 @@ pub unsafe extern "C" fn signal_reject_deadly() {
 pub unsafe extern "C" fn signal_accept_deadly() {
     rejecting_deadly = false_0 != 0;
 }
-unsafe extern "C" fn signal_name(
-    mut signum: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+unsafe extern "C" fn signal_name(mut signum: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     match signum {
         SIGPWR => {
-            return b"SIGPWR\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGPWR\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGPIPE => {
-            return b"SIGPIPE\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGPIPE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGTERM => {
-            return b"SIGTERM\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGTERM\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGTSTP => {
-            return b"SIGTSTP\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGTSTP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGQUIT => {
-            return b"SIGQUIT\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGQUIT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGHUP => {
-            return b"SIGHUP\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGHUP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGINT => {
-            return b"SIGINT\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGINT\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGUSR1 => {
-            return b"SIGUSR1\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"SIGUSR1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         SIGWINCH => {
             return b"SIGWINCH\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char;
         }
         _ => {
-            return b"Unknown\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"Unknown\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
     };
 }
@@ -2965,7 +2926,8 @@ unsafe extern "C" fn on_signal(
     mut data: *mut ::core::ffi::c_void,
 ) {
     '_c2rust_label: {
-        if signum >= 0 as ::core::ffi::c_int {} else {
+        if signum >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"signum >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/signal.c\0".as_ptr()
@@ -2993,8 +2955,7 @@ unsafe extern "C" fn on_signal(
         SIGUSR1 => {
             apply_autocmds(
                 EVENT_SIGNAL,
-                b"SIGUSR1\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SIGUSR1\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 (*curbuf).b_fname,
                 true_0 != 0,
                 curbuf,
@@ -3003,8 +2964,7 @@ unsafe extern "C" fn on_signal(
         SIGWINCH => {
             apply_autocmds(
                 EVENT_SIGNAL,
-                b"SIGWINCH\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"SIGWINCH\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 (*curbuf).b_fname,
                 true_0 != 0,
                 curbuf,

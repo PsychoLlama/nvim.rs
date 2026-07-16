@@ -27,12 +27,7 @@ extern "C" {
     fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T;
     fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T;
     fn api_clear_error(value: *mut Error);
-    fn api_set_error(
-        err: *mut Error,
-        errType: ErrorType,
-        format: *const ::core::ffi::c_char,
-        ...
-    );
+    fn api_set_error(err: *mut Error, errType: ErrorType, format: *const ::core::ffi::c_char, ...);
     fn nvim_create_buf(listed: Boolean, scratch: Boolean, err: *mut Error) -> Buffer;
     fn block_autocmds();
     fn unblock_autocmds();
@@ -2164,9 +2159,7 @@ pub struct C2Rust_Unnamed_16 {
     pub capacity: size_t,
     pub items: *mut *mut win_T,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: C2Rust_Unnamed_16 = C2Rust_Unnamed_16 {
     size: 0 as size_t,
     capacity: 0 as size_t,
@@ -2190,14 +2183,15 @@ pub unsafe extern "C" fn win_new_float(
         };
         if fconfig.window != 0 as ::core::ffi::c_int {
             '_c2rust_label: {
-                if !last {} else {
+                if !last {
+                } else {
                     __assert_fail(
                         b"!last\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         50 as ::core::ffi::c_uint,
-                        b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -2209,79 +2203,77 @@ pub unsafe extern "C" fn win_new_float(
             if tp.is_null() {
                 return ::core::ptr::null_mut::<win_T>();
             }
-            tp_last = lastwin_nofloating(
-                if tp == curtab { ::core::ptr::null_mut::<tabpage_T>() } else { tp },
-            );
+            tp_last = lastwin_nofloating(if tp == curtab {
+                ::core::ptr::null_mut::<tabpage_T>()
+            } else {
+                tp
+            });
         }
         wp = win_alloc(tp_last, false_0 != 0);
         win_init(wp, curwin, 0 as ::core::ffi::c_int);
-        if !(*wp).w_onebuf_opt.wo_wbr.is_null()
-            && fconfig.height == 1 as ::core::ffi::c_int
-        {
-            if (*wp).w_onebuf_opt.wo_wbr
-                != &raw mut empty_string_option as *mut ::core::ffi::c_char
+        if !(*wp).w_onebuf_opt.wo_wbr.is_null() && fconfig.height == 1 as ::core::ffi::c_int {
+            if (*wp).w_onebuf_opt.wo_wbr != &raw mut empty_string_option as *mut ::core::ffi::c_char
             {
                 free_string_option((*wp).w_onebuf_opt.wo_wbr);
             }
-            (*wp).w_onebuf_opt.wo_wbr = &raw mut empty_string_option
-                as *mut ::core::ffi::c_char;
+            (*wp).w_onebuf_opt.wo_wbr = &raw mut empty_string_option as *mut ::core::ffi::c_char;
         }
         if !(*wp).w_onebuf_opt.wo_stl.is_null()
-            && (*wp).w_onebuf_opt.wo_stl
-                != &raw mut empty_string_option as *mut ::core::ffi::c_char
+            && (*wp).w_onebuf_opt.wo_stl != &raw mut empty_string_option as *mut ::core::ffi::c_char
         {
             free_string_option((*wp).w_onebuf_opt.wo_stl);
-            (*wp).w_onebuf_opt.wo_stl = &raw mut empty_string_option
-                as *mut ::core::ffi::c_char;
+            (*wp).w_onebuf_opt.wo_stl = &raw mut empty_string_option as *mut ::core::ffi::c_char;
         }
     } else {
         '_c2rust_label_0: {
-            if !last {} else {
+            if !last {
+            } else {
                 __assert_fail(
                     b"!last\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     74 as ::core::ffi::c_uint,
-                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
         '_c2rust_label_1: {
-            if !(*wp).w_floating {} else {
+            if !(*wp).w_floating {
+            } else {
                 __assert_fail(
                     b"!wp->w_floating\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     75 as ::core::ffi::c_uint,
-                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
         let mut win_tp: *mut tabpage_T = win_find_tabpage(wp);
         '_c2rust_label_2: {
-            if !win_tp.is_null() {} else {
+            if !win_tp.is_null() {
+            } else {
                 __assert_fail(
                     b"win_tp\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     77 as ::core::ffi::c_uint,
-                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"win_T *win_new_float(win_T *, _Bool, WinConfig, Error *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                 );
             }
         };
-        if win_tp == curtab && firstwin == wp
+        if win_tp == curtab
+            && firstwin == wp
             && lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()) == wp
-            || win_tp != curtab && (*win_tp).tp_firstwin == wp
-                && lastwin_nofloating(win_tp) == wp
+            || win_tp != curtab && (*win_tp).tp_firstwin == wp && lastwin_nofloating(win_tp) == wp
         {
             api_set_error(
                 err,
                 kErrorTypeException,
-                b"Cannot change last window into float\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Cannot change last window into float\0".as_ptr() as *const ::core::ffi::c_char,
             );
             return ::core::ptr::null_mut::<win_T>();
         } else if !cmdwin_win.is_null() && !(*cmdwin_win).w_floating {
@@ -2318,9 +2310,14 @@ pub unsafe extern "C" fn win_new_float(
             win_tp
         };
         let mut dir: ::core::ffi::c_int = 0;
-        winframe_remove(wp, &raw mut dir, tp_0, ::core::ptr::null_mut::<*mut frame_T>());
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*wp).w_frame
-            as *mut *mut ::core::ffi::c_void;
+        winframe_remove(
+            wp,
+            &raw mut dir,
+            tp_0,
+            ::core::ptr::null_mut::<*mut frame_T>(),
+        );
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*wp).w_frame as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -2368,29 +2365,33 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
     (*wp).w_onebuf_opt.wo_winhl = if *old_0 as ::core::ffi::c_int == NUL {
         xstrdup(b"EndOfBuffer:\0".as_ptr() as *const ::core::ffi::c_char)
     } else {
-        concat_str(old_0, b",EndOfBuffer:\0".as_ptr() as *const ::core::ffi::c_char)
+        concat_str(
+            old_0,
+            b",EndOfBuffer:\0".as_ptr() as *const ::core::ffi::c_char,
+        )
     };
     free_string_option(old_0);
     parse_winhl_opt(::core::ptr::null::<::core::ffi::c_char>(), wp);
-    if *(*wp).w_onebuf_opt.wo_scl.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int != 'a' as ::core::ffi::c_int
+    if *(*wp)
+        .w_onebuf_opt
+        .wo_scl
+        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        != 'a' as ::core::ffi::c_int
         || strlen((*wp).w_onebuf_opt.wo_scl) >= 8 as size_t
     {
         free_string_option((*wp).w_onebuf_opt.wo_scl);
-        (*wp).w_onebuf_opt.wo_scl = xstrdup(
-            b"auto\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*wp).w_onebuf_opt.wo_scl = xstrdup(b"auto\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    if *(*wp).w_onebuf_opt.wo_fdc.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int != '0' as ::core::ffi::c_int
+    if *(*wp)
+        .w_onebuf_opt
+        .wo_fdc
+        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        != '0' as ::core::ffi::c_int
     {
         free_string_option((*wp).w_onebuf_opt.wo_fdc);
-        (*wp).w_onebuf_opt.wo_fdc = xstrdup(
-            b"0\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        (*wp).w_onebuf_opt.wo_fdc = xstrdup(b"0\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    if !(*wp).w_onebuf_opt.wo_cc.is_null()
-        && *(*wp).w_onebuf_opt.wo_cc as ::core::ffi::c_int != NUL
+    if !(*wp).w_onebuf_opt.wo_cc.is_null() && *(*wp).w_onebuf_opt.wo_cc as ::core::ffi::c_int != NUL
     {
         free_string_option((*wp).w_onebuf_opt.wo_cc);
         (*wp).w_onebuf_opt.wo_cc = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
@@ -2399,16 +2400,14 @@ pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
         && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
     {
         free_string_option((*wp).w_onebuf_opt.wo_stc);
-        (*wp).w_onebuf_opt.wo_stc = &raw mut empty_string_option
-            as *mut ::core::ffi::c_char;
+        (*wp).w_onebuf_opt.wo_stc = &raw mut empty_string_option as *mut ::core::ffi::c_char;
     }
     if (*wp).w_floating as ::core::ffi::c_int != 0
         && !(*wp).w_onebuf_opt.wo_stl.is_null()
         && *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
     {
         free_string_option((*wp).w_onebuf_opt.wo_stl);
-        (*wp).w_onebuf_opt.wo_stl = &raw mut empty_string_option
-            as *mut ::core::ffi::c_char;
+        (*wp).w_onebuf_opt.wo_stl = &raw mut empty_string_option as *mut ::core::ffi::c_char;
         if (*wp).w_status_height > 0 as ::core::ffi::c_int {
             win_config_float(wp, (*wp).w_config);
         }
@@ -2458,11 +2457,8 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
         let mut row: ::core::ffi::c_int = mouse_row;
         let mut col: ::core::ffi::c_int = mouse_col;
         let mut grid: ::core::ffi::c_int = mouse_grid;
-        let mut mouse_win: *mut win_T = mouse_find_win_inner(
-            &raw mut grid,
-            &raw mut row,
-            &raw mut col,
-        );
+        let mut mouse_win: *mut win_T =
+            mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
         if !mouse_win.is_null() {
             fconfig.relative = kFloatRelativeWindow;
             fconfig.row += row as ::core::ffi::c_double;
@@ -2470,13 +2466,12 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
             fconfig.window = (*mouse_win).handle as Window;
         }
     }
-    let mut change_external: bool = fconfig.external as ::core::ffi::c_int
-        != (*wp).w_config.external as ::core::ffi::c_int;
+    let mut change_external: bool =
+        fconfig.external as ::core::ffi::c_int != (*wp).w_config.external as ::core::ffi::c_int;
     let mut change_border: bool = fconfig.border as ::core::ffi::c_int
         != (*wp).w_config.border as ::core::ffi::c_int
         || memcmp(
-            &raw mut fconfig.border_hl_ids as *mut ::core::ffi::c_int
-                as *const ::core::ffi::c_void,
+            &raw mut fconfig.border_hl_ids as *mut ::core::ffi::c_int as *const ::core::ffi::c_void,
             &raw mut (*wp).w_config.border_hl_ids as *mut ::core::ffi::c_int
                 as *const ::core::ffi::c_void,
             ::core::mem::size_of::<[::core::ffi::c_int; 8]>(),
@@ -2487,11 +2482,10 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 4 as ::core::ffi::c_int {
         let mut new_adj: ::core::ffi::c_int = (has_border as ::core::ffi::c_int != 0
-            && (*wp)
-                .w_config
-                .border_chars[(2 as ::core::ffi::c_int * i + 1 as ::core::ffi::c_int)
-                as usize][0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != 0)
-            as ::core::ffi::c_int;
+            && (*wp).w_config.border_chars
+                [(2 as ::core::ffi::c_int * i + 1 as ::core::ffi::c_int) as usize]
+                [0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                != 0) as ::core::ffi::c_int;
         if new_adj != (*wp).w_border_adj[i as usize] {
             change_border = true_0 != 0;
             (*wp).w_border_adj[i as usize] = new_adj;
@@ -2499,13 +2493,12 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
         i += 1;
     }
     if !ui_has(kUIMultigrid) {
-        let mut above_ch: ::core::ffi::c_int = if (*wp).w_config.zindex
-            < kZIndexMessages as ::core::ffi::c_int
-        {
-            p_ch as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        };
+        let mut above_ch: ::core::ffi::c_int =
+            if (*wp).w_config.zindex < kZIndexMessages as ::core::ffi::c_int {
+                p_ch as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            };
         (*wp).w_height = if (*wp).w_height < Rows - win_border_height(wp) - above_ch {
             (*wp).w_height
         } else {
@@ -2521,9 +2514,7 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
     set_must_redraw(UPD_VALID as ::core::ffi::c_int);
     (*wp).w_redr_status = (*wp).w_status_height != 0;
     (*wp).w_pos_changed = true_0 != 0;
-    if change_external as ::core::ffi::c_int != 0
-        || change_border as ::core::ffi::c_int != 0
-    {
+    if change_external as ::core::ffi::c_int != 0 || change_border as ::core::ffi::c_int != 0 {
         (*wp).w_hl_needs_update = true_0;
         redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
     }
@@ -2536,10 +2527,7 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
             type_0: kErrorTypeNone,
             msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         };
-        let mut parent: *mut win_T = find_window_by_handle(
-            (*wp).w_config.window,
-            &raw mut dummy,
-        );
+        let mut parent: *mut win_T = find_window_by_handle((*wp).w_config.window, &raw mut dummy);
         if !parent.is_null() {
             row_0 += (*parent).w_winrow;
             col_0 += (*parent).w_wincol;
@@ -2600,10 +2588,7 @@ unsafe extern "C" fn float_zindex_cmp(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn win_float_remove(
-    mut bang: bool,
-    mut count: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi::c_int) {
     let mut float_win_arr: C2Rust_Unnamed_16 = KV_INITIAL_VALUE;
     let mut wp: *mut win_T = lastwin;
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
@@ -2617,12 +2602,11 @@ pub unsafe extern "C" fn win_float_remove(
                 float_win_arr.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<*mut win_T>().wrapping_mul(float_win_arr.capacity),
             ) as *mut *mut win_T;
-        } else {};
+        } else {
+        };
         let c2rust_fresh0 = float_win_arr.size;
         float_win_arr.size = float_win_arr.size.wrapping_add(1);
-        let c2rust_lvalue_ptr = &raw mut *float_win_arr
-            .items
-            .offset(c2rust_fresh0 as isize);
+        let c2rust_lvalue_ptr = &raw mut *float_win_arr.items.offset(c2rust_fresh0 as isize);
         *c2rust_lvalue_ptr = wp;
         wp = (*wp).w_prev;
     }
@@ -2679,8 +2663,8 @@ pub unsafe extern "C" fn win_float_update_statusline() {
     let mut wp: *mut win_T = lastwin;
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         let mut has_status: bool = (*wp).w_status_height > 0 as ::core::ffi::c_int;
-        let mut should_show: bool = *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int
-            != NUL && (p_ls == 1 as OptInt || p_ls == 2 as OptInt);
+        let mut should_show: bool = *(*wp).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL
+            && (p_ls == 1 as OptInt || p_ls == 2 as OptInt);
         if should_show as ::core::ffi::c_int != has_status as ::core::ffi::c_int {
             win_config_float(wp, (*wp).w_config);
         }
@@ -2747,7 +2731,8 @@ pub unsafe extern "C" fn win_float_find_altwin(
 ) -> *mut win_T {
     let mut wp: *mut win_T = prevwin;
     if tp.is_null() {
-        return if win_valid(wp) as ::core::ffi::c_int != 0 && wp != win as *mut win_T
+        return if win_valid(wp) as ::core::ffi::c_int != 0
+            && wp != win as *mut win_T
             && (*wp).w_config.focusable as ::core::ffi::c_int != 0
             && !(*wp).w_config.hide
         {
@@ -2757,14 +2742,15 @@ pub unsafe extern "C" fn win_float_find_altwin(
         };
     }
     '_c2rust_label: {
-        if tp != curtab as *const tabpage_T {} else {
+        if tp != curtab as *const tabpage_T {
+        } else {
             __assert_fail(
                 b"tp != curtab\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/winfloat.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 402 as ::core::ffi::c_uint,
-                b"win_T *win_float_find_altwin(const win_T *, const tabpage_T *)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"win_T *win_float_find_altwin(const win_T *, const tabpage_T *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
@@ -2773,8 +2759,7 @@ pub unsafe extern "C" fn win_float_find_altwin(
     } else {
         (*tp).tp_firstwin
     };
-    return if (*wp).w_config.focusable as ::core::ffi::c_int != 0 && !(*wp).w_config.hide
-    {
+    return if (*wp).w_config.focusable as ::core::ffi::c_int != 0 && !(*wp).w_config.hide {
         wp
     } else {
         (*tp).tp_firstwin

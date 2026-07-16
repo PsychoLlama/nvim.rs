@@ -19,15 +19,9 @@ extern "C" {
         __format: *const ::core::ffi::c_char,
         ...
     ) -> ::core::ffi::c_int;
-    fn fscanf(
-        __stream: *mut FILE,
-        __format: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn uv_kill(
-        pid: ::core::ffi::c_int,
-        signum: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn fscanf(__stream: *mut FILE, __format: *const ::core::ffi::c_char, ...)
+        -> ::core::ffi::c_int;
+    fn uv_kill(pid: ::core::ffi::c_int, signum: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn logmsg(
         log_level: ::core::ffi::c_int,
         context: *const ::core::ffi::c_char,
@@ -165,14 +159,11 @@ pub const UV_EADDRINUSE: C2Rust_Unnamed = -98;
 pub const UV_EACCES: C2Rust_Unnamed = -13;
 pub const UV_E2BIG: C2Rust_Unnamed = -7;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 34],
-        [::core::ffi::c_char; 34],
-    >(*b"_Bool os_proc_tree_kill(int, int)\0")
+    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
+        *b"_Bool os_proc_tree_kill(int, int)\0",
+    )
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn os_proc_tree_kill(
@@ -180,10 +171,10 @@ pub unsafe extern "C" fn os_proc_tree_kill(
     mut sig: ::core::ffi::c_int,
 ) -> bool {
     '_c2rust_label: {
-        if sig == 15 as ::core::ffi::c_int || sig == 9 as ::core::ffi::c_int {} else {
+        if sig == 15 as ::core::ffi::c_int || sig == 9 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
-                b"sig == SIGTERM || sig == SIGKILL\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"sig == SIGTERM || sig == SIGKILL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/os/proc.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 98 as ::core::ffi::c_uint,
@@ -219,9 +210,7 @@ pub unsafe extern "C" fn os_proc_children(
     if ppid < 0 as ::core::ffi::c_int {
         return 2 as ::core::ffi::c_int;
     }
-    let mut temp: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-        ::core::ffi::c_int,
-    >();
+    let mut temp: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     *proc_list = ::core::ptr::null_mut::<::core::ffi::c_int>();
     *proc_count = 0 as size_t;
     let mut proc_p: [::core::ffi::c_char; 256] = [
@@ -497,8 +486,11 @@ pub unsafe extern "C" fn os_proc_children(
         return 2 as ::core::ffi::c_int;
     }
     let mut match_pid: ::core::ffi::c_int = 0;
-    while fscanf(fp, b"%d\0".as_ptr() as *const ::core::ffi::c_char, &raw mut match_pid)
-        > 0 as ::core::ffi::c_int
+    while fscanf(
+        fp,
+        b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+        &raw mut match_pid,
+    ) > 0 as ::core::ffi::c_int
     {
         temp = xrealloc(
             temp as *mut ::core::ffi::c_void,

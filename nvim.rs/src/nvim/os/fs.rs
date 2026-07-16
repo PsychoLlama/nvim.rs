@@ -9,15 +9,8 @@ extern "C" {
         __function: *const ::core::ffi::c_char,
     ) -> !;
     fn __errno_location() -> *mut ::core::ffi::c_int;
-    fn fcntl(
-        __fd: ::core::ffi::c_int,
-        __cmd: ::core::ffi::c_int,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fdopen(
-        __fd: ::core::ffi::c_int,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn fcntl(__fd: ::core::ffi::c_int, __cmd: ::core::ffi::c_int, ...) -> ::core::ffi::c_int;
+    fn fdopen(__fd: ::core::ffi::c_int, __modes: *const ::core::ffi::c_char) -> *mut FILE;
     fn abort() -> !;
     fn memset(
         __s: *mut ::core::ffi::c_void,
@@ -83,10 +76,7 @@ extern "C" {
         flags: ::core::ffi::c_int,
         cb: uv_fs_cb,
     ) -> ::core::ffi::c_int;
-    fn uv_fs_scandir_next(
-        req: *mut uv_fs_t,
-        ent: *mut uv_dirent_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_fs_scandir_next(req: *mut uv_fs_t, ent: *mut uv_dirent_t) -> ::core::ffi::c_int;
     fn uv_fs_stat(
         loop_0: *mut uv_loop_t,
         req: *mut uv_fs_t,
@@ -162,30 +152,17 @@ extern "C" {
         gid: uv_gid_t,
         cb: uv_fs_cb,
     ) -> ::core::ffi::c_int;
-    fn uv_exepath(
-        buffer: *mut ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
+    fn uv_exepath(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
     fn uv_cwd(buffer: *mut ::core::ffi::c_char, size: *mut size_t) -> ::core::ffi::c_int;
     fn uv_chdir(dir: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn read(
-        __fd: ::core::ffi::c_int,
-        __buf: *mut ::core::ffi::c_void,
-        __nbytes: size_t,
-    ) -> ssize_t;
-    fn write(
-        __fd: ::core::ffi::c_int,
-        __buf: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ssize_t;
+    fn read(__fd: ::core::ffi::c_int, __buf: *mut ::core::ffi::c_void, __nbytes: size_t)
+        -> ssize_t;
+    fn write(__fd: ::core::ffi::c_int, __buf: *const ::core::ffi::c_void, __n: size_t) -> ssize_t;
     fn dup(__fd: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn getuid() -> __uid_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xmemcpyz(
         dst: *mut ::core::ffi::c_void,
         src: *const ::core::ffi::c_void,
@@ -195,11 +172,7 @@ extern "C" {
         str: *const ::core::ffi::c_char,
         c: ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
-    fn memcnt(
-        data: *const ::core::ffi::c_void,
-        c: ::core::ffi::c_char,
-        len: size_t,
-    ) -> size_t;
+    fn memcnt(data: *const ::core::ffi::c_void, c: ::core::ffi::c_char, len: size_t) -> size_t;
     fn xstrlcpy(
         dst: *mut ::core::ffi::c_char,
         src: *const ::core::ffi::c_char,
@@ -239,11 +212,7 @@ extern "C" {
     ) -> bool;
     static mut g_stats: nvim_stats_s;
     static mut stdin_fd: ::core::ffi::c_int;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn verbose_enter();
@@ -254,10 +223,7 @@ extern "C" {
     fn get_past_head(path: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn vim_ispathsep(c: ::core::ffi::c_int) -> bool;
     fn dir_of_file_exists(fname: *mut ::core::ffi::c_char) -> bool;
-    fn FullName_save(
-        fname: *const ::core::ffi::c_char,
-        force: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
     fn save_abs_path(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn gettail_dir(fname: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char;
     fn append_path(
@@ -443,9 +409,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -472,9 +437,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -810,9 +773,7 @@ pub struct nvim_stats_s {
     pub redraw: int64_t,
     pub log_skip: int16_t,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const O_WRONLY: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
 pub const O_RDWR: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;
@@ -827,30 +788,23 @@ pub const NODE_NORMAL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static mut e_xattr_erange: [::core::ffi::c_char; 51] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 51],
-        [::core::ffi::c_char; 51],
-    >(*b"E1506: Buffer too small to copy xattr value or key\0")
+    ::core::mem::transmute::<[u8; 51], [::core::ffi::c_char; 51]>(
+        *b"E1506: Buffer too small to copy xattr value or key\0",
+    )
 };
 static mut e_xattr_e2big: [::core::ffi::c_char; 84] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 84],
-        [::core::ffi::c_char; 84],
-    >(
+    ::core::mem::transmute::<[u8; 84], [::core::ffi::c_char; 84]>(
         *b"E1508: Size of the extended attribute value is larger than the maximum size allowed\0",
     )
 };
 static mut e_xattr_other: [::core::ffi::c_char; 65] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 65],
-        [::core::ffi::c_char; 65],
-    >(*b"E1509: Error occurred when reading or writing extended attribute\0")
+    ::core::mem::transmute::<[u8; 65], [::core::ffi::c_char; 65]>(
+        *b"E1509: Error occurred when reading or writing extended attribute\0",
+    )
 };
 static mut kLibuvSuccess: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[no_mangle]
-pub unsafe extern "C" fn os_chdir(
-    mut path: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn os_chdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     if p_verbose >= 5 as OptInt {
         verbose_enter();
         smsg(
@@ -946,8 +900,12 @@ pub unsafe extern "C" fn os_isrealdir(mut name: *const ::core::ffi::c_char) -> b
             len: 0,
         }; 4],
     };
-    if uv_fs_lstat(::core::ptr::null_mut::<uv_loop_t>(), &raw mut request, name, None)
-        != kLibuvSuccess
+    if uv_fs_lstat(
+        ::core::ptr::null_mut::<uv_loop_t>(),
+        &raw mut request,
+        name,
+        None,
+    ) != kLibuvSuccess
     {
         return false_0 != 0;
     }
@@ -965,9 +923,7 @@ pub unsafe extern "C" fn os_isdir(mut name: *const ::core::ffi::c_char) -> bool 
     return mode & __S_IFMT as int32_t == 0o40000 as int32_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_nodetype(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn os_nodetype(mut name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut statbuf: uv_stat_t = uv_stat_t {
         st_dev: 0,
         st_mode: 0,
@@ -1124,9 +1080,8 @@ unsafe extern "C" fn is_executable_in_path(
     mut name: *const ::core::ffi::c_char,
     mut abspath: *mut *mut ::core::ffi::c_char,
 ) -> bool {
-    let mut path_env: *mut ::core::ffi::c_char = os_getenv(
-        b"PATH\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut path_env: *mut ::core::ffi::c_char =
+        os_getenv(b"PATH\0".as_ptr() as *const ::core::ffi::c_char);
     if path_env.is_null() {
         return false_0 != 0;
     }
@@ -1138,10 +1093,7 @@ unsafe extern "C" fn is_executable_in_path(
     let mut p: *mut ::core::ffi::c_char = path;
     let mut rv: bool = false_0 != 0;
     loop {
-        let mut e: *mut ::core::ffi::c_char = xstrchrnul(
-            p,
-            ENV_SEPCHAR as ::core::ffi::c_char,
-        );
+        let mut e: *mut ::core::ffi::c_char = xstrchrnul(p, ENV_SEPCHAR as ::core::ffi::c_char);
         xmemcpyz(
             buf as *mut ::core::ffi::c_void,
             p as *const ::core::ffi::c_void,
@@ -1255,9 +1207,8 @@ pub unsafe extern "C" fn os_fopen(
     mut flags: *const ::core::ffi::c_char,
 ) -> *mut FILE {
     '_c2rust_label: {
-        if !flags.is_null() && strlen(flags) > 0 as size_t
-            && strlen(flags) <= 2 as size_t
-        {} else {
+        if !flags.is_null() && strlen(flags) > 0 as size_t && strlen(flags) <= 2 as size_t {
+        } else {
             __assert_fail(
                 b"flags != NULL && strlen(flags) > 0 && strlen(flags) <= 2\0".as_ptr()
                     as *const ::core::ffi::c_char,
@@ -1292,7 +1243,8 @@ pub unsafe extern "C" fn os_fopen(
         '_c2rust_label_0: {
             if *flags.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '+' as ::core::ffi::c_int
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"flags[1] == '+'\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
@@ -1336,8 +1288,7 @@ pub unsafe extern "C" fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::
             b"os_set_cloexec\0".as_ptr() as *const ::core::ffi::c_char,
             497 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Failed to get flags on descriptor %d: %s\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Failed to get flags on descriptor %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
             fd,
             strerror(e),
         );
@@ -1354,8 +1305,7 @@ pub unsafe extern "C" fn os_set_cloexec(fd: ::core::ffi::c_int) -> ::core::ffi::
             b"os_set_cloexec\0".as_ptr() as *const ::core::ffi::c_char,
             504 as ::core::ffi::c_int,
             true_0 != 0,
-            b"Failed to set CLOEXEC on descriptor %d: %s\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"Failed to set CLOEXEC on descriptor %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
             fd,
             strerror(e),
         );
@@ -1454,9 +1404,9 @@ pub unsafe extern "C" fn os_dup(fd: ::core::ffi::c_int) -> ::core::ffi::c_int {
             }
             return error;
         } else {
-            return ret
+            return ret;
         }
-    };
+    }
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_open_stdin_fd() -> ::core::ffi::c_int {
@@ -1479,7 +1429,8 @@ pub unsafe extern "C" fn os_read(
     *ret_eof = false_0 != 0;
     if ret_buf.is_null() {
         '_c2rust_label: {
-            if size == 0 as size_t {} else {
+            if size == 0 as size_t {
+            } else {
                 __assert_fail(
                     b"size == 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
@@ -1495,7 +1446,8 @@ pub unsafe extern "C" fn os_read(
     let mut read_bytes: size_t = 0 as size_t;
     while read_bytes != size {
         '_c2rust_label_0: {
-            if size >= read_bytes {} else {
+            if size >= read_bytes {
+            } else {
                 __assert_fail(
                     b"size >= read_bytes\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
@@ -1517,14 +1469,10 @@ pub unsafe extern "C" fn os_read(
         if cur_read_bytes < 0 as ptrdiff_t {
             let error: ::core::ffi::c_int = uv_translate_sys_error(*__errno_location());
             *__errno_location() = 0 as ::core::ffi::c_int;
-            if non_blocking as ::core::ffi::c_int != 0
-                && error == UV_EAGAIN as ::core::ffi::c_int
-            {
+            if non_blocking as ::core::ffi::c_int != 0 && error == UV_EAGAIN as ::core::ffi::c_int {
                 break;
             }
-            if error == UV_EINTR as ::core::ffi::c_int
-                || error == UV_EAGAIN as ::core::ffi::c_int
-            {
+            if error == UV_EINTR as ::core::ffi::c_int || error == UV_EAGAIN as ::core::ffi::c_int {
                 continue;
             }
             return error as ptrdiff_t;
@@ -1553,9 +1501,9 @@ pub unsafe extern "C" fn os_readv(
     while i < iov_size {
         '_c2rust_label: {
             if toread
-                <= (18446744073709551615 as size_t)
-                    .wrapping_sub((*iov.offset(i as isize)).iov_len)
-            {} else {
+                <= (18446744073709551615 as size_t).wrapping_sub((*iov.offset(i as isize)).iov_len)
+            {
+            } else {
                 __assert_fail(
                     b"toread <= SIZE_MAX - iov[i].iov_len\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -1571,11 +1519,8 @@ pub unsafe extern "C" fn os_readv(
         i = i.wrapping_add(1);
     }
     while read_bytes < toread && iov_size != 0 && !*ret_eof {
-        let mut cur_read_bytes: ptrdiff_t = readv(
-            fd,
-            iov,
-            iov_size as ::core::ffi::c_int,
-        ) as ptrdiff_t;
+        let mut cur_read_bytes: ptrdiff_t =
+            readv(fd, iov, iov_size as ::core::ffi::c_int) as ptrdiff_t;
         if cur_read_bytes == 0 as ptrdiff_t {
             *ret_eof = true_0 != 0;
         }
@@ -1583,11 +1528,10 @@ pub unsafe extern "C" fn os_readv(
             read_bytes = read_bytes.wrapping_add(cur_read_bytes as size_t);
             while iov_size != 0 && cur_read_bytes != 0 {
                 if cur_read_bytes < (*iov).iov_len as ptrdiff_t {
-                    (*iov).iov_len = (*iov)
-                        .iov_len
-                        .wrapping_sub(cur_read_bytes as size_t);
+                    (*iov).iov_len = (*iov).iov_len.wrapping_sub(cur_read_bytes as size_t);
                     (*iov).iov_base = ((*iov).iov_base as *mut ::core::ffi::c_char)
-                        .offset(cur_read_bytes as isize) as *mut ::core::ffi::c_void;
+                        .offset(cur_read_bytes as isize)
+                        as *mut ::core::ffi::c_void;
                     cur_read_bytes = 0 as ptrdiff_t;
                 } else {
                     cur_read_bytes -= (*iov).iov_len as ptrdiff_t;
@@ -1601,14 +1545,10 @@ pub unsafe extern "C" fn os_readv(
             }
             let error: ::core::ffi::c_int = uv_translate_sys_error(*__errno_location());
             *__errno_location() = 0 as ::core::ffi::c_int;
-            if non_blocking as ::core::ffi::c_int != 0
-                && error == UV_EAGAIN as ::core::ffi::c_int
-            {
+            if non_blocking as ::core::ffi::c_int != 0 && error == UV_EAGAIN as ::core::ffi::c_int {
                 break;
             }
-            if error == UV_EINTR as ::core::ffi::c_int
-                || error == UV_EAGAIN as ::core::ffi::c_int
-            {
+            if error == UV_EINTR as ::core::ffi::c_int || error == UV_EAGAIN as ::core::ffi::c_int {
                 continue;
             }
             return error as ptrdiff_t;
@@ -1625,7 +1565,8 @@ pub unsafe extern "C" fn os_write(
 ) -> ptrdiff_t {
     if buf.is_null() {
         '_c2rust_label: {
-            if size == 0 as size_t {} else {
+            if size == 0 as size_t {
+            } else {
                 __assert_fail(
                     b"size == 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
@@ -1641,7 +1582,8 @@ pub unsafe extern "C" fn os_write(
     let mut written_bytes: size_t = 0 as size_t;
     while written_bytes != size {
         '_c2rust_label_0: {
-            if size >= written_bytes {} else {
+            if size >= written_bytes {
+            } else {
                 __assert_fail(
                     b"size >= written_bytes\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/os/fs.c\0".as_ptr()
@@ -1663,19 +1605,15 @@ pub unsafe extern "C" fn os_write(
         if cur_written_bytes < 0 as ptrdiff_t {
             let error: ::core::ffi::c_int = uv_translate_sys_error(*__errno_location());
             *__errno_location() = 0 as ::core::ffi::c_int;
-            if non_blocking as ::core::ffi::c_int != 0
-                && error == UV_EAGAIN as ::core::ffi::c_int
-            {
+            if non_blocking as ::core::ffi::c_int != 0 && error == UV_EAGAIN as ::core::ffi::c_int {
                 break;
             }
-            if error == UV_EINTR as ::core::ffi::c_int
-                || error == UV_EAGAIN as ::core::ffi::c_int
-            {
+            if error == UV_EINTR as ::core::ffi::c_int || error == UV_EAGAIN as ::core::ffi::c_int {
                 continue;
             }
             return error as ptrdiff_t;
         } else if cur_written_bytes == 0 as ptrdiff_t {
-            return UV_UNKNOWN as ::core::ffi::c_int as ptrdiff_t
+            return UV_UNKNOWN as ::core::ffi::c_int as ptrdiff_t;
         }
     }
     return written_bytes as ptrdiff_t;
@@ -2060,18 +1998,14 @@ pub unsafe extern "C" fn os_copy_xattr(
     if size <= 0 as ssize_t {
         return;
     }
-    let mut xattr_buf: *mut ::core::ffi::c_char = xmalloc(size as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut xattr_buf: *mut ::core::ffi::c_char =
+        xmalloc(size as size_t) as *mut ::core::ffi::c_char;
     size = listxattr(from_file, xattr_buf, size as size_t);
     let mut tsize: ssize_t = size;
     *__errno_location() = 0 as ::core::ffi::c_int;
     let mut max_vallen: ssize_t = 0 as ssize_t;
-    let mut val: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut val: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut round: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     '_error_exit: while round < 2 as ::core::ffi::c_int {
         let mut key: *mut ::core::ffi::c_char = xattr_buf;
@@ -2083,9 +2017,14 @@ pub unsafe extern "C" fn os_copy_xattr(
                 from_file,
                 key,
                 val as *mut ::core::ffi::c_void,
-                if round != 0 { max_vallen as size_t } else { 0 as size_t },
+                if round != 0 {
+                    max_vallen as size_t
+                } else {
+                    0 as size_t
+                },
             );
-            if !(vallen >= 0 as ssize_t && round != 0
+            if !(vallen >= 0 as ssize_t
+                && round != 0
                 && setxattr(
                     to_file,
                     key,
@@ -2097,19 +2036,16 @@ pub unsafe extern "C" fn os_copy_xattr(
                 if *__errno_location() != 0 {
                     match *__errno_location() {
                         E2BIG => {
-                            errmsg = &raw const e_xattr_e2big
-                                as *const ::core::ffi::c_char;
+                            errmsg = &raw const e_xattr_e2big as *const ::core::ffi::c_char;
                             break '_error_exit;
                         }
                         ENOTSUP | EACCES | EPERM => {}
                         ERANGE => {
-                            errmsg = &raw const e_xattr_erange
-                                as *const ::core::ffi::c_char;
+                            errmsg = &raw const e_xattr_erange as *const ::core::ffi::c_char;
                             break '_error_exit;
                         }
                         _ => {
-                            errmsg = &raw const e_xattr_other
-                                as *const ::core::ffi::c_char;
+                            errmsg = &raw const e_xattr_other as *const ::core::ffi::c_char;
                             break '_error_exit;
                         }
                     }
@@ -2125,8 +2061,7 @@ pub unsafe extern "C" fn os_copy_xattr(
         if round != 0 {
             break;
         }
-        val = xmalloc((max_vallen as size_t).wrapping_add(1 as size_t))
-            as *mut ::core::ffi::c_char;
+        val = xmalloc((max_vallen as size_t).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
         round += 1;
     }
     xfree(xattr_buf as *mut ::core::ffi::c_void);
@@ -2141,10 +2076,7 @@ pub unsafe extern "C" fn os_get_acl(mut fname: *const ::core::ffi::c_char) -> vi
     return ret;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_set_acl(
-    mut fname: *const ::core::ffi::c_char,
-    mut aclent: vim_acl_T,
-) {
+pub unsafe extern "C" fn os_set_acl(mut fname: *const ::core::ffi::c_char, mut aclent: vim_acl_T) {
     if aclent.is_null() {
         return;
     }
@@ -2190,12 +2122,11 @@ pub unsafe extern "C" fn os_file_owned(mut fname: *const ::core::ffi::c_char) ->
             },
         },
     };
-    let mut file_owned: bool = os_fileinfo(fname, &raw mut finfo) as ::core::ffi::c_int
-        != 0 && finfo.stat.st_uid == uid as uint64_t;
-    let mut link_owned: bool = os_fileinfo_link(fname, &raw mut finfo)
-        as ::core::ffi::c_int != 0 && finfo.stat.st_uid == uid as uint64_t;
-    return file_owned as ::core::ffi::c_int != 0
-        && link_owned as ::core::ffi::c_int != 0;
+    let mut file_owned: bool = os_fileinfo(fname, &raw mut finfo) as ::core::ffi::c_int != 0
+        && finfo.stat.st_uid == uid as uint64_t;
+    let mut link_owned: bool = os_fileinfo_link(fname, &raw mut finfo) as ::core::ffi::c_int != 0
+        && finfo.stat.st_uid == uid as uint64_t;
+    return file_owned as ::core::ffi::c_int != 0 && link_owned as ::core::ffi::c_int != 0;
 }
 #[no_mangle]
 pub unsafe extern "C" fn os_chown(
@@ -2481,9 +2412,7 @@ pub unsafe extern "C" fn os_file_settime(
     return r;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_file_is_readable(
-    mut name: *const ::core::ffi::c_char,
-) -> bool {
+pub unsafe extern "C" fn os_file_is_readable(mut name: *const ::core::ffi::c_char) -> bool {
     let mut r: ::core::ffi::c_int = 0;
     let mut req: uv_fs_t = uv_fs_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -2817,10 +2746,8 @@ pub unsafe extern "C" fn os_mkdir_recurse(
     created: *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let dirlen: size_t = strlen(dir);
-    let curdir: *mut ::core::ffi::c_char = xmemdupz(
-        dir as *const ::core::ffi::c_void,
-        dirlen,
-    ) as *mut ::core::ffi::c_char;
+    let curdir: *mut ::core::ffi::c_char =
+        xmemdupz(dir as *const ::core::ffi::c_void, dirlen) as *mut ::core::ffi::c_char;
     let past_head: *mut ::core::ffi::c_char = get_past_head(curdir);
     let mut e: *mut ::core::ffi::c_char = curdir.offset(dirlen as isize);
     let real_end: *const ::core::ffi::c_char = e;
@@ -2880,9 +2807,8 @@ pub unsafe extern "C" fn os_file_mkdir(
         let mut c: ::core::ffi::c_char = *tail;
         *tail = NUL as ::core::ffi::c_char;
         let mut r: ::core::ffi::c_int = 0;
-        let mut failed_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut failed_dir: *mut ::core::ffi::c_char =
+            ::core::ptr::null_mut::<::core::ffi::c_char>();
         r = os_mkdir_recurse(
             fname,
             mode,
@@ -2985,9 +2911,7 @@ pub unsafe extern "C" fn os_mkdtemp(
     return result;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_rmdir(
-    mut path: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn os_rmdir(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut r: ::core::ffi::c_int = 0;
     let mut req: uv_fs_t = uv_fs_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -3054,7 +2978,12 @@ pub unsafe extern "C" fn os_rmdir(
             len: 0,
         }; 4],
     };
-    r = uv_fs_rmdir(::core::ptr::null_mut::<uv_loop_t>(), &raw mut req, path, None);
+    r = uv_fs_rmdir(
+        ::core::ptr::null_mut::<uv_loop_t>(),
+        &raw mut req,
+        path,
+        None,
+    );
     uv_fs_req_cleanup(&raw mut req);
     return r;
 }
@@ -3076,13 +3005,9 @@ pub unsafe extern "C" fn os_scandir(
     return r >= 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_scandir_next(
-    mut dir: *mut Directory,
-) -> *const ::core::ffi::c_char {
-    let mut err: ::core::ffi::c_int = uv_fs_scandir_next(
-        &raw mut (*dir).request,
-        &raw mut (*dir).ent,
-    );
+pub unsafe extern "C" fn os_scandir_next(mut dir: *mut Directory) -> *const ::core::ffi::c_char {
+    let mut err: ::core::ffi::c_int =
+        uv_fs_scandir_next(&raw mut (*dir).request, &raw mut (*dir).ent);
     return if err != UV_EOF as ::core::ffi::c_int {
         (*dir).ent.name
     } else {
@@ -3094,9 +3019,7 @@ pub unsafe extern "C" fn os_closedir(mut dir: *mut Directory) {
     uv_fs_req_cleanup(&raw mut (*dir).request);
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_remove(
-    mut path: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn os_remove(mut path: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut r: ::core::ffi::c_int = 0;
     let mut req: uv_fs_t = uv_fs_t {
         data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
@@ -3163,7 +3086,12 @@ pub unsafe extern "C" fn os_remove(
             len: 0,
         }; 4],
     };
-    r = uv_fs_unlink(::core::ptr::null_mut::<uv_loop_t>(), &raw mut req, path, None);
+    r = uv_fs_unlink(
+        ::core::ptr::null_mut::<uv_loop_t>(),
+        &raw mut req,
+        path,
+        None,
+    );
     uv_fs_req_cleanup(&raw mut req);
     return r;
 }
@@ -3365,10 +3293,7 @@ pub unsafe extern "C" fn os_fileinfo_id_equal(
         && (*file_info_1).stat.st_dev == (*file_info_2).stat.st_dev;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_fileinfo_id(
-    mut file_info: *const FileInfo,
-    mut file_id: *mut FileID,
-) {
+pub unsafe extern "C" fn os_fileinfo_id(mut file_info: *const FileInfo, mut file_id: *mut FileID) {
     (*file_id).inode = (*file_info).stat.st_ino;
     (*file_id).device_id = (*file_info).stat.st_dev;
 }
@@ -3381,15 +3306,11 @@ pub unsafe extern "C" fn os_fileinfo_size(mut file_info: *const FileInfo) -> uin
     return (*file_info).stat.st_size;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_fileinfo_hardlinks(
-    mut file_info: *const FileInfo,
-) -> uint64_t {
+pub unsafe extern "C" fn os_fileinfo_hardlinks(mut file_info: *const FileInfo) -> uint64_t {
     return (*file_info).stat.st_nlink;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_fileinfo_blocksize(
-    mut file_info: *const FileInfo,
-) -> uint64_t {
+pub unsafe extern "C" fn os_fileinfo_blocksize(mut file_info: *const FileInfo) -> uint64_t {
     return (*file_info).stat.st_blksize;
 }
 #[no_mangle]

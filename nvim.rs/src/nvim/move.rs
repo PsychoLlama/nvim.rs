@@ -16,19 +16,11 @@ extern "C" {
     fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
     fn check_cursor_lnum(win: *mut win_T);
     fn check_cursor(wp: *mut win_T);
-    fn decor_conceal_line(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-        check_cursor_0: bool,
-    ) -> bool;
+    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor_0: bool) -> bool;
     fn win_lines_concealed(wp: *mut win_T) -> bool;
     fn diff_get_corresponding_line(buf1: *mut buf_T, lnum1: linenr_T) -> linenr_T;
     fn redrawing() -> bool;
-    fn win_scroll_lines(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-        line_count: ::core::ffi::c_int,
-    );
+    fn win_scroll_lines(wp: *mut win_T, row: ::core::ffi::c_int, line_count: ::core::ffi::c_int);
     fn number_width(wp: *mut win_T) -> ::core::ffi::c_int;
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
@@ -85,12 +77,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn mb_adjust_cursor();
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn vcol2col(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        vcol: colnr_T,
-        coladdp: *mut colnr_T,
-    ) -> colnr_T;
+    fn vcol2col(wp: *mut win_T, lnum: linenr_T, vcol: colnr_T, coladdp: *mut colnr_T) -> colnr_T;
     fn nv_screengo(
         oap: *mut oparg_T,
         dir: ::core::ffi::c_int,
@@ -124,11 +111,7 @@ extern "C" {
     );
     fn win_may_fill(wp: *mut win_T) -> bool;
     fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn plines_win(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        limit_winheight: bool,
-    ) -> ::core::ffi::c_int;
+    fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> ::core::ffi::c_int;
     fn plines_win_nofill(
         wp: *mut win_T,
         lnum: linenr_T,
@@ -1819,9 +1802,7 @@ pub struct lineoff_T {
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const kOptCuloptFlagNumber: C2Rust_Unnamed_16 = 4;
 pub const kOptCuloptFlagLine: C2Rust_Unnamed_16 = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
@@ -1837,17 +1818,14 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
     return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
 }
-unsafe extern "C" fn adjust_plines_for_skipcol(
-    mut wp: *mut win_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn adjust_plines_for_skipcol(mut wp: *mut win_T) -> ::core::ffi::c_int {
     if (*wp).w_skipcol == 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
     let mut w2: ::core::ffi::c_int = width + win_col_off2(wp);
     if (*wp).w_skipcol >= width && w2 > 0 as ::core::ffi::c_int {
-        return ((*wp).w_skipcol as ::core::ffi::c_int - width) / w2
-            + 1 as ::core::ffi::c_int;
+        return ((*wp).w_skipcol as ::core::ffi::c_int - width) / w2 + 1 as ::core::ffi::c_int;
     }
     return 0 as ::core::ffi::c_int;
 }
@@ -1859,14 +1837,8 @@ pub unsafe extern "C" fn plines_correct_topline(
     mut limit_winheight: bool,
     mut foldedp: *mut bool,
 ) -> ::core::ffi::c_int {
-    let mut n: ::core::ffi::c_int = plines_win_full(
-        wp,
-        lnum,
-        nextp,
-        foldedp,
-        true_0 != 0,
-        false_0 != 0,
-    );
+    let mut n: ::core::ffi::c_int =
+        plines_win_full(wp, lnum, nextp, foldedp, true_0 != 0, false_0 != 0);
     if lnum == (*wp).w_topline {
         n -= adjust_plines_for_skipcol(wp);
     }
@@ -1889,13 +1861,8 @@ unsafe extern "C" fn comp_botline(mut wp: *mut win_T) {
     while lnum <= (*(*wp).w_buffer).b_ml.ml_line_count {
         let mut last: linenr_T = lnum;
         let mut folded: bool = false;
-        let mut n: ::core::ffi::c_int = plines_correct_topline(
-            wp,
-            lnum,
-            &raw mut last,
-            true_0 != 0,
-            &raw mut folded,
-        );
+        let mut n: ::core::ffi::c_int =
+            plines_correct_topline(wp, lnum, &raw mut last, true_0 != 0, &raw mut folded);
         if lnum <= (*wp).w_cursor.lnum && last >= (*wp).w_cursor.lnum {
             (*wp).w_cline_row = done;
             (*wp).w_cline_height = n;
@@ -1920,14 +1887,13 @@ unsafe extern "C" fn redraw_for_cursorline(mut wp: *mut win_T) {
     if (*wp).w_valid & VALID_CROW != 0 {
         return;
     }
-    if (*wp).w_onebuf_opt.wo_rnu != 0
-        || win_cursorline_standout(wp) as ::core::ffi::c_int != 0
-    {
+    if (*wp).w_onebuf_opt.wo_rnu != 0 || win_cursorline_standout(wp) as ::core::ffi::c_int != 0 {
         redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
     }
 }
 unsafe extern "C" fn redraw_for_cursorcolumn(mut wp: *mut win_T) {
-    if wp == curwin && (*wp).w_onebuf_opt.wo_cole > 0 as OptInt
+    if wp == curwin
+        && (*wp).w_onebuf_opt.wo_cole > 0 as OptInt
         && conceal_cursor_line(wp) as ::core::ffi::c_int != 0
     {
         redrawWinline(wp, (*wp).w_cursor.lnum);
@@ -1939,7 +1905,8 @@ unsafe extern "C" fn redraw_for_cursorcolumn(mut wp: *mut win_T) {
         redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
     } else if (*wp).w_onebuf_opt.wo_cul != 0
         && (*wp).w_p_culopt_flags as ::core::ffi::c_int
-            & kOptCuloptFlagScreenline as ::core::ffi::c_int != 0
+            & kOptCuloptFlagScreenline as ::core::ffi::c_int
+            != 0
     {
         redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
     }
@@ -2051,10 +2018,8 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
                     ::core::ptr::null_mut::<colnr_T>(),
                     ::core::ptr::null_mut::<colnr_T>(),
                 );
-                let mut overlap: ::core::ffi::c_int = sms_marker_overlap(
-                    wp,
-                    -1 as ::core::ffi::c_int,
-                );
+                let mut overlap: ::core::ffi::c_int =
+                    sms_marker_overlap(wp, -1 as ::core::ffi::c_int);
                 if (*wp).w_skipcol as ::core::ffi::c_int + overlap > vcol {
                     check_topline = true_0 != 0;
                 }
@@ -2064,8 +2029,8 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
             check_topline = true_0 != 0;
         }
         if check_topline {
-            let mut halfheight: ::core::ffi::c_int = (*wp).w_view_height
-                / 2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+            let mut halfheight: ::core::ffi::c_int =
+                (*wp).w_view_height / 2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
             if halfheight < 2 as ::core::ffi::c_int {
                 halfheight = 2 as ::core::ffi::c_int;
             }
@@ -2075,37 +2040,26 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
                 let mut lnum: linenr_T = (*wp).w_cursor.lnum;
                 while (lnum as OptInt) < (*wp).w_topline as OptInt + *so_ptr {
                     '_c2rust_label: {
-                        if !(*wp).w_buffer.is_null() {} else {
+                        if !(*wp).w_buffer.is_null() {
+                        } else {
                             __assert_fail(
-                                b"wp->w_buffer != 0\0".as_ptr()
+                                b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
+                                b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
                                     as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
                                 338 as ::core::ffi::c_uint,
                                 b"void update_topline(win_T *)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                             );
                         }
                     };
-                    if lnum >= (*(*wp).w_buffer).b_ml.ml_line_count
-                        || {
-                            n
-                                += !decor_conceal_line(
-                                    wp,
-                                    lnum as ::core::ffi::c_int,
-                                    false_0 != 0,
-                                ) as ::core::ffi::c_int as int64_t;
-                            n >= halfheight as int64_t
-                        }
-                    {
+                    if lnum >= (*(*wp).w_buffer).b_ml.ml_line_count || {
+                        n += !decor_conceal_line(wp, lnum as ::core::ffi::c_int, false_0 != 0)
+                            as ::core::ffi::c_int as int64_t;
+                        n >= halfheight as int64_t
+                    } {
                         break;
                     }
-                    hasFolding(
-                        wp,
-                        lnum,
-                        ::core::ptr::null_mut::<linenr_T>(),
-                        &raw mut lnum,
-                    );
+                    hasFolding(wp, lnum, ::core::ptr::null_mut::<linenr_T>(), &raw mut lnum);
                     lnum += 1;
                 }
             } else {
@@ -2133,14 +2087,14 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
             validate_botline_win(wp);
         }
         '_c2rust_label_0: {
-            if !(*wp).w_buffer.is_null() {} else {
+            if !(*wp).w_buffer.is_null() {
+            } else {
                 __assert_fail(
                     b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
                     376 as ::core::ffi::c_uint,
-                    b"void update_topline(win_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"void update_topline(win_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -2187,18 +2141,14 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
                 if win_lines_concealed(wp) {
                     let mut lnum_0: linenr_T = (*wp).w_cursor.lnum;
                     while (lnum_0 as OptInt) >= (*wp).w_botline as OptInt - *so_ptr {
-                        if lnum_0 <= 0 as linenr_T
-                            || {
-                                n_1
-                                    += !decor_conceal_line(
-                                        wp,
-                                        lnum_0 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                                        false_0 != 0,
-                                    ) as ::core::ffi::c_int as int64_t;
-                                n_1
-                                    > ((*wp).w_view_height + 1 as ::core::ffi::c_int) as int64_t
-                            }
-                        {
+                        if lnum_0 <= 0 as linenr_T || {
+                            n_1 += !decor_conceal_line(
+                                wp,
+                                lnum_0 as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                                false_0 != 0,
+                            ) as ::core::ffi::c_int as int64_t;
+                            n_1 > ((*wp).w_view_height + 1 as ::core::ffi::c_int) as int64_t
+                        } {
                             break;
                         }
                         hasFolding(
@@ -2210,8 +2160,8 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
                         lnum_0 -= 1;
                     }
                 } else {
-                    n_1 = (((*wp).w_cursor.lnum - (*wp).w_botline + 1 as linenr_T)
-                        as OptInt + *so_ptr) as int64_t;
+                    n_1 = (((*wp).w_cursor.lnum - (*wp).w_botline + 1 as linenr_T) as OptInt
+                        + *so_ptr) as int64_t;
                 }
                 if n_1 <= ((*wp).w_view_height + 1 as ::core::ffi::c_int) as int64_t {
                     scroll_cursor_bot(wp, scrolljump_value(wp), false_0 != 0);
@@ -2289,22 +2239,24 @@ pub unsafe extern "C" fn update_curswant() {
 #[no_mangle]
 pub unsafe extern "C" fn check_cursor_moved(mut wp: *mut win_T) {
     if (*wp).w_cursor.lnum != (*wp).w_valid_cursor.lnum {
-        (*wp).w_valid
-            &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CHEIGHT | VALID_CROW
-                | VALID_TOPLINE);
-        if wp == curwin && (*wp).w_valid_cursor.lnum > 0 as linenr_T
-            && (*wp).w_onebuf_opt.wo_cole >= 2 as OptInt && !conceal_cursor_line(wp)
+        (*wp).w_valid &=
+            !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CHEIGHT | VALID_CROW | VALID_TOPLINE);
+        if wp == curwin
+            && (*wp).w_valid_cursor.lnum > 0 as linenr_T
+            && (*wp).w_onebuf_opt.wo_cole >= 2 as OptInt
+            && !conceal_cursor_line(wp)
             && (decor_conceal_line(
                 wp,
                 (*wp).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                 true_0 != 0,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
                 || decor_conceal_line(
                     wp,
-                    (*wp).w_valid_cursor.lnum as ::core::ffi::c_int
-                        - 1 as ::core::ffi::c_int,
+                    (*wp).w_valid_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                     true_0 != 0,
-                ) as ::core::ffi::c_int != 0)
+                ) as ::core::ffi::c_int
+                    != 0)
         {
             changed_window_setting(wp);
         }
@@ -2313,9 +2265,13 @@ pub unsafe extern "C" fn check_cursor_moved(mut wp: *mut win_T) {
         (*wp).w_valid_skipcol = (*wp).w_skipcol;
         (*wp).w_viewport_invalid = true_0 != 0;
     } else if (*wp).w_skipcol != (*wp).w_valid_skipcol {
-        (*wp).w_valid
-            &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CHEIGHT | VALID_CROW
-                | VALID_BOTLINE | VALID_BOTLINE_AP);
+        (*wp).w_valid &= !(VALID_WROW
+            | VALID_WCOL
+            | VALID_VIRTCOL
+            | VALID_CHEIGHT
+            | VALID_CROW
+            | VALID_BOTLINE
+            | VALID_BOTLINE_AP);
         (*wp).w_valid_cursor = (*wp).w_cursor;
         (*wp).w_valid_leftcol = (*wp).w_leftcol;
         (*wp).w_valid_skipcol = (*wp).w_skipcol;
@@ -2341,7 +2297,11 @@ pub unsafe extern "C" fn changed_window_setting(mut wp: *mut win_T) {
 pub unsafe extern "C" fn changed_window_setting_all() {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             changed_window_setting(wp);
             wp = (*wp).w_next;
@@ -2367,21 +2327,18 @@ pub unsafe extern "C" fn set_topline(mut wp: *mut win_T, mut lnum: linenr_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn changed_cline_bef_curs(mut wp: *mut win_T) {
-    (*wp).w_valid
-        &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT
-            | VALID_TOPLINE);
+    (*wp).w_valid &=
+        !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
 }
 #[no_mangle]
 pub unsafe extern "C" fn changed_line_abv_curs() {
-    (*curwin).w_valid
-        &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT
-            | VALID_TOPLINE);
+    (*curwin).w_valid &=
+        !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
 }
 #[no_mangle]
 pub unsafe extern "C" fn changed_line_abv_curs_win(mut wp: *mut win_T) {
-    (*wp).w_valid
-        &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT
-            | VALID_TOPLINE);
+    (*wp).w_valid &=
+        !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE);
 }
 #[no_mangle]
 pub unsafe extern "C" fn validate_botline_win(mut wp: *mut win_T) {
@@ -2414,8 +2371,7 @@ pub unsafe extern "C" fn validate_cursor(mut wp: *mut win_T) {
 unsafe extern "C" fn curs_rows(mut wp: *mut win_T) {
     let mut all_invalid: bool = !redrawing()
         || (*wp).w_lines_valid == 0 as ::core::ffi::c_int
-        || (*(*wp).w_lines.offset(0 as ::core::ffi::c_int as isize)).wl_lnum
-            > (*wp).w_topline;
+        || (*(*wp).w_lines.offset(0 as ::core::ffi::c_int as isize)).wl_lnum > (*wp).w_topline;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     (*wp).w_cline_row = 0 as ::core::ffi::c_int;
     let mut lnum: linenr_T = (*wp).w_topline;
@@ -2429,11 +2385,9 @@ unsafe extern "C" fn curs_rows(mut wp: *mut win_T) {
                     break 's_11;
                 } else if (*(*wp).w_lines.offset(i as isize)).wl_lnum == lnum {
                     if !(*(*wp).w_buffer).b_mod_set
-                        || (*(*wp).w_lines.offset(i as isize)).wl_lastlnum
-                            < (*wp).w_cursor.lnum
+                        || (*(*wp).w_lines.offset(i as isize)).wl_lastlnum < (*wp).w_cursor.lnum
                         || (*(*wp).w_buffer).b_mod_top
-                            > (*(*wp).w_lines.offset(i as isize)).wl_lastlnum
-                                + 1 as linenr_T
+                            > (*(*wp).w_lines.offset(i as isize)).wl_lastlnum + 1 as linenr_T
                     {
                         valid = true_0 != 0;
                     }
@@ -2449,25 +2403,21 @@ unsafe extern "C" fn curs_rows(mut wp: *mut win_T) {
                 if lnum > (*wp).w_cursor.lnum {
                     break 's_111;
                 }
-                (*wp).w_cline_row
-                    += (*(*wp).w_lines.offset(i as isize)).wl_size as ::core::ffi::c_int;
+                (*wp).w_cline_row +=
+                    (*(*wp).w_lines.offset(i as isize)).wl_size as ::core::ffi::c_int;
             } else {
                 let mut last: linenr_T = lnum;
                 let mut folded: bool = false;
-                let mut n: ::core::ffi::c_int = plines_correct_topline(
-                    wp,
-                    lnum,
-                    &raw mut last,
-                    true_0 != 0,
-                    &raw mut folded,
-                );
+                let mut n: ::core::ffi::c_int =
+                    plines_correct_topline(wp, lnum, &raw mut last, true_0 != 0, &raw mut folded);
                 lnum = last + 1 as linenr_T;
                 if lnum
                     + decor_conceal_line(
                         wp,
                         lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                         false_0 != 0,
-                    ) as linenr_T > (*wp).w_cursor.lnum
+                    ) as linenr_T
+                    > (*wp).w_cursor.lnum
                 {
                     break 's_111;
                 }
@@ -2478,11 +2428,11 @@ unsafe extern "C" fn curs_rows(mut wp: *mut win_T) {
     }
     check_cursor_moved(wp);
     if (*wp).w_valid & VALID_CHEIGHT == 0 {
-        if all_invalid as ::core::ffi::c_int != 0 || i == (*wp).w_lines_valid
+        if all_invalid as ::core::ffi::c_int != 0
+            || i == (*wp).w_lines_valid
             || i < (*wp).w_lines_valid
                 && (!(*(*wp).w_lines.offset(i as isize)).wl_valid
-                    || (*(*wp).w_lines.offset(i as isize)).wl_lnum
-                        != (*wp).w_cursor.lnum)
+                    || (*(*wp).w_lines.offset(i as isize)).wl_lnum != (*wp).w_cursor.lnum)
         {
             (*wp).w_cline_height = plines_win_full(
                 wp,
@@ -2501,8 +2451,8 @@ unsafe extern "C" fn curs_rows(mut wp: *mut win_T) {
                 ::core::ptr::null_mut::<linenr_T>(),
             );
         } else {
-            (*wp).w_cline_height = (*(*wp).w_lines.offset(i as isize)).wl_size
-                as ::core::ffi::c_int;
+            (*wp).w_cline_height =
+                (*(*wp).w_lines.offset(i as isize)).wl_size as ::core::ffi::c_int;
             (*wp).w_cline_folded = (*(*wp).w_lines.offset(i as isize)).wl_folded;
         }
     }
@@ -2550,14 +2500,14 @@ pub unsafe extern "C" fn validate_cursor_col(mut wp: *mut win_T) {
     let mut col: colnr_T = (*wp).w_virtcol;
     let mut off: colnr_T = win_col_off(wp);
     col += off;
-    let mut width: ::core::ffi::c_int = (*wp).w_view_width - off as ::core::ffi::c_int
-        + win_col_off2(wp);
-    if (*wp).w_onebuf_opt.wo_wrap != 0 && col >= (*wp).w_view_width
+    let mut width: ::core::ffi::c_int =
+        (*wp).w_view_width - off as ::core::ffi::c_int + win_col_off2(wp);
+    if (*wp).w_onebuf_opt.wo_wrap != 0
+        && col >= (*wp).w_view_width
         && width > 0 as ::core::ffi::c_int
     {
-        col
-            -= ((col as ::core::ffi::c_int - (*wp).w_view_width) / width
-                + 1 as ::core::ffi::c_int) * width;
+        col -= ((col as ::core::ffi::c_int - (*wp).w_view_width) / width + 1 as ::core::ffi::c_int)
+            * width;
     }
     if col > (*wp).w_leftcol {
         col -= (*wp).w_leftcol;
@@ -2569,38 +2519,35 @@ pub unsafe extern "C" fn validate_cursor_col(mut wp: *mut win_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_col_off(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    return (if (*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0
+    return (if (*wp).w_onebuf_opt.wo_nu != 0
+        || (*wp).w_onebuf_opt.wo_rnu != 0
         || *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
     {
         number_width(wp)
-            + (*(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int == NUL)
-                as ::core::ffi::c_int
+            + (*(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int == NUL) as ::core::ffi::c_int
     } else {
         0 as ::core::ffi::c_int
-    })
-        + (if wp != cmdwin_win {
-            0 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
-        }) + win_fdccol_count(wp) + (*wp).w_scwidth * SIGN_WIDTH as ::core::ffi::c_int;
+    }) + (if wp != cmdwin_win {
+        0 as ::core::ffi::c_int
+    } else {
+        1 as ::core::ffi::c_int
+    }) + win_fdccol_count(wp)
+        + (*wp).w_scwidth * SIGN_WIDTH as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn win_col_off2(mut wp: *mut win_T) -> ::core::ffi::c_int {
-    if ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0
+    if ((*wp).w_onebuf_opt.wo_nu != 0
+        || (*wp).w_onebuf_opt.wo_rnu != 0
         || *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL)
         && !vim_strchr(p_cpo, CPO_NUMCOL).is_null()
     {
         return number_width(wp)
-            + (*(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int == NUL)
-                as ::core::ffi::c_int;
+            + (*(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
     }
     return 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn curs_columns(
-    mut wp: *mut win_T,
-    mut may_scroll: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core::ffi::c_int) {
     let mut startcol: colnr_T = 0;
     let mut endcol: colnr_T = 0;
     update_topline(wp);
@@ -2636,12 +2583,9 @@ pub unsafe extern "C" fn curs_columns(
         if (*wp).w_onebuf_opt.wo_wrap != 0 {
             (*wp).w_wrow = (*wp).w_view_height - 1 as ::core::ffi::c_int;
         } else {
-            (*wp).w_wrow = (*wp).w_view_height - 1 as ::core::ffi::c_int
-                - (*wp).w_empty_rows;
+            (*wp).w_wrow = (*wp).w_view_height - 1 as ::core::ffi::c_int - (*wp).w_empty_rows;
         }
-    } else if (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*wp).w_view_width != 0 as ::core::ffi::c_int
-    {
+    } else if (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_view_width != 0 as ::core::ffi::c_int {
         width2 = width1 + win_col_off2(wp);
         if (*wp).w_cursor.lnum == (*wp).w_topline
             && (*wp).w_skipcol > 0 as ::core::ffi::c_int
@@ -2650,10 +2594,9 @@ pub unsafe extern "C" fn curs_columns(
             if (*wp).w_skipcol <= width1 {
                 (*wp).w_wcol -= width2;
             } else {
-                (*wp).w_wcol
-                    -= width2
-                        * (((*wp).w_skipcol as ::core::ffi::c_int - width1) / width2
-                            + 1 as ::core::ffi::c_int);
+                (*wp).w_wcol -= width2
+                    * (((*wp).w_skipcol as ::core::ffi::c_int - width1) / width2
+                        + 1 as ::core::ffi::c_int);
             }
             did_sub_skipcol = true_0 != 0;
         }
@@ -2666,7 +2609,8 @@ pub unsafe extern "C" fn curs_columns(
         let mut siso: int64_t = get_sidescrolloff_value(wp);
         let mut off_left: int64_t = (startcol - (*wp).w_leftcol) as int64_t - siso;
         let mut off_right: int64_t = (endcol - (*wp).w_leftcol) as int64_t
-            - ((*wp).w_view_width as int64_t - siso) + 1 as int64_t;
+            - ((*wp).w_view_width as int64_t - siso)
+            + 1 as int64_t;
         if off_left < 0 as int64_t || off_right > 0 as int64_t {
             let mut diff: int64_t = if off_left < 0 as int64_t {
                 -off_left
@@ -2682,11 +2626,12 @@ pub unsafe extern "C" fn curs_columns(
             } else {
                 if diff < p_ss {
                     '_c2rust_label: {
-                        if p_ss <= 2147483647 as OptInt {} else {
+                        if p_ss <= 2147483647 as OptInt {
+                        } else {
                             __assert_fail(
                                 b"p_ss <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                                 903 as ::core::ffi::c_uint,
                                 b"void curs_columns(win_T *, int)\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -2696,11 +2641,11 @@ pub unsafe extern "C" fn curs_columns(
                     diff = p_ss as int64_t;
                 }
                 if off_left < 0 as int64_t {
-                    new_leftcol = (*wp).w_leftcol as ::core::ffi::c_int
-                        - diff as ::core::ffi::c_int;
+                    new_leftcol =
+                        (*wp).w_leftcol as ::core::ffi::c_int - diff as ::core::ffi::c_int;
                 } else {
-                    new_leftcol = (*wp).w_leftcol as ::core::ffi::c_int
-                        + diff as ::core::ffi::c_int;
+                    new_leftcol =
+                        (*wp).w_leftcol as ::core::ffi::c_int + diff as ::core::ffi::c_int;
                 }
             }
             new_leftcol = if new_leftcol > 0 as ::core::ffi::c_int {
@@ -2734,14 +2679,14 @@ pub unsafe extern "C" fn curs_columns(
             && {
                 plines = plines_win_nofill(wp, (*wp).w_cursor.lnum, false_0 != 0);
                 plines - 1 as ::core::ffi::c_int >= (*wp).w_view_height
-            }) && (*wp).w_view_height != 0 as ::core::ffi::c_int
-        && (*wp).w_cursor.lnum == (*wp).w_topline && width2 > 0 as ::core::ffi::c_int
+            })
+        && (*wp).w_view_height != 0 as ::core::ffi::c_int
+        && (*wp).w_cursor.lnum == (*wp).w_topline
+        && width2 > 0 as ::core::ffi::c_int
         && (*wp).w_view_width != 0 as ::core::ffi::c_int
     {
         extra = 0 as ::core::ffi::c_int;
-        if (*wp).w_skipcol as int64_t + so * width2 as int64_t
-            > (*wp).w_virtcol as int64_t
-        {
+        if (*wp).w_skipcol as int64_t + so * width2 as int64_t > (*wp).w_virtcol as int64_t {
             extra = 1 as ::core::ffi::c_int;
         }
         if plines == 0 as ::core::ffi::c_int {
@@ -2750,15 +2695,14 @@ pub unsafe extern "C" fn curs_columns(
         plines -= 1;
         if plines as int64_t > (*wp).w_wrow as int64_t + so {
             '_c2rust_label_0: {
-                if (*wp).w_wrow as int64_t + so <= 2147483647 as int64_t {} else {
+                if (*wp).w_wrow as int64_t + so <= 2147483647 as int64_t {
+                } else {
                     __assert_fail(
-                        b"wp->w_wrow + so <= INT_MAX\0".as_ptr()
+                        b"wp->w_wrow + so <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
                         964 as ::core::ffi::c_uint,
-                        b"void curs_columns(win_T *, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                        b"void curs_columns(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
@@ -2767,14 +2711,12 @@ pub unsafe extern "C" fn curs_columns(
             n = plines;
         }
         if n as int64_t
-            >= ((*wp).w_view_height + (*wp).w_skipcol as ::core::ffi::c_int / width2)
-                as int64_t - so
+            >= ((*wp).w_view_height + (*wp).w_skipcol as ::core::ffi::c_int / width2) as int64_t
+                - so
         {
             extra += 2 as ::core::ffi::c_int;
         }
-        if extra == 3 as ::core::ffi::c_int
-            || (*wp).w_view_height as int64_t <= so * 2 as int64_t
-        {
+        if extra == 3 as ::core::ffi::c_int || (*wp).w_view_height as int64_t <= so * 2 as int64_t {
             n = (*wp).w_virtcol as ::core::ffi::c_int / width2;
             if n > (*wp).w_view_height / 2 as ::core::ffi::c_int {
                 n -= (*wp).w_view_height / 2 as ::core::ffi::c_int;
@@ -2791,19 +2733,21 @@ pub unsafe extern "C" fn curs_columns(
             }) as colnr_T;
         } else if extra == 1 as ::core::ffi::c_int {
             '_c2rust_label_1: {
-                if so <= 2147483647 as int64_t {} else {
+                if so <= 2147483647 as int64_t {
+                } else {
                     __assert_fail(
                         b"so <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        989 as ::core::ffi::c_uint,
-                        b"void curs_columns(win_T *, int)\0".as_ptr()
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
                             as *const ::core::ffi::c_char,
+                        989 as ::core::ffi::c_uint,
+                        b"void curs_columns(win_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
                 }
             };
             extra = (((*wp).w_skipcol as int64_t + so * width2 as int64_t
-                - (*wp).w_virtcol as int64_t + width2 as int64_t - 1 as int64_t)
+                - (*wp).w_virtcol as int64_t
+                + width2 as int64_t
+                - 1 as int64_t)
                 / width2 as int64_t) as ::core::ffi::c_int;
             if extra > 0 as ::core::ffi::c_int {
                 if extra * width2 > (*wp).w_skipcol {
@@ -2812,8 +2756,7 @@ pub unsafe extern "C" fn curs_columns(
                 (*wp).w_skipcol -= extra * width2;
             }
         } else if extra == 2 as ::core::ffi::c_int {
-            endcol = ((n - (*wp).w_view_height + 1 as ::core::ffi::c_int) * width2)
-                as colnr_T;
+            endcol = ((n - (*wp).w_view_height + 1 as ::core::ffi::c_int) * width2) as colnr_T;
             while endcol > (*wp).w_virtcol {
                 endcol -= width2;
             }
@@ -2824,9 +2767,9 @@ pub unsafe extern "C" fn curs_columns(
             };
         }
         if did_sub_skipcol {
-            (*wp).w_wrow
-                -= ((*wp).w_skipcol as ::core::ffi::c_int
-                    - prev_skipcol as ::core::ffi::c_int) / width2;
+            (*wp).w_wrow -= ((*wp).w_skipcol as ::core::ffi::c_int
+                - prev_skipcol as ::core::ffi::c_int)
+                / width2;
         } else {
             (*wp).w_wrow -= (*wp).w_skipcol as ::core::ffi::c_int / width2;
         }
@@ -2835,8 +2778,8 @@ pub unsafe extern "C" fn curs_columns(
             (*wp).w_skipcol += extra * width2;
             (*wp).w_wrow -= extra;
         }
-        extra = (prev_skipcol as ::core::ffi::c_int
-            - (*wp).w_skipcol as ::core::ffi::c_int) / width2;
+        extra =
+            (prev_skipcol as ::core::ffi::c_int - (*wp).w_skipcol as ::core::ffi::c_int) / width2;
         if !(*wp).w_grid.target.is_null() {
             win_scroll_lines(wp, 0 as ::core::ffi::c_int, extra);
         }
@@ -2870,47 +2813,42 @@ pub unsafe extern "C" fn textpos2screenpos(
     let mut is_folded: bool = false_0 != 0;
     let mut lnum: linenr_T = (*pos).lnum;
     if lnum >= (*wp).w_topline && lnum <= (*wp).w_botline {
-        is_folded = hasFolding(
-            wp,
-            lnum,
-            &raw mut lnum,
-            ::core::ptr::null_mut::<linenr_T>(),
-        );
+        is_folded = hasFolding(wp, lnum, &raw mut lnum, ::core::ptr::null_mut::<linenr_T>());
         row = plines_m_win(wp, (*wp).w_topline, lnum - 1 as linenr_T, INT_MAX);
         row -= adjust_plines_for_skipcol(wp);
-        row
-            += if lnum == (*wp).w_topline {
-                (*wp).w_topfill
-            } else {
-                win_get_fill(wp, lnum)
-            };
+        row += if lnum == (*wp).w_topline {
+            (*wp).w_topfill
+        } else {
+            win_get_fill(wp, lnum)
+        };
         visible_row = true_0 != 0;
     } else if !local || lnum < (*wp).w_topline {
         row = 0 as ::core::ffi::c_int;
     } else {
         row = (*wp).w_view_height - 1 as ::core::ffi::c_int;
     }
-    let mut existing_row: bool = lnum > 0 as linenr_T
-        && lnum <= (*(*wp).w_buffer).b_ml.ml_line_count;
+    let mut existing_row: bool =
+        lnum > 0 as linenr_T && lnum <= (*(*wp).w_buffer).b_ml.ml_line_count;
     if (local as ::core::ffi::c_int != 0 || visible_row as ::core::ffi::c_int != 0)
         && existing_row as ::core::ffi::c_int != 0
     {
         let off: colnr_T = win_col_off(wp);
         if is_folded {
-            row
-                += (if local as ::core::ffi::c_int != 0 {
-                    0 as ::core::ffi::c_int
-                } else {
-                    (*wp).w_winrow + (*wp).w_winrow_off
-                }) + 1 as ::core::ffi::c_int;
+            row += (if local as ::core::ffi::c_int != 0 {
+                0 as ::core::ffi::c_int
+            } else {
+                (*wp).w_winrow + (*wp).w_winrow_off
+            }) + 1 as ::core::ffi::c_int;
             coloff = (if local as ::core::ffi::c_int != 0 {
                 0 as colnr_T
             } else {
                 (*wp).w_wincol as colnr_T + (*wp).w_wincol_off as colnr_T
-            }) + 1 as colnr_T + off;
+            }) + 1 as colnr_T
+                + off;
         } else {
             '_c2rust_label: {
-                if lnum == (*pos).lnum {} else {
+                if lnum == (*pos).lnum {
+                } else {
                     __assert_fail(
                         b"lnum == pos->lnum\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0"
@@ -2924,14 +2862,13 @@ pub unsafe extern "C" fn textpos2screenpos(
             getvcol(wp, pos, &raw mut scol, &raw mut ccol, &raw mut ecol);
             let mut col: colnr_T = scol;
             col += off;
-            let mut width: ::core::ffi::c_int = (*wp).w_view_width
-                - off as ::core::ffi::c_int + win_col_off2(wp);
-            if (*wp).w_onebuf_opt.wo_wrap != 0 && col >= (*wp).w_view_width
+            let mut width: ::core::ffi::c_int =
+                (*wp).w_view_width - off as ::core::ffi::c_int + win_col_off2(wp);
+            if (*wp).w_onebuf_opt.wo_wrap != 0
+                && col >= (*wp).w_view_width
                 && width > 0 as ::core::ffi::c_int
             {
-                let mut rowoff: ::core::ffi::c_int = if visible_row as ::core::ffi::c_int
-                    != 0
-                {
+                let mut rowoff: ::core::ffi::c_int = if visible_row as ::core::ffi::c_int != 0 {
                     (col as ::core::ffi::c_int - (*wp).w_view_width) / width
                         + 1 as ::core::ffi::c_int
                 } else {
@@ -2941,21 +2878,23 @@ pub unsafe extern "C" fn textpos2screenpos(
                 row += rowoff;
             }
             col -= (*wp).w_leftcol;
-            if col >= 0 as ::core::ffi::c_int && col < (*wp).w_view_width
-                && row >= 0 as ::core::ffi::c_int && row < (*wp).w_view_height
+            if col >= 0 as ::core::ffi::c_int
+                && col < (*wp).w_view_width
+                && row >= 0 as ::core::ffi::c_int
+                && row < (*wp).w_view_height
             {
                 coloff = (col as ::core::ffi::c_int - scol as ::core::ffi::c_int
                     + (if local as ::core::ffi::c_int != 0 {
                         0 as ::core::ffi::c_int
                     } else {
                         (*wp).w_wincol + (*wp).w_wincol_off
-                    }) + 1 as ::core::ffi::c_int) as colnr_T;
-                row
-                    += (if local as ::core::ffi::c_int != 0 {
-                        0 as ::core::ffi::c_int
-                    } else {
-                        (*wp).w_winrow + (*wp).w_winrow_off
-                    }) + 1 as ::core::ffi::c_int;
+                    })
+                    + 1 as ::core::ffi::c_int) as colnr_T;
+                row += (if local as ::core::ffi::c_int != 0 {
+                    0 as ::core::ffi::c_int
+                } else {
+                    (*wp).w_winrow + (*wp).w_winrow_off
+                }) + 1 as ::core::ffi::c_int;
             } else {
                 ecol = 0 as ::core::ffi::c_int as colnr_T;
                 ccol = ecol;
@@ -2985,15 +2924,12 @@ pub unsafe extern "C" fn f_screenpos(
 ) {
     tv_dict_alloc_ret(rettv);
     let mut dict: *mut dict_T = (*rettv).vval.v_dict;
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
         return;
     }
     let mut pos: pos_T = pos_T {
-        lnum: tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize))
-            as linenr_T,
+        lnum: tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as linenr_T,
         col: tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize)) as colnr_T
             - 1 as colnr_T,
         coladd: 0 as colnr_T,
@@ -3065,11 +3001,10 @@ unsafe extern "C" fn virtcol2col(
         if p == line {
             return 0 as ::core::ffi::c_int;
         }
-        p = p
-            .offset(
-                -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
-                    + 1 as ::core::ffi::c_int) as isize),
-            );
+        p = p.offset(
+            -((utf_head_off(line, p.offset(-(1 as ::core::ffi::c_int as isize)))
+                + 1 as ::core::ffi::c_int) as isize),
+        );
     }
     return (p.offset_from(line) + 1 as isize) as ::core::ffi::c_int;
 }
@@ -3086,9 +3021,7 @@ pub unsafe extern "C" fn f_virtcol2col(
     {
         return;
     }
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
         return;
     }
@@ -3097,7 +3030,8 @@ pub unsafe extern "C" fn f_virtcol2col(
         argvars.offset(1 as ::core::ffi::c_int as isize),
         &raw mut error,
     ) as linenr_T;
-    if error as ::core::ffi::c_int != 0 || lnum < 0 as linenr_T
+    if error as ::core::ffi::c_int != 0
+        || lnum < 0 as linenr_T
         || lnum > (*(*wp).w_buffer).b_ml.ml_line_count
     {
         return;
@@ -3112,7 +3046,8 @@ pub unsafe extern "C" fn f_virtcol2col(
     (*rettv).vval.v_number = virtcol2col(wp, lnum, screencol) as varnumber_T;
 }
 unsafe extern "C" fn cursor_correct_sms(mut wp: *mut win_T) {
-    if (*wp).w_onebuf_opt.wo_sms == 0 || (*wp).w_onebuf_opt.wo_wrap == 0
+    if (*wp).w_onebuf_opt.wo_sms == 0
+        || (*wp).w_onebuf_opt.wo_wrap == 0
         || (*wp).w_cursor.lnum != (*wp).w_topline
     {
         return;
@@ -3125,8 +3060,8 @@ unsafe extern "C" fn cursor_correct_sms(mut wp: *mut win_T) {
     } else {
         width1 as int64_t + (so - 1 as int64_t) * width2 as int64_t
     };
-    let mut space_cols: ::core::ffi::c_int = ((*wp).w_view_height
-        - 1 as ::core::ffi::c_int) * width2;
+    let mut space_cols: ::core::ffi::c_int =
+        ((*wp).w_view_height - 1 as ::core::ffi::c_int) * width2;
     let mut size: ::core::ffi::c_int = if so == 0 as int64_t {
         0 as ::core::ffi::c_int
     } else {
@@ -3137,7 +3072,8 @@ unsafe extern "C" fn cursor_correct_sms(mut wp: *mut win_T) {
     } else if so_cols > (space_cols / 2 as ::core::ffi::c_int) as int64_t {
         so_cols = (space_cols / 2 as ::core::ffi::c_int) as int64_t;
     }
-    while so_cols > size as int64_t && so_cols - width2 as int64_t >= width1 as int64_t
+    while so_cols > size as int64_t
+        && so_cols - width2 as int64_t >= width1 as int64_t
         && width1 > 0 as ::core::ffi::c_int
     {
         so_cols -= width2 as int64_t;
@@ -3151,9 +3087,16 @@ unsafe extern "C" fn cursor_correct_sms(mut wp: *mut win_T) {
         sms_marker_overlap(wp, (*wp).w_view_width - width2)
     };
     let mut top: int64_t = (*wp).w_skipcol as int64_t
-        + (if so_cols != 0 as int64_t { so_cols } else { overlap as int64_t });
-    let mut bot: int64_t = ((*wp).w_skipcol as ::core::ffi::c_int + width1
-        + ((*wp).w_view_height - 1 as ::core::ffi::c_int) * width2) as int64_t - so_cols;
+        + (if so_cols != 0 as int64_t {
+            so_cols
+        } else {
+            overlap as int64_t
+        });
+    let mut bot: int64_t = ((*wp).w_skipcol as ::core::ffi::c_int
+        + width1
+        + ((*wp).w_view_height - 1 as ::core::ffi::c_int) * width2)
+        as int64_t
+        - so_cols;
     validate_virtcol(wp);
     let mut col: colnr_T = (*wp).w_virtcol;
     if (col as int64_t) < top {
@@ -3171,9 +3114,9 @@ unsafe extern "C" fn cursor_correct_sms(mut wp: *mut win_T) {
     if col != (*wp).w_virtcol {
         (*wp).w_curswant = col;
         let mut rc: ::core::ffi::c_int = coladvance(wp, (*wp).w_curswant);
-        (*wp).w_valid
-            &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
-        if rc == FAIL && (*wp).w_skipcol > 0 as ::core::ffi::c_int
+        (*wp).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
+        if rc == FAIL
+            && (*wp).w_skipcol > 0 as ::core::ffi::c_int
             && (*wp).w_cursor.lnum < (*(*wp).w_buffer).b_ml.ml_line_count
         {
             validate_virtcol(wp);
@@ -3202,7 +3145,8 @@ pub unsafe extern "C" fn scroll_redraw(mut up: ::core::ffi::c_int, mut count: li
         cursor_correct(curwin);
         check_cursor_moved(curwin);
         (*curwin).w_valid |= VALID_TOPLINE;
-        while (*curwin).w_topline == prev_topline && (*curwin).w_skipcol == prev_skipcol
+        while (*curwin).w_topline == prev_topline
+            && (*curwin).w_skipcol == prev_skipcol
             && (*curwin).w_topfill == prev_topfill
         {
             if up != 0 {
@@ -3239,8 +3183,7 @@ pub unsafe extern "C" fn scrolldown(
     let mut done: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut width1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut width2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*wp).w_onebuf_opt.wo_sms != 0;
+    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_onebuf_opt.wo_sms != 0;
     if do_sms {
         width1 = (*wp).w_view_width - win_col_off(wp);
         width2 = width1 + win_col_off2(wp);
@@ -3254,12 +3197,9 @@ pub unsafe extern "C" fn scrolldown(
     validate_cursor(wp);
     let mut todo: ::core::ffi::c_int = line_count as ::core::ffi::c_int;
     while todo > 0 as ::core::ffi::c_int {
-        let mut can_fill: bool = (*wp).w_topfill
-            < (*wp).w_view_height - 1 as ::core::ffi::c_int
+        let mut can_fill: bool = (*wp).w_topfill < (*wp).w_view_height - 1 as ::core::ffi::c_int
             && (*wp).w_topfill < win_get_fill(wp, (*wp).w_topline);
-        if (*wp).w_topline == 1 as linenr_T && !can_fill
-            && (!do_sms || (*wp).w_skipcol < width1)
-        {
+        if (*wp).w_topline == 1 as linenr_T && !can_fill && (!do_sms || (*wp).w_skipcol < width1) {
             break;
         }
         if do_sms as ::core::ffi::c_int != 0 && (*wp).w_skipcol >= width1 {
@@ -3284,16 +3224,13 @@ pub unsafe extern "C" fn scrolldown(
                 &raw mut first,
                 ::core::ptr::null_mut::<linenr_T>(),
             ) {
-                done
-                    += !decor_conceal_line(
-                        wp,
-                        first as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                        false_0 != 0,
-                    ) as ::core::ffi::c_int;
+                done += !decor_conceal_line(
+                    wp,
+                    first as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                    false_0 != 0,
+                ) as ::core::ffi::c_int;
                 if byfold == 0 {
-                    todo
-                        -= ((*wp).w_topline - first - 1 as linenr_T)
-                            as ::core::ffi::c_int;
+                    todo -= ((*wp).w_topline - first - 1 as linenr_T) as ::core::ffi::c_int;
                 }
                 (*wp).w_botline -= (*wp).w_topline - first;
                 (*wp).w_topline = first;
@@ -3328,7 +3265,8 @@ pub unsafe extern "C" fn scrolldown(
             wp,
             (*wp).w_topline as ::core::ffi::c_int - 2 as ::core::ffi::c_int,
             false_0 != 0,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         (*wp).w_topline -= 1;
         hasFolding(
@@ -3348,9 +3286,9 @@ pub unsafe extern "C" fn scrolldown(
     if (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_view_width != 0 as ::core::ffi::c_int {
         validate_virtcol(wp);
         validate_cheight(wp);
-        wrow
-            += (*wp).w_cline_height - 1 as ::core::ffi::c_int
-                - (*wp).w_virtcol as ::core::ffi::c_int / (*wp).w_view_width;
+        wrow += (*wp).w_cline_height
+            - 1 as ::core::ffi::c_int
+            - (*wp).w_virtcol as ::core::ffi::c_int / (*wp).w_view_width;
     }
     let mut moved: bool = false_0 != 0;
     while wrow >= (*wp).w_view_height && (*wp).w_cursor.lnum > 1 as linenr_T {
@@ -3361,12 +3299,11 @@ pub unsafe extern "C" fn scrolldown(
             &raw mut first_0,
             ::core::ptr::null_mut::<linenr_T>(),
         ) {
-            wrow
-                -= !decor_conceal_line(
-                    wp,
-                    (*wp).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    false_0 != 0,
-                ) as ::core::ffi::c_int;
+            wrow -= !decor_conceal_line(
+                wp,
+                (*wp).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                false_0 != 0,
+            ) as ::core::ffi::c_int;
             (*wp).w_cursor.lnum = if first_0 - 1 as linenr_T > 1 as linenr_T {
                 first_0 - 1 as linenr_T
             } else {
@@ -3377,8 +3314,7 @@ pub unsafe extern "C" fn scrolldown(
             (*wp).w_cursor.lnum = (*wp).w_cursor.lnum - 1;
             wrow -= plines_win(wp, c2rust_fresh0, true_0 != 0);
         }
-        (*wp).w_valid
-            &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
+        (*wp).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
         moved = true_0 != 0;
     }
     if moved {
@@ -3400,11 +3336,9 @@ pub unsafe extern "C" fn scrollup(
 ) -> bool {
     let mut topline: linenr_T = (*wp).w_topline;
     let mut botline: linenr_T = (*wp).w_botline;
-    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*wp).w_onebuf_opt.wo_sms != 0;
+    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_onebuf_opt.wo_sms != 0;
     if do_sms as ::core::ffi::c_int != 0
-        || byfold as ::core::ffi::c_int != 0
-            && win_lines_concealed(wp) as ::core::ffi::c_int != 0
+        || byfold as ::core::ffi::c_int != 0 && win_lines_concealed(wp) as ::core::ffi::c_int != 0
         || win_may_fill(wp) as ::core::ffi::c_int != 0
     {
         let mut width1: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
@@ -3416,28 +3350,20 @@ pub unsafe extern "C" fn scrollup(
         }
         let mut todo: ::core::ffi::c_int = line_count as ::core::ffi::c_int;
         while todo > 0 as ::core::ffi::c_int {
-            todo
-                += decor_conceal_line(
-                    wp,
-                    (*wp).w_topline as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    false_0 != 0,
-                ) as ::core::ffi::c_int;
+            todo += decor_conceal_line(
+                wp,
+                (*wp).w_topline as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                false_0 != 0,
+            ) as ::core::ffi::c_int;
             if (*wp).w_topfill > 0 as ::core::ffi::c_int {
                 (*wp).w_topfill -= 1;
             } else {
                 let mut lnum: linenr_T = (*wp).w_topline;
                 if byfold {
-                    hasFolding(
-                        wp,
-                        lnum,
-                        ::core::ptr::null_mut::<linenr_T>(),
-                        &raw mut lnum,
-                    );
+                    hasFolding(wp, lnum, ::core::ptr::null_mut::<linenr_T>(), &raw mut lnum);
                 }
                 if lnum == (*wp).w_topline && do_sms as ::core::ffi::c_int != 0 {
-                    let mut add: ::core::ffi::c_int = if (*wp).w_skipcol
-                        > 0 as ::core::ffi::c_int
-                    {
+                    let mut add: ::core::ffi::c_int = if (*wp).w_skipcol > 0 as ::core::ffi::c_int {
                         width2
                     } else {
                         width1
@@ -3462,18 +3388,14 @@ pub unsafe extern "C" fn scrollup(
                     (*wp).w_topline = lnum;
                     (*wp).w_topfill = win_get_fill(wp, lnum);
                     (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
-                    if todo > 1 as ::core::ffi::c_int
-                        && do_sms as ::core::ffi::c_int != 0
-                    {
+                    if todo > 1 as ::core::ffi::c_int && do_sms as ::core::ffi::c_int != 0 {
                         size = linetabsize_eol(wp, (*wp).w_topline);
                     }
                 }
             }
             todo -= 1;
         }
-        if prev_skipcol > 0 as ::core::ffi::c_int
-            || (*wp).w_skipcol > 0 as ::core::ffi::c_int
-        {
+        if prev_skipcol > 0 as ::core::ffi::c_int || (*wp).w_skipcol > 0 as ::core::ffi::c_int {
             redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
         }
     } else {
@@ -3485,9 +3407,7 @@ pub unsafe extern "C" fn scrollup(
     } else {
         (*(*wp).w_buffer).b_ml.ml_line_count
     };
-    (*wp).w_botline = if (*wp).w_botline
-        < (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T
-    {
+    (*wp).w_botline = if (*wp).w_botline < (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T {
         (*wp).w_botline
     } else {
         (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T
@@ -3502,8 +3422,7 @@ pub unsafe extern "C" fn scrollup(
     (*wp).w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE);
     if (*wp).w_cursor.lnum < (*wp).w_topline {
         (*wp).w_cursor.lnum = (*wp).w_topline;
-        (*wp).w_valid
-            &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
+        (*wp).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
         coladvance(wp, (*wp).w_curswant);
     }
     let mut moved: bool = topline != (*wp).w_topline || botline != (*wp).w_botline;
@@ -3511,7 +3430,8 @@ pub unsafe extern "C" fn scrollup(
 }
 #[no_mangle]
 pub unsafe extern "C" fn adjust_skipcol() {
-    if (*curwin).w_onebuf_opt.wo_wrap == 0 || (*curwin).w_onebuf_opt.wo_sms == 0
+    if (*curwin).w_onebuf_opt.wo_wrap == 0
+        || (*curwin).w_onebuf_opt.wo_sms == 0
         || (*curwin).w_cursor.lnum != (*curwin).w_topline
     {
         return;
@@ -3530,21 +3450,17 @@ pub unsafe extern "C" fn adjust_skipcol() {
     let mut scrolled: bool = false_0 != 0;
     validate_cheight(curwin);
     if (*curwin).w_cline_height == (*curwin).w_view_height
-        && plines_win(curwin, (*curwin).w_cursor.lnum, false_0 != 0)
-            <= (*curwin).w_view_height
+        && plines_win(curwin, (*curwin).w_cursor.lnum, false_0 != 0) <= (*curwin).w_view_height
     {
         reset_skipcol(curwin);
         return;
     }
     validate_virtcol(curwin);
-    let mut overlap: ::core::ffi::c_int = sms_marker_overlap(
-        curwin,
-        (*curwin).w_view_width - width2,
-    );
+    let mut overlap: ::core::ffi::c_int =
+        sms_marker_overlap(curwin, (*curwin).w_view_width - width2);
     while (*curwin).w_skipcol > 0 as ::core::ffi::c_int
         && ((*curwin).w_virtcol as int64_t)
-            < ((*curwin).w_skipcol as ::core::ffi::c_int + overlap) as int64_t
-                + scrolloff_cols
+            < ((*curwin).w_skipcol as ::core::ffi::c_int + overlap) as int64_t + scrolloff_cols
     {
         if (*curwin).w_skipcol >= width1 + width2 {
             (*curwin).w_skipcol -= width2;
@@ -3562,8 +3478,7 @@ pub unsafe extern "C" fn adjust_skipcol() {
     let mut col: int64_t = (*curwin).w_virtcol as int64_t + scrolloff_cols;
     if scrolloff_cols > 0 as int64_t {
         let mut size: ::core::ffi::c_int = linetabsize_eol(curwin, (*curwin).w_topline);
-        size = width1
-            + width2 * ((size - width1 + width2 - 1 as ::core::ffi::c_int) / width2);
+        size = width1 + width2 * ((size - width1 + width2 - 1 as ::core::ffi::c_int) / width2);
         while col > size as int64_t {
             col -= width2 as int64_t;
         }
@@ -3590,11 +3505,7 @@ pub unsafe extern "C" fn adjust_skipcol() {
 #[no_mangle]
 pub unsafe extern "C" fn check_topfill(mut wp: *mut win_T, mut down: bool) {
     if (*wp).w_topfill > 0 as ::core::ffi::c_int {
-        let mut n: ::core::ffi::c_int = plines_win_nofill(
-            wp,
-            (*wp).w_topline,
-            true_0 != 0,
-        );
+        let mut n: ::core::ffi::c_int = plines_win_nofill(wp, (*wp).w_topline, true_0 != 0);
         if (*wp).w_topfill + n > (*wp).w_view_height {
             if down as ::core::ffi::c_int != 0 && (*wp).w_topline > 1 as linenr_T {
                 (*wp).w_topline -= 1;
@@ -3613,8 +3524,7 @@ pub unsafe extern "C" fn check_topfill(mut wp: *mut win_T, mut down: bool) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn scrolldown_clamp() {
-    let mut can_fill: bool = (*curwin).w_topfill
-        < win_get_fill(curwin, (*curwin).w_topline);
+    let mut can_fill: bool = (*curwin).w_topfill < win_get_fill(curwin, (*curwin).w_topline);
     if (*curwin).w_topline <= 1 as linenr_T && !can_fill {
         return;
     }
@@ -3623,25 +3533,16 @@ pub unsafe extern "C" fn scrolldown_clamp() {
     if can_fill {
         end_row += 1;
     } else {
-        end_row
-            += plines_win_nofill(
-                curwin,
-                (*curwin).w_topline - 1 as linenr_T,
-                true_0 != 0,
-            );
+        end_row += plines_win_nofill(curwin, (*curwin).w_topline - 1 as linenr_T, true_0 != 0);
     }
-    if (*curwin).w_onebuf_opt.wo_wrap != 0
-        && (*curwin).w_view_width != 0 as ::core::ffi::c_int
-    {
+    if (*curwin).w_onebuf_opt.wo_wrap != 0 && (*curwin).w_view_width != 0 as ::core::ffi::c_int {
         validate_cheight(curwin);
         validate_virtcol(curwin);
-        end_row
-            += (*curwin).w_cline_height - 1 as ::core::ffi::c_int
-                - (*curwin).w_virtcol as ::core::ffi::c_int / (*curwin).w_view_width;
+        end_row += (*curwin).w_cline_height
+            - 1 as ::core::ffi::c_int
+            - (*curwin).w_virtcol as ::core::ffi::c_int / (*curwin).w_view_width;
     }
-    if (end_row as int64_t)
-        < (*curwin).w_view_height as int64_t - get_scrolloff_value(curwin)
-    {
+    if (end_row as int64_t) < (*curwin).w_view_height as int64_t - get_scrolloff_value(curwin) {
         if can_fill {
             (*curwin).w_topfill += 1;
             check_topfill(curwin, true_0 != 0);
@@ -3670,9 +3571,7 @@ pub unsafe extern "C" fn scrollup_clamp() {
     let mut start_row: ::core::ffi::c_int = (*curwin).w_wrow
         - plines_win_nofill(curwin, (*curwin).w_topline, true_0 != 0)
         - (*curwin).w_topfill;
-    if (*curwin).w_onebuf_opt.wo_wrap != 0
-        && (*curwin).w_view_width != 0 as ::core::ffi::c_int
-    {
+    if (*curwin).w_onebuf_opt.wo_wrap != 0 && (*curwin).w_view_width != 0 as ::core::ffi::c_int {
         validate_virtcol(curwin);
         start_row -= (*curwin).w_virtcol as ::core::ffi::c_int / (*curwin).w_view_width;
     }
@@ -3732,7 +3631,8 @@ unsafe extern "C" fn botline_forw(mut wp: *mut win_T, mut lp: *mut lineoff_T) {
         (*lp).lnum += 1;
         (*lp).fill = 0 as ::core::ffi::c_int;
         '_c2rust_label: {
-            if !(*wp).w_buffer.is_null() {} else {
+            if !(*wp).w_buffer.is_null() {
+            } else {
                 __assert_fail(
                     b"wp->w_buffer != 0\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
@@ -3797,22 +3697,19 @@ pub unsafe extern "C" fn scroll_cursor_top(
         if top < (*wp).w_topline {
             scrolled += i;
         }
-        if (new_topline >= (*wp).w_topline || scrolled > min_scroll)
-            && extra as int64_t >= off
-        {
+        if (new_topline >= (*wp).w_topline || scrolled > min_scroll) && extra as int64_t >= off {
             break;
         }
         used += i;
         if (extra + i) as int64_t <= off && bot < (*(*wp).w_buffer).b_ml.ml_line_count {
-            used
-                += plines_win_full(
-                    wp,
-                    bot,
-                    &raw mut bot,
-                    ::core::ptr::null_mut::<bool>(),
-                    true_0 != 0,
-                    true_0 != 0,
-                );
+            used += plines_win_full(
+                wp,
+                bot,
+                &raw mut bot,
+                ::core::ptr::null_mut::<bool>(),
+                true_0 != 0,
+                true_0 != 0,
+            );
         }
         if used > (*wp).w_view_height {
             break;
@@ -3851,21 +3748,18 @@ pub unsafe extern "C" fn scroll_cursor_top(
                 reset_skipcol(wp);
             }
         }
-        if (*wp).w_topline != old_topline || (*wp).w_skipcol != old_skipcol
+        if (*wp).w_topline != old_topline
+            || (*wp).w_skipcol != old_skipcol
             || (*wp).w_topfill as linenr_T != old_topfill
         {
-            (*wp).w_valid
-                &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
+            (*wp).w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
         }
         (*wp).w_valid |= VALID_TOPLINE;
         (*wp).w_viewport_invalid = true_0 != 0;
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn set_empty_rows(
-    mut wp: *mut win_T,
-    mut used: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn set_empty_rows(mut wp: *mut win_T, mut used: ::core::ffi::c_int) {
     (*wp).w_filler_rows = 0 as ::core::ffi::c_int;
     if used == 0 as ::core::ffi::c_int {
         (*wp).w_empty_rows = 0 as ::core::ffi::c_int;
@@ -3900,12 +3794,16 @@ pub unsafe extern "C" fn scroll_cursor_bot(
     let mut old_valid: ::core::ffi::c_int = (*wp).w_valid;
     let mut old_empty_rows: ::core::ffi::c_int = (*wp).w_empty_rows;
     let mut cln: linenr_T = (*wp).w_cursor.lnum;
-    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*wp).w_onebuf_opt.wo_sms != 0;
+    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_onebuf_opt.wo_sms != 0;
     if set_topbot {
         let mut used: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut cln_last: linenr_T = cln;
-        hasFolding(wp, cln, ::core::ptr::null_mut::<linenr_T>(), &raw mut cln_last);
+        hasFolding(
+            wp,
+            cln,
+            ::core::ptr::null_mut::<linenr_T>(),
+            &raw mut cln_last,
+        );
         (*wp).w_botline = cln_last + 1 as linenr_T;
         loff.lnum = cln_last + 1 as linenr_T;
         loff.fill = 0 as ::core::ffi::c_int;
@@ -3917,13 +3815,12 @@ pub unsafe extern "C" fn scroll_cursor_bot(
             if used + loff.height > (*wp).w_view_height {
                 if do_sms {
                     if used < (*wp).w_view_height {
-                        let mut plines_offset: ::core::ffi::c_int = used + loff.height
-                            - (*wp).w_view_height;
+                        let mut plines_offset: ::core::ffi::c_int =
+                            used + loff.height - (*wp).w_view_height;
                         used = (*wp).w_view_height;
                         (*wp).w_topfill = loff.fill;
                         (*wp).w_topline = loff.lnum;
-                        (*wp).w_skipcol = skipcol_from_plines(wp, plines_offset)
-                            as colnr_T;
+                        (*wp).w_skipcol = skipcol_from_plines(wp, plines_offset) as colnr_T;
                     }
                 }
                 break;
@@ -3935,7 +3832,8 @@ pub unsafe extern "C" fn scroll_cursor_bot(
         }
         set_empty_rows(wp, used);
         (*wp).w_valid |= VALID_BOTLINE | VALID_BOTLINE_AP;
-        if (*wp).w_topline != old_topline || (*wp).w_topfill != old_topfill
+        if (*wp).w_topline != old_topline
+            || (*wp).w_topfill != old_topfill
             || (*wp).w_skipcol != old_skipcol
             || (*wp).w_skipcol != 0 as ::core::ffi::c_int
         {
@@ -3957,19 +3855,15 @@ pub unsafe extern "C" fn scroll_cursor_bot(
             scrolled -= (*wp).w_empty_rows;
         }
         if do_sms {
-            let mut top_plines: ::core::ffi::c_int = plines_win_nofill(
-                wp,
-                (*wp).w_topline,
-                false_0 != 0,
-            );
+            let mut top_plines: ::core::ffi::c_int =
+                plines_win_nofill(wp, (*wp).w_topline, false_0 != 0);
             let mut width1: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
             if width1 > 0 as ::core::ffi::c_int {
                 let mut width2: ::core::ffi::c_int = width1 + win_col_off2(wp);
                 let mut skip_lines: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 if (*wp).w_skipcol > width1 {
-                    skip_lines
-                        += ((*wp).w_skipcol as ::core::ffi::c_int - width1) / width2
-                            + 1 as ::core::ffi::c_int;
+                    skip_lines += ((*wp).w_skipcol as ::core::ffi::c_int - width1) / width2
+                        + 1 as ::core::ffi::c_int;
                 } else if (*wp).w_skipcol > 0 as ::core::ffi::c_int {
                     skip_lines = 1 as ::core::ffi::c_int;
                 }
@@ -3985,14 +3879,19 @@ pub unsafe extern "C" fn scroll_cursor_bot(
         fill: 0,
         height: 0,
     };
-    if !hasFolding(wp, (*wp).w_cursor.lnum, &raw mut loff.lnum, &raw mut boff.lnum) {
+    if !hasFolding(
+        wp,
+        (*wp).w_cursor.lnum,
+        &raw mut loff.lnum,
+        &raw mut boff.lnum,
+    ) {
         loff.lnum = cln;
         boff.lnum = cln;
     }
     loff.fill = 0 as ::core::ffi::c_int;
     boff.fill = 0 as ::core::ffi::c_int;
-    let mut fill_below_window: ::core::ffi::c_int = win_get_fill(wp, (*wp).w_botline)
-        - (*wp).w_filler_rows;
+    let mut fill_below_window: ::core::ffi::c_int =
+        win_get_fill(wp, (*wp).w_botline) - (*wp).w_filler_rows;
     let mut extra: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut so: int64_t = get_scrolloff_value(wp);
     while loff.lnum > 1 as linenr_T {
@@ -4002,7 +3901,8 @@ pub unsafe extern "C" fn scroll_cursor_bot(
                     (mouse_dragging - 1 as ::core::ffi::c_int) as int64_t
                 } else {
                     so
-                }) || boff.lnum + 1 as linenr_T > (*(*wp).w_buffer).b_ml.ml_line_count)
+                })
+            || boff.lnum + 1 as linenr_T > (*(*wp).w_buffer).b_ml.ml_line_count)
             && loff.lnum <= (*wp).w_botline
             && (loff.lnum < (*wp).w_botline || loff.fill >= fill_below_window)
         {
@@ -4030,7 +3930,8 @@ pub unsafe extern "C" fn scroll_cursor_bot(
         }
         botline_forw(wp, &raw mut boff);
         '_c2rust_label: {
-            if boff.height != MAXCOL as ::core::ffi::c_int {} else {
+            if boff.height != MAXCOL as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"boff.height != MAXCOL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/move.c\0".as_ptr()
@@ -4050,12 +3951,12 @@ pub unsafe extern "C" fn scroll_cursor_bot(
                 (mouse_dragging - 1 as ::core::ffi::c_int) as int64_t
             } else {
                 so
-            }) || scrolled < min_scroll
+            })
+            || scrolled < min_scroll
         {
             extra += boff.height;
             if boff.lnum >= (*wp).w_botline
-                || boff.lnum + 1 as linenr_T == (*wp).w_botline
-                    && boff.fill > (*wp).w_filler_rows
+                || boff.lnum + 1 as linenr_T == (*wp).w_botline && boff.fill > (*wp).w_filler_rows
             {
                 scrolled += boff.height;
                 if boff.lnum == (*wp).w_botline && boff.fill == 0 as ::core::ffi::c_int {
@@ -4084,9 +3985,7 @@ pub unsafe extern "C" fn scroll_cursor_bot(
             line_count = 9999 as ::core::ffi::c_int as linenr_T;
         }
     }
-    if line_count >= (*wp).w_view_height as linenr_T
-        && line_count > min_scroll as linenr_T
-    {
+    if line_count >= (*wp).w_view_height as linenr_T && line_count > min_scroll as linenr_T {
         scroll_cursor_halfway(wp, false_0 != 0, true_0 != 0);
     } else if line_count > 0 as linenr_T {
         if do_sms {
@@ -4095,7 +3994,8 @@ pub unsafe extern "C" fn scroll_cursor_bot(
             scrollup(wp, line_count, true_0 != 0);
         }
     }
-    if (*wp).w_topline == old_topline && (*wp).w_skipcol == old_skipcol
+    if (*wp).w_topline == old_topline
+        && (*wp).w_skipcol == old_skipcol
         && set_topbot as ::core::ffi::c_int != 0
     {
         (*wp).w_botline = old_botline;
@@ -4132,8 +4032,7 @@ pub unsafe extern "C" fn scroll_cursor_halfway(
     let mut topline: linenr_T = loff.lnum;
     let mut skipcol: colnr_T = 0 as colnr_T;
     let mut want_height: ::core::ffi::c_int = 0;
-    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*wp).w_onebuf_opt.wo_sms != 0;
+    let mut do_sms: bool = (*wp).w_onebuf_opt.wo_wrap != 0 && (*wp).w_onebuf_opt.wo_sms != 0;
     if do_sms {
         if atend {
             want_height = ((*wp).w_view_height - used) / 2 as ::core::ffi::c_int;
@@ -4172,11 +4071,9 @@ pub unsafe extern "C" fn scroll_cursor_halfway(
             let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
             while round <= 2 as ::core::ffi::c_int {
                 if if prefer_above as ::core::ffi::c_int != 0 {
-                    (round == 2 as ::core::ffi::c_int && below < above)
-                        as ::core::ffi::c_int
+                    (round == 2 as ::core::ffi::c_int && below < above) as ::core::ffi::c_int
                 } else {
-                    (round == 1 as ::core::ffi::c_int && below <= above)
-                        as ::core::ffi::c_int
+                    (round == 1 as ::core::ffi::c_int && below <= above) as ::core::ffi::c_int
                 } != 0
                 {
                     if boff.lnum < (*(*wp).w_buffer).b_ml.ml_line_count {
@@ -4196,11 +4093,9 @@ pub unsafe extern "C" fn scroll_cursor_halfway(
                     }
                 }
                 if if prefer_above as ::core::ffi::c_int != 0 {
-                    (round == 1 as ::core::ffi::c_int && below >= above)
-                        as ::core::ffi::c_int
+                    (round == 1 as ::core::ffi::c_int && below >= above) as ::core::ffi::c_int
                 } else {
-                    (round == 1 as ::core::ffi::c_int && below > above)
-                        as ::core::ffi::c_int
+                    (round == 1 as ::core::ffi::c_int && below > above) as ::core::ffi::c_int
                 } != 0
                 {
                     topline_back(wp, &raw mut loff);
@@ -4230,9 +4125,9 @@ pub unsafe extern "C" fn scroll_cursor_halfway(
         topline,
         &raw mut (*wp).w_topline,
         ::core::ptr::null_mut::<linenr_T>(),
-    )
-        && ((*wp).w_topline != topline || skipcol != 0 as ::core::ffi::c_int
-            || (*wp).w_skipcol != 0 as ::core::ffi::c_int)
+    ) && ((*wp).w_topline != topline
+        || skipcol != 0 as ::core::ffi::c_int
+        || (*wp).w_skipcol != 0 as ::core::ffi::c_int)
     {
         (*wp).w_topline = topline;
         if skipcol != 0 as ::core::ffi::c_int {
@@ -4260,8 +4155,7 @@ pub unsafe extern "C" fn cursor_correct(mut wp: *mut win_T) {
     }
     if (*wp).w_topline == 1 as linenr_T {
         above_wanted = 0 as int64_t;
-        let mut max_off: ::core::ffi::c_int = (*wp).w_view_height
-            / 2 as ::core::ffi::c_int;
+        let mut max_off: ::core::ffi::c_int = (*wp).w_view_height / 2 as ::core::ffi::c_int;
         below_wanted = if below_wanted < max_off as int64_t {
             below_wanted
         } else {
@@ -4273,8 +4167,8 @@ pub unsafe extern "C" fn cursor_correct(mut wp: *mut win_T) {
         && mouse_dragging == 0 as ::core::ffi::c_int
     {
         below_wanted = 0 as int64_t;
-        let mut max_off_0: ::core::ffi::c_int = ((*wp).w_view_height
-            - 1 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int;
+        let mut max_off_0: ::core::ffi::c_int =
+            ((*wp).w_view_height - 1 as ::core::ffi::c_int) / 2 as ::core::ffi::c_int;
         above_wanted = if above_wanted < max_off_0 as int64_t {
             above_wanted
         } else {
@@ -4301,18 +4195,16 @@ pub unsafe extern "C" fn cursor_correct(mut wp: *mut win_T) {
     while ((above as int64_t) < above_wanted || (below as int64_t) < below_wanted)
         && topline < botline
     {
-        if (below as int64_t) < below_wanted
-            && (below <= above || above as int64_t >= above_wanted)
+        if (below as int64_t) < below_wanted && (below <= above || above as int64_t >= above_wanted)
         {
-            below
-                += plines_win_full(
-                    wp,
-                    botline,
-                    ::core::ptr::null_mut::<linenr_T>(),
-                    ::core::ptr::null_mut::<bool>(),
-                    true_0 != 0,
-                    true_0 != 0,
-                );
+            below += plines_win_full(
+                wp,
+                botline,
+                ::core::ptr::null_mut::<linenr_T>(),
+                ::core::ptr::null_mut::<bool>(),
+                true_0 != 0,
+                true_0 != 0,
+            );
             hasFolding(
                 wp,
                 botline,
@@ -4321,8 +4213,7 @@ pub unsafe extern "C" fn cursor_correct(mut wp: *mut win_T) {
             );
             botline -= 1;
         }
-        if (above as int64_t) < above_wanted
-            && (above < below || below as int64_t >= below_wanted)
+        if (above as int64_t) < above_wanted && (above < below || below as int64_t >= below_wanted)
         {
             above += plines_win_nofill(wp, topline, true_0 != 0);
             hasFolding(
@@ -4361,8 +4252,7 @@ unsafe extern "C" fn get_scroll_overlap(mut dir: Direction) -> ::core::ffi::c_in
         fill: 0,
         height: 0,
     };
-    let mut min_height: ::core::ffi::c_int = (*curwin).w_view_height
-        - 2 as ::core::ffi::c_int;
+    let mut min_height: ::core::ffi::c_int = (*curwin).w_view_height - 2 as ::core::ffi::c_int;
     validate_botline_win(curwin);
     if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int
         && (*curwin).w_topline == 1 as linenr_T
@@ -4379,14 +4269,12 @@ unsafe extern "C" fn get_scroll_overlap(mut dir: Direction) -> ::core::ffi::c_in
     loff.fill = win_get_fill(
         curwin,
         loff.lnum
-            + (dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int)
-                as ::core::ffi::c_int,
-    )
-        - (if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-            (*curwin).w_filler_rows
-        } else {
-            (*curwin).w_topfill
-        });
+            + (dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int) as ::core::ffi::c_int,
+    ) - (if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
+        (*curwin).w_filler_rows
+    } else {
+        (*curwin).w_topfill
+    });
     loff.height = if loff.fill > 0 as ::core::ffi::c_int {
         1 as ::core::ffi::c_int
     } else {
@@ -4420,12 +4308,11 @@ unsafe extern "C" fn get_scroll_overlap(mut dir: Direction) -> ::core::ffi::c_in
         botline_forw(curwin, &raw mut loff);
     }
     let mut h4: ::core::ffi::c_int = loff.height;
-    if h4 == MAXCOL as ::core::ffi::c_int || h4 + h3 + h2 > min_height
-        || h3 + h2 + h1 > min_height
+    if h4 == MAXCOL as ::core::ffi::c_int || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height
     {
-        return min_height + 1 as ::core::ffi::c_int
+        return min_height + 1 as ::core::ffi::c_int;
     } else {
-        return min_height
+        return min_height;
     };
 }
 unsafe extern "C" fn scroll_with_sms(
@@ -4439,44 +4326,45 @@ unsafe extern "C" fn scroll_with_sms(
     let mut prev_topfill: ::core::ffi::c_int = (*curwin).w_topfill;
     (*curwin).w_onebuf_opt.wo_sms = true_0;
     scroll_redraw(
-        (dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int)
-            as ::core::ffi::c_int,
+        (dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int) as ::core::ffi::c_int,
         count as linenr_T,
     );
     if prev_sms == 0 && (*curwin).w_skipcol > 0 as ::core::ffi::c_int {
         let mut fixdir: ::core::ffi::c_int = dir as ::core::ffi::c_int;
         if labs(((*curwin).w_topline - prev_topline) as ::core::ffi::c_long)
-            > (dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int)
-                as ::core::ffi::c_int as ::core::ffi::c_long
+            > (dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int) as ::core::ffi::c_int
+                as ::core::ffi::c_long
         {
             fixdir = dir as ::core::ffi::c_int * -1 as ::core::ffi::c_int;
         }
-        let mut width1: ::core::ffi::c_int = (*curwin).w_view_width
-            - win_col_off(curwin);
+        let mut width1: ::core::ffi::c_int = (*curwin).w_view_width - win_col_off(curwin);
         let mut width2: ::core::ffi::c_int = width1 + win_col_off2(curwin);
         count = 1 as ::core::ffi::c_int
-            + ((*curwin).w_skipcol as ::core::ffi::c_int - width1
-                - 1 as ::core::ffi::c_int) / width2;
+            + ((*curwin).w_skipcol as ::core::ffi::c_int - width1 - 1 as ::core::ffi::c_int)
+                / width2;
         if fixdir == FORWARD as ::core::ffi::c_int {
             count = 1 as ::core::ffi::c_int
                 + (linetabsize_eol(curwin, (*curwin).w_topline)
-                    - (*curwin).w_skipcol as ::core::ffi::c_int - width1 + width2
-                    - 1 as ::core::ffi::c_int) / width2;
+                    - (*curwin).w_skipcol as ::core::ffi::c_int
+                    - width1
+                    + width2
+                    - 1 as ::core::ffi::c_int)
+                    / width2;
         }
         scroll_redraw(
             (fixdir == FORWARD as ::core::ffi::c_int) as ::core::ffi::c_int,
             count as linenr_T,
         );
-        *curscount
-            += count
-                * (if fixdir == dir as ::core::ffi::c_int {
-                    1 as ::core::ffi::c_int
-                } else {
-                    -1 as ::core::ffi::c_int
-                });
+        *curscount += count
+            * (if fixdir == dir as ::core::ffi::c_int {
+                1 as ::core::ffi::c_int
+            } else {
+                -1 as ::core::ffi::c_int
+            });
     }
     (*curwin).w_onebuf_opt.wo_sms = prev_sms;
-    return (*curwin).w_topline != prev_topline || (*curwin).w_topfill != prev_topfill
+    return (*curwin).w_topline != prev_topline
+        || (*curwin).w_topfill != prev_topfill
         || (*curwin).w_skipcol != prev_skipcol;
 }
 #[no_mangle]
@@ -4486,8 +4374,7 @@ pub unsafe extern "C" fn pagescroll(
     mut half: bool,
 ) -> ::core::ffi::c_int {
     let mut did_move: bool = false_0 != 0;
-    let mut buflen: ::core::ffi::c_int = (*curbuf).b_ml.ml_line_count
-        as ::core::ffi::c_int;
+    let mut buflen: ::core::ffi::c_int = (*curbuf).b_ml.ml_line_count as ::core::ffi::c_int;
     let mut prev_col: colnr_T = (*curwin).w_cursor.col;
     let mut prev_curswant: colnr_T = (*curwin).w_curswant;
     let mut prev_lnum: linenr_T = (*curwin).w_cursor.lnum;
@@ -4547,17 +4434,15 @@ pub unsafe extern "C" fn pagescroll(
                 count
             }) as OptInt;
         }
-        count = if (*curwin).w_view_height
-            < (*curwin).w_onebuf_opt.wo_scr as ::core::ffi::c_int
-        {
+        count = if (*curwin).w_view_height < (*curwin).w_onebuf_opt.wo_scr as ::core::ffi::c_int {
             (*curwin).w_view_height
         } else {
             (*curwin).w_onebuf_opt.wo_scr as ::core::ffi::c_int
         };
         let mut curscount: ::core::ffi::c_int = count;
         if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
-            && ((*curwin).w_topline + (*curwin).w_view_height as linenr_T
-                + count as linenr_T > buflen as linenr_T
+            && ((*curwin).w_topline + (*curwin).w_view_height as linenr_T + count as linenr_T
+                > buflen as linenr_T
                 || win_lines_concealed(curwin) as ::core::ffi::c_int != 0)
         {
             let mut n: ::core::ffi::c_int = plines_correct_topline(
@@ -4567,16 +4452,13 @@ pub unsafe extern "C" fn pagescroll(
                 false_0 != 0,
                 ::core::ptr::null_mut::<bool>(),
             );
-            if n - count < (*curwin).w_view_height
-                && (*curwin).w_topline < buflen as linenr_T
-            {
-                n
-                    += plines_m_win(
-                        curwin,
-                        (*curwin).w_topline + 1 as linenr_T,
-                        buflen as linenr_T,
-                        (*curwin).w_view_height + count,
-                    );
+            if n - count < (*curwin).w_view_height && (*curwin).w_topline < buflen as linenr_T {
+                n += plines_m_win(
+                    curwin,
+                    (*curwin).w_topline + 1 as linenr_T,
+                    buflen as linenr_T,
+                    (*curwin).w_view_height + count,
+                );
             }
             if n < (*curwin).w_view_height + count {
                 count = n - (*curwin).w_view_height;
@@ -4589,33 +4471,34 @@ pub unsafe extern "C" fn pagescroll(
             (*curwin).w_curswant = prev_curswant;
         }
         if (*curwin).w_onebuf_opt.wo_wrap != 0 {
-            nv_screengo(&raw mut oa, dir as ::core::ffi::c_int, curscount, true_0 != 0);
+            nv_screengo(
+                &raw mut oa,
+                dir as ::core::ffi::c_int,
+                curscount,
+                true_0 != 0,
+            );
         } else if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
             cursor_down_inner(curwin, curscount, true_0 != 0);
         } else {
             cursor_up_inner(curwin, curscount as linenr_T, true_0 != 0);
         }
     } else {
-        count
-            *= if firstwin == lastwin && p_window > 0 as OptInt
-                && p_window < (Rows - 1 as ::core::ffi::c_int) as OptInt
-            {
-                if 1 as ::core::ffi::c_int
-                    > p_window as ::core::ffi::c_int - 2 as ::core::ffi::c_int
-                {
-                    1 as ::core::ffi::c_int
-                } else {
-                    p_window as ::core::ffi::c_int - 2 as ::core::ffi::c_int
-                }
+        count *= if firstwin == lastwin
+            && p_window > 0 as OptInt
+            && p_window < (Rows - 1 as ::core::ffi::c_int) as OptInt
+        {
+            if 1 as ::core::ffi::c_int > p_window as ::core::ffi::c_int - 2 as ::core::ffi::c_int {
+                1 as ::core::ffi::c_int
             } else {
-                get_scroll_overlap(dir)
-            };
+                p_window as ::core::ffi::c_int - 2 as ::core::ffi::c_int
+            }
+        } else {
+            get_scroll_overlap(dir)
+        };
         did_move = scroll_with_sms(dir, count, &raw mut count);
         if did_move {
             validate_botline_win(curwin);
-            let mut lnum: linenr_T = if dir as ::core::ffi::c_int
-                == FORWARD as ::core::ffi::c_int
-            {
+            let mut lnum: linenr_T = if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
                 (*curwin).w_topline
             } else {
                 (*curwin).w_botline - 1 as linenr_T
@@ -4631,7 +4514,8 @@ pub unsafe extern "C" fn pagescroll(
         cursor_correct(curwin);
     }
     foldAdjustCursor(curwin);
-    did_move = did_move as ::core::ffi::c_int != 0 || prev_col != (*curwin).w_cursor.col
+    did_move = did_move as ::core::ffi::c_int != 0
+        || prev_col != (*curwin).w_cursor.col
         || prev_lnum != (*curwin).w_cursor.lnum;
     if !did_move {
         beep_flush();
@@ -4640,7 +4524,11 @@ pub unsafe extern "C" fn pagescroll(
     } else if p_sol != 0 {
         nv_g_home_m_cmd(&raw mut ca);
     }
-    return if did_move as ::core::ffi::c_int != 0 { OK } else { FAIL };
+    return if did_move as ::core::ffi::c_int != 0 {
+        OK
+    } else {
+        FAIL
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_check_cursorbind() {
@@ -4650,8 +4538,7 @@ pub unsafe extern "C" fn do_check_cursorbind() {
         col: 0 as colnr_T,
         coladd: 0 as colnr_T,
     };
-    if curwin == prev_curwin
-        && equalpos((*curwin).w_cursor, prev_cursor) as ::core::ffi::c_int != 0
+    if curwin == prev_curwin && equalpos((*curwin).w_cursor, prev_cursor) as ::core::ffi::c_int != 0
     {
         return;
     }

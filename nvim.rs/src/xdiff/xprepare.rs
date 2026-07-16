@@ -19,10 +19,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn xdl_cha_free(cha: *mut chastore_t);
     fn xdl_cha_alloc(cha: *mut chastore_t) -> *mut ::core::ffi::c_void;
-    fn xdl_guess_lines(
-        mf: *mut mmfile_t,
-        sample: ::core::ffi::c_long,
-    ) -> ::core::ffi::c_long;
+    fn xdl_guess_lines(mf: *mut mmfile_t, sample: ::core::ffi::c_long) -> ::core::ffi::c_long;
     fn xdl_recmatch(
         l1: *const ::core::ffi::c_char,
         s1: ::core::ffi::c_long,
@@ -129,15 +126,12 @@ pub struct s_xdlclass {
     pub len1: ::core::ffi::c_long,
     pub len2: ::core::ffi::c_long,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 14 as ::core::ffi::c_int;
-pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int = (1 as ::core::ffi::c_int)
-    << 15 as ::core::ffi::c_int;
-pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF
-    | XDF_HISTOGRAM_DIFF;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const XDF_PATIENCE_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
+pub const XDF_HISTOGRAM_DIFF: ::core::ffi::c_int =
+    (1 as ::core::ffi::c_int) << 15 as ::core::ffi::c_int;
+pub const XDF_DIFF_ALGORITHM_MASK: ::core::ffi::c_int = XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF;
 pub const XDL_KPDIS_RUN: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const XDL_MAX_EQLIMIT: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
 pub const XDL_SIMSCAN_WINDOW: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
@@ -159,9 +153,9 @@ unsafe extern "C" fn xdl_init_classifier(
     {
         return -1 as ::core::ffi::c_int;
     }
-    (*cf).rchash = xmalloc(
-        ((*cf).hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
-    ) as *mut *mut xdlclass_t;
+    (*cf).rchash =
+        xmalloc(((*cf).hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()))
+            as *mut *mut xdlclass_t;
     if (*cf).rchash.is_null() {
         xdl_cha_free(&raw mut (*cf).ncha);
         return -1 as ::core::ffi::c_int;
@@ -172,9 +166,9 @@ unsafe extern "C" fn xdl_init_classifier(
         ((*cf).hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
     );
     (*cf).alloc = size;
-    (*cf).rcrecs = xmalloc(
-        ((*cf).alloc as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
-    ) as *mut *mut xdlclass_t;
+    (*cf).rcrecs =
+        xmalloc(((*cf).alloc as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()))
+            as *mut *mut xdlclass_t;
     if (*cf).rcrecs.is_null() {
         xfree((*cf).rchash as *mut ::core::ffi::c_void);
         xdl_cha_free(&raw mut (*cf).ncha);
@@ -196,15 +190,13 @@ unsafe extern "C" fn xdl_classify_record(
     mut rec: *mut xrecord_t,
 ) -> ::core::ffi::c_int {
     let mut hi: ::core::ffi::c_long = 0;
-    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut rcrec: *mut xdlclass_t = ::core::ptr::null_mut::<xdlclass_t>();
     let mut rcrecs: *mut *mut xdlclass_t = ::core::ptr::null_mut::<*mut xdlclass_t>();
     line = (*rec).ptr;
     hi = ((*rec).ha.wrapping_add((*rec).ha >> (*cf).hbits)
-        & ((1 as ::core::ffi::c_ulong) << (*cf).hbits)
-            .wrapping_sub(1 as ::core::ffi::c_ulong)) as ::core::ffi::c_long;
+        & ((1 as ::core::ffi::c_ulong) << (*cf).hbits).wrapping_sub(1 as ::core::ffi::c_ulong))
+        as ::core::ffi::c_long;
     rcrec = *(*cf).rchash.offset(hi as isize);
     while !rcrec.is_null() {
         if (*rcrec).ha == (*rec).ha
@@ -232,8 +224,7 @@ unsafe extern "C" fn xdl_classify_record(
             (*cf).alloc *= 2 as ::core::ffi::c_long;
             rcrecs = xrealloc(
                 (*cf).rcrecs as *mut ::core::ffi::c_void,
-                ((*cf).alloc as size_t)
-                    .wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
+                ((*cf).alloc as size_t).wrapping_mul(::core::mem::size_of::<*mut xdlclass_t>()),
             ) as *mut *mut xdlclass_t;
             if rcrecs.is_null() {
                 return -1 as ::core::ffi::c_int;
@@ -278,22 +269,14 @@ unsafe extern "C" fn xdl_prepare_ctx(
     let mut blk: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut cur: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut top: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut prev: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut prev: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut crec: *mut xrecord_t = ::core::ptr::null_mut::<xrecord_t>();
     let mut recs: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
     let mut rrecs: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
     let mut rhash: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
-    let mut ha: *mut ::core::ffi::c_ulong = ::core::ptr::null_mut::<
-        ::core::ffi::c_ulong,
-    >();
-    let mut rchg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut rindex: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<
-        ::core::ffi::c_long,
-    >();
+    let mut ha: *mut ::core::ffi::c_ulong = ::core::ptr::null_mut::<::core::ffi::c_ulong>();
+    let mut rchg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut rindex: *mut ::core::ffi::c_long = ::core::ptr::null_mut::<::core::ffi::c_long>();
     ha = ::core::ptr::null_mut::<::core::ffi::c_ulong>();
     rindex = ::core::ptr::null_mut::<::core::ffi::c_long>();
     rchg = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -306,9 +289,8 @@ unsafe extern "C" fn xdl_prepare_ctx(
             narec / 4 as ::core::ffi::c_long + 1 as ::core::ffi::c_long,
         ) >= 0 as ::core::ffi::c_int
         {
-            recs = xmalloc(
-                (narec as size_t).wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()),
-            ) as *mut *mut xrecord_t;
+            recs = xmalloc((narec as size_t).wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()))
+                as *mut *mut xrecord_t;
             if !recs.is_null() {
                 if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
                     == XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
@@ -319,8 +301,7 @@ unsafe extern "C" fn xdl_prepare_ctx(
                     hbits = xdl_hashbits(narec as ::core::ffi::c_uint);
                     hsize = ((1 as ::core::ffi::c_int) << hbits) as ::core::ffi::c_long;
                     rhash = xmalloc(
-                        (hsize as size_t)
-                            .wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()),
+                        (hsize as size_t).wrapping_mul(::core::mem::size_of::<*mut xrecord_t>()),
                     ) as *mut *mut xrecord_t;
                     if rhash.is_null() {
                         break '_abort;
@@ -335,8 +316,7 @@ unsafe extern "C" fn xdl_prepare_ctx(
                 }
                 nrec = 0 as ::core::ffi::c_long;
                 's_139: {
-                    blk = xdl_mmfile_first(mf, &raw mut bsize)
-                        as *const ::core::ffi::c_char;
+                    blk = xdl_mmfile_first(mf, &raw mut bsize) as *const ::core::ffi::c_char;
                     cur = blk;
                     if !cur.is_null() {
                         top = blk.offset(bsize as isize);
@@ -371,11 +351,9 @@ unsafe extern "C" fn xdl_prepare_ctx(
                             (*crec).ha = hav;
                             let c2rust_fresh0 = nrec;
                             nrec = nrec + 1;
-                            let c2rust_lvalue_ptr = &raw mut *recs
-                                .offset(c2rust_fresh0 as isize);
+                            let c2rust_lvalue_ptr = &raw mut *recs.offset(c2rust_fresh0 as isize);
                             *c2rust_lvalue_ptr = crec;
-                            if (*xpp).flags
-                                & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
+                            if (*xpp).flags & XDF_DIFF_ALGORITHM_MASK as ::core::ffi::c_ulong
                                 != XDF_HISTOGRAM_DIFF as ::core::ffi::c_ulong
                                 && xdl_classify_record(pass, cf, rhash, hbits, crec)
                                     < 0 as ::core::ffi::c_int
@@ -403,9 +381,7 @@ unsafe extern "C" fn xdl_prepare_ctx(
                     if !rindex.is_null() {
                         ha = xmalloc(
                             ((nrec + 1 as ::core::ffi::c_long) as size_t)
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<::core::ffi::c_ulong>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_ulong>()),
                         ) as *mut ::core::ffi::c_ulong;
                         if !ha.is_null() {
                             (*xdf).nrec = nrec;
@@ -436,10 +412,7 @@ unsafe extern "C" fn xdl_prepare_ctx(
 unsafe extern "C" fn xdl_free_ctx(mut xdf: *mut xdfile_t) {
     xfree((*xdf).rhash as *mut ::core::ffi::c_void);
     xfree((*xdf).rindex as *mut ::core::ffi::c_void);
-    xfree(
-        (*xdf).rchg.offset(-(1 as ::core::ffi::c_int as isize))
-            as *mut ::core::ffi::c_void,
-    );
+    xfree((*xdf).rchg.offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void);
     xfree((*xdf).ha as *mut ::core::ffi::c_void);
     xfree((*xdf).recs as *mut ::core::ffi::c_void);
     xdl_cha_free(&raw mut (*xdf).rcha);
@@ -569,9 +542,7 @@ unsafe extern "C" fn xdl_clean_mmatch(
         if *dis.offset((i - r) as isize) == 0 {
             rdis0 += 1;
         } else {
-            if *dis.offset((i - r) as isize) as ::core::ffi::c_int
-                != 2 as ::core::ffi::c_int
-            {
+            if *dis.offset((i - r) as isize) as ::core::ffi::c_int != 2 as ::core::ffi::c_int {
                 break;
             }
             rpdis0 += 1;
@@ -588,9 +559,7 @@ unsafe extern "C" fn xdl_clean_mmatch(
         if *dis.offset((i + r) as isize) == 0 {
             rdis1 += 1;
         } else {
-            if *dis.offset((i + r) as isize) as ::core::ffi::c_int
-                != 2 as ::core::ffi::c_int
-            {
+            if *dis.offset((i + r) as isize) as ::core::ffi::c_int != 2 as ::core::ffi::c_int {
                 break;
             }
             rpdis1 += 1;
@@ -616,15 +585,9 @@ unsafe extern "C" fn xdl_cleanup_records(
     let mut mlim: ::core::ffi::c_long = 0;
     let mut recs: *mut *mut xrecord_t = ::core::ptr::null_mut::<*mut xrecord_t>();
     let mut rcrec: *mut xdlclass_t = ::core::ptr::null_mut::<xdlclass_t>();
-    let mut dis: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut dis1: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut dis2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut dis: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut dis1: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut dis2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     dis = xmalloc(((*xdf1).nrec + (*xdf2).nrec + 2 as ::core::ffi::c_long) as size_t)
         as *mut ::core::ffi::c_char;
     if dis.is_null() {
@@ -636,7 +599,9 @@ unsafe extern "C" fn xdl_cleanup_records(
         ((*xdf1).nrec + (*xdf2).nrec + 2 as ::core::ffi::c_long) as size_t,
     );
     dis1 = dis;
-    dis2 = dis1.offset((*xdf1).nrec as isize).offset(1 as ::core::ffi::c_int as isize);
+    dis2 = dis1
+        .offset((*xdf1).nrec as isize)
+        .offset(1 as ::core::ffi::c_int as isize);
     mlim = xdl_bogosqrt((*xdf1).nrec);
     if mlim > XDL_MAX_EQLIMIT as ::core::ffi::c_long {
         mlim = XDL_MAX_EQLIMIT as ::core::ffi::c_long;
@@ -645,7 +610,11 @@ unsafe extern "C" fn xdl_cleanup_records(
     recs = (*xdf1).recs.offset((*xdf1).dstart as isize);
     while i <= (*xdf1).dend {
         rcrec = *(*cf).rcrecs.offset((**recs).ha as isize);
-        nm = if !rcrec.is_null() { (*rcrec).len2 } else { 0 as ::core::ffi::c_long };
+        nm = if !rcrec.is_null() {
+            (*rcrec).len2
+        } else {
+            0 as ::core::ffi::c_long
+        };
         *dis1.offset(i as isize) = (if nm == 0 as ::core::ffi::c_long {
             0 as ::core::ffi::c_int
         } else if nm >= mlim {
@@ -664,7 +633,11 @@ unsafe extern "C" fn xdl_cleanup_records(
     recs = (*xdf2).recs.offset((*xdf2).dstart as isize);
     while i <= (*xdf2).dend {
         rcrec = *(*cf).rcrecs.offset((**recs).ha as isize);
-        nm = if !rcrec.is_null() { (*rcrec).len1 } else { 0 as ::core::ffi::c_long };
+        nm = if !rcrec.is_null() {
+            (*rcrec).len1
+        } else {
+            0 as ::core::ffi::c_long
+        };
         *dis2.offset(i as isize) = (if nm == 0 as ::core::ffi::c_long {
             0 as ::core::ffi::c_int
         } else if nm >= mlim {
@@ -725,7 +698,11 @@ unsafe extern "C" fn xdl_trim_ends(
     recs1 = (*xdf1).recs;
     recs2 = (*xdf2).recs;
     i = 0 as ::core::ffi::c_long;
-    lim = (if (*xdf1).nrec < (*xdf2).nrec { (*xdf1).nrec } else { (*xdf2).nrec });
+    lim = (if (*xdf1).nrec < (*xdf2).nrec {
+        (*xdf1).nrec
+    } else {
+        (*xdf2).nrec
+    });
     while i < lim {
         if (**recs1).ha != (**recs2).ha {
             break;

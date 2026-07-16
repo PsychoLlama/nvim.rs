@@ -35,11 +35,7 @@ extern "C" {
     fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
     fn set_leftcol(leftcol: colnr_T) -> bool;
     fn get_cursor_pos_ptr() -> *mut ::core::ffi::c_char;
-    fn decor_conceal_line(
-        wp: *mut win_T,
-        row: ::core::ffi::c_int,
-        check_cursor: bool,
-    ) -> bool;
+    fn decor_conceal_line(wp: *mut win_T, row: ::core::ffi::c_int, check_cursor: bool) -> bool;
     fn update_screen() -> ::core::ffi::c_int;
     fn setcursor();
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
@@ -143,11 +139,7 @@ extern "C" {
     fn win_col_off2(wp: *mut win_T) -> ::core::ffi::c_int;
     fn scroll_redraw(up: ::core::ffi::c_int, count: linenr_T);
     fn check_topfill(wp: *mut win_T, down: bool);
-    fn pagescroll(
-        dir: Direction,
-        count: ::core::ffi::c_int,
-        half: bool,
-    ) -> ::core::ffi::c_int;
+    fn pagescroll(dir: Direction, count: ::core::ffi::c_int, half: bool) -> ::core::ffi::c_int;
     fn end_visual_mode();
     fn prep_redo(
         regname: ::core::ffi::c_int,
@@ -203,11 +195,7 @@ extern "C" {
     );
     fn win_may_fill(wp: *mut win_T) -> bool;
     fn win_get_fill(wp: *mut win_T, lnum: linenr_T) -> ::core::ffi::c_int;
-    fn plines_win(
-        wp: *mut win_T,
-        lnum: linenr_T,
-        limit_winheight: bool,
-    ) -> ::core::ffi::c_int;
+    fn plines_win(wp: *mut win_T, lnum: linenr_T, limit_winheight: bool) -> ::core::ffi::c_int;
     fn plines_win_nofill(
         wp: *mut win_T,
         lnum: linenr_T,
@@ -215,10 +203,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     static mut pum_grid: ScreenGrid;
     fn pum_visible() -> bool;
-    fn yank_register_mline(
-        regname: ::core::ffi::c_int,
-        reg: *mut *mut yankreg_T,
-    ) -> bool;
+    fn yank_register_mline(regname: ::core::ffi::c_int, reg: *mut *mut yankreg_T) -> bool;
     fn insert_reg(
         regname: ::core::ffi::c_int,
         reg: *mut yankreg_T,
@@ -239,10 +224,7 @@ extern "C" {
     fn ui_check_mouse();
     fn ui_mouse_has(mode: ::core::ffi::c_int) -> bool;
     fn ui_cursor_shape();
-    fn ui_comp_mouse_focus(
-        row: ::core::ffi::c_int,
-        col: ::core::ffi::c_int,
-    ) -> *mut ScreenGrid;
+    fn ui_comp_mouse_focus(row: ::core::ffi::c_int, col: ::core::ffi::c_int) -> *mut ScreenGrid;
     fn win_fdccol_count(wp: *mut win_T) -> ::core::ffi::c_int;
     fn win_valid(win: *const win_T) -> bool;
     fn find_tabpage(n: ::core::ffi::c_int) -> *mut tabpage_T;
@@ -316,9 +298,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -2238,9 +2219,7 @@ pub const OP_YANK: C2Rust_Unnamed_21 = 2;
 pub const OP_DELETE: C2Rust_Unnamed_21 = 1;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const kCharsizeRegular: C2Rust_Unnamed_22 = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_G: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
@@ -2264,11 +2243,11 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -2277,8 +2256,7 @@ unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
 }
 #[inline(always)]
 unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0
-        || equalpos(a, b) as ::core::ffi::c_int != 0;
+    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
 }
 pub const MOUSE_VISUAL: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -2289,8 +2267,8 @@ pub const MOD_MASK_META: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const MOD_MASK_2CLICK: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const MOD_MASK_3CLICK: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const MOD_MASK_4CLICK: ::core::ffi::c_int = 0x60 as ::core::ffi::c_int;
-pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK
-    | MOD_MASK_4CLICK;
+pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int =
+    MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 #[inline(always)]
 unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
     let p: *const uint8_t = p_in as *const uint8_t;
@@ -2299,10 +2277,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
         return CharInfo {
             value: first as int32_t,
             len: 1 as ::core::ffi::c_int,
-        }
+        };
     } else {
-        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize]
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = utf8len_tab[first as usize] as ::core::ffi::c_int;
         let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
         if code_point < 0 as int32_t {
             len = 1 as ::core::ffi::c_int;
@@ -2316,8 +2293,9 @@ unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharI
 #[inline(always)]
 unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint)
-        as ::core::ffi::c_int as ::core::ffi::c_long != 0
+    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
+        as ::core::ffi::c_long
+        != 0
     {
         return StrCharInfo {
             ptr: next as *mut ::core::ffi::c_char,
@@ -2330,9 +2308,7 @@ unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
     return utfc_next_impl(cur);
 }
 #[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(
-    mut ptr: *mut ::core::ffi::c_char,
-) -> StrCharInfo {
+unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
     return StrCharInfo {
         ptr: ptr,
         chr: utf_ptr2CharInfo(ptr),
@@ -2340,11 +2316,10 @@ unsafe extern "C" fn utf_ptr2StrCharInfo(
 }
 static mut orig_topline: linenr_T = 0 as linenr_T;
 static mut orig_topfill: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-unsafe extern "C" fn get_mouse_class(
-    mut p: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn get_mouse_class(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     if utf8len_tab[*p.offset(0 as ::core::ffi::c_int as isize) as uint8_t as usize]
-        as ::core::ffi::c_int > 1 as ::core::ffi::c_int
+        as ::core::ffi::c_int
+        > 1 as ::core::ffi::c_int
     {
         return mb_get_class(p);
     }
@@ -2356,8 +2331,7 @@ unsafe extern "C" fn get_mouse_class(
         return 2 as ::core::ffi::c_int;
     }
     if c != NUL
-        && !vim_strchr(b"-+*/%<>&|^!=\0".as_ptr() as *const ::core::ffi::c_char, c)
-            .is_null()
+        && !vim_strchr(b"-+*/%<>&|^!=\0".as_ptr() as *const ::core::ffi::c_char, c).is_null()
     {
         return 1 as ::core::ffi::c_int;
     }
@@ -2365,12 +2339,10 @@ unsafe extern "C" fn get_mouse_class(
 }
 unsafe extern "C" fn find_start_of_word(mut pos: *mut pos_T) {
     let mut line: *mut ::core::ffi::c_char = ml_get((*pos).lnum);
-    let mut cclass: ::core::ffi::c_int = get_mouse_class(
-        line.offset((*pos).col as isize),
-    );
+    let mut cclass: ::core::ffi::c_int = get_mouse_class(line.offset((*pos).col as isize));
     while (*pos).col > 0 as ::core::ffi::c_int {
-        let mut col: ::core::ffi::c_int = (*pos).col as ::core::ffi::c_int
-            - 1 as ::core::ffi::c_int;
+        let mut col: ::core::ffi::c_int =
+            (*pos).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
         col -= utf_head_off(line, line.offset(col as isize));
         if get_mouse_class(line.offset(col as isize)) != cclass {
             break;
@@ -2386,12 +2358,10 @@ unsafe extern "C" fn find_end_of_word(mut pos: *mut pos_T) {
         (*pos).col -= 1;
         (*pos).col -= utf_head_off(line, line.offset((*pos).col as isize));
     }
-    let mut cclass: ::core::ffi::c_int = get_mouse_class(
-        line.offset((*pos).col as isize),
-    );
+    let mut cclass: ::core::ffi::c_int = get_mouse_class(line.offset((*pos).col as isize));
     while *line.offset((*pos).col as isize) as ::core::ffi::c_int != NUL {
-        let mut col: ::core::ffi::c_int = (*pos).col as ::core::ffi::c_int
-            + utfc_ptr2len(line.offset((*pos).col as isize));
+        let mut col: ::core::ffi::c_int =
+            (*pos).col as ::core::ffi::c_int + utfc_ptr2len(line.offset((*pos).col as isize));
         if get_mouse_class(line.offset(col as isize)) != cclass {
             if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
                 (*pos).col = col as colnr_T;
@@ -2403,8 +2373,7 @@ unsafe extern "C" fn find_end_of_word(mut pos: *mut pos_T) {
     }
 }
 unsafe extern "C" fn move_tab_to_mouse() {
-    let mut tabnr: ::core::ffi::c_int = (*tab_page_click_defs.offset(mouse_col as isize))
-        .tabnr;
+    let mut tabnr: ::core::ffi::c_int = (*tab_page_click_defs.offset(mouse_col as isize)).tabnr;
     if tabnr <= 0 as ::core::ffi::c_int {
         tabpage_move(9999 as ::core::ffi::c_int);
     } else if tabnr < tabpage_index(curtab) {
@@ -2518,8 +2487,8 @@ unsafe extern "C" fn call_click_def_func(
             .wrapping_div(::core::mem::size_of::<typval_T>())
             .wrapping_div(
                 (::core::mem::size_of::<[typval_T; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<typval_T>()) == 0)
-                    as ::core::ffi::c_int as usize,
+                    .wrapping_rem(::core::mem::size_of::<typval_T>())
+                    == 0) as ::core::ffi::c_int as usize,
             ) as ::core::ffi::c_int,
         &raw mut argv as *mut typval_T,
         &raw mut rettv,
@@ -2534,23 +2503,16 @@ unsafe extern "C" fn get_fpos_of_mouse(mut mpos: *mut pos_T) -> ::core::ffi::c_i
     if row < 0 as ::core::ffi::c_int || col < 0 as ::core::ffi::c_int {
         return IN_UNKNOWN as ::core::ffi::c_int;
     }
-    let mut wp: *mut win_T = mouse_find_win_inner(
-        &raw mut grid,
-        &raw mut row,
-        &raw mut col,
-    );
+    let mut wp: *mut win_T = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
     if wp.is_null() {
         return IN_UNKNOWN as ::core::ffi::c_int;
     }
     let mut winrow: ::core::ffi::c_int = row;
     let mut wincol: ::core::ffi::c_int = col;
-    let mut below_buffer: bool = mouse_comp_pos(
-        wp,
-        &raw mut row,
-        &raw mut col,
-        &raw mut (*mpos).lnum,
-    );
-    if !below_buffer && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
+    let mut below_buffer: bool =
+        mouse_comp_pos(wp, &raw mut row, &raw mut col, &raw mut (*mpos).lnum);
+    if !below_buffer
+        && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
         && (if (*wp).w_onebuf_opt.wo_rl != 0 {
             (wincol >= (*wp).w_view_width - win_col_off(wp)) as ::core::ffi::c_int
         } else {
@@ -2562,17 +2524,15 @@ unsafe extern "C" fn get_fpos_of_mouse(mut mpos: *mut pos_T) -> ::core::ffi::c_i
     if winrow >= (*wp).w_view_height + (*wp).w_status_height {
         if mouse_grid <= 1 as ::core::ffi::c_int
             && (mouse_row as OptInt) < Rows as OptInt - p_ch
-            && mouse_row as OptInt
-                >= Rows as OptInt - p_ch - global_stl_height() as OptInt
+            && mouse_row as OptInt >= Rows as OptInt - p_ch - global_stl_height() as OptInt
         {
             return IN_STATUS_LINE as ::core::ffi::c_int;
         }
         return IN_UNKNOWN as ::core::ffi::c_int;
     } else if winrow >= (*wp).w_view_height {
-        return IN_STATUS_LINE as ::core::ffi::c_int
+        return IN_STATUS_LINE as ::core::ffi::c_int;
     }
-    if winrow < 0 as ::core::ffi::c_int
-        && winrow + (*wp).w_winbar_height >= 0 as ::core::ffi::c_int
+    if winrow < 0 as ::core::ffi::c_int && winrow + (*wp).w_winbar_height >= 0 as ::core::ffi::c_int
     {
         return MOUSE_WINBAR as ::core::ffi::c_int;
     }
@@ -2591,8 +2551,10 @@ unsafe extern "C" fn do_popup(
     mut m_pos: pos_T,
 ) -> ::core::ffi::c_int {
     let mut jump_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if strcmp(p_mousem, b"popup_setpos\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
+    if strcmp(
+        p_mousem,
+        b"popup_setpos\0".as_ptr() as *const ::core::ffi::c_char,
+    ) == 0 as ::core::ffi::c_int
     {
         if VIsual_active {
             if m_pos_flag != IN_BUFFER as ::core::ffi::c_int {
@@ -2601,8 +2563,7 @@ unsafe extern "C" fn do_popup(
                 if (*curwin).w_cursor.lnum <= VIsual.lnum
                     && (m_pos.lnum < (*curwin).w_cursor.lnum || VIsual.lnum < m_pos.lnum)
                     || VIsual.lnum < (*curwin).w_cursor.lnum
-                        && (m_pos.lnum < VIsual.lnum
-                            || (*curwin).w_cursor.lnum < m_pos.lnum)
+                        && (m_pos.lnum < VIsual.lnum || (*curwin).w_cursor.lnum < m_pos.lnum)
                 {
                     jump_flags = MOUSE_MAY_STOP_VIS as ::core::ffi::c_int;
                 }
@@ -2640,18 +2601,12 @@ unsafe extern "C" fn do_popup(
         }
     }
     if jump_flags != 0 {
-        jump_flags = jump_to_mouse(
-            jump_flags,
-            ::core::ptr::null_mut::<bool>(),
-            which_button,
-        );
-        redraw_curbuf_later(
-            if VIsual_active as ::core::ffi::c_int != 0 {
-                UPD_INVERTED as ::core::ffi::c_int
-            } else {
-                UPD_VALID as ::core::ffi::c_int
-            },
-        );
+        jump_flags = jump_to_mouse(jump_flags, ::core::ptr::null_mut::<bool>(), which_button);
+        redraw_curbuf_later(if VIsual_active as ::core::ffi::c_int != 0 {
+            UPD_INVERTED as ::core::ffi::c_int
+        } else {
+            UPD_VALID as ::core::ffi::c_int
+        });
         update_screen();
         setcursor();
         ui_flush();
@@ -2679,8 +2634,8 @@ pub unsafe extern "C" fn do_mouse(
     };
     loop {
         which_button = get_mouse_button(
-            (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int
-                & 0xff as ::core::ffi::c_uint) as ::core::ffi::c_int,
+            (-c as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
+                as ::core::ffi::c_int,
             &raw mut is_click,
             &raw mut is_drag,
         );
@@ -2704,9 +2659,8 @@ pub unsafe extern "C" fn do_mouse(
         mouse_col = save_mouse_col;
         break;
     }
-    if c
-        == -(253 as ::core::ffi::c_int
-            + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+    if c == -(253 as ::core::ffi::c_int
+        + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
     {
         return false_0 != 0;
     }
@@ -2724,7 +2678,8 @@ pub unsafe extern "C" fn do_mouse(
             }
         }
     }
-    if is_click as ::core::ffi::c_int != 0 && mod_mask & MOD_MASK_CTRL != 0
+    if is_click as ::core::ffi::c_int != 0
+        && mod_mask & MOD_MASK_CTRL != 0
         && which_button == MOUSE_RIGHT as ::core::ffi::c_int
     {
         if State & MODE_INSERT as ::core::ffi::c_int != 0 {
@@ -2737,17 +2692,18 @@ pub unsafe extern "C" fn do_mouse(
         got_click = false_0 != 0;
         return false_0 != 0;
     }
-    if mod_mask & MOD_MASK_CTRL != 0 && which_button != MOUSE_LEFT as ::core::ffi::c_int
-    {
+    if mod_mask & MOD_MASK_CTRL != 0 && which_button != MOUSE_LEFT as ::core::ffi::c_int {
         return false_0 != 0;
     }
     if mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_META) != 0
-        && (!is_click || mod_mask & MOD_MASK_MULTI_CLICK != 0
+        && (!is_click
+            || mod_mask & MOD_MASK_MULTI_CLICK != 0
             || which_button == MOUSE_MIDDLE as ::core::ffi::c_int)
         && !(mod_mask & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0
             && mouse_model_popup() as ::core::ffi::c_int != 0
             && which_button == MOUSE_LEFT as ::core::ffi::c_int)
-        && !(mod_mask & MOD_MASK_ALT != 0 && !mouse_model_popup()
+        && !(mod_mask & MOD_MASK_ALT != 0
+            && !mouse_model_popup()
             && which_button == MOUSE_RIGHT as ::core::ffi::c_int)
     {
         return false_0 != 0;
@@ -2774,14 +2730,13 @@ pub unsafe extern "C" fn do_mouse(
                     stuffcharReadbuff('y' as ::core::ffi::c_int);
                     stuffcharReadbuff(
                         -(253 as ::core::ffi::c_int
-                            + ((KE_MIDDLEMOUSE as ::core::ffi::c_int)
-                                << 8 as ::core::ffi::c_int)),
+                            + ((KE_MIDDLEMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)),
                     );
                 }
                 return false_0 != 0;
             }
         } else if State & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-            return false_0 != 0
+            return false_0 != 0;
         }
         if State & MODE_INSERT as ::core::ffi::c_int != 0 {
             if regname == '.' as ::core::ffi::c_int {
@@ -2791,7 +2746,8 @@ pub unsafe extern "C" fn do_mouse(
                     && eval_has_provider(
                         b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
                         false_0 != 0,
-                    ) as ::core::ffi::c_int != 0
+                    ) as ::core::ffi::c_int
+                        != 0
                 {
                     regname = '*' as ::core::ffi::c_int;
                 }
@@ -2813,20 +2769,16 @@ pub unsafe extern "C" fn do_mouse(
                         }) | PUT_CURSEND as ::core::ffi::c_int,
                     );
                     AppendCharToRedobuff(Ctrl_R);
-                    AppendCharToRedobuff(
-                        if fixindent as ::core::ffi::c_int != 0 {
-                            Ctrl_P
-                        } else {
-                            Ctrl_O
-                        },
-                    );
-                    AppendCharToRedobuff(
-                        if regname == 0 as ::core::ffi::c_int {
-                            '"' as ::core::ffi::c_int
-                        } else {
-                            regname
-                        },
-                    );
+                    AppendCharToRedobuff(if fixindent as ::core::ffi::c_int != 0 {
+                        Ctrl_P
+                    } else {
+                        Ctrl_O
+                    });
+                    AppendCharToRedobuff(if regname == 0 as ::core::ffi::c_int {
+                        '"' as ::core::ffi::c_int
+                    } else {
+                        regname
+                    });
                 }
             }
             return false_0 != 0;
@@ -2839,7 +2791,8 @@ pub unsafe extern "C" fn do_mouse(
     };
     let mut old_curwin: *mut win_T = curwin;
     if !tab_page_click_defs.is_null() {
-        if mouse_grid <= 1 as ::core::ffi::c_int && mouse_row == 0 as ::core::ffi::c_int
+        if mouse_grid <= 1 as ::core::ffi::c_int
+            && mouse_row == 0 as ::core::ffi::c_int
             && (*firstwin).w_winrow > 0 as ::core::ffi::c_int
         {
             if is_drag {
@@ -2849,11 +2802,11 @@ pub unsafe extern "C" fn do_mouse(
                 return false_0 != 0;
             }
             if is_click as ::core::ffi::c_int != 0
-                && cmdwin_type == 0 as ::core::ffi::c_int && mouse_col < Columns
+                && cmdwin_type == 0 as ::core::ffi::c_int
+                && mouse_col < Columns
             {
-                let mut tabnr: ::core::ffi::c_int = (*tab_page_click_defs
-                    .offset(mouse_col as isize))
-                    .tabnr;
+                let mut tabnr: ::core::ffi::c_int =
+                    (*tab_page_click_defs.offset(mouse_col as isize)).tabnr;
                 in_tab_line = true_0 != 0;
                 's_464: {
                     match (*tab_page_click_defs.offset(mouse_col as isize)).type_0
@@ -2864,13 +2817,11 @@ pub unsafe extern "C" fn do_mouse(
                                 if mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
                                     end_visual_mode();
                                     tabpage_new();
-                                    tabpage_move(
-                                        if tabnr == 0 as ::core::ffi::c_int {
-                                            9999 as ::core::ffi::c_int
-                                        } else {
-                                            tabnr - 1 as ::core::ffi::c_int
-                                        },
-                                    );
+                                    tabpage_move(if tabnr == 0 as ::core::ffi::c_int {
+                                        9999 as ::core::ffi::c_int
+                                    } else {
+                                        tabnr - 1 as ::core::ffi::c_int
+                                    });
                                 } else {
                                     goto_tabpage(tabnr);
                                     if curwin != old_curwin {
@@ -2882,11 +2833,7 @@ pub unsafe extern "C" fn do_mouse(
                         }
                         2 => {}
                         3 => {
-                            call_click_def_func(
-                                tab_page_click_defs,
-                                mouse_col,
-                                which_button,
-                            );
+                            call_click_def_func(tab_page_click_defs, mouse_col, which_button);
                             break 's_464;
                         }
                         0 | _ => {
@@ -2897,9 +2844,7 @@ pub unsafe extern "C" fn do_mouse(
                 }
             }
             return true_0 != 0;
-        } else if is_drag as ::core::ffi::c_int != 0
-            && in_tab_line as ::core::ffi::c_int != 0
-        {
+        } else if is_drag as ::core::ffi::c_int != 0 && in_tab_line as ::core::ffi::c_int != 0 {
             move_tab_to_mouse();
             return false_0 != 0;
         }
@@ -2913,20 +2858,24 @@ pub unsafe extern "C" fn do_mouse(
     if mouse_model_popup() {
         m_pos_flag = get_fpos_of_mouse(&raw mut m_pos);
         if m_pos_flag
-            & (IN_STATUS_LINE as ::core::ffi::c_int | MOUSE_WINBAR as ::core::ffi::c_int
-                | MOUSE_STATUSCOL as ::core::ffi::c_int) == 0
+            & (IN_STATUS_LINE as ::core::ffi::c_int
+                | MOUSE_WINBAR as ::core::ffi::c_int
+                | MOUSE_STATUSCOL as ::core::ffi::c_int)
+            == 0
             && which_button == MOUSE_RIGHT as ::core::ffi::c_int
             && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
         {
             if !is_click {
                 return false_0 != 0;
             }
-            return do_popup(which_button, m_pos_flag, m_pos)
-                & CURSOR_MOVED as ::core::ffi::c_int != 0;
+            return do_popup(which_button, m_pos_flag, m_pos) & CURSOR_MOVED as ::core::ffi::c_int
+                != 0;
         }
         if m_pos_flag
-            & (IN_STATUS_LINE as ::core::ffi::c_int | MOUSE_WINBAR as ::core::ffi::c_int
-                | MOUSE_STATUSCOL as ::core::ffi::c_int) == 0
+            & (IN_STATUS_LINE as ::core::ffi::c_int
+                | MOUSE_WINBAR as ::core::ffi::c_int
+                | MOUSE_STATUSCOL as ::core::ffi::c_int)
+            == 0
             && (which_button == MOUSE_LEFT as ::core::ffi::c_int
                 && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0)
         {
@@ -2945,8 +2894,8 @@ pub unsafe extern "C" fn do_mouse(
         coladd: 0,
     };
     let mut mouse_can_visual: bool = ui_mouse_has(MOUSE_VISUAL);
-    if State & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int)
-        != 0 && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
+    if State & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int) != 0
+        && mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
     {
         if which_button == MOUSE_LEFT as ::core::ffi::c_int
             && mouse_can_visual as ::core::ffi::c_int != 0
@@ -2961,9 +2910,7 @@ pub unsafe extern "C" fn do_mouse(
         } else if which_button == MOUSE_RIGHT as ::core::ffi::c_int
             && mouse_can_visual as ::core::ffi::c_int != 0
         {
-            if is_click as ::core::ffi::c_int != 0
-                && VIsual_active as ::core::ffi::c_int != 0
-            {
+            if is_click as ::core::ffi::c_int != 0 && VIsual_active as ::core::ffi::c_int != 0 {
                 if lt((*curwin).w_cursor, VIsual) {
                     start_visual = (*curwin).w_cursor;
                     end_visual = VIsual;
@@ -3001,29 +2948,24 @@ pub unsafe extern "C" fn do_mouse(
     let mut moved: bool = jump_flags & CURSOR_MOVED as ::core::ffi::c_int != 0;
     let mut in_winbar: bool = jump_flags & MOUSE_WINBAR as ::core::ffi::c_int != 0;
     let mut in_statuscol: bool = jump_flags & MOUSE_STATUSCOL as ::core::ffi::c_int != 0;
-    let mut in_status_line: bool = jump_flags & IN_STATUS_LINE as ::core::ffi::c_int
-        != 0;
-    let mut in_global_statusline: bool = in_status_line as ::core::ffi::c_int != 0
-        && global_stl_height() > 0 as ::core::ffi::c_int;
+    let mut in_status_line: bool = jump_flags & IN_STATUS_LINE as ::core::ffi::c_int != 0;
+    let mut in_global_statusline: bool =
+        in_status_line as ::core::ffi::c_int != 0 && global_stl_height() > 0 as ::core::ffi::c_int;
     let mut in_sep_line: bool = jump_flags & IN_SEP_LINE as ::core::ffi::c_int != 0;
-    if (in_winbar as ::core::ffi::c_int != 0 || in_status_line as ::core::ffi::c_int != 0
+    if (in_winbar as ::core::ffi::c_int != 0
+        || in_status_line as ::core::ffi::c_int != 0
         || in_statuscol as ::core::ffi::c_int != 0)
         && is_click as ::core::ffi::c_int != 0
     {
         let mut click_grid: ::core::ffi::c_int = mouse_grid;
         let mut click_row: ::core::ffi::c_int = mouse_row;
         let mut click_col: ::core::ffi::c_int = mouse_col;
-        let mut wp: *mut win_T = mouse_find_win_inner(
-            &raw mut click_grid,
-            &raw mut click_row,
-            &raw mut click_col,
-        );
+        let mut wp: *mut win_T =
+            mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col);
         if wp.is_null() {
             return false_0 != 0;
         }
-        let mut click_defs: *mut StlClickDefinition = if in_status_line
-            as ::core::ffi::c_int != 0
-        {
+        let mut click_defs: *mut StlClickDefinition = if in_status_line as ::core::ffi::c_int != 0 {
             (*wp).w_status_click_defs
         } else if in_winbar as ::core::ffi::c_int != 0 {
             (*wp).w_winbar_click_defs
@@ -3046,13 +2988,12 @@ pub unsafe extern "C" fn do_mouse(
                     } else {
                         wp
                     }))
-                        .w_status_click_defs_size as ::core::ffi::c_int
+                    .w_status_click_defs_size as ::core::ffi::c_int
         {
             return false_0 != 0;
         }
         if !click_defs.is_null() {
-            match (*click_defs.offset(click_col as isize)).type_0 as ::core::ffi::c_uint
-            {
+            match (*click_defs.offset(click_col as isize)).type_0 as ::core::ffi::c_uint {
                 0 => {
                     if in_statuscol as ::core::ffi::c_int != 0
                         && mouse_model_popup() as ::core::ffi::c_int != 0
@@ -3069,9 +3010,11 @@ pub unsafe extern "C" fn do_mouse(
                     '_c2rust_label: {
                         if false
                             && !(b"winbar, statusline and statuscolumn only support %@ for clicks\0"
-                                .as_ptr() as *const ::core::ffi::c_char)
+                                .as_ptr()
+                                as *const ::core::ffi::c_char)
                                 .is_null()
-                        {} else {
+                        {
+                        } else {
                             __assert_fail(
                                 b"false && \"winbar, statusline and statuscolumn only support %@ for clicks\"\0"
                                     .as_ptr() as *const ::core::ffi::c_char,
@@ -3088,25 +3031,22 @@ pub unsafe extern "C" fn do_mouse(
         }
         if !(in_statuscol as ::core::ffi::c_int != 0
             && jump_flags
-                & (MOUSE_FOLD_CLOSE as ::core::ffi::c_int
-                    | MOUSE_FOLD_OPEN as ::core::ffi::c_int) != 0)
+                & (MOUSE_FOLD_CLOSE as ::core::ffi::c_int | MOUSE_FOLD_OPEN as ::core::ffi::c_int)
+                != 0)
         {
             return false_0 != 0;
         }
-    } else if in_winbar as ::core::ffi::c_int != 0
-        || in_statuscol as ::core::ffi::c_int != 0
-    {
-        return false_0 != 0
+    } else if in_winbar as ::core::ffi::c_int != 0 || in_statuscol as ::core::ffi::c_int != 0 {
+        return false_0 != 0;
     }
-    if curwin != old_curwin && !oap.is_null()
-        && (*oap).op_type != OP_NOP as ::core::ffi::c_int
-    {
+    if curwin != old_curwin && !oap.is_null() && (*oap).op_type != OP_NOP as ::core::ffi::c_int {
         clearop(oap);
     }
-    if mod_mask == 0 as ::core::ffi::c_int && !is_drag
+    if mod_mask == 0 as ::core::ffi::c_int
+        && !is_drag
         && jump_flags
-            & (MOUSE_FOLD_CLOSE as ::core::ffi::c_int
-                | MOUSE_FOLD_OPEN as ::core::ffi::c_int) != 0
+            & (MOUSE_FOLD_CLOSE as ::core::ffi::c_int | MOUSE_FOLD_OPEN as ::core::ffi::c_int)
+            != 0
         && which_button == MOUSE_LEFT as ::core::ffi::c_int
     {
         if jump_flags & MOUSE_FOLD_OPEN as ::core::ffi::c_int != 0 {
@@ -3118,7 +3058,8 @@ pub unsafe extern "C" fn do_mouse(
             (*curwin).w_cursor = save_cursor;
         }
     }
-    if VIsual_active as ::core::ffi::c_int != 0 && is_drag as ::core::ffi::c_int != 0
+    if VIsual_active as ::core::ffi::c_int != 0
+        && is_drag as ::core::ffi::c_int != 0
         && get_scrolloff_value(curwin) != 0
     {
         if mouse_row == 0 as ::core::ffi::c_int {
@@ -3127,8 +3068,7 @@ pub unsafe extern "C" fn do_mouse(
             mouse_dragging = 1 as ::core::ffi::c_int;
         }
     }
-    if is_drag as ::core::ffi::c_int != 0 && mouse_row < 0 as ::core::ffi::c_int
-        && !in_status_line
+    if is_drag as ::core::ffi::c_int != 0 && mouse_row < 0 as ::core::ffi::c_int && !in_status_line
     {
         scroll_redraw(false_0, 1 as linenr_T);
         mouse_row = 0 as ::core::ffi::c_int;
@@ -3157,9 +3097,7 @@ pub unsafe extern "C" fn do_mouse(
             } else {
                 end_visual.col = rightcol;
             }
-            if (*curwin).w_cursor.lnum
-                >= (start_visual.lnum + end_visual.lnum) / 2 as linenr_T
-            {
+            if (*curwin).w_cursor.lnum >= (start_visual.lnum + end_visual.lnum) / 2 as linenr_T {
                 end_visual.lnum = start_visual.lnum;
             }
             start_visual = (*curwin).w_cursor;
@@ -3172,23 +3110,22 @@ pub unsafe extern "C" fn do_mouse(
         } else if lt(end_visual, (*curwin).w_cursor) {
             VIsual = start_visual;
         } else if end_visual.lnum == start_visual.lnum {
-            if (*curwin).w_cursor.col - start_visual.col
-                > end_visual.col - (*curwin).w_cursor.col
-            {
+            if (*curwin).w_cursor.col - start_visual.col > end_visual.col - (*curwin).w_cursor.col {
                 VIsual = start_visual;
             } else {
                 VIsual = end_visual;
             }
         } else {
-            diff = (*curwin).w_cursor.lnum - start_visual.lnum
+            diff = (*curwin).w_cursor.lnum
+                - start_visual.lnum
                 - (end_visual.lnum - (*curwin).w_cursor.lnum);
             if diff > 0 as linenr_T {
                 VIsual = start_visual;
             } else if diff < 0 as linenr_T {
                 VIsual = end_visual;
             } else if (*curwin).w_cursor.col
-                < (start_visual.col as ::core::ffi::c_int
-                    + end_visual.col as ::core::ffi::c_int) / 2 as ::core::ffi::c_int
+                < (start_visual.col as ::core::ffi::c_int + end_visual.col as ::core::ffi::c_int)
+                    / 2 as ::core::ffi::c_int
             {
                 VIsual = end_visual;
             } else {
@@ -3205,7 +3142,8 @@ pub unsafe extern "C" fn do_mouse(
             && eval_has_provider(
                 b"clipboard\0".as_ptr() as *const ::core::ffi::c_char,
                 false_0 != 0,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
         {
             regname = '*' as ::core::ffi::c_int;
         }
@@ -3249,8 +3187,7 @@ pub unsafe extern "C" fn do_mouse(
                 0 as ::core::ffi::c_int
             }) | PUT_CURSEND as ::core::ffi::c_int,
         );
-    } else if (mod_mask & MOD_MASK_CTRL != 0
-        || mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK)
+    } else if (mod_mask & MOD_MASK_CTRL != 0 || mod_mask & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK)
         && bt_quickfix(curbuf) as ::core::ffi::c_int != 0
     {
         if (*curwin).w_llist_ref.is_null() {
@@ -3270,8 +3207,7 @@ pub unsafe extern "C" fn do_mouse(
         got_click = false_0 != 0;
     } else if mod_mask & MOD_MASK_SHIFT != 0 {
         if State & MODE_INSERT as ::core::ffi::c_int != 0
-            || VIsual_active as ::core::ffi::c_int != 0
-                && VIsual_select as ::core::ffi::c_int != 0
+            || VIsual_active as ::core::ffi::c_int != 0 && VIsual_select as ::core::ffi::c_int != 0
         {
             stuffcharReadbuff(Ctrl_O);
         }
@@ -3280,13 +3216,11 @@ pub unsafe extern "C" fn do_mouse(
         } else {
             stuffcharReadbuff('#' as ::core::ffi::c_int);
         }
-    } else if !(in_status_line as ::core::ffi::c_int != 0
-        || in_sep_line as ::core::ffi::c_int != 0)
+    } else if !(in_status_line as ::core::ffi::c_int != 0 || in_sep_line as ::core::ffi::c_int != 0)
     {
         if mod_mask & MOD_MASK_MULTI_CLICK != 0
-            && State
-                & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int)
-                != 0 && mouse_can_visual as ::core::ffi::c_int != 0
+            && State & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int) != 0
+            && mouse_can_visual as ::core::ffi::c_int != 0
         {
             if is_click as ::core::ffi::c_int != 0 || !VIsual_active {
                 if VIsual_active {
@@ -3326,10 +3260,10 @@ pub unsafe extern "C" fn do_mouse(
                     if !oap.is_null() {
                         (*oap).motion_type = kMTCharWise;
                     }
-                    if !oap.is_null() && VIsual_mode == 'v' as ::core::ffi::c_int
+                    if !oap.is_null()
+                        && VIsual_mode == 'v' as ::core::ffi::c_int
                         && !vim_iswordc(gchar_pos(&raw mut end_visual))
-                        && equalpos((*curwin).w_cursor, VIsual) as ::core::ffi::c_int
-                            != 0
+                        && equalpos((*curwin).w_cursor, VIsual) as ::core::ffi::c_int != 0
                         && {
                             pos = findmatch(oap, NUL);
                             !pos.is_null()
@@ -3340,9 +3274,7 @@ pub unsafe extern "C" fn do_mouse(
                             == kMTLineWise as ::core::ffi::c_int
                         {
                             VIsual_mode = 'V' as ::core::ffi::c_int;
-                        } else if *p_sel as ::core::ffi::c_int
-                            == 'e' as ::core::ffi::c_int
-                        {
+                        } else if *p_sel as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
                             if lt((*curwin).w_cursor, VIsual) {
                                 VIsual.col += 1;
                             } else {
@@ -3352,8 +3284,7 @@ pub unsafe extern "C" fn do_mouse(
                     }
                 }
                 if pos.is_null()
-                    && (is_click as ::core::ffi::c_int != 0
-                        || is_drag as ::core::ffi::c_int != 0)
+                    && (is_click as ::core::ffi::c_int != 0 || is_drag as ::core::ffi::c_int != 0)
                 {
                     if lt((*curwin).w_cursor, orig_cursor) {
                         find_start_of_word(&raw mut (*curwin).w_cursor);
@@ -3382,7 +3313,8 @@ pub unsafe extern "C" fn do_mouse(
         }
     }
     if !VIsual_active && old_active != 0 && mode_displayed as ::core::ffi::c_int != 0
-        || VIsual_active as ::core::ffi::c_int != 0 && p_smd != 0
+        || VIsual_active as ::core::ffi::c_int != 0
+            && p_smd != 0
             && msg_silent == 0 as ::core::ffi::c_int
             && (old_active == 0 || VIsual_mode != old_mode)
     {
@@ -3410,13 +3342,11 @@ pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
                 (*curbuf).b_prompt_insert = 'A' as ::core::ffi::c_int;
             }
         }
-        start_arrow(
-            if curwin == old_curwin {
-                &raw mut tpos
-            } else {
-                ::core::ptr::null_mut::<pos_T>()
-            },
-        );
+        start_arrow(if curwin == old_curwin {
+            &raw mut tpos
+        } else {
+            ::core::ptr::null_mut::<pos_T>()
+        });
         if curwin != new_curwin && win_valid(new_curwin) as ::core::ffi::c_int != 0 {
             curwin = new_curwin;
             curbuf = (*curwin).w_buffer;
@@ -3428,8 +3358,7 @@ pub unsafe extern "C" fn ins_mouse(mut c: ::core::ffi::c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
     let mut shift_or_ctrl: bool = mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
-    if (*cap).arg == MSCR_UP as ::core::ffi::c_int
-        || (*cap).arg == MSCR_DOWN as ::core::ffi::c_int
+    if (*cap).arg == MSCR_UP as ::core::ffi::c_int || (*cap).arg == MSCR_DOWN as ::core::ffi::c_int
     {
         if State & MODE_NORMAL as ::core::ffi::c_int != 0
             && shift_or_ctrl as ::core::ffi::c_int != 0
@@ -3445,8 +3374,7 @@ pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
             );
         } else {
             if shift_or_ctrl {
-                (*cap).count1 = ((*curwin).w_botline - (*curwin).w_topline)
-                    as ::core::ffi::c_int;
+                (*cap).count1 = ((*curwin).w_botline - (*curwin).w_topline) as ::core::ffi::c_int;
             } else {
                 (*cap).count1 = p_mousescroll_vert as ::core::ffi::c_int;
             }
@@ -3551,8 +3479,7 @@ pub unsafe extern "C" fn ins_mousescroll(mut dir: ::core::ffi::c_int) {
         }
         _ => {
             siemsg(
-                b"Invalid ins_mousescroll() argument: %d\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"Invalid ins_mousescroll() argument: %d\0".as_ptr() as *const ::core::ffi::c_char,
                 dir,
             );
         }
@@ -3590,69 +3517,48 @@ pub unsafe extern "C" fn is_mouse_key(mut c: ::core::ffi::c_int) -> bool {
     return c
         == -(253 as ::core::ffi::c_int
             + ((KE_LEFTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LEFTMOUSE_NM as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LEFTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LEFTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_LEFTRELEASE_NM as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MIDDLEMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MIDDLEDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MIDDLERELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_RIGHTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_RIGHTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_RIGHTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_X1MOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_X1DRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_X1RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_X2MOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_X2DRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        || c
-            == -(253 as ::core::ffi::c_int
-                + ((KE_X2RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LEFTMOUSE_NM as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LEFTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LEFTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_LEFTRELEASE_NM as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MIDDLEMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MIDDLEDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MIDDLERELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_RIGHTMOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_RIGHTDRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_RIGHTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_X1MOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_X1DRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_X1RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_X2MOUSE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_X2DRAG as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
+        || c == -(253 as ::core::ffi::c_int
+            + ((KE_X2RELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 }
 unsafe extern "C" fn mouse_model_popup() -> bool {
     return *p_mousem.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -3689,14 +3595,13 @@ pub unsafe extern "C" fn jump_to_mouse(
     mouse_past_eol = false_0 != 0;
     if flags & MOUSE_RELEASED as ::core::ffi::c_int != 0 {
         if !dragwin.is_null() && did_drag == 0 {
-            flags
-                &= !(MOUSE_FOCUS as ::core::ffi::c_int
-                    | MOUSE_DID_MOVE as ::core::ffi::c_int);
+            flags &= !(MOUSE_FOCUS as ::core::ffi::c_int | MOUSE_DID_MOVE as ::core::ffi::c_int);
         }
         dragwin = ::core::ptr::null_mut::<win_T>();
         did_drag = false_0;
     }
-    if !(flags & MOUSE_DID_MOVE as ::core::ffi::c_int != 0 && prev_row == mouse_row
+    if !(flags & MOUSE_DID_MOVE as ::core::ffi::c_int != 0
+        && prev_row == mouse_row
         && prev_col == mouse_col)
     {
         prev_row = mouse_row;
@@ -3705,34 +3610,32 @@ pub unsafe extern "C" fn jump_to_mouse(
             if row < 0 as ::core::ffi::c_int || col < 0 as ::core::ffi::c_int {
                 return IN_UNKNOWN as ::core::ffi::c_int;
             }
-            let mut wp: *mut win_T = mouse_find_win_inner(
-                &raw mut grid,
-                &raw mut row,
-                &raw mut col,
-            );
+            let mut wp: *mut win_T =
+                mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
             if wp.is_null() {
                 return IN_UNKNOWN as ::core::ffi::c_int;
             }
-            let mut below_window: bool = grid == DEFAULT_GRID_HANDLE
-                && row + (*wp).w_winbar_height >= (*wp).w_height;
+            let mut below_window: bool =
+                grid == DEFAULT_GRID_HANDLE && row + (*wp).w_winbar_height >= (*wp).w_height;
             on_status_line = below_window as ::core::ffi::c_int != 0
                 && row + (*wp).w_winbar_height - (*wp).w_height + 1 as ::core::ffi::c_int
                     == 1 as ::core::ffi::c_int;
-            on_sep_line = grid == DEFAULT_GRID_HANDLE && col >= (*wp).w_width
-                && col - (*wp).w_width + 1 as ::core::ffi::c_int
-                    == 1 as ::core::ffi::c_int;
+            on_sep_line = grid == DEFAULT_GRID_HANDLE
+                && col >= (*wp).w_width
+                && col - (*wp).w_width + 1 as ::core::ffi::c_int == 1 as ::core::ffi::c_int;
             on_winbar = row < 0 as ::core::ffi::c_int
                 && row + (*wp).w_winbar_height >= 0 as ::core::ffi::c_int;
-            on_statuscol = !below_window && !on_status_line && !on_sep_line && !on_winbar
+            on_statuscol = !below_window
+                && !on_status_line
+                && !on_sep_line
+                && !on_winbar
                 && *(*wp).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL
                 && (if (*wp).w_onebuf_opt.wo_rl != 0 {
                     (col >= (*wp).w_view_width - win_col_off(wp)) as ::core::ffi::c_int
                 } else {
                     (col < win_col_off(wp)) as ::core::ffi::c_int
                 }) != 0;
-            if on_status_line as ::core::ffi::c_int != 0
-                && on_sep_line as ::core::ffi::c_int != 0
-            {
+            if on_status_line as ::core::ffi::c_int != 0 && on_sep_line as ::core::ffi::c_int != 0 {
                 if stl_connected(wp) {
                     on_sep_line = false_0 != 0;
                 } else {
@@ -3748,15 +3651,14 @@ pub unsafe extern "C" fn jump_to_mouse(
             let mut old_cursor: pos_T = (*curwin).w_cursor;
             if !keep_focus {
                 if on_winbar {
-                    return IN_OTHER_WIN as ::core::ffi::c_int
-                        | MOUSE_WINBAR as ::core::ffi::c_int;
+                    return IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_WINBAR as ::core::ffi::c_int;
                 }
                 if !on_statuscol {
                     fdc = win_fdccol_count(wp);
                     dragwin = ::core::ptr::null_mut::<win_T>();
                     if below_window {
-                        status_line_offset = row + (*wp).w_winbar_height - (*wp).w_height
-                            + 1 as ::core::ffi::c_int;
+                        status_line_offset =
+                            row + (*wp).w_winbar_height - (*wp).w_height + 1 as ::core::ffi::c_int;
                         dragwin = wp;
                     } else {
                         status_line_offset = 0 as ::core::ffi::c_int;
@@ -3776,17 +3678,18 @@ pub unsafe extern "C" fn jump_to_mouse(
                     }
                     if VIsual_active as ::core::ffi::c_int != 0
                         && ((*wp).w_buffer != (*curwin).w_buffer
-                            || status_line_offset == 0 && sep_line_offset == 0
+                            || status_line_offset == 0
+                                && sep_line_offset == 0
                                 && (if (*wp).w_onebuf_opt.wo_rl != 0 {
                                     (col < (*wp).w_view_width - fdc) as ::core::ffi::c_int
                                 } else {
-                                    (col
-                                        >= fdc
-                                            + (if wp != cmdwin_win {
-                                                0 as ::core::ffi::c_int
-                                            } else {
-                                                1 as ::core::ffi::c_int
-                                            })) as ::core::ffi::c_int
+                                    (col >= fdc
+                                        + (if wp != cmdwin_win {
+                                            0 as ::core::ffi::c_int
+                                        } else {
+                                            1 as ::core::ffi::c_int
+                                        }))
+                                        as ::core::ffi::c_int
                                 }) != 0
                                 && flags & MOUSE_MAY_STOP_VIS as ::core::ffi::c_int != 0)
                     {
@@ -3799,9 +3702,7 @@ pub unsafe extern "C" fn jump_to_mouse(
                         col += (*wp).w_wincol;
                         wp = cmdwin_win;
                     }
-                    if dragwin.is_null()
-                        || flags & MOUSE_RELEASED as ::core::ffi::c_int != 0
-                    {
+                    if dragwin.is_null() || flags & MOUSE_RELEASED as ::core::ffi::c_int != 0 {
                         win_enter(wp, true_0 != 0);
                     }
                     if curwin != old_curwin {
@@ -3824,20 +3725,19 @@ pub unsafe extern "C" fn jump_to_mouse(
                     (*curwin).w_cursor.lnum = (*curwin).w_topline;
                 }
             } else if status_line_offset != 0 {
-                if which_button == MOUSE_LEFT as ::core::ffi::c_int && !dragwin.is_null()
-                {
+                if which_button == MOUSE_LEFT as ::core::ffi::c_int && !dragwin.is_null() {
                     count = row - (*dragwin).w_winrow - (*dragwin).w_height
-                        + 1 as ::core::ffi::c_int - status_line_offset;
+                        + 1 as ::core::ffi::c_int
+                        - status_line_offset;
                     win_drag_status_line(dragwin, count);
                     did_drag |= count;
                 }
                 return IN_STATUS_LINE as ::core::ffi::c_int;
-            } else if sep_line_offset != 0
-                && which_button == MOUSE_LEFT as ::core::ffi::c_int
-            {
+            } else if sep_line_offset != 0 && which_button == MOUSE_LEFT as ::core::ffi::c_int {
                 if !dragwin.is_null() {
                     count = col - (*dragwin).w_wincol - (*dragwin).w_width
-                        + 1 as ::core::ffi::c_int - sep_line_offset;
+                        + 1 as ::core::ffi::c_int
+                        - sep_line_offset;
                     win_drag_vsep_line(dragwin, count);
                     did_drag |= count;
                 }
@@ -3845,17 +3745,15 @@ pub unsafe extern "C" fn jump_to_mouse(
             } else if on_status_line as ::core::ffi::c_int != 0
                 && which_button == MOUSE_RIGHT as ::core::ffi::c_int
             {
-                return IN_STATUS_LINE as ::core::ffi::c_int
+                return IN_STATUS_LINE as ::core::ffi::c_int;
             } else if on_winbar as ::core::ffi::c_int != 0
                 && which_button == MOUSE_RIGHT as ::core::ffi::c_int
             {
-                return IN_OTHER_WIN as ::core::ffi::c_int
-                    | MOUSE_WINBAR as ::core::ffi::c_int
+                return IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_WINBAR as ::core::ffi::c_int;
             } else if on_statuscol as ::core::ffi::c_int != 0
                 && which_button == MOUSE_RIGHT as ::core::ffi::c_int
             {
-                return IN_OTHER_WIN as ::core::ffi::c_int
-                    | MOUSE_STATUSCOL as ::core::ffi::c_int
+                return IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_STATUSCOL as ::core::ffi::c_int;
             } else {
                 if flags & MOUSE_MAY_STOP_VIS as ::core::ffi::c_int != 0 {
                     end_visual_mode();
@@ -3872,17 +3770,14 @@ pub unsafe extern "C" fn jump_to_mouse(
                     count = 0 as ::core::ffi::c_int;
                     first = true_0 != 0;
                     while (*curwin).w_topline > 1 as linenr_T {
-                        if (*curwin).w_topfill
-                            < win_get_fill(curwin, (*curwin).w_topline)
-                        {
+                        if (*curwin).w_topfill < win_get_fill(curwin, (*curwin).w_topline) {
                             count += 1;
                         } else {
-                            count
-                                += plines_win(
-                                    curwin,
-                                    (*curwin).w_topline - 1 as linenr_T,
-                                    true_0 != 0,
-                                );
+                            count += plines_win(
+                                curwin,
+                                (*curwin).w_topline - 1 as linenr_T,
+                                true_0 != 0,
+                            );
                         }
                         if !first && count > -row {
                             break;
@@ -3894,9 +3789,7 @@ pub unsafe extern "C" fn jump_to_mouse(
                             &raw mut (*curwin).w_topline,
                             ::core::ptr::null_mut::<linenr_T>(),
                         );
-                        if (*curwin).w_topfill
-                            < win_get_fill(curwin, (*curwin).w_topline)
-                        {
+                        if (*curwin).w_topfill < win_get_fill(curwin, (*curwin).w_topline) {
                             (*curwin).w_topfill += 1;
                         } else {
                             (*curwin).w_topline -= 1;
@@ -3904,8 +3797,8 @@ pub unsafe extern "C" fn jump_to_mouse(
                         }
                     }
                     check_topfill(curwin, false_0 != 0);
-                    (*curwin).w_valid
-                        &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
+                    (*curwin).w_valid &=
+                        !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
                     redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
                     row = 0 as ::core::ffi::c_int;
                 } else if row >= (*curwin).w_view_height {
@@ -3915,12 +3808,9 @@ pub unsafe extern "C" fn jump_to_mouse(
                         if (*curwin).w_topfill > 0 as ::core::ffi::c_int {
                             count += 1;
                         } else {
-                            count
-                                += plines_win(curwin, (*curwin).w_topline, true_0 != 0);
+                            count += plines_win(curwin, (*curwin).w_topline, true_0 != 0);
                         }
-                        if !first
-                            && count
-                                > row - (*curwin).w_view_height + 1 as ::core::ffi::c_int
+                        if !first && count > row - (*curwin).w_view_height + 1 as ::core::ffi::c_int
                         {
                             break;
                         }
@@ -3933,27 +3823,24 @@ pub unsafe extern "C" fn jump_to_mouse(
                                 (*curwin).w_topline,
                                 ::core::ptr::null_mut::<linenr_T>(),
                                 &raw mut (*curwin).w_topline,
-                            ) as ::core::ffi::c_int != 0
+                            ) as ::core::ffi::c_int
+                                != 0
                                 && (*curwin).w_topline == (*curbuf).b_ml.ml_line_count
                             {
                                 break;
                             }
                             (*curwin).w_topline += 1;
-                            (*curwin).w_topfill = win_get_fill(
-                                curwin,
-                                (*curwin).w_topline,
-                            );
+                            (*curwin).w_topfill = win_get_fill(curwin, (*curwin).w_topline);
                         }
                     }
                     check_topfill(curwin, false_0 != 0);
                     redraw_later(curwin, UPD_VALID as ::core::ffi::c_int);
-                    (*curwin).w_valid
-                        &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
+                    (*curwin).w_valid &=
+                        !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
                     row = (*curwin).w_view_height - 1 as ::core::ffi::c_int;
                 } else if row == 0 as ::core::ffi::c_int {
                     if mouse_dragging > 0 as ::core::ffi::c_int
-                        && (*curwin).w_cursor.lnum
-                            == (*(*curwin).w_buffer).b_ml.ml_line_count
+                        && (*curwin).w_cursor.lnum == (*(*curwin).w_buffer).b_ml.ml_line_count
                         && (*curwin).w_cursor.lnum == (*curwin).w_topline
                     {
                         (*curwin).w_valid &= !VALID_TOPLINE;
@@ -3995,12 +3882,12 @@ pub unsafe extern "C" fn jump_to_mouse(
                 *inclusive = false_0 != 0;
             }
             count = if on_statuscol as ::core::ffi::c_int != 0 {
-                IN_OTHER_WIN as ::core::ffi::c_int
-                    | MOUSE_STATUSCOL as ::core::ffi::c_int
+                IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_STATUSCOL as ::core::ffi::c_int
             } else {
                 IN_BUFFER as ::core::ffi::c_int
             };
-            if curwin != old_curwin || (*curwin).w_cursor.lnum != old_cursor.lnum
+            if curwin != old_curwin
+                || (*curwin).w_cursor.lnum != old_cursor.lnum
                 || (*curwin).w_cursor.col != old_cursor.col
             {
                 count |= CURSOR_MOVED as ::core::ffi::c_int;
@@ -4019,8 +3906,7 @@ pub unsafe extern "C" fn jump_to_mouse(
         return IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_WINBAR as ::core::ffi::c_int;
     }
     if on_statuscol {
-        return IN_OTHER_WIN as ::core::ffi::c_int
-            | MOUSE_STATUSCOL as ::core::ffi::c_int;
+        return IN_OTHER_WIN as ::core::ffi::c_int | MOUSE_STATUSCOL as ::core::ffi::c_int;
     }
     if flags & MOUSE_MAY_STOP_VIS as ::core::ffi::c_int != 0 {
         end_visual_mode();
@@ -4087,12 +3973,11 @@ pub unsafe extern "C" fn mouse_comp_pos(
     let mut lnum: linenr_T = (*win).w_topline;
     while row > 0 as ::core::ffi::c_int {
         if win_may_fill(win) {
-            row
-                -= if lnum == (*win).w_topline {
-                    (*win).w_topfill
-                } else {
-                    win_get_fill(win, lnum)
-                };
+            row -= if lnum == (*win).w_topline {
+                (*win).w_topfill
+            } else {
+                win_get_fill(win, lnum)
+            };
             count = plines_win_nofill(win, lnum, false_0 != 0);
         } else {
             count = plines_win(win, lnum, false_0 != 0);
@@ -4103,7 +3988,8 @@ pub unsafe extern "C" fn mouse_comp_pos(
                 let mut skip_lines: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                 if (*win).w_skipcol > width1 {
                     skip_lines = ((*win).w_skipcol as ::core::ffi::c_int - width1)
-                        / (width1 + win_col_off2(win)) + 1 as ::core::ffi::c_int;
+                        / (width1 + win_col_off2(win))
+                        + 1 as ::core::ffi::c_int;
                 } else if (*win).w_skipcol > 0 as ::core::ffi::c_int {
                     skip_lines = 1 as ::core::ffi::c_int;
                 }
@@ -4113,7 +3999,12 @@ pub unsafe extern "C" fn mouse_comp_pos(
         if count > row {
             break;
         }
-        hasFolding(win, lnum, ::core::ptr::null_mut::<linenr_T>(), &raw mut lnum);
+        hasFolding(
+            win,
+            lnum,
+            ::core::ptr::null_mut::<linenr_T>(),
+            &raw mut lnum,
+        );
         if lnum == (*(*win).w_buffer).b_ml.ml_line_count {
             retval = true_0 != 0;
             break;
@@ -4127,10 +4018,16 @@ pub unsafe extern "C" fn mouse_comp_pos(
             win,
             lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
             false_0 != 0,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         lnum += 1;
-        hasFolding(win, lnum, ::core::ptr::null_mut::<linenr_T>(), &raw mut lnum);
+        hasFolding(
+            win,
+            lnum,
+            ::core::ptr::null_mut::<linenr_T>(),
+            &raw mut lnum,
+        );
     }
     if !retval {
         let mut off: ::core::ffi::c_int = win_col_off(win) - win_col_off2(win);
@@ -4144,7 +4041,11 @@ pub unsafe extern "C" fn mouse_comp_pos(
         col += (*win).w_leftcol as ::core::ffi::c_int;
     }
     col -= win_col_off(win);
-    col = if col > 0 as ::core::ffi::c_int { col } else { 0 as ::core::ffi::c_int };
+    col = if col > 0 as ::core::ffi::c_int {
+        col
+    } else {
+        0 as ::core::ffi::c_int
+    };
     *colp = col;
     *rowp = row;
     *lnump = lnum;
@@ -4158,9 +4059,9 @@ pub unsafe extern "C" fn mouse_find_win_inner(
 ) -> *mut win_T {
     let mut wp_grid: *mut win_T = mouse_find_grid_win(gridp, rowp, colp);
     if !wp_grid.is_null() {
-        return wp_grid
+        return wp_grid;
     } else if *gridp > 1 as ::core::ffi::c_int {
-        return ::core::ptr::null_mut::<win_T>()
+        return ::core::ptr::null_mut::<win_T>();
     }
     let mut fp: *mut frame_T = topframe;
     *rowp -= (*firstwin).w_winrow;
@@ -4222,7 +4123,8 @@ unsafe extern "C" fn mouse_find_grid_win(
         *gridp = DEFAULT_GRID_HANDLE;
     } else if *gridp > 1 as ::core::ffi::c_int {
         let mut wp: *mut win_T = get_win_by_grid_handle(*gridp as handle_T);
-        if !wp.is_null() && !(*wp).w_grid_alloc.chars.is_null()
+        if !wp.is_null()
+            && !(*wp).w_grid_alloc.chars.is_null()
             && !((*wp).w_floating as ::core::ffi::c_int != 0 && !(*wp).w_config.mouse)
         {
             *rowp = if *rowp - (*wp).w_grid.row_offset
@@ -4232,13 +4134,12 @@ unsafe extern "C" fn mouse_find_grid_win(
             } else {
                 (*wp).w_view_height - 1 as ::core::ffi::c_int
             };
-            *colp = if *colp - (*wp).w_grid.col_offset
-                < (*wp).w_view_width - 1 as ::core::ffi::c_int
-            {
-                *colp - (*wp).w_grid.col_offset
-            } else {
-                (*wp).w_view_width - 1 as ::core::ffi::c_int
-            };
+            *colp =
+                if *colp - (*wp).w_grid.col_offset < (*wp).w_view_width - 1 as ::core::ffi::c_int {
+                    *colp - (*wp).w_grid.col_offset
+                } else {
+                    (*wp).w_view_width - 1 as ::core::ffi::c_int
+                };
             return wp;
         }
     } else if *gridp == 0 as ::core::ffi::c_int {
@@ -4291,10 +4192,7 @@ pub unsafe extern "C" fn vcol2col(
             lvl: 0,
             x: ::core::ptr::null_mut::<MTNode>(),
             i: 0,
-            s: [C2Rust_Unnamed_13 {
-                oldcol: 0,
-                i: 0,
-            }; 20],
+            s: [C2Rust_Unnamed_13 { oldcol: 0, i: 0 }; 20],
             intersect_idx: 0,
             intersect_pos: MTPos { row: 0, col: 0 },
             intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -4304,8 +4202,8 @@ pub unsafe extern "C" fn vcol2col(
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     let mut cur_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while cur_vcol < vcol && *ci.ptr as ::core::ffi::c_int != NUL {
-        let mut next_vcol: ::core::ffi::c_int = cur_vcol
-            + win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+        let mut next_vcol: ::core::ffi::c_int =
+            cur_vcol + win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
         if next_vcol > vcol {
             break;
         }
@@ -4355,14 +4253,8 @@ unsafe extern "C" fn find_longest_lnum() -> linenr_T {
                 max = len;
                 ret = lnum;
             } else if len == max
-                && abs(
-                    lnum as ::core::ffi::c_int
-                        - (*curwin).w_cursor.lnum as ::core::ffi::c_int,
-                )
-                    < abs(
-                        ret as ::core::ffi::c_int
-                            - (*curwin).w_cursor.lnum as ::core::ffi::c_int,
-                    )
+                && abs(lnum as ::core::ffi::c_int - (*curwin).w_cursor.lnum as ::core::ffi::c_int)
+                    < abs(ret as ::core::ffi::c_int - (*curwin).w_cursor.lnum as ::core::ffi::c_int)
             {
                 ret = lnum;
             }
@@ -4380,8 +4272,8 @@ unsafe extern "C" fn mouse_check_grid(
     let mut click_grid: ::core::ffi::c_int = mouse_grid;
     let mut click_row: ::core::ffi::c_int = mouse_row;
     let mut click_col: ::core::ffi::c_int = mouse_col;
-    if mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col)
-        != curwin || (*curwin).w_redr_type != 0 as ::core::ffi::c_int
+    if mouse_find_win_inner(&raw mut click_grid, &raw mut click_row, &raw mut click_col) != curwin
+        || (*curwin).w_redr_type != 0 as ::core::ffi::c_int
     {
         return;
     }
@@ -4397,13 +4289,15 @@ unsafe extern "C" fn mouse_check_grid(
     }
     click_row += start_row;
     click_col += start_col;
-    if click_row < 0 as ::core::ffi::c_int || click_row >= (*gp).rows
-        || click_col < 0 as ::core::ffi::c_int || click_col >= (*gp).cols
+    if click_row < 0 as ::core::ffi::c_int
+        || click_row >= (*gp).rows
+        || click_col < 0 as ::core::ffi::c_int
+        || click_col >= (*gp).cols
     {
         return;
     }
-    let off: size_t = (*(*gp).line_offset.offset(click_row as isize))
-        .wrapping_add(click_col as size_t);
+    let off: size_t =
+        (*(*gp).line_offset.offset(click_row as isize)).wrapping_add(click_col as size_t);
     let mut col_from_screen: colnr_T = *(*gp).vcols.offset(off as isize);
     if col_from_screen >= 0 as ::core::ffi::c_int {
         *vcolp = col_from_screen;
@@ -4443,24 +4337,21 @@ pub unsafe extern "C" fn f_getmousepos(
         ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         mouse_col as varnumber_T + 1 as varnumber_T,
     );
-    let mut wp: *mut win_T = mouse_find_win_inner(
-        &raw mut grid,
-        &raw mut row,
-        &raw mut col,
-    );
+    let mut wp: *mut win_T = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
     if !wp.is_null() {
-        let mut height: ::core::ffi::c_int = (*wp).w_height + (*wp).w_hsep_height
-            + (*wp).w_status_height;
+        let mut height: ::core::ffi::c_int =
+            (*wp).w_height + (*wp).w_hsep_height + (*wp).w_status_height;
         if row < height + (*wp).w_border_adj[2 as ::core::ffi::c_int as usize] {
             winid = (*wp).handle as varnumber_T;
             winrow = (row + 1 as ::core::ffi::c_int + (*wp).w_winrow_off) as varnumber_T;
             wincol = (col + 1 as ::core::ffi::c_int + (*wp).w_wincol_off) as varnumber_T;
-            if row >= 0 as ::core::ffi::c_int && row < (*wp).w_height
-                && col >= 0 as ::core::ffi::c_int && col < (*wp).w_width
+            if row >= 0 as ::core::ffi::c_int
+                && row < (*wp).w_height
+                && col >= 0 as ::core::ffi::c_int
+                && col < (*wp).w_width
             {
                 mouse_comp_pos(wp, &raw mut row, &raw mut col, &raw mut lnum);
-                col = vcol2col(wp, lnum, col as colnr_T, &raw mut coladd)
-                    as ::core::ffi::c_int;
+                col = vcol2col(wp, lnum, col as colnr_T, &raw mut coladd) as ::core::ffi::c_int;
                 column = (col + 1 as ::core::ffi::c_int) as varnumber_T;
             }
         }
@@ -4511,9 +4402,9 @@ unsafe extern "C" fn win_charsize(
     mut csarg: *mut CharsizeArg,
 ) -> CharSize {
     if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
     } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr)
+        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
     };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -73,10 +73,7 @@ extern "C" {
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xcalloc(count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xmemcpyz(
         dst: *mut ::core::ffi::c_void,
         src: *const ::core::ffi::c_void,
@@ -107,11 +104,7 @@ extern "C" {
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> bool;
-    fn remote_ui_disconnect(
-        channel_id: uint64_t,
-        err: *mut Error,
-        send_error_exit: bool,
-    );
+    fn remote_ui_disconnect(channel_id: uint64_t, err: *mut Error, send_error_exit: bool);
     fn remote_ui_connect(
         channel_id: uint64_t,
         server_addr: *mut ::core::ffi::c_char,
@@ -134,11 +127,7 @@ extern "C" {
     fn arg_all() -> *mut ::core::ffi::c_char;
     fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool);
     fn is_aucmd_win(win: *mut win_T) -> bool;
-    fn do_autocmd(
-        eap: *mut exarg_T,
-        arg_in: *mut ::core::ffi::c_char,
-        forceit: ::core::ffi::c_int,
-    );
+    fn do_autocmd(eap: *mut exarg_T, arg_in: *mut ::core::ffi::c_char, forceit: ::core::ffi::c_int);
     fn do_doautocmd(
         arg_start: *mut ::core::ffi::c_char,
         do_msg: bool,
@@ -287,21 +276,13 @@ extern "C" {
     fn skipwhite(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn skipdigits(q: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn skiptowhite_esc(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn getdigits(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: intmax_t,
-    ) -> intmax_t;
+    fn getdigits(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: intmax_t) -> intmax_t;
     fn getdigits_int(
         pp: *mut *mut ::core::ffi::c_char,
         strict: bool,
         def: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn getdigits_int32(
-        pp: *mut *mut ::core::ffi::c_char,
-        strict: bool,
-        def: int32_t,
-    ) -> int32_t;
+    fn getdigits_int32(pp: *mut *mut ::core::ffi::c_char, strict: bool, def: int32_t) -> int32_t;
     fn backslash_halve(p: *mut ::core::ffi::c_char);
     fn ExpandOne(
         xp: *mut expand_T,
@@ -398,11 +379,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn beginline(flags: ::core::ffi::c_int);
     fn msg(s: *const ::core::ffi::c_char, hl_id: ::core::ffi::c_int) -> bool;
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg_multiline(
         s: *const ::core::ffi::c_char,
         kind: *const ::core::ffi::c_char,
@@ -448,16 +425,11 @@ extern "C" {
         copyID: ::core::ffi::c_int,
     ) -> *mut list_T;
     fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T;
-    fn tv_list_find_str(
-        l: *mut list_T,
-        n: ::core::ffi::c_int,
-    ) -> *const ::core::ffi::c_char;
+    fn tv_list_find_str(l: *mut list_T, n: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     fn callback_free(callback: *mut Callback);
     fn tv_clear(tv: *mut typval_T);
     fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn get_scriptlocal_funcname(
-        funcname: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_scriptlocal_funcname(funcname: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn ex_function(eap: *mut exarg_T);
     fn ex_delfunction(eap: *mut exarg_T);
     fn ex_return(eap: *mut exarg_T);
@@ -488,17 +460,10 @@ extern "C" {
     fn get_vim_var_list(idx: VimVarIndex) -> *mut list_T;
     fn get_vim_var_str(idx: VimVarIndex) -> *mut ::core::ffi::c_char;
     fn set_vim_var_nr(idx: VimVarIndex, val: varnumber_T);
-    fn set_vim_var_string(
-        idx: VimVarIndex,
-        val: *const ::core::ffi::c_char,
-        len: ptrdiff_t,
-    );
+    fn set_vim_var_string(idx: VimVarIndex, val: *const ::core::ffi::c_char, len: ptrdiff_t);
     fn v_exception(oldval: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn v_throwpoint(oldval: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn var_redir_start(
-        name: *mut ::core::ffi::c_char,
-        append: bool,
-    ) -> ::core::ffi::c_int;
+    fn var_redir_start(name: *mut ::core::ffi::c_char, append: bool) -> ::core::ffi::c_int;
     fn var_redir_stop();
     fn os_hrtime() -> uint64_t;
     fn multiqueue_process_events(self_0: *mut MultiQueue);
@@ -666,15 +631,8 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn shorten_fnames(force: ::core::ffi::c_int);
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
-    fn ga_append_via_ptr(
-        gap: *mut garray_T,
-        item_size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
+    fn ga_append_via_ptr(gap: *mut garray_T, item_size: size_t) -> *mut ::core::ffi::c_void;
     fn hasFolding(
         win: *mut win_T,
         lnum: linenr_T,
@@ -860,14 +818,8 @@ extern "C" {
         base_in: *const ::core::ffi::c_char,
         p_in: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn mb_copy_char(
-        fp: *mut *const ::core::ffi::c_char,
-        tp: *mut *mut ::core::ffi::c_char,
-    );
-    fn get_encoding_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn mb_copy_char(fp: *mut *const ::core::ffi::c_char, tp: *mut *mut ::core::ffi::c_char);
+    fn get_encoding_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     static utf8len_tab: [uint8_t; 256];
     fn ml_recover(checkext: bool);
     fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool);
@@ -882,11 +834,7 @@ extern "C" {
     fn check_cursor_moved(wp: *mut win_T);
     fn cursor_valid(wp: *mut win_T) -> ::core::ffi::c_int;
     fn validate_cursor(wp: *mut win_T);
-    fn scrolldown(
-        wp: *mut win_T,
-        line_count: linenr_T,
-        byfold: ::core::ffi::c_int,
-    ) -> bool;
+    fn scrolldown(wp: *mut win_T, line_count: linenr_T, byfold: ::core::ffi::c_int) -> bool;
     fn scrollup(wp: *mut win_T, line_count: linenr_T, byfold: bool) -> bool;
     fn cursor_correct(wp: *mut win_T);
     fn server_start(addr: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
@@ -917,11 +865,7 @@ extern "C" {
         opt_flags: ::core::ffi::c_int,
         set_sid: scid_T,
     );
-    fn set_option_value_give_err(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    );
+    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
     fn get_findfunc() -> *mut ::core::ffi::c_char;
     fn magic_isset() -> bool;
     fn option_set_callback_func(
@@ -930,17 +874,11 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn get_scrolloff_value(wp: *mut win_T) -> int64_t;
     fn free_string_option(p: *mut ::core::ffi::c_char);
-    fn get_fileformat_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_fileformat_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn check_ff_value(p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
     fn os_mkdir(path: *const ::core::ffi::c_char, mode: int32_t) -> ::core::ffi::c_int;
     fn os_breakcheck();
@@ -977,24 +915,15 @@ extern "C" {
         fname1: *const ::core::ffi::c_char,
         fname2: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    fn FullName_save(
-        fname: *const ::core::ffi::c_char,
-        force: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn FullName_save(fname: *const ::core::ffi::c_char, force: bool) -> *mut ::core::ffi::c_char;
     fn path_has_wildcard(p: *const ::core::ffi::c_char) -> bool;
     fn pathcmp(
         p: *const ::core::ffi::c_char,
         q: *const ::core::ffi::c_char,
         maxlen: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn path_try_shorten_fname(
-        full_path: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn plines_m_win_fill(
-        wp: *mut win_T,
-        first: linenr_T,
-        last: linenr_T,
-    ) -> ::core::ffi::c_int;
+    fn path_try_shorten_fname(full_path: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
+    fn plines_m_win_fill(wp: *mut win_T, first: linenr_T, last: linenr_T) -> ::core::ffi::c_int;
     fn ex_profile(eap: *mut exarg_T);
     fn func_line_start(cookie: *mut ::core::ffi::c_void);
     fn func_line_exec(cookie: *mut ::core::ffi::c_void);
@@ -1002,10 +931,7 @@ extern "C" {
     fn script_line_start();
     fn script_line_exec();
     fn script_line_end();
-    fn pum_make_popup(
-        path_name: *const ::core::ffi::c_char,
-        use_mouse_pos: ::core::ffi::c_int,
-    );
+    fn pum_make_popup(path_name: *const ::core::ffi::c_char, use_mouse_pos: ::core::ffi::c_int);
     fn skip_regexp(
         startp: *mut ::core::ffi::c_char,
         delim: ::core::ffi::c_int,
@@ -1077,10 +1003,7 @@ extern "C" {
         forceit: bool,
         silent: bool,
     );
-    fn shada_write_file(
-        file: *const ::core::ffi::c_char,
-        nomerge: bool,
-    ) -> ::core::ffi::c_int;
+    fn shada_write_file(file: *const ::core::ffi::c_char, nomerge: bool) -> ::core::ffi::c_int;
     fn shada_read_everything(
         fname: *const ::core::ffi::c_char,
         forceit: bool,
@@ -1160,15 +1083,8 @@ extern "C" {
     fn curbufIsChanged() -> bool;
     fn window_layout_locked(cmd: cmdidx_T) -> bool;
     fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool;
-    fn do_window(
-        nchar: ::core::ffi::c_int,
-        Prenum: ::core::ffi::c_int,
-        xchar: ::core::ffi::c_int,
-    );
-    fn win_split(
-        size: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn do_window(nchar: ::core::ffi::c_int, Prenum: ::core::ffi::c_int, xchar: ::core::ffi::c_int);
+    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn win_valid(win: *const win_T) -> bool;
     fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
     fn trigger_tabclosedpre(tp: *mut tabpage_T);
@@ -1203,10 +1119,7 @@ extern "C" {
     fn ex_diffthis(eap: *mut exarg_T);
     fn ex_diffoff(eap: *mut exarg_T);
     fn ex_diffgetput(eap: *mut exarg_T);
-    fn skip_expr(
-        pp: *mut *mut ::core::ffi::c_char,
-        evalarg: *mut evalarg_T,
-    ) -> ::core::ffi::c_int;
+    fn skip_expr(pp: *mut *mut ::core::ffi::c_char, evalarg: *mut evalarg_T) -> ::core::ffi::c_int;
     fn eval_to_string(
         arg: *mut ::core::ffi::c_char,
         join_list: bool,
@@ -1467,9 +1380,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1496,9 +1408,7 @@ pub struct C2Rust_Unnamed_0 {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1629,9 +1539,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -1643,9 +1552,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1657,15 +1565,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_6 {
@@ -1805,9 +1708,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1878,9 +1780,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -3547,12 +3448,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -3599,12 +3498,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_29 {
@@ -3822,9 +3719,8 @@ pub const EXPAND_COMMANDS: C2Rust_Unnamed_33 = 1;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_33 = 0;
 pub const EXPAND_OK: C2Rust_Unnamed_33 = -1;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_33 = -2;
-pub type CompleteListItemGetter = Option<
-    unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
->;
+pub type CompleteListItemGetter =
+    Option<unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
 pub type optmagic_T = ::core::ffi::c_uint;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
@@ -5080,13 +4976,8 @@ pub type LineGetter = Option<
 >;
 pub type exarg_T = exarg;
 pub type ex_func_T = Option<unsafe extern "C" fn(*mut exarg_T) -> ()>;
-pub type ex_preview_func_T = Option<
-    unsafe extern "C" fn(
-        *mut exarg_T,
-        ::core::ffi::c_int,
-        handle_T,
-    ) -> ::core::ffi::c_int,
->;
+pub type ex_preview_func_T =
+    Option<unsafe extern "C" fn(*mut exarg_T, ::core::ffi::c_int, handle_T) -> ::core::ffi::c_int>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct CommandDefinition {
@@ -6108,15 +5999,9 @@ pub const OP_NOP: C2Rust_Unnamed_67 = 0;
 pub type C2Rust_Unnamed_68 = ::core::ffi::c_uint;
 pub const INT32_MAX: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_1: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_1: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EXIT_FAILURE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
@@ -6235,71 +6120,57 @@ unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     return (*l).lv_len;
 }
 static mut e_ambiguous_use_of_user_defined_command: [::core::ffi::c_char; 44] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 44],
-        [::core::ffi::c_char; 44],
-    >(*b"E464: Ambiguous use of user-defined command\0")
+    ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(
+        *b"E464: Ambiguous use of user-defined command\0",
+    )
 };
 static mut e_no_call_stack_to_substitute_for_stack: [::core::ffi::c_char; 48] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 48],
-        [::core::ffi::c_char; 48],
-    >(*b"E489: No call stack to substitute for \"<stack>\"\0")
+    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
+        *b"E489: No call stack to substitute for \"<stack>\"\0",
+    )
 };
 static mut e_not_an_editor_command: [::core::ffi::c_char; 28] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 28],
-        [::core::ffi::c_char; 28],
-    >(*b"E492: Not an editor command\0")
+    ::core::mem::transmute::<[u8; 28], [::core::ffi::c_char; 28]>(*b"E492: Not an editor command\0")
 };
 static mut e_no_autocommand_file_name_to_substitute_for_afile: [::core::ffi::c_char; 59] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 59],
-        [::core::ffi::c_char; 59],
-    >(*b"E495: No autocommand file name to substitute for \"<afile>\"\0")
+    ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
+        *b"E495: No autocommand file name to substitute for \"<afile>\"\0",
+    )
 };
 static mut e_no_autocommand_buffer_number_to_substitute_for_abuf: [::core::ffi::c_char; 62] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 62],
-        [::core::ffi::c_char; 62],
-    >(*b"E496: No autocommand buffer number to substitute for \"<abuf>\"\0")
+    ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(
+        *b"E496: No autocommand buffer number to substitute for \"<abuf>\"\0",
+    )
 };
 static mut e_no_autocommand_match_name_to_substitute_for_amatch: [::core::ffi::c_char; 61] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 61],
-        [::core::ffi::c_char; 61],
-    >(*b"E497: No autocommand match name to substitute for \"<amatch>\"\0")
+    ::core::mem::transmute::<[u8; 61], [::core::ffi::c_char; 61]>(
+        *b"E497: No autocommand match name to substitute for \"<amatch>\"\0",
+    )
 };
 static mut e_no_source_file_name_to_substitute_for_sfile: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 55],
-        [::core::ffi::c_char; 55],
-    >(*b"E498: No :source file name to substitute for \"<sfile>\"\0")
+    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
+        *b"E498: No :source file name to substitute for \"<sfile>\"\0",
+    )
 };
 static mut e_no_line_number_to_use_for_slnum: [::core::ffi::c_char; 42] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 42],
-        [::core::ffi::c_char; 42],
-    >(*b"E842: No line number to use for \"<slnum>\"\0")
+    ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
+        *b"E842: No line number to use for \"<slnum>\"\0",
+    )
 };
 static mut e_no_line_number_to_use_for_sflnum: [::core::ffi::c_char; 43] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 43],
-        [::core::ffi::c_char; 43],
-    >(*b"E961: No line number to use for \"<sflnum>\"\0")
+    ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
+        *b"E961: No line number to use for \"<sflnum>\"\0",
+    )
 };
 static mut e_no_script_file_name_to_substitute_for_script: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 56],
-        [::core::ffi::c_char; 56],
-    >(*b"E1274: No script file name to substitute for \"<script>\"\0")
+    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
+        *b"E1274: No script file name to substitute for \"<script>\"\0",
+    )
 };
 static mut quitmore: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static mut ex_pressedreturn: bool = false_0 != 0;
-static mut dollar_command: [::core::ffi::c_char; 2] = [
-    '$' as ::core::ffi::c_char,
-    0 as ::core::ffi::c_char,
-];
+static mut dollar_command: [::core::ffi::c_char; 2] =
+    ['$' as ::core::ffi::c_char, 0 as ::core::ffi::c_char];
 unsafe extern "C" fn save_dbg_stuff(mut dsp: *mut dbg_stuff) {
     (*dsp).trylevel = trylevel;
     trylevel = 0 as ::core::ffi::c_int;
@@ -6352,7 +6223,8 @@ unsafe extern "C" fn is_other_file(
     if *ffname as ::core::ffi::c_int == NUL {
         return false_0 != 0;
     }
-    if !(*curbuf).file_id_valid && !(*curbuf).b_sfname.is_null()
+    if !(*curbuf).file_id_valid
+        && !(*curbuf).b_sfname.is_null()
         && *(*curbuf).b_sfname as ::core::ffi::c_int != NUL
     {
         return path_fnamecmp(ffname, (*curbuf).b_sfname) != 0 as ::core::ffi::c_int;
@@ -6378,9 +6250,7 @@ pub unsafe extern "C" fn do_exmode() {
         0 as ::core::ffi::c_int,
     );
     while exmode_active {
-        if ex_normal_busy > 0 as ::core::ffi::c_int
-            && typebuf.tb_len == 0 as ::core::ffi::c_int
-        {
+        if ex_normal_busy > 0 as ::core::ffi::c_int && typebuf.tb_len == 0 as ::core::ffi::c_int {
             exmode_active = false_0 != 0;
             break;
         } else {
@@ -6401,19 +6271,20 @@ pub unsafe extern "C" fn do_exmode() {
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
                 NULL_1,
                 0 as ::core::ffi::c_int,
             );
             lines_left = Rows - 1 as ::core::ffi::c_int;
-            if (prev_line != (*curwin).w_cursor.lnum
-                || changedtick != buf_get_changedtick(curbuf)) && !ex_no_reprint
+            if (prev_line != (*curwin).w_cursor.lnum || changedtick != buf_get_changedtick(curbuf))
+                && !ex_no_reprint
             {
                 if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
-                    emsg(
-                        gettext(&raw const e_empty_buffer as *const ::core::ffi::c_char),
-                    );
+                    emsg(gettext(
+                        &raw const e_empty_buffer as *const ::core::ffi::c_char,
+                    ));
                 } else {
                     if ex_pressedreturn {
                         msg_scroll_flush();
@@ -6423,25 +6294,18 @@ pub unsafe extern "C" fn do_exmode() {
                         }
                     }
                     msg_col = 0 as ::core::ffi::c_int;
-                    print_line_no_prefix(
-                        (*curwin).w_cursor.lnum,
-                        false_0 != 0,
-                        false_0 != 0,
-                    );
+                    print_line_no_prefix((*curwin).w_cursor.lnum, false_0 != 0, false_0 != 0);
                     msg_clr_eos();
                 }
             } else if ex_pressedreturn as ::core::ffi::c_int != 0 && !ex_no_reprint {
                 if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
-                    emsg(
-                        gettext(&raw const e_empty_buffer as *const ::core::ffi::c_char),
-                    );
+                    emsg(gettext(
+                        &raw const e_empty_buffer as *const ::core::ffi::c_char,
+                    ));
                 } else {
-                    emsg(
-                        gettext(
-                            b"E501: At end-of-file\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(
+                        b"E501: At end-of-file\0".as_ptr() as *const ::core::ffi::c_char
+                    ));
                 }
             }
         }
@@ -6453,10 +6317,7 @@ pub unsafe extern "C" fn do_exmode() {
     need_wait_return = false_0 != 0;
     msg_scroll = save_msg_scroll;
 }
-unsafe extern "C" fn msg_verbose_cmd(
-    mut lnum: linenr_T,
-    mut cmd: *mut ::core::ffi::c_char,
-) {
+unsafe extern "C" fn msg_verbose_cmd(mut lnum: linenr_T, mut cmd: *mut ::core::ffi::c_char) {
     no_wait_return += 1;
     verbose_enter_scroll();
     if lnum == 0 as linenr_T {
@@ -6482,7 +6343,8 @@ unsafe extern "C" fn msg_verbose_cmd(
 static mut cmdline_call_depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if cmdline_call_depth >= 0 as ::core::ffi::c_int {} else {
+        if cmdline_call_depth >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"cmdline_call_depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
@@ -6492,9 +6354,7 @@ unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
             );
         }
     };
-    if cmdline_call_depth >= 200 as ::core::ffi::c_int
-        && cmdline_call_depth as OptInt >= p_mfd
-    {
+    if cmdline_call_depth >= 200 as ::core::ffi::c_int && cmdline_call_depth as OptInt >= p_mfd {
         return FAIL;
     }
     cmdline_call_depth += 1;
@@ -6504,7 +6364,8 @@ unsafe extern "C" fn do_cmdline_start() -> ::core::ffi::c_int {
 unsafe extern "C" fn do_cmdline_end() {
     cmdline_call_depth -= 1;
     '_c2rust_label: {
-        if cmdline_call_depth >= 0 as ::core::ffi::c_int {} else {
+        if cmdline_call_depth >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"cmdline_call_depth >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
@@ -6517,14 +6378,13 @@ unsafe extern "C" fn do_cmdline_end() {
     end_batch_changes();
 }
 #[no_mangle]
-pub unsafe extern "C" fn do_cmdline_cmd(
-    mut cmd: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn do_cmdline_cmd(mut cmd: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     return do_cmdline(
         cmd as *mut ::core::ffi::c_char,
         None,
         NULL_1,
-        DOCMD_VERBOSE as ::core::ffi::c_int | DOCMD_NOWAIT as ::core::ffi::c_int
+        DOCMD_VERBOSE as ::core::ffi::c_int
+            | DOCMD_NOWAIT as ::core::ffi::c_int
             | DOCMD_KEYTYPED as ::core::ffi::c_int,
     );
 }
@@ -6535,12 +6395,8 @@ pub unsafe extern "C" fn do_cmdline(
     mut cookie: *mut ::core::ffi::c_void,
     mut flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut next_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut cmdline_copy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut next_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut cmdline_copy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut used_getline: bool = false_0 != 0;
     static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut msg_didout_before_start: bool = false_0 != 0;
@@ -6570,13 +6426,9 @@ pub unsafe extern "C" fn do_cmdline(
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
     let mut current_line: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut breakpoint: *mut linenr_T = ::core::ptr::null_mut::<linenr_T>();
-    let mut dbg_tick: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<
-        ::core::ffi::c_int,
-    >();
+    let mut dbg_tick: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let mut debug_saved: dbg_stuff = dbg_stuff {
         trylevel: 0,
         force_abort: 0,
@@ -6599,9 +6451,7 @@ pub unsafe extern "C" fn do_cmdline(
             bool,
         ) -> *mut ::core::ffi::c_char,
     > = None;
-    let mut cmd_cookie: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-        ::core::ffi::c_void,
-    >();
+    let mut cmd_cookie: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
     let mut cmd_loop_cookie: loop_cookie = loop_cookie {
         lines_gap: ::core::ptr::null_mut::<garray_T>(),
         current_line: 0,
@@ -6613,7 +6463,9 @@ pub unsafe extern "C" fn do_cmdline(
     msg_list = &raw mut private_msg_list;
     private_msg_list = ::core::ptr::null_mut::<msglist_T>();
     if do_cmdline_start() == FAIL {
-        emsg(gettext(&raw const e_command_too_recursive as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_command_too_recursive as *const ::core::ffi::c_char,
+        ));
         do_errthrow(
             NULL_1 as *mut cstack_T,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -6640,9 +6492,7 @@ pub unsafe extern "C" fn do_cmdline(
                 ) -> *mut ::core::ffi::c_char,
         ),
     );
-    if getline_is_func as ::core::ffi::c_int != 0
-        && ex_nesting_level == func_level(real_cookie)
-    {
+    if getline_is_func as ::core::ffi::c_int != 0 && ex_nesting_level == func_level(real_cookie) {
         ex_nesting_level += 1;
     }
     if getline_is_func {
@@ -6664,7 +6514,7 @@ pub unsafe extern "C" fn do_cmdline(
     ) {
         fname = (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_name;
+        .es_name;
         breakpoint = source_breakpoint(real_cookie);
         dbg_tick = source_dbg_tick(real_cookie);
     }
@@ -6716,18 +6566,16 @@ pub unsafe extern "C" fn do_cmdline(
                     ) -> *mut ::core::ffi::c_char,
             ),
         );
-        if next_cmdline.is_null() && !force_abort
+        if next_cmdline.is_null()
+            && !force_abort
             && cstack.cs_idx < 0 as ::core::ffi::c_int
-            && !(getline_is_func as ::core::ffi::c_int != 0
-                && func_has_abort(real_cookie) != 0)
+            && !(getline_is_func as ::core::ffi::c_int != 0 && func_has_abort(real_cookie) != 0)
         {
             did_emsg = false_0;
         }
-        if cstack.cs_looplevel > 0 as ::core::ffi::c_int
-            && current_line < lines_ga.ga_len
-        {
-            let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut cmdline_copy
-                as *mut *mut ::core::ffi::c_void;
+        if cstack.cs_looplevel > 0 as ::core::ffi::c_int && current_line < lines_ga.ga_len {
+            let mut ptr_: *mut *mut ::core::ffi::c_void =
+                &raw mut cmdline_copy as *mut *mut ::core::ffi::c_void;
             xfree(*ptr_);
             *ptr_ = NULL_1;
             *ptr_;
@@ -6750,9 +6598,11 @@ pub unsafe extern "C" fn do_cmdline(
                                 *mut ::core::ffi::c_void,
                                 ::core::ffi::c_int,
                                 bool,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     ),
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
             {
                 script_line_end();
             }
@@ -6760,9 +6610,7 @@ pub unsafe extern "C" fn do_cmdline(
                 retval = FAIL;
                 break;
             } else {
-                if !breakpoint.is_null() && !dbg_tick.is_null()
-                    && *dbg_tick != debug_tick
-                {
+                if !breakpoint.is_null() && !dbg_tick.is_null() && *dbg_tick != debug_tick {
                     *breakpoint = dbg_find_breakpoint(
                         getline_equal(
                             fgetline,
@@ -6774,41 +6622,34 @@ pub unsafe extern "C" fn do_cmdline(
                                         *mut ::core::ffi::c_void,
                                         ::core::ffi::c_int,
                                         bool,
-                                    ) -> *mut ::core::ffi::c_char,
+                                    )
+                                        -> *mut ::core::ffi::c_char,
                             ),
                         ),
                         fname,
                         (*(exestack.ga_data as *mut estack_T)
-                            .offset(
-                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
-                            ))
-                            .es_lnum,
+                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        .es_lnum,
                     );
                     *dbg_tick = debug_tick;
                 }
-                next_cmdline = (*(lines_ga.ga_data as *mut wcmd_T)
-                    .offset(current_line as isize))
-                    .line;
+                next_cmdline =
+                    (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).line;
                 (*(exestack.ga_data as *mut estack_T)
                     .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum = (*(lines_ga.ga_data as *mut wcmd_T)
-                    .offset(current_line as isize))
-                    .lnum;
-                if !breakpoint.is_null() && *breakpoint != 0 as linenr_T
+                .es_lnum = (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).lnum;
+                if !breakpoint.is_null()
+                    && *breakpoint != 0 as linenr_T
                     && *breakpoint
                         <= (*(exestack.ga_data as *mut estack_T)
-                            .offset(
-                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
-                            ))
-                            .es_lnum
+                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        .es_lnum
                 {
                     dbg_breakpoint(
                         fname,
                         (*(exestack.ga_data as *mut estack_T)
-                            .offset(
-                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
-                            ))
-                            .es_lnum,
+                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        .es_lnum,
                     );
                     *breakpoint = dbg_find_breakpoint(
                         getline_equal(
@@ -6821,15 +6662,14 @@ pub unsafe extern "C" fn do_cmdline(
                                         *mut ::core::ffi::c_void,
                                         ::core::ffi::c_int,
                                         bool,
-                                    ) -> *mut ::core::ffi::c_char,
+                                    )
+                                        -> *mut ::core::ffi::c_char,
                             ),
                         ),
                         fname,
                         (*(exestack.ga_data as *mut estack_T)
-                            .offset(
-                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
-                            ))
-                            .es_lnum,
+                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        .es_lnum,
                     );
                     *dbg_tick = debug_tick;
                 }
@@ -6846,7 +6686,8 @@ pub unsafe extern "C" fn do_cmdline(
                                     *mut ::core::ffi::c_void,
                                     ::core::ffi::c_int,
                                     bool,
-                                ) -> *mut ::core::ffi::c_char,
+                                )
+                                    -> *mut ::core::ffi::c_char,
                         ),
                     ) {
                         script_line_start();
@@ -6855,9 +6696,7 @@ pub unsafe extern "C" fn do_cmdline(
             }
         }
         if next_cmdline.is_null() {
-            let mut indent: ::core::ffi::c_int = if cstack.cs_idx
-                < 0 as ::core::ffi::c_int
-            {
+            let mut indent: ::core::ffi::c_int = if cstack.cs_idx < 0 as ::core::ffi::c_int {
                 0 as ::core::ffi::c_int
             } else {
                 (cstack.cs_idx + 1 as ::core::ffi::c_int) * 2 as ::core::ffi::c_int
@@ -6873,9 +6712,11 @@ pub unsafe extern "C" fn do_cmdline(
                                 *mut ::core::ffi::c_void,
                                 ::core::ffi::c_int,
                                 bool,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     ),
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
             {
                 if ui_has(kUICmdline) {
                     ui_ext_cmdline_block_append(0 as size_t, last_cmdline);
@@ -6883,15 +6724,15 @@ pub unsafe extern "C" fn do_cmdline(
                 }
                 msg_didout = true_0 != 0;
             }
-            if fgetline.is_none()
-                || {
-                    next_cmdline = fgetline
-                        .expect(
-                            "non-null function pointer",
-                        )(':' as ::core::ffi::c_int, cookie, indent, true_0 != 0);
-                    next_cmdline.is_null()
-                }
-            {
+            if fgetline.is_none() || {
+                next_cmdline = fgetline.expect("non-null function pointer")(
+                    ':' as ::core::ffi::c_int,
+                    cookie,
+                    indent,
+                    true_0 != 0,
+                );
+                next_cmdline.is_null()
+            } {
                 if KeyTyped as ::core::ffi::c_int != 0
                     && flags & DOCMD_REPEAT as ::core::ffi::c_int == 0
                 {
@@ -6913,9 +6754,11 @@ pub unsafe extern "C" fn do_cmdline(
                                     *mut ::core::ffi::c_void,
                                     ::core::ffi::c_int,
                                     bool,
-                                ) -> *mut ::core::ffi::c_char,
+                                )
+                                    -> *mut ::core::ffi::c_char,
                         ),
-                    ) as ::core::ffi::c_int != 0
+                    ) as ::core::ffi::c_int
+                        != 0
                 {
                     ui_ext_cmdline_block_append(indent as size_t, next_cmdline);
                 }
@@ -6958,8 +6801,7 @@ pub unsafe extern "C" fn do_cmdline(
             cmd_loop_cookie.current_line = current_line;
             cmd_loop_cookie.lc_getline = fgetline;
             cmd_loop_cookie.cookie = cookie;
-            cmd_loop_cookie.repeating = (current_line < lines_ga.ga_len)
-                as ::core::ffi::c_int;
+            cmd_loop_cookie.repeating = (current_line < lines_ga.ga_len) as ::core::ffi::c_int;
             if current_line == lines_ga.ga_len {
                 store_loop_line(&raw mut lines_ga, next_cmdline);
             }
@@ -6993,13 +6835,14 @@ pub unsafe extern "C" fn do_cmdline(
         if p_verbose >= 15 as OptInt
             && !(*(exestack.ga_data as *mut estack_T)
                 .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                .es_name
-                .is_null() || p_verbose >= 16 as OptInt
+            .es_name
+            .is_null()
+            || p_verbose >= 16 as OptInt
         {
             msg_verbose_cmd(
                 (*(exestack.ga_data as *mut estack_T)
                     .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum,
+                .es_lnum,
                 cmdline_copy,
             );
         }
@@ -7016,8 +6859,8 @@ pub unsafe extern "C" fn do_cmdline(
             current_line = cmd_loop_cookie.current_line;
         }
         if next_cmdline.is_null() {
-            let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut cmdline_copy
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                &raw mut cmdline_copy as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__0);
             *ptr__0 = NULL_1;
             *ptr__0;
@@ -7031,9 +6874,12 @@ pub unsafe extern "C" fn do_cmdline(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
-            ) as ::core::ffi::c_int != 0 && !new_last_cmdline.is_null()
+            ) as ::core::ffi::c_int
+                != 0
+                && !new_last_cmdline.is_null()
             {
                 xfree(last_cmdline as *mut ::core::ffi::c_void);
                 last_cmdline = new_last_cmdline;
@@ -7047,7 +6893,8 @@ pub unsafe extern "C" fn do_cmdline(
             );
             next_cmdline = cmdline_copy;
         }
-        if did_emsg != 0 && !force_abort
+        if did_emsg != 0
+            && !force_abort
             && getline_equal(
                 fgetline,
                 cookie,
@@ -7058,29 +6905,33 @@ pub unsafe extern "C" fn do_cmdline(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
-            ) as ::core::ffi::c_int != 0 && func_has_abort(real_cookie) == 0
+            ) as ::core::ffi::c_int
+                != 0
+            && func_has_abort(real_cookie) == 0
         {
             did_emsg = false_0;
         }
         if cstack.cs_looplevel > 0 as ::core::ffi::c_int {
             current_line += 1;
             if cstack.cs_lflags
-                & (CSL_HAD_CONT as ::core::ffi::c_int
-                    | CSL_HAD_ENDLOOP as ::core::ffi::c_int) != 0
+                & (CSL_HAD_CONT as ::core::ffi::c_int | CSL_HAD_ENDLOOP as ::core::ffi::c_int)
+                != 0
             {
-                cstack.cs_lflags
-                    &= !(CSL_HAD_CONT as ::core::ffi::c_int
-                        | CSL_HAD_ENDLOOP as ::core::ffi::c_int);
-                if did_emsg == 0 && !got_int && !did_throw
+                cstack.cs_lflags &=
+                    !(CSL_HAD_CONT as ::core::ffi::c_int | CSL_HAD_ENDLOOP as ::core::ffi::c_int);
+                if did_emsg == 0
+                    && !got_int
+                    && !did_throw
                     && cstack.cs_idx >= 0 as ::core::ffi::c_int
                     && cstack.cs_flags[cstack.cs_idx as usize]
-                        & (CSF_WHILE as ::core::ffi::c_int
-                            | CSF_FOR as ::core::ffi::c_int) != 0
+                        & (CSF_WHILE as ::core::ffi::c_int | CSF_FOR as ::core::ffi::c_int)
+                        != 0
                     && cstack.cs_line[cstack.cs_idx as usize] >= 0 as ::core::ffi::c_int
-                    && cstack.cs_flags[cstack.cs_idx as usize]
-                        & CSF_ACTIVE as ::core::ffi::c_int != 0
+                    && cstack.cs_flags[cstack.cs_idx as usize] & CSF_ACTIVE as ::core::ffi::c_int
+                        != 0
                 {
                     current_line = cstack.cs_line[cstack.cs_idx as usize];
                     cstack.cs_lflags |= CSL_HAD_LOOP as ::core::ffi::c_int;
@@ -7097,13 +6948,13 @@ pub unsafe extern "C" fn do_cmdline(
                                             *mut ::core::ffi::c_void,
                                             ::core::ffi::c_int,
                                             bool,
-                                        ) -> *mut ::core::ffi::c_char,
+                                        )
+                                            -> *mut ::core::ffi::c_char,
                                 ),
                             ),
                             fname,
-                            (*(lines_ga.ga_data as *mut wcmd_T)
-                                .offset(current_line as isize))
-                                .lnum - 1 as linenr_T,
+                            (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize)).lnum
+                                - 1 as linenr_T,
                         );
                         *dbg_tick = debug_tick;
                     }
@@ -7124,15 +6975,15 @@ pub unsafe extern "C" fn do_cmdline(
             if !(lines_ga.ga_len <= 0 as ::core::ffi::c_int) {
                 (*(exestack.ga_data as *mut estack_T)
                     .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_lnum = (*(lines_ga.ga_data as *mut wcmd_T)
+                .es_lnum = (*(lines_ga.ga_data as *mut wcmd_T)
                     .offset((lines_ga.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .lnum;
+                .lnum;
                 let mut _gap: *mut garray_T = &raw mut lines_ga;
                 if !(*_gap).ga_data.is_null() {
                     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while i < (*_gap).ga_len {
-                        let mut _item: *mut wcmd_T = ((*_gap).ga_data as *mut wcmd_T)
-                            .offset(i as isize);
+                        let mut _item: *mut wcmd_T =
+                            ((*_gap).ga_data as *mut wcmd_T).offset(i as isize);
                         xfree((*_item).line as *mut ::core::ffi::c_void);
                         i += 1;
                     }
@@ -7157,12 +7008,11 @@ pub unsafe extern "C" fn do_cmdline(
             did_throw = false_0 != 0;
             got_int = did_throw;
             did_emsg = got_int as ::core::ffi::c_int;
-            cstack.cs_flags[cstack.cs_idx as usize]
-                |= CSF_ACTIVE as ::core::ffi::c_int | CSF_FINALLY as ::core::ffi::c_int;
+            cstack.cs_flags[cstack.cs_idx as usize] |=
+                CSF_ACTIVE as ::core::ffi::c_int | CSF_FINALLY as ::core::ffi::c_int;
         }
         trylevel = initial_trylevel + cstack.cs_trylevel;
-        if trylevel == 0 as ::core::ffi::c_int && did_emsg == 0 && !got_int && !did_throw
-        {
+        if trylevel == 0 as ::core::ffi::c_int && did_emsg == 0 && !got_int && !did_throw {
             force_abort = false_0 != 0;
         }
         do_intthrow(&raw mut cstack);
@@ -7184,10 +7034,13 @@ pub unsafe extern "C" fn do_cmdline(
                                 *mut ::core::ffi::c_void,
                                 ::core::ffi::c_int,
                                 bool,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     ),
-                ) as ::core::ffi::c_int != 0)
-            && (!next_cmdline.is_null() || cstack.cs_idx >= 0 as ::core::ffi::c_int
+                ) as ::core::ffi::c_int
+                    != 0)
+            && (!next_cmdline.is_null()
+                || cstack.cs_idx >= 0 as ::core::ffi::c_int
                 || flags & DOCMD_REPEAT as ::core::ffi::c_int != 0))
         {
             break;
@@ -7199,15 +7052,16 @@ pub unsafe extern "C" fn do_cmdline(
     if !(*_gap_0).ga_data.is_null() {
         let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i_0 < (*_gap_0).ga_len {
-            let mut _item_0: *mut wcmd_T = ((*_gap_0).ga_data as *mut wcmd_T)
-                .offset(i_0 as isize);
+            let mut _item_0: *mut wcmd_T = ((*_gap_0).ga_data as *mut wcmd_T).offset(i_0 as isize);
             xfree((*_item_0).line as *mut ::core::ffi::c_void);
             i_0 += 1;
         }
     }
     ga_clear(_gap_0);
     if cstack.cs_idx >= 0 as ::core::ffi::c_int {
-        if !got_int && !did_throw && !aborting()
+        if !got_int
+            && !did_throw
+            && !aborting()
             && (getline_equal(
                 fgetline,
                 cookie,
@@ -7218,9 +7072,12 @@ pub unsafe extern "C" fn do_cmdline(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
-            ) as ::core::ffi::c_int != 0 && !source_finished(fgetline, cookie)
+            ) as ::core::ffi::c_int
+                != 0
+                && !source_finished(fgetline, cookie)
                 || getline_equal(
                     fgetline,
                     cookie,
@@ -7231,32 +7088,27 @@ pub unsafe extern "C" fn do_cmdline(
                                 *mut ::core::ffi::c_void,
                                 ::core::ffi::c_int,
                                 bool,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     ),
-                ) as ::core::ffi::c_int != 0 && func_has_ended(real_cookie) == 0)
+                ) as ::core::ffi::c_int
+                    != 0
+                    && func_has_ended(real_cookie) == 0)
         {
-            if cstack.cs_flags[cstack.cs_idx as usize] & CSF_TRY as ::core::ffi::c_int
-                != 0
-            {
+            if cstack.cs_flags[cstack.cs_idx as usize] & CSF_TRY as ::core::ffi::c_int != 0 {
                 emsg(gettext(&raw const e_endtry as *const ::core::ffi::c_char));
-            } else if cstack.cs_flags[cstack.cs_idx as usize]
-                & CSF_WHILE as ::core::ffi::c_int != 0
+            } else if cstack.cs_flags[cstack.cs_idx as usize] & CSF_WHILE as ::core::ffi::c_int != 0
             {
                 emsg(gettext(&raw const e_endwhile as *const ::core::ffi::c_char));
-            } else if cstack.cs_flags[cstack.cs_idx as usize]
-                & CSF_FOR as ::core::ffi::c_int != 0
-            {
+            } else if cstack.cs_flags[cstack.cs_idx as usize] & CSF_FOR as ::core::ffi::c_int != 0 {
                 emsg(gettext(&raw const e_endfor as *const ::core::ffi::c_char));
             } else {
                 emsg(gettext(&raw const e_endif as *const ::core::ffi::c_char));
             }
         }
         loop {
-            let mut idx: ::core::ffi::c_int = cleanup_conditionals(
-                &raw mut cstack,
-                0 as ::core::ffi::c_int,
-                true_0,
-            );
+            let mut idx: ::core::ffi::c_int =
+                cleanup_conditionals(&raw mut cstack, 0 as ::core::ffi::c_int, true_0);
             if idx >= 0 as ::core::ffi::c_int {
                 idx -= 1;
             }
@@ -7286,7 +7138,8 @@ pub unsafe extern "C" fn do_cmdline(
                         bool,
                     ) -> *mut ::core::ffi::c_char,
             ),
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
         {
             b"endfunction\0".as_ptr() as *const ::core::ffi::c_char
         } else {
@@ -7317,7 +7170,9 @@ pub unsafe extern "C" fn do_cmdline(
                     bool,
                 ) -> *mut ::core::ffi::c_char,
         ),
-    ) as ::core::ffi::c_int != 0 && ex_nesting_level > source_level(real_cookie)
+    ) as ::core::ffi::c_int
+        != 0
+        && ex_nesting_level > source_level(real_cookie)
         || getline_equal(
             fgetline,
             cookie,
@@ -7330,7 +7185,8 @@ pub unsafe extern "C" fn do_cmdline(
                         bool,
                     ) -> *mut ::core::ffi::c_char,
             ),
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
             && ex_nesting_level > func_level(real_cookie) + 1 as ::core::ffi::c_int
     {
         if !did_throw {
@@ -7364,7 +7220,8 @@ pub unsafe extern "C" fn do_cmdline(
                         bool,
                     ) -> *mut ::core::ffi::c_char,
             ),
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
             || getline_equal(
                 fgetline,
                 cookie,
@@ -7375,9 +7232,11 @@ pub unsafe extern "C" fn do_cmdline(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
-            ) as ::core::ffi::c_int != 0)
+            ) as ::core::ffi::c_int
+                != 0)
             && ex_nesting_level + 1 as ::core::ffi::c_int <= debug_break_level
         {
             do_debug(
@@ -7391,13 +7250,13 @@ pub unsafe extern "C" fn do_cmdline(
                                 *mut ::core::ffi::c_void,
                                 ::core::ffi::c_int,
                                 bool,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     ),
-                ) as ::core::ffi::c_int != 0
+                ) as ::core::ffi::c_int
+                    != 0
                 {
-                    gettext(
-                        b"End of sourced file\0".as_ptr() as *const ::core::ffi::c_char,
-                    )
+                    gettext(b"End of sourced file\0".as_ptr() as *const ::core::ffi::c_char)
                 } else {
                     gettext(b"End of function\0".as_ptr() as *const ::core::ffi::c_char)
                 },
@@ -7423,13 +7282,15 @@ pub unsafe extern "C" fn do_cmdline(
         msg_scroll = false_0;
         if retval == FAIL
             || did_endif as ::core::ffi::c_int != 0
-                && KeyTyped as ::core::ffi::c_int != 0 && did_emsg == 0
+                && KeyTyped as ::core::ffi::c_int != 0
+                && did_emsg == 0
         {
             need_wait_return = false_0 != 0;
             msg_didany = false_0 != 0;
         } else if need_wait_return {
             msg_didout = msg_didout as ::core::ffi::c_int
-                | msg_didout_before_start as ::core::ffi::c_int != 0;
+                | msg_didout_before_start as ::core::ffi::c_int
+                != 0;
             wait_return(false_0);
         }
     }
@@ -7443,7 +7304,8 @@ pub unsafe extern "C" fn do_cmdline(
 #[no_mangle]
 pub unsafe extern "C" fn handle_did_throw() {
     '_c2rust_label: {
-        if !current_exception.is_null() {} else {
+        if !current_exception.is_null() {
+        } else {
             __assert_fail(
                 b"current_exception != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
@@ -7460,10 +7322,7 @@ pub unsafe extern "C" fn handle_did_throw() {
             vim_snprintf(
                 &raw mut IObuff as *mut ::core::ffi::c_char,
                 IOSIZE as size_t,
-                gettext(
-                    b"E605: Exception not caught: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E605: Exception not caught: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 (*current_exception).value,
             );
             p = xstrdup(&raw mut IObuff as *mut ::core::ffi::c_char);
@@ -7509,7 +7368,7 @@ pub unsafe extern "C" fn handle_did_throw() {
     xfree(
         (*(exestack.ga_data as *mut estack_T)
             .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-            .es_name as *mut ::core::ffi::c_void,
+        .es_name as *mut ::core::ffi::c_void,
     );
     estack_pop();
 }
@@ -7524,15 +7383,16 @@ unsafe extern "C" fn get_loop_line(
         if (*cp).repeating != 0 {
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
-        let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if (*cp).lc_getline.is_none() {
             line = getcmdline(c, 0 as ::core::ffi::c_int, indent, do_concat);
         } else {
-            line = (*cp)
-                .lc_getline
-                .expect("non-null function pointer")(c, (*cp).cookie, indent, do_concat);
+            line = (*cp).lc_getline.expect("non-null function pointer")(
+                c,
+                (*cp).cookie,
+                indent,
+                do_concat,
+            );
         }
         if !line.is_null() {
             store_loop_line((*cp).lines_gap, line);
@@ -7542,23 +7402,20 @@ unsafe extern "C" fn get_loop_line(
     }
     KeyTyped = false_0 != 0;
     (*cp).current_line += 1;
-    let mut wp: *mut wcmd_T = ((*(*cp).lines_gap).ga_data as *mut wcmd_T)
-        .offset((*cp).current_line as isize);
+    let mut wp: *mut wcmd_T =
+        ((*(*cp).lines_gap).ga_data as *mut wcmd_T).offset((*cp).current_line as isize);
     (*(exestack.ga_data as *mut estack_T)
         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum = (*wp).lnum;
+    .es_lnum = (*wp).lnum;
     return xstrdup((*wp).line);
 }
-unsafe extern "C" fn store_loop_line(
-    mut gap: *mut garray_T,
-    mut line: *mut ::core::ffi::c_char,
-) {
-    let mut p: *mut wcmd_T = ga_append_via_ptr(gap, ::core::mem::size_of::<wcmd_T>())
-        as *mut wcmd_T;
+unsafe extern "C" fn store_loop_line(mut gap: *mut garray_T, mut line: *mut ::core::ffi::c_char) {
+    let mut p: *mut wcmd_T =
+        ga_append_via_ptr(gap, ::core::mem::size_of::<wcmd_T>()) as *mut wcmd_T;
     (*p).line = xstrdup(line);
     (*p).lnum = (*(exestack.ga_data as *mut estack_T)
         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-        .es_lnum;
+    .es_lnum;
 }
 #[no_mangle]
 pub unsafe extern "C" fn getline_equal(
@@ -7618,12 +7475,11 @@ unsafe extern "C" fn compute_buffer_local_count(
         buf = (*buf).b_next;
     }
     while count != 0 as ::core::ffi::c_int {
-        count
-            += if count < 0 as ::core::ffi::c_int {
-                1 as ::core::ffi::c_int
-            } else {
-                -1 as ::core::ffi::c_int
-            };
+        count += if count < 0 as ::core::ffi::c_int {
+            1 as ::core::ffi::c_int
+        } else {
+            -1 as ::core::ffi::c_int
+        };
         let mut nextbuf: *mut buf_T = if offset < 0 as ::core::ffi::c_int {
             (*buf).b_prev
         } else {
@@ -7699,48 +7555,10 @@ unsafe extern "C" fn get_wincmd_addr_type(
     mut eap: *mut exarg_T,
 ) {
     match *arg as ::core::ffi::c_int {
-        83
-        | Ctrl_S
-        | 115
-        | Ctrl_N
-        | 110
-        | 106
-        | Ctrl_J
-        | 107
-        | Ctrl_K
-        | 84
-        | Ctrl_R
-        | 114
-        | 82
-        | 75
-        | 74
-        | 43
-        | 45
-        | Ctrl__
-        | 95
-        | 124
-        | 93
-        | Ctrl_RSB
-        | 103
-        | Ctrl_G
-        | Ctrl_V
-        | 118
-        | 104
-        | Ctrl_H
-        | 108
-        | Ctrl_L
-        | 72
-        | 76
-        | 62
-        | 60
-        | 125
-        | 102
-        | 70
-        | Ctrl_F
-        | 105
-        | Ctrl_I
-        | 100
-        | Ctrl_D => {
+        83 | Ctrl_S | 115 | Ctrl_N | 110 | 106 | Ctrl_J | 107 | Ctrl_K | 84 | Ctrl_R | 114 | 82
+        | 75 | 74 | 43 | 45 | Ctrl__ | 95 | 124 | 93 | Ctrl_RSB | 103 | Ctrl_G | Ctrl_V | 118
+        | 104 | Ctrl_H | 108 | Ctrl_L | 72 | 76 | 62 | 60 | 125 | 102 | 70 | Ctrl_F | 105
+        | Ctrl_I | 100 | Ctrl_D => {
             (*eap).addr_type = ADDR_OTHER;
         }
         Ctrl_HAT | 94 => {
@@ -7768,22 +7586,16 @@ unsafe extern "C" fn skip_colon_white(
     return p as *mut ::core::ffi::c_char;
 }
 #[no_mangle]
-pub unsafe extern "C" fn set_cmd_addr_type(
-    mut eap: *mut exarg_T,
-    mut p: *mut ::core::ffi::c_char,
-) {
+pub unsafe extern "C" fn set_cmd_addr_type(mut eap: *mut exarg_T, mut p: *mut ::core::ffi::c_char) {
     if ((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
         return;
     }
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_SIZE as ::core::ffi::c_int {
-        (*eap).addr_type = cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize]
-            .cmd_addr_type;
+        (*eap).addr_type = cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_addr_type;
     } else {
         (*eap).addr_type = ADDR_LINES;
     }
-    if (*eap).cmdidx as ::core::ffi::c_int == CMD_wincmd as ::core::ffi::c_int
-        && !p.is_null()
-    {
+    if (*eap).cmdidx as ::core::ffi::c_int == CMD_wincmd as ::core::ffi::c_int && !p.is_null() {
         get_wincmd_addr_type(skipwhite(p), eap);
     }
     if ((*eap).cmdidx as ::core::ffi::c_int == CMD_cc as ::core::ffi::c_int
@@ -7849,8 +7661,7 @@ pub unsafe extern "C" fn set_cmd_dflall_range(mut eap: *mut exarg_T) {
             (*eap).line2 = current_win_nr(::core::ptr::null::<win_T>()) as linenr_T;
         }
         5 => {
-            (*eap).line2 = current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
-                as linenr_T;
+            (*eap).line2 = current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) as linenr_T;
         }
         6 => {
             (*eap).line2 = 1 as ::core::ffi::c_int as linenr_T;
@@ -7870,12 +7681,10 @@ pub unsafe extern "C" fn set_cmd_dflall_range(mut eap: *mut exarg_T) {
             }
         }
         11 | 9 | 8 => {
-            iemsg(
-                gettext(
-                    b"INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                ),
-            );
+            iemsg(gettext(
+                b"INTERNAL: Cannot use EX_DFLALL with ADDR_NONE, ADDR_UNSIGNED or ADDR_QUICKFIX\0"
+                    .as_ptr() as *const ::core::ffi::c_char,
+            ));
         }
         _ => {}
     };
@@ -7886,8 +7695,7 @@ unsafe extern "C" fn parse_register(mut eap: *mut exarg_T) {
         && (!(((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
             || *(*eap).arg as ::core::ffi::c_int != '=' as ::core::ffi::c_int)
         && !((*eap).argt & EX_COUNT as uint32_t != 0
-            && ascii_isdigit(*(*eap).arg as ::core::ffi::c_int) as ::core::ffi::c_int
-                != 0)
+            && ascii_isdigit(*(*eap).arg as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
     {
         if valid_yank_reg(
             *(*eap).arg as ::core::ffi::c_int,
@@ -7898,10 +7706,9 @@ unsafe extern "C" fn parse_register(mut eap: *mut exarg_T) {
             let c2rust_fresh25 = (*eap).arg;
             (*eap).arg = (*eap).arg.offset(1);
             (*eap).regname = *c2rust_fresh25 as uint8_t as ::core::ffi::c_int;
-            if *(*eap).arg.offset(-1 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int == '=' as ::core::ffi::c_int
-                && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int != NUL
+            if *(*eap).arg.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                == '=' as ::core::ffi::c_int
+                && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 if (*eap).skip == 0 {
                     set_expr_line(xstrdup((*eap).arg));
@@ -7931,12 +7738,11 @@ pub unsafe extern "C" fn set_cmd_count(
             (*eap).line2 = INT32_MAX as linenr_T;
         } else {
             (*eap).line2 = ((*eap).line2 as ::core::ffi::c_int
-                + (count - 1 as linenr_T) as ::core::ffi::c_int) as linenr_T;
+                + (count - 1 as linenr_T) as ::core::ffi::c_int)
+                as linenr_T;
         }
         (*eap).addr_count += 1;
-        if validate as ::core::ffi::c_int != 0
-            && (*eap).line2 > (*curbuf).b_ml.ml_line_count
-        {
+        if validate as ::core::ffi::c_int != 0 && (*eap).line2 > (*curbuf).b_ml.ml_line_count {
             (*eap).line2 = (*curbuf).b_ml.ml_line_count;
         }
     };
@@ -7953,25 +7759,23 @@ unsafe extern "C" fn parse_count(
             || {
                 p = skipdigits((*eap).arg.offset(1 as ::core::ffi::c_int as isize));
                 *p as ::core::ffi::c_int == NUL
-            } || ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
+            }
+            || ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
     {
-        let mut n: linenr_T = getdigits_int32(
-            &raw mut (*eap).arg,
-            false_0 != 0,
-            INT32_MAX as int32_t,
-        );
+        let mut n: linenr_T =
+            getdigits_int32(&raw mut (*eap).arg, false_0 != 0, INT32_MAX as int32_t);
         (*eap).arg = skipwhite((*eap).arg);
         if !(*eap).args.is_null() {
             '_c2rust_label: {
                 if (*eap).argc > 0 as size_t
-                    && (*eap).arg
-                        >= *(*eap).args.offset(0 as ::core::ffi::c_int as isize)
-                {} else {
+                    && (*eap).arg >= *(*eap).args.offset(0 as ::core::ffi::c_int as isize)
+                {
+                } else {
                     __assert_fail(
                         b"eap->argc > 0 && eap->arg >= eap->args[0]\0".as_ptr()
                             as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         1467 as ::core::ffi::c_uint,
                         b"int parse_count(exarg_T *, const char **, _Bool)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -7980,19 +7784,14 @@ unsafe extern "C" fn parse_count(
             };
             if (*eap).arg
                 < (*(*eap).args.offset(0 as ::core::ffi::c_int as isize))
-                    .offset(
-                        *(*eap).arglens.offset(0 as ::core::ffi::c_int as isize) as isize,
-                    )
+                    .offset(*(*eap).arglens.offset(0 as ::core::ffi::c_int as isize) as isize)
             {
-                *(*eap).arglens.offset(0 as ::core::ffi::c_int as isize) = (*(*eap)
-                    .arglens
-                    .offset(0 as ::core::ffi::c_int as isize))
-                    .wrapping_sub(
+                *(*eap).arglens.offset(0 as ::core::ffi::c_int as isize) =
+                    (*(*eap).arglens.offset(0 as ::core::ffi::c_int as isize)).wrapping_sub(
                         (*eap)
                             .arg
-                            .offset_from(
-                                *(*eap).args.offset(0 as ::core::ffi::c_int as isize),
-                            ) as size_t,
+                            .offset_from(*(*eap).args.offset(0 as ::core::ffi::c_int as isize))
+                            as size_t,
                     );
                 *(*eap).args.offset(0 as ::core::ffi::c_int as isize) = (*eap).arg;
             } else {
@@ -8001,9 +7800,7 @@ unsafe extern "C" fn parse_count(
         }
         if n <= 0 as linenr_T && (*eap).argt & EX_ZEROR as uint32_t == 0 as uint32_t {
             if !errormsg.is_null() {
-                *errormsg = gettext(
-                    &raw const e_zerocount as *const ::core::ffi::c_char,
-                );
+                *errormsg = gettext(&raw const e_zerocount as *const ::core::ffi::c_char);
             }
             return FAIL;
         }
@@ -8019,15 +7816,11 @@ pub unsafe extern "C" fn is_cmd_ni(mut cmdidx: cmdidx_T) -> bool {
             || cmdnames[cmdidx as usize].cmd_func
                 == Some(ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> ()));
 }
-unsafe extern "C" fn find_excmd_after_range(
-    mut eap: *mut exarg_T,
-) -> *mut ::core::ffi::c_char {
+unsafe extern "C" fn find_excmd_after_range(mut eap: *mut exarg_T) -> *mut ::core::ffi::c_char {
     let mut cmd: *mut ::core::ffi::c_char = (*eap).cmd;
     (*eap).cmd = skip_range((*eap).cmd, ::core::ptr::null_mut::<::core::ffi::c_int>());
-    let mut p: *mut ::core::ffi::c_char = find_ex_command(
-        eap,
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    );
+    let mut p: *mut ::core::ffi::c_char =
+        find_ex_command(eap, ::core::ptr::null_mut::<::core::ffi::c_int>());
     (*eap).cmd = cmd;
     return p;
 }
@@ -8061,9 +7854,8 @@ pub unsafe extern "C" fn parse_cmdline(
     mut errormsg: *mut *const ::core::ffi::c_char,
 ) -> bool {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut after_modifier: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut after_modifier: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: bool = false_0 != 0;
     let save_ex_pressedreturn: bool = ex_pressedreturn;
     let save_cursor: pos_T = (*curwin).w_cursor;
@@ -8110,19 +7902,14 @@ pub unsafe extern "C" fn parse_cmdline(
         cstack: ::core::ptr::null_mut::<cstack_T>(),
     };
     let mut orig_cmd: *mut ::core::ffi::c_char = (*eap).cmd;
-    let mut result: ::core::ffi::c_int = parse_command_modifiers(
-        eap,
-        errormsg,
-        &raw mut (*cmdinfo).cmdmod,
-        false_0 != 0,
-    );
+    let mut result: ::core::ffi::c_int =
+        parse_command_modifiers(eap, errormsg, &raw mut (*cmdinfo).cmdmod, false_0 != 0);
     after_modifier = (*eap).cmd;
     if !(result == FAIL && after_modifier == orig_cmd) {
         p = find_excmd_after_range(eap);
         if p.is_null() {
             *errormsg = gettext(
-                &raw const e_ambiguous_use_of_user_defined_command
-                    as *const ::core::ffi::c_char,
+                &raw const e_ambiguous_use_of_user_defined_command as *const ::core::ffi::c_char,
             );
         } else {
             set_cmd_addr_type(eap, p);
@@ -8134,8 +7921,7 @@ pub unsafe extern "C" fn parse_cmdline(
                         && after_modifier == *cmdline)
                     {
                         if *(*eap).cmd as ::core::ffi::c_int == NUL
-                            && (*eap).cmdidx as ::core::ffi::c_int
-                                == CMD_SIZE as ::core::ffi::c_int
+                            && (*eap).cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
                         {
                             (*eap).arg = (*eap).cmd;
                             if (*eap).addr_count > 0 as ::core::ffi::c_int {
@@ -8156,8 +7942,7 @@ pub unsafe extern "C" fn parse_cmdline(
                                 ),
                                 IOSIZE as size_t,
                             );
-                            let mut cmdname: *mut ::core::ffi::c_char = if !after_modifier
-                                .is_null()
+                            let mut cmdname: *mut ::core::ffi::c_char = if !after_modifier.is_null()
                             {
                                 after_modifier
                             } else {
@@ -8166,14 +7951,10 @@ pub unsafe extern "C" fn parse_cmdline(
                             append_command(cmdname);
                             *errormsg = &raw mut IObuff as *mut ::core::ffi::c_char;
                         } else {
-                            (*eap).forceit = parse_bang(eap, &raw mut p)
-                                as ::core::ffi::c_int;
-                            if !(((*eap).cmdidx as ::core::ffi::c_int)
-                                < 0 as ::core::ffi::c_int)
-                            {
-                                (*eap).argt = cmdnames[(*eap).cmdidx as ::core::ffi::c_int
-                                        as usize]
-                                    .cmd_argt;
+                            (*eap).forceit = parse_bang(eap, &raw mut p) as ::core::ffi::c_int;
+                            if !(((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
+                                (*eap).argt =
+                                    cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize].cmd_argt;
                             }
                             (*eap).arg = if (*eap).cmdidx as ::core::ffi::c_int
                                 == CMD_bang as ::core::ffi::c_int
@@ -8182,8 +7963,8 @@ pub unsafe extern "C" fn parse_cmdline(
                             } else {
                                 skipwhite(p)
                             };
-                            if (*eap).cmdidx as ::core::ffi::c_int
-                                == CMD_read as ::core::ffi::c_int && (*eap).forceit != 0
+                            if (*eap).cmdidx as ::core::ffi::c_int == CMD_read as ::core::ffi::c_int
+                                && (*eap).forceit != 0
                             {
                                 (*eap).forceit = false_0;
                             }
@@ -8197,10 +7978,7 @@ pub unsafe extern "C" fn parse_cmdline(
                                 {
                                     let mut start: *mut ::core::ffi::c_char = arg;
                                     emsg_skip += 1;
-                                    skip_expr(
-                                        &raw mut arg,
-                                        ::core::ptr::null_mut::<evalarg_T>(),
-                                    );
+                                    skip_expr(&raw mut arg, ::core::ptr::null_mut::<evalarg_T>());
                                     emsg_skip -= 1;
                                     if arg == start {
                                         arg = arg.offset(1);
@@ -8213,18 +7991,14 @@ pub unsafe extern "C" fn parse_cmdline(
                                     *arg = NUL as ::core::ffi::c_char;
                                 }
                             }
-                            if (*eap).argt & EX_BANG as uint32_t == 0
-                                && (*eap).forceit != 0
-                            {
-                                *errormsg = gettext(
-                                    &raw const e_nobang as *const ::core::ffi::c_char,
-                                );
+                            if (*eap).argt & EX_BANG as uint32_t == 0 && (*eap).forceit != 0 {
+                                *errormsg =
+                                    gettext(&raw const e_nobang as *const ::core::ffi::c_char);
                             } else if (*eap).argt & EX_RANGE as uint32_t == 0
                                 && (*eap).addr_count > 0 as ::core::ffi::c_int
                             {
-                                *errormsg = gettext(
-                                    &raw const e_norange as *const ::core::ffi::c_char,
-                                );
+                                *errormsg =
+                                    gettext(&raw const e_norange as *const ::core::ffi::c_char);
                             } else {
                                 if (*eap).argt & EX_DFLALL as uint32_t != 0
                                     && (*eap).addr_count == 0 as ::core::ffi::c_int
@@ -8234,10 +8008,8 @@ pub unsafe extern "C" fn parse_cmdline(
                                 parse_register(eap);
                                 if parse_count(eap, errormsg, false_0 != 0) != FAIL {
                                     if !(*eap).nextcmd.is_null() {
-                                        (*eap).nextcmd = skip_colon_white(
-                                            (*eap).nextcmd,
-                                            true_0 != 0,
-                                        );
+                                        (*eap).nextcmd =
+                                            skip_colon_white((*eap).nextcmd, true_0 != 0);
                                     }
                                     if (*eap).argt & EX_XFILE as uint32_t != 0 {
                                         (*cmdinfo).magic.file = true_0 != 0;
@@ -8264,15 +8036,14 @@ pub unsafe extern "C" fn parse_cmdline(
 }
 unsafe extern "C" fn shift_cmd_args(mut eap: *mut exarg_T) {
     '_c2rust_label: {
-        if !(*eap).args.is_null() && (*eap).argc > 0 as size_t {} else {
+        if !(*eap).args.is_null() && (*eap).argc > 0 as size_t {
+        } else {
             __assert_fail(
-                b"eap->args != NULL && eap->argc > 0\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"eap->args != NULL && eap->argc > 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 1708 as ::core::ffi::c_uint,
-                b"void shift_cmd_args(exarg_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void shift_cmd_args(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -8280,7 +8051,10 @@ unsafe extern "C" fn shift_cmd_args(mut eap: *mut exarg_T) {
     let mut oldarglens: *mut size_t = (*eap).arglens;
     (*eap).argc = (*eap).argc.wrapping_sub(1);
     (*eap).args = (if (*eap).argc > 0 as size_t {
-        xcalloc((*eap).argc, ::core::mem::size_of::<*mut ::core::ffi::c_char>())
+        xcalloc(
+            (*eap).argc,
+            ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
+        )
     } else {
         NULL_1
     }) as *mut *mut ::core::ffi::c_char;
@@ -8291,10 +8065,9 @@ unsafe extern "C" fn shift_cmd_args(mut eap: *mut exarg_T) {
     }) as *mut size_t;
     let mut i: size_t = 0 as size_t;
     while i < (*eap).argc {
-        *(*eap).args.offset(i as isize) = *oldargs
-            .offset(i.wrapping_add(1 as size_t) as isize);
-        *(*eap).arglens.offset(i as isize) = *oldarglens
-            .offset(i.wrapping_add(1 as size_t) as isize);
+        *(*eap).args.offset(i as isize) = *oldargs.offset(i.wrapping_add(1 as size_t) as isize);
+        *(*eap).arglens.offset(i as isize) =
+            *oldarglens.offset(i.wrapping_add(1 as size_t) as isize);
         i = i.wrapping_add(1);
     }
     (*eap).arg = if (*eap).argc > 0 as size_t {
@@ -8323,23 +8096,19 @@ unsafe extern "C" fn execute_cmd0(
         && !(((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
     {
         if (*eap).args.is_null() {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             if (*eap).cmdidx as ::core::ffi::c_int == CMD_bdelete as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_bwipeout as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_bunload as ::core::ffi::c_int
+                || (*eap).cmdidx as ::core::ffi::c_int == CMD_bwipeout as ::core::ffi::c_int
+                || (*eap).cmdidx as ::core::ffi::c_int == CMD_bunload as ::core::ffi::c_int
             {
                 p = skiptowhite_esc((*eap).arg);
             } else {
                 p = (*eap).arg.offset(strlen((*eap).arg) as isize);
                 while p > (*eap).arg
                     && ascii_iswhite(
-                        *p.offset(-1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                        *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                    ) as ::core::ffi::c_int
+                        != 0
                 {
                     p = p.offset(-1);
                 }
@@ -8357,9 +8126,7 @@ unsafe extern "C" fn execute_cmd0(
             (*eap).line2 = buflist_findpat(
                 *(*eap).args.offset(0 as ::core::ffi::c_int as isize),
                 (*(*eap).args.offset(0 as ::core::ffi::c_int as isize))
-                    .offset(
-                        *(*eap).arglens.offset(0 as ::core::ffi::c_int as isize) as isize,
-                    ),
+                    .offset(*(*eap).arglens.offset(0 as ::core::ffi::c_int as isize) as isize),
                 (*eap).argt & EX_BUFUNL as uint32_t != 0 as uint32_t,
                 false_0 != 0,
                 false_0 != 0,
@@ -8389,9 +8156,11 @@ unsafe extern "C" fn execute_cmd0(
         if preview {
             *retv = cmdnames[(*eap).cmdidx as usize]
                 .cmd_preview_func
-                .expect(
-                    "non-null function pointer",
-                )(eap, cmdpreview_get_ns(), cmdpreview_get_bufnr());
+                .expect("non-null function pointer")(
+                eap,
+                cmdpreview_get_ns(),
+                cmdpreview_get_bufnr(),
+            );
         } else {
             cmdnames[(*eap).cmdidx as usize]
                 .cmd_func
@@ -8425,21 +8194,21 @@ pub unsafe extern "C" fn execute_cmd(
     };
     let mut retv: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if do_cmdline_start() == FAIL {
-        emsg(gettext(&raw const e_command_too_recursive as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_command_too_recursive as *const ::core::ffi::c_char,
+        ));
         return retv;
     }
-    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut save_cmdmod: cmdmod_T = cmdmod;
     cmdmod = (*cmdinfo).cmdmod;
     apply_cmdmod(&raw mut cmdmod);
     '_end: {
-        if (*curbuf).b_p_ma == 0 && (*eap).argt & EX_MODIFY as uint32_t != 0
+        if (*curbuf).b_p_ma == 0
+            && (*eap).argt & EX_MODIFY as uint32_t != 0
             && !(!(*curbuf).terminal.is_null()
                 && ((*eap).cmdidx as ::core::ffi::c_int == CMD_put as ::core::ffi::c_int
-                    || (*eap).cmdidx as ::core::ffi::c_int
-                        == CMD_iput as ::core::ffi::c_int))
+                    || (*eap).cmdidx as ::core::ffi::c_int == CMD_iput as ::core::ffi::c_int))
         {
             errormsg = gettext(&raw const e_modifiable as *const ::core::ffi::c_char);
         } else {
@@ -8447,9 +8216,7 @@ pub unsafe extern "C" fn execute_cmd(
                 if cmdwin_type != 0 as ::core::ffi::c_int
                     && (*eap).argt & EX_CMDWIN as uint32_t == 0
                 {
-                    errormsg = gettext(
-                        &raw const e_cmdwin as *const ::core::ffi::c_char,
-                    );
+                    errormsg = gettext(&raw const e_cmdwin as *const ::core::ffi::c_char);
                     break '_end;
                 } else if text_locked() as ::core::ffi::c_int != 0
                     && (*eap).argt & EX_LOCK_OK as uint32_t == 0
@@ -8459,11 +8226,9 @@ pub unsafe extern "C" fn execute_cmd(
                 }
             }
             if !((*eap).argt & EX_CMDWIN as uint32_t == 0
-                && (*eap).cmdidx as ::core::ffi::c_int
-                    != CMD_checktime as ::core::ffi::c_int
+                && (*eap).cmdidx as ::core::ffi::c_int != CMD_checktime as ::core::ffi::c_int
                 && (*eap).cmdidx as ::core::ffi::c_int != CMD_edit as ::core::ffi::c_int
-                && !((*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_file as ::core::ffi::c_int
+                && !((*eap).cmdidx as ::core::ffi::c_int == CMD_file as ::core::ffi::c_int
                     && *(*eap).arg as ::core::ffi::c_int == NUL)
                 && !(((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int)
                 && curbuf_locked() as ::core::ffi::c_int != 0)
@@ -8500,9 +8265,7 @@ pub unsafe extern "C" fn execute_cmd(
                             cs_pend: C2Rust_Unnamed_34 {
                                 csp_rv: [::core::ptr::null_mut::<::core::ffi::c_void>(); 50],
                             },
-                            cs_forinfo: [::core::ptr::null_mut::<
-                                ::core::ffi::c_void,
-                            >(); 50],
+                            cs_forinfo: [::core::ptr::null_mut::<::core::ffi::c_void>(); 50],
                             cs_line: [0; 50],
                             cs_idx: -1 as ::core::ffi::c_int,
                             cs_looplevel: 0,
@@ -8532,32 +8295,34 @@ unsafe extern "C" fn profile_cmd(
     mut cookie: *mut ::core::ffi::c_void,
 ) {
     if do_profiling == PROF_YES
-        && ((*eap).skip == 0 || (*cstack).cs_idx == 0 as ::core::ffi::c_int
+        && ((*eap).skip == 0
+            || (*cstack).cs_idx == 0 as ::core::ffi::c_int
             || (*cstack).cs_idx > 0 as ::core::ffi::c_int
-                && (*cstack)
-                    .cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
-                    & CSF_ACTIVE as ::core::ffi::c_int != 0)
+                && (*cstack).cs_flags[((*cstack).cs_idx - 1 as ::core::ffi::c_int) as usize]
+                    & CSF_ACTIVE as ::core::ffi::c_int
+                    != 0)
     {
-        let mut skip: bool = did_emsg != 0 || got_int as ::core::ffi::c_int != 0
+        let mut skip: bool = did_emsg != 0
+            || got_int as ::core::ffi::c_int != 0
             || did_throw as ::core::ffi::c_int != 0;
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_catch as ::core::ffi::c_int {
             skip = !skip
                 && !((*cstack).cs_idx >= 0 as ::core::ffi::c_int
                     && (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                        & CSF_THROWN as ::core::ffi::c_int != 0
+                        & CSF_THROWN as ::core::ffi::c_int
+                        != 0
                     && (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                        & CSF_CAUGHT as ::core::ffi::c_int == 0);
+                        & CSF_CAUGHT as ::core::ffi::c_int
+                        == 0);
         } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_else as ::core::ffi::c_int
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_elseif as ::core::ffi::c_int
         {
             skip = skip as ::core::ffi::c_int != 0
                 || !((*cstack).cs_idx >= 0 as ::core::ffi::c_int
                     && (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                        & (CSF_ACTIVE as ::core::ffi::c_int
-                            | CSF_TRUE as ::core::ffi::c_int) == 0);
-        } else if (*eap).cmdidx as ::core::ffi::c_int
-            == CMD_finally as ::core::ffi::c_int
-        {
+                        & (CSF_ACTIVE as ::core::ffi::c_int | CSF_TRUE as ::core::ffi::c_int)
+                        == 0);
+        } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_finally as ::core::ffi::c_int {
             skip = false_0 != 0;
         } else if (*eap).cmdidx as ::core::ffi::c_int != CMD_endif as ::core::ffi::c_int
             && (*eap).cmdidx as ::core::ffi::c_int != CMD_endfor as ::core::ffi::c_int
@@ -8577,7 +8342,8 @@ unsafe extern "C" fn profile_cmd(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
             ) {
                 func_line_exec(getline_cookie(fgetline, cookie));
@@ -8591,7 +8357,8 @@ unsafe extern "C" fn profile_cmd(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
             ) {
                 script_line_exec();
@@ -8602,12 +8369,12 @@ unsafe extern "C" fn profile_cmd(
 unsafe extern "C" fn skip_cmd(mut eap: *const exarg_T) -> bool {
     if (*eap).skip != 0 {
         match (*eap).cmdidx as ::core::ffi::c_int {
-            525 | 147 | 167 | 145 | 187 | 141 | 140 | 143 | 488 | 54 | 159 | 146 | 168
-            | 3 | 550 | 26 | 31 | 38 | 53 | 97 | 99 | 115 | 126 | 127 | 131 | 132 | 135
-            | 136 | 138 | 139 | 149 | 151 | 157 | 176 | 181 | 183 | 188 | 189 | 198 | 199
-            | 209 | 207 | 206 | 208 | 230 | 231 | 255 | 256 | 264 | 278 | 288 | 298 | 302
-            | 323 | 334 | 346 | 349 | 351 | 355 | 353 | 371 | 374 | 378 | 407 | 410 | 415
-            | 382 | 444 | 453 | 468 | 473 | 555 | 484 | 498 | 499 | 506 | 507 | 527 => {}
+            525 | 147 | 167 | 145 | 187 | 141 | 140 | 143 | 488 | 54 | 159 | 146 | 168 | 3
+            | 550 | 26 | 31 | 38 | 53 | 97 | 99 | 115 | 126 | 127 | 131 | 132 | 135 | 136 | 138
+            | 139 | 149 | 151 | 157 | 176 | 181 | 183 | 188 | 189 | 198 | 199 | 209 | 207 | 206
+            | 208 | 230 | 231 | 255 | 256 | 264 | 278 | 288 | 298 | 302 | 323 | 334 | 346 | 349
+            | 351 | 355 | 353 | 371 | 374 | 378 | 407 | 410 | 415 | 382 | 444 | 453 | 468 | 473
+            | 555 | 484 | 498 | 499 | 506 | 507 | 527 => {}
             _ => return true_0 != 0,
         }
     }
@@ -8620,15 +8387,12 @@ unsafe extern "C" fn do_one_cmd(
     mut fgetline: LineGetter,
     mut cookie: *mut ::core::ffi::c_void,
 ) -> *mut ::core::ffi::c_char {
-    let mut after_modifier: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut after_modifier: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut ni: ::core::ffi::c_int = 0;
     let mut retv: ::core::ffi::c_int = 0;
-    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let save_reg_executing: ::core::ffi::c_int = reg_executing;
     let save_pending_end_reg_executing: bool = pending_end_reg_executing;
     let mut ea: exarg_T = exarg {
@@ -8702,8 +8466,8 @@ unsafe extern "C" fn do_one_cmd(
     '_doend: {
         if !(*(*cmdlinep).offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '#' as ::core::ffi::c_int
-            && *(*cmdlinep).offset(1 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int == '!' as ::core::ffi::c_int)
+            && *(*cmdlinep).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                == '!' as ::core::ffi::c_int)
         {
             ea.cmd = *cmdlinep;
             ea.cmdlinep = cmdlinep;
@@ -8719,12 +8483,13 @@ unsafe extern "C" fn do_one_cmd(
             {
                 apply_cmdmod(&raw mut cmdmod);
                 after_modifier = ea.cmd;
-                ea.skip = (did_emsg != 0 || got_int as ::core::ffi::c_int != 0
+                ea.skip = (did_emsg != 0
+                    || got_int as ::core::ffi::c_int != 0
                     || did_throw as ::core::ffi::c_int != 0
                     || (*cstack).cs_idx >= 0 as ::core::ffi::c_int
                         && (*cstack).cs_flags[(*cstack).cs_idx as usize]
-                            & CSF_ACTIVE as ::core::ffi::c_int == 0)
-                    as ::core::ffi::c_int;
+                            & CSF_ACTIVE as ::core::ffi::c_int
+                            == 0) as ::core::ffi::c_int;
                 p = find_excmd_after_range(&raw mut ea);
                 profile_cmd(&raw mut ea, cstack, fgetline, cookie);
                 if !exiting {
@@ -8735,9 +8500,7 @@ unsafe extern "C" fn do_one_cmd(
                     do_intthrow(cstack);
                 }
                 set_cmd_addr_type(&raw mut ea, p);
-                if parse_cmd_address(&raw mut ea, &raw mut errormsg, false_0 != 0)
-                    != FAIL
-                {
+                if parse_cmd_address(&raw mut ea, &raw mut errormsg, false_0 != 0) != FAIL {
                     ea.cmd = skip_colon_white(ea.cmd, true_0 != 0);
                     if *ea.cmd as ::core::ffi::c_int == NUL
                         || *ea.cmd as ::core::ffi::c_int == '"' as ::core::ffi::c_int
@@ -8748,7 +8511,8 @@ unsafe extern "C" fn do_one_cmd(
                     {
                         if ea.skip == 0 {
                             '_c2rust_label: {
-                                if errormsg.is_null() {} else {
+                                if errormsg.is_null() {
+                                } else {
                                     __assert_fail(
                                         b"errormsg == NULL\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -8764,25 +8528,20 @@ unsafe extern "C" fn do_one_cmd(
                         }
                     } else {
                         if !p.is_null()
-                            && ea.cmdidx as ::core::ffi::c_int
-                                == CMD_SIZE as ::core::ffi::c_int && ea.skip == 0
-                            && (*ea.cmd as ::core::ffi::c_uint
-                                >= 'A' as ::core::ffi::c_uint
-                                && *ea.cmd as ::core::ffi::c_uint
-                                    <= 'Z' as ::core::ffi::c_uint)
+                            && ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
+                            && ea.skip == 0
+                            && (*ea.cmd as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+                                && *ea.cmd as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint)
                             && has_event(EVENT_CMDUNDEFINED) as ::core::ffi::c_int != 0
                         {
                             let mut cmdname: *mut ::core::ffi::c_char = ea.cmd;
-                            while *cmdname as ::core::ffi::c_uint
-                                >= 'A' as ::core::ffi::c_uint
-                                && *cmdname as ::core::ffi::c_uint
-                                    <= 'Z' as ::core::ffi::c_uint
-                                || *cmdname as ::core::ffi::c_uint
-                                    >= 'a' as ::core::ffi::c_uint
-                                    && *cmdname as ::core::ffi::c_uint
-                                        <= 'z' as ::core::ffi::c_uint
+                            while *cmdname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+                                && *cmdname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+                                || *cmdname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
+                                    && *cmdname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
                                 || ascii_isdigit(*cmdname as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int != 0
+                                    as ::core::ffi::c_int
+                                    != 0
                             {
                                 cmdname = cmdname.offset(1);
                             }
@@ -8796,7 +8555,8 @@ unsafe extern "C" fn do_one_cmd(
                                 cmdname,
                                 true_0 != 0,
                                 ::core::ptr::null_mut::<buf_T>(),
-                            ) as ::core::ffi::c_int;
+                            )
+                                as ::core::ffi::c_int;
                             xfree(cmdname as *mut ::core::ffi::c_void);
                             p = if ret != 0 && !aborting() {
                                 find_ex_command(
@@ -8814,8 +8574,7 @@ unsafe extern "C" fn do_one_cmd(
                                         as *const ::core::ffi::c_char,
                                 );
                             }
-                        } else if ea.cmdidx as ::core::ffi::c_int
-                            == CMD_SIZE as ::core::ffi::c_int
+                        } else if ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
                         {
                             if ea.skip == 0 {
                                 xstrlcpy(
@@ -8826,13 +8585,12 @@ unsafe extern "C" fn do_one_cmd(
                                     ),
                                     IOSIZE as size_t,
                                 );
-                                let mut cmdname_0: *mut ::core::ffi::c_char = if !after_modifier
-                                    .is_null()
-                                {
-                                    after_modifier
-                                } else {
-                                    *cmdlinep
-                                };
+                                let mut cmdname_0: *mut ::core::ffi::c_char =
+                                    if !after_modifier.is_null() {
+                                        after_modifier
+                                    } else {
+                                        *cmdlinep
+                                    };
                                 if flags & DOCMD_VERBOSE as ::core::ffi::c_int == 0 {
                                     append_command(cmdname_0);
                                 }
@@ -8842,21 +8600,17 @@ unsafe extern "C" fn do_one_cmd(
                             }
                         } else {
                             ni = is_cmd_ni(ea.cmdidx) as ::core::ffi::c_int;
-                            ea.forceit = parse_bang(&raw mut ea, &raw mut p)
-                                as ::core::ffi::c_int;
-                            if !((ea.cmdidx as ::core::ffi::c_int)
-                                < 0 as ::core::ffi::c_int)
-                            {
-                                ea.argt = cmdnames[ea.cmdidx as ::core::ffi::c_int as usize]
-                                    .cmd_argt;
+                            ea.forceit = parse_bang(&raw mut ea, &raw mut p) as ::core::ffi::c_int;
+                            if !((ea.cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int) {
+                                ea.argt =
+                                    cmdnames[ea.cmdidx as ::core::ffi::c_int as usize].cmd_argt;
                             }
                             if ea.skip == 0 {
                                 if sandbox != 0 as ::core::ffi::c_int
                                     && ea.argt & EX_SBOXOK as uint32_t == 0
                                 {
-                                    errormsg = gettext(
-                                        &raw const e_sandbox as *const ::core::ffi::c_char,
-                                    );
+                                    errormsg =
+                                        gettext(&raw const e_sandbox as *const ::core::ffi::c_char);
                                     break '_doend;
                                 } else if (*curbuf).b_p_ma == 0
                                     && ea.argt & EX_MODIFY as uint32_t != 0
@@ -8900,7 +8654,8 @@ unsafe extern "C" fn do_one_cmd(
                                         && curbuf_locked() as ::core::ffi::c_int != 0
                                     {
                                         break '_doend;
-                                    } else if ni == 0 && ea.argt & EX_RANGE as uint32_t == 0
+                                    } else if ni == 0
+                                        && ea.argt & EX_RANGE as uint32_t == 0
                                         && ea.addr_count > 0 as ::core::ffi::c_int
                                     {
                                         errormsg = gettext(
@@ -8910,16 +8665,11 @@ unsafe extern "C" fn do_one_cmd(
                                     }
                                 }
                             }
-                            if ni == 0 && ea.argt & EX_BANG as uint32_t == 0
-                                && ea.forceit != 0
-                            {
-                                errormsg = gettext(
-                                    &raw const e_nobang as *const ::core::ffi::c_char,
-                                );
+                            if ni == 0 && ea.argt & EX_BANG as uint32_t == 0 && ea.forceit != 0 {
+                                errormsg =
+                                    gettext(&raw const e_nobang as *const ::core::ffi::c_char);
                             } else {
-                                if ea.skip == 0 && ni == 0
-                                    && ea.argt & EX_RANGE as uint32_t != 0
-                                {
+                                if ea.skip == 0 && ni == 0 && ea.argt & EX_RANGE as uint32_t != 0 {
                                     if global_busy == 0 && ea.line1 > ea.line2 {
                                         if msg_silent == 0 as ::core::ffi::c_int {
                                             if flags & DOCMD_VERBOSE as ::core::ffi::c_int != 0
@@ -8930,12 +8680,10 @@ unsafe extern "C" fn do_one_cmd(
                                                         as *const ::core::ffi::c_char,
                                                 );
                                                 break '_doend;
-                                            } else if ask_yesno(
-                                                gettext(
-                                                    b"Backwards range given, OK to swap\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
-                                            ) != 'y' as ::core::ffi::c_int
+                                            } else if ask_yesno(gettext(
+                                                b"Backwards range given, OK to swap\0".as_ptr()
+                                                    as *const ::core::ffi::c_char,
+                                            )) != 'y' as ::core::ffi::c_int
                                             {
                                                 break '_doend;
                                             }
@@ -8992,18 +8740,26 @@ unsafe extern "C" fn do_one_cmd(
                                         's_449: {
                                             if ea.argt & EX_ARGOPT as uint32_t != 0 {
                                                 loop {
-                                                    if !(*ea.arg.offset(0 as ::core::ffi::c_int as isize)
-                                                        as ::core::ffi::c_int == '+' as ::core::ffi::c_int
-                                                        && *ea.arg.offset(1 as ::core::ffi::c_int as isize)
-                                                            as ::core::ffi::c_int == '+' as ::core::ffi::c_int)
+                                                    if !(*ea
+                                                        .arg
+                                                        .offset(0 as ::core::ffi::c_int as isize)
+                                                        as ::core::ffi::c_int
+                                                        == '+' as ::core::ffi::c_int
+                                                        && *ea.arg.offset(
+                                                            1 as ::core::ffi::c_int as isize,
+                                                        )
+                                                            as ::core::ffi::c_int
+                                                            == '+' as ::core::ffi::c_int)
                                                     {
                                                         break 's_449;
                                                     }
-                                                    if !(getargopt(&raw mut ea) == FAIL && ni == 0) {
+                                                    if !(getargopt(&raw mut ea) == FAIL && ni == 0)
+                                                    {
                                                         continue;
                                                     }
                                                     errormsg = gettext(
-                                                        &raw const e_invarg as *const ::core::ffi::c_char,
+                                                        &raw const e_invarg
+                                                            as *const ::core::ffi::c_char,
                                                     );
                                                     break '_doend;
                                                 }
@@ -9021,15 +8777,15 @@ unsafe extern "C" fn do_one_cmd(
                                                 if *ea.arg as ::core::ffi::c_int
                                                     != '>' as ::core::ffi::c_int
                                                 {
-                                                    errormsg = gettext(
-                                                        b"E494: Use w or w>>\0".as_ptr()
-                                                            as *const ::core::ffi::c_char,
-                                                    );
+                                                    errormsg =
+                                                        gettext(b"E494: Use w or w>>\0".as_ptr()
+                                                            as *const ::core::ffi::c_char);
                                                     break '_doend;
                                                 } else {
-                                                    ea.arg = skipwhite(
-                                                        ea.arg.offset(1 as ::core::ffi::c_int as isize),
-                                                    );
+                                                    ea.arg =
+                                                        skipwhite(ea.arg.offset(
+                                                            1 as ::core::ffi::c_int as isize,
+                                                        ));
                                                     ea.append = true_0;
                                                 }
                                             } else if *ea.arg as ::core::ffi::c_int
@@ -9080,25 +8836,31 @@ unsafe extern "C" fn do_one_cmd(
                                             || ea.cmdidx as ::core::ffi::c_int
                                                 == CMD_global as ::core::ffi::c_int
                                             || ea.cmdidx as ::core::ffi::c_int
-                                                == CMD_vglobal as ::core::ffi::c_int || ea.usefilter != 0
+                                                == CMD_vglobal as ::core::ffi::c_int
+                                            || ea.usefilter != 0
                                         {
                                             let mut s: *mut ::core::ffi::c_char = ea.arg;
                                             while *s != 0 {
-                                                if *s as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
+                                                if *s as ::core::ffi::c_int
+                                                    == '\\' as ::core::ffi::c_int
                                                     && *s.offset(1 as ::core::ffi::c_int as isize)
-                                                        as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                                                        as ::core::ffi::c_int
+                                                        == '\n' as ::core::ffi::c_int
                                                 {
                                                     memmove(
                                                         s as *mut ::core::ffi::c_void,
                                                         s.offset(1 as ::core::ffi::c_int as isize)
                                                             as *const ::core::ffi::c_void,
-                                                        strlen(s.offset(1 as ::core::ffi::c_int as isize))
-                                                            .wrapping_add(1 as size_t),
+                                                        strlen(s.offset(
+                                                            1 as ::core::ffi::c_int as isize,
+                                                        ))
+                                                        .wrapping_add(1 as size_t),
                                                     );
                                                 } else if *s as ::core::ffi::c_int
                                                     == '\n' as ::core::ffi::c_int
                                                 {
-                                                    ea.nextcmd = s.offset(1 as ::core::ffi::c_int as isize);
+                                                    ea.nextcmd =
+                                                        s.offset(1 as ::core::ffi::c_int as isize);
                                                     *s = NUL as ::core::ffi::c_char;
                                                     break;
                                                 }
@@ -9117,23 +8879,28 @@ unsafe extern "C" fn do_one_cmd(
                                             if ea.argt & EX_FLAGS as uint32_t != 0 {
                                                 get_flags(&raw mut ea);
                                             }
-                                            if ni == 0 && ea.argt & EX_EXTRA as uint32_t == 0
+                                            if ni == 0
+                                                && ea.argt & EX_EXTRA as uint32_t == 0
                                                 && *ea.arg as ::core::ffi::c_int != NUL
                                                 && *ea.arg as ::core::ffi::c_int
                                                     != '"' as ::core::ffi::c_int
                                                 && (*ea.arg as ::core::ffi::c_int
                                                     != '|' as ::core::ffi::c_int
-                                                    || ea.argt & EX_TRLBAR as uint32_t == 0 as uint32_t)
+                                                    || ea.argt & EX_TRLBAR as uint32_t
+                                                        == 0 as uint32_t)
                                             {
                                                 errormsg = ex_errmsg(
-                                                    &raw const e_trailing_arg as *const ::core::ffi::c_char,
+                                                    &raw const e_trailing_arg
+                                                        as *const ::core::ffi::c_char,
                                                     ea.arg,
                                                 );
-                                            } else if ni == 0 && ea.argt & EX_NEEDARG as uint32_t != 0
+                                            } else if ni == 0
+                                                && ea.argt & EX_NEEDARG as uint32_t != 0
                                                 && *ea.arg as ::core::ffi::c_int == NUL
                                             {
                                                 errormsg = gettext(
-                                                    &raw const e_argreq as *const ::core::ffi::c_char,
+                                                    &raw const e_argreq
+                                                        as *const ::core::ffi::c_char,
                                                 );
                                             } else if !skip_cmd(&raw mut ea) {
                                                 retv = 0 as ::core::ffi::c_int;
@@ -9186,9 +8953,7 @@ unsafe extern "C" fn do_one_cmd(
     }
     if !errormsg.is_null() && *errormsg as ::core::ffi::c_int != NUL && did_emsg == 0 {
         if flags & DOCMD_VERBOSE as ::core::ffi::c_int != 0 {
-            if errormsg
-                != &raw mut IObuff as *mut ::core::ffi::c_char
-                    as *const ::core::ffi::c_char
+            if errormsg != &raw mut IObuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_char
             {
                 xstrlcpy(
                     &raw mut IObuff as *mut ::core::ffi::c_char,
@@ -9236,15 +9001,10 @@ pub unsafe extern "C" fn ex_errmsg(
     );
     return &raw mut ex_error_buf as *mut ::core::ffi::c_char;
 }
-static mut exmode_plus: [::core::ffi::c_char; 2] = unsafe {
-    ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"+\0")
-};
-unsafe extern "C" fn ex_range_without_command(
-    mut eap: *mut exarg_T,
-) -> *mut ::core::ffi::c_char {
-    let mut errormsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+static mut exmode_plus: [::core::ffi::c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"+\0") };
+unsafe extern "C" fn ex_range_without_command(mut eap: *mut exarg_T) -> *mut ::core::ffi::c_char {
+    let mut errormsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *(*eap).cmd as ::core::ffi::c_int == '|' as ::core::ffi::c_int
         || exmode_active as ::core::ffi::c_int != 0
             && (*eap).cmd
@@ -9285,9 +9045,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
     mut skip_only: bool,
 ) -> ::core::ffi::c_int {
     let mut orig_cmd: *mut ::core::ffi::c_char = (*eap).cmd;
-    let mut cmd_start: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut cmd_start: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut use_plus_cmd: bool = false_0 != 0;
     let mut has_visual_range: bool = false_0 != 0;
     memset(
@@ -9301,11 +9059,9 @@ pub unsafe extern "C" fn parse_command_modifiers(
         5 as size_t,
     ) == 0 as ::core::ffi::c_int
     {
-        let mut p: *const ::core::ffi::c_char = skipwhite(
-            (*eap).cmd.offset(5 as ::core::ffi::c_int as isize),
-        );
-        if *p as ::core::ffi::c_int != NUL
-            && *p as ::core::ffi::c_int != '|' as ::core::ffi::c_int
+        let mut p: *const ::core::ffi::c_char =
+            skipwhite((*eap).cmd.offset(5 as ::core::ffi::c_int as isize));
+        if *p as ::core::ffi::c_int != NUL && *p as ::core::ffi::c_int != '|' as ::core::ffi::c_int
         {
             (*eap).cmd = (*eap).cmd.offset(5 as ::core::ffi::c_int as isize);
             cmd_start = (*eap).cmd;
@@ -9331,9 +9087,11 @@ pub unsafe extern "C" fn parse_command_modifiers(
                             *mut ::core::ffi::c_void,
                             ::core::ffi::c_int,
                             bool,
-                        ) -> *mut ::core::ffi::c_char,
+                        )
+                            -> *mut ::core::ffi::c_char,
                 ),
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
             && (*curwin).w_cursor.lnum < (*curbuf).b_ml.ml_line_count
         {
             (*eap).cmd = &raw mut exmode_plus as *mut ::core::ffi::c_char;
@@ -9360,10 +9118,8 @@ pub unsafe extern "C" fn parse_command_modifiers(
                 }
                 return FAIL;
             }
-            let mut p_0: *mut ::core::ffi::c_char = skip_range(
-                (*eap).cmd,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            );
+            let mut p_0: *mut ::core::ffi::c_char =
+                skip_range((*eap).cmd, ::core::ptr::null_mut::<::core::ffi::c_int>());
             match *p_0 as ::core::ffi::c_int {
                 97 => {
                     if !checkforcmd(
@@ -9440,9 +9196,8 @@ pub unsafe extern "C" fn parse_command_modifiers(
                     }
                 }
                 102 => {
-                    let mut reg_pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut reg_pat: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                     if !checkforcmd(
                         &raw mut p_0,
                         b"filter\0".as_ptr() as *const ::core::ffi::c_char,
@@ -9479,10 +9234,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
                     }
                     if !skip_only {
                         (*cmod).cmod_filter_pat = xstrdup(reg_pat);
-                        (*cmod).cmod_filter_regmatch.regprog = vim_regcomp(
-                            reg_pat,
-                            RE_MAGIC,
-                        );
+                        (*cmod).cmod_filter_regmatch.regprog = vim_regcomp(reg_pat, RE_MAGIC);
                         if (*cmod).cmod_filter_regmatch.regprog.is_null() {
                             break;
                         }
@@ -9502,7 +9254,8 @@ pub unsafe extern "C" fn parse_command_modifiers(
                                 &raw mut p_0,
                                 b"hide\0".as_ptr() as *const ::core::ffi::c_char,
                                 3 as ::core::ffi::c_int,
-                            ) || *p_0 as ::core::ffi::c_int == NUL
+                            )
+                            || *p_0 as ::core::ffi::c_int == NUL
                             || ends_excmd(*p_0 as ::core::ffi::c_int) != 0
                         {
                             break;
@@ -9574,14 +9327,11 @@ pub unsafe extern "C" fn parse_command_modifiers(
                         }
                         (*cmod).cmod_flags |= CMOD_SILENT as ::core::ffi::c_int;
                         if *(*eap).cmd as ::core::ffi::c_int == '!' as ::core::ffi::c_int
-                            && !ascii_iswhite(
-                                *(*eap).cmd.offset(-1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
-                            )
+                            && !ascii_iswhite(*(*eap).cmd.offset(-1 as ::core::ffi::c_int as isize)
+                                as ::core::ffi::c_int)
                         {
-                            (*eap).cmd = skipwhite(
-                                (*eap).cmd.offset(1 as ::core::ffi::c_int as isize),
-                            );
+                            (*eap).cmd =
+                                skipwhite((*eap).cmd.offset(1 as ::core::ffi::c_int as isize));
                             (*cmod).cmod_flags |= CMOD_ERRSILENT as ::core::ffi::c_int;
                         }
                     }
@@ -9602,17 +9352,16 @@ pub unsafe extern "C" fn parse_command_modifiers(
                                 false_0,
                                 1 as ::core::ffi::c_int,
                                 errormsg,
-                            ) as ::core::ffi::c_int;
+                            )
+                                as ::core::ffi::c_int;
                             if (*eap).cmd.is_null() {
                                 return false_0;
                             }
                             if tabnr == MAXLNUM as ::core::ffi::c_int {
-                                (*cmod).cmod_tab = tabpage_index(curtab)
-                                    + 1 as ::core::ffi::c_int;
+                                (*cmod).cmod_tab = tabpage_index(curtab) + 1 as ::core::ffi::c_int;
                             } else {
                                 if tabnr < 0 as ::core::ffi::c_int
-                                    || tabnr
-                                        > current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
+                                    || tabnr > current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
                                 {
                                     *errormsg = gettext(
                                         &raw const e_invrange as *const ::core::ffi::c_char,
@@ -9660,8 +9409,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
                             break;
                         }
                         if ascii_isdigit(*(*eap).cmd as ::core::ffi::c_int) {
-                            (*cmod).cmod_verbose = atoi((*eap).cmd)
-                                + 1 as ::core::ffi::c_int;
+                            (*cmod).cmod_verbose = atoi((*eap).cmd) + 1 as ::core::ffi::c_int;
                         } else {
                             (*cmod).cmod_verbose = 2 as ::core::ffi::c_int;
                         }
@@ -9685,10 +9433,8 @@ pub unsafe extern "C" fn parse_command_modifiers(
                 );
                 xmemcpyz(
                     orig_cmd.offset(len as isize) as *mut ::core::ffi::c_void,
-                    b" *+\0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                        .wrapping_sub(1 as size_t),
+                    b" *+\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
                 );
             } else {
                 memmove(
@@ -9707,8 +9453,8 @@ pub unsafe extern "C" fn parse_command_modifiers(
                 );
             }
         } else if use_plus_cmd {
-            (*eap).cmd = b"'<,'>+\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            (*eap).cmd =
+                b"'<,'>+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             (*eap).cmd = orig_cmd;
         }
@@ -9719,8 +9465,7 @@ pub unsafe extern "C" fn parse_command_modifiers(
 }
 #[no_mangle]
 pub unsafe extern "C" fn apply_cmdmod(mut cmod: *mut cmdmod_T) {
-    if (*cmod).cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0
-        && (*cmod).cmod_did_sandbox == 0
+    if (*cmod).cmod_flags & CMOD_SANDBOX as ::core::ffi::c_int != 0 && (*cmod).cmod_did_sandbox == 0
     {
         sandbox += 1;
         (*cmod).cmod_did_sandbox = true_0;
@@ -9732,7 +9477,8 @@ pub unsafe extern "C" fn apply_cmdmod(mut cmod: *mut cmdmod_T) {
         p_verbose = ((*cmod).cmod_verbose - 1 as ::core::ffi::c_int) as OptInt;
     }
     if (*cmod).cmod_flags
-        & (CMOD_SILENT as ::core::ffi::c_int | CMOD_UNSILENT as ::core::ffi::c_int) != 0
+        & (CMOD_SILENT as ::core::ffi::c_int | CMOD_UNSILENT as ::core::ffi::c_int)
+        != 0
         && (*cmod).cmod_save_msg_silent == 0 as ::core::ffi::c_int
     {
         (*cmod).cmod_save_msg_silent = msg_silent + 1 as ::core::ffi::c_int;
@@ -9798,9 +9544,7 @@ pub unsafe extern "C" fn undo_cmdmod(mut cmod: *mut cmdmod_T) {
     xfree((*cmod).cmod_filter_pat as *mut ::core::ffi::c_void);
     vim_regfree((*cmod).cmod_filter_regmatch.regprog);
     if (*cmod).cmod_save_msg_silent > 0 as ::core::ffi::c_int {
-        if did_emsg == 0
-            || msg_silent > (*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int
-        {
+        if did_emsg == 0 || msg_silent > (*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int {
             msg_silent = (*cmod).cmod_save_msg_silent - 1 as ::core::ffi::c_int;
         }
         emsg_silent -= (*cmod).cmod_did_esilent;
@@ -9857,16 +9601,12 @@ pub unsafe extern "C" fn parse_cmd_address(
                         }
                         3 => {
                             let mut buf: *mut buf_T = firstbuf;
-                            while !(*buf).b_next.is_null()
-                                && (*buf).b_ml.ml_mfp.is_null()
-                            {
+                            while !(*buf).b_next.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                                 buf = (*buf).b_next;
                             }
                             (*eap).line1 = (*buf).handle as linenr_T;
                             buf = lastbuf;
-                            while !(*buf).b_prev.is_null()
-                                && (*buf).b_ml.ml_mfp.is_null()
-                            {
+                            while !(*buf).b_prev.is_null() && (*buf).b_ml.ml_mfp.is_null() {
                                 buf = (*buf).b_prev;
                             }
                             (*eap).line2 = (*buf).handle as linenr_T;
@@ -9876,9 +9616,7 @@ pub unsafe extern "C" fn parse_cmd_address(
                             (*eap).line2 = (*lastbuf).handle as linenr_T;
                         }
                         1 | 5 => {
-                            if ((*eap).cmdidx as ::core::ffi::c_int)
-                                < 0 as ::core::ffi::c_int
-                            {
+                            if ((*eap).cmdidx as ::core::ffi::c_int) < 0 as ::core::ffi::c_int {
                                 (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
                                 (*eap).line2 = (if (*eap).addr_type as ::core::ffi::c_uint
                                     == ADDR_WINDOWS as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -9888,28 +9626,23 @@ pub unsafe extern "C" fn parse_cmd_address(
                                     current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
                                 }) as linenr_T;
                             } else {
-                                *errormsg = gettext(
-                                    &raw const e_invrange as *const ::core::ffi::c_char,
-                                );
+                                *errormsg =
+                                    gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                                 break '_theend;
                             }
                         }
                         6 | 9 | 8 => {
-                            *errormsg = gettext(
-                                &raw const e_invrange as *const ::core::ffi::c_char,
-                            );
+                            *errormsg =
+                                gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                             break '_theend;
                         }
                         2 => {
-                            if (*(*curwin).w_alist).al_ga.ga_len
-                                == 0 as ::core::ffi::c_int
-                            {
+                            if (*(*curwin).w_alist).al_ga.ga_len == 0 as ::core::ffi::c_int {
                                 (*eap).line2 = 0 as ::core::ffi::c_int as linenr_T;
                                 (*eap).line1 = (*eap).line2;
                             } else {
                                 (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
-                                (*eap).line2 = (*(*curwin).w_alist).al_ga.ga_len
-                                    as linenr_T;
+                                (*eap).line2 = (*(*curwin).w_alist).al_ga.ga_len as linenr_T;
                             }
                         }
                         7 => {
@@ -9922,27 +9655,23 @@ pub unsafe extern "C" fn parse_cmd_address(
                         11 | _ => {}
                     }
                     (*eap).addr_count += 1;
-                } else if *(*eap).cmd as ::core::ffi::c_int == '*' as ::core::ffi::c_int
-                {
+                } else if *(*eap).cmd as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
                     if (*eap).addr_type as ::core::ffi::c_uint
                         != ADDR_LINES as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
-                        *errormsg = gettext(
-                            &raw const e_invrange as *const ::core::ffi::c_char,
-                        );
+                        *errormsg = gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                         break '_theend;
                     } else {
                         (*eap).cmd = (*eap).cmd.offset(1);
                         if (*eap).skip == 0 {
-                            let mut fm: *mut fmark_T = mark_get_visual(
-                                curbuf,
-                                '<' as ::core::ffi::c_int,
-                            );
+                            let mut fm: *mut fmark_T =
+                                mark_get_visual(curbuf, '<' as ::core::ffi::c_int);
                             if !mark_check(fm, errormsg) {
                                 break '_theend;
                             }
                             '_c2rust_label: {
-                                if !fm.is_null() {} else {
+                                if !fm.is_null() {
+                                } else {
                                     __assert_fail(
                                         b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                                         b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
@@ -9959,7 +9688,8 @@ pub unsafe extern "C" fn parse_cmd_address(
                                 break '_theend;
                             }
                             '_c2rust_label_0: {
-                                if !fm.is_null() {} else {
+                                if !fm.is_null() {
+                                } else {
                                     __assert_fail(
                                         b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                                         b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
@@ -10024,14 +9754,10 @@ pub unsafe extern "C" fn checkforcmd(
         i += 1;
     }
     if i >= len
-        && !(*(*pp).offset(i as isize) as ::core::ffi::c_uint
-            >= 'A' as ::core::ffi::c_uint
-            && *(*pp).offset(i as isize) as ::core::ffi::c_uint
-                <= 'Z' as ::core::ffi::c_uint
-            || *(*pp).offset(i as isize) as ::core::ffi::c_uint
-                >= 'a' as ::core::ffi::c_uint
-                && *(*pp).offset(i as isize) as ::core::ffi::c_uint
-                    <= 'z' as ::core::ffi::c_uint)
+        && !(*(*pp).offset(i as isize) as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+            && *(*pp).offset(i as isize) as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+            || *(*pp).offset(i as isize) as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
+                && *(*pp).offset(i as isize) as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
     {
         *pp = skipwhite((*pp).offset(i as isize));
         return true_0 != 0;
@@ -10046,10 +9772,7 @@ unsafe extern "C" fn append_command(mut cmd: *const ::core::ffi::c_char) {
         d = (&raw mut IObuff as *mut ::core::ffi::c_char)
             .offset(IOSIZE as isize)
             .offset(-(100 as ::core::ffi::c_int as isize));
-        d = d
-            .offset(
-                -(utf_head_off(&raw mut IObuff as *mut ::core::ffi::c_char, d) as isize),
-            );
+        d = d.offset(-(utf_head_off(&raw mut IObuff as *mut ::core::ffi::c_char, d) as isize));
         strcpy(
             d,
             b"...\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -10068,19 +9791,20 @@ unsafe extern "C" fn append_command(mut cmd: *const ::core::ffi::c_char) {
     {
         if *s.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
             == 0xc2 as ::core::ffi::c_int
-            && *s.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int == 0xa0 as ::core::ffi::c_int
+            && *s.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+                == 0xa0 as ::core::ffi::c_int
         {
             s = s.offset(2 as ::core::ffi::c_int as isize);
             strcpy(
                 d,
-                b"<a0>\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"<a0>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             d = d.offset(4 as ::core::ffi::c_int as isize);
         } else {
             if d.offset_from(&raw mut IObuff as *mut ::core::ffi::c_char)
-                + utfc_ptr2len(s) as isize + 1 as isize >= IOSIZE as isize
+                + utfc_ptr2len(s) as isize
+                + 1 as isize
+                >= IOSIZE as isize
             {
                 break;
             }
@@ -10114,12 +9838,11 @@ unsafe extern "C" fn one_letter_cmd(
                     != 's' as ::core::ffi::c_int
                     && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         != 'r' as ::core::ffi::c_int
-                    && (*p.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == NUL
-                        || *p.offset(3 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int != 'i' as ::core::ffi::c_int
-                            && *p.offset(4 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int != 'p' as ::core::ffi::c_int))
+                    && (*p.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+                        || *p.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            != 'i' as ::core::ffi::c_int
+                            && *p.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                != 'p' as ::core::ffi::c_int))
             || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == 'g' as ::core::ffi::c_int
             || *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -10177,15 +9900,14 @@ pub unsafe extern "C" fn find_ex_command(
         }
         if p == (*eap).cmd
             && !vim_strchr(
-                    b"@!=><&~#\0".as_ptr() as *const ::core::ffi::c_char,
-                    *p as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                b"@!=><&~#\0".as_ptr() as *const ::core::ffi::c_char,
+                *p as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             p = p.offset(1);
         }
-        let mut len: ::core::ffi::c_int = p.offset_from((*eap).cmd)
-            as ::core::ffi::c_int;
+        let mut len: ::core::ffi::c_int = p.offset_from((*eap).cmd) as ::core::ffi::c_int;
         if *(*eap).cmd as ::core::ffi::c_int == 'd' as ::core::ffi::c_int
             && (*p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == 'l' as ::core::ffi::c_int
@@ -10196,10 +9918,8 @@ pub unsafe extern "C" fn find_ex_command(
             i = 0 as ::core::ffi::c_int;
             while i < len {
                 if *(*eap).cmd.offset(i as isize) as ::core::ffi::c_int
-                    != ::core::mem::transmute::<
-                        [u8; 7],
-                        [::core::ffi::c_char; 7],
-                    >(*b"delete\0")[i as usize] as ::core::ffi::c_int
+                    != ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"delete\0")
+                        [i as usize] as ::core::ffi::c_int
                 {
                     break;
                 }
@@ -10218,55 +9938,51 @@ pub unsafe extern "C" fn find_ex_command(
         }
         if *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
             >= 'a' as ::core::ffi::c_uint
-            && *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
+            && *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                <= 'z' as ::core::ffi::c_uint
         {
-            let c1: ::core::ffi::c_int = *(*eap)
-                .cmd
-                .offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int;
+            let c1: ::core::ffi::c_int = *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize)
+                as uint8_t as ::core::ffi::c_int;
             let c2: ::core::ffi::c_int = if len == 1 as ::core::ffi::c_int {
                 NUL
             } else {
-                *(*eap).cmd.offset(1 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
+                *(*eap).cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             };
             if command_count != CMD_SIZE as ::core::ffi::c_int {
-                iemsg(
-                    gettext(
-                        b"E943: Command table needs to be updated, run 'make'\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                iemsg(gettext(
+                    b"E943: Command table needs to be updated, run 'make'\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                ));
                 getout(1 as ::core::ffi::c_int);
             }
-            (*eap).cmdidx = cmdidxs1[(c1 as uint8_t as ::core::ffi::c_int
-                - 'a' as ::core::ffi::c_int) as usize] as cmdidx_T;
+            (*eap).cmdidx = cmdidxs1
+                [(c1 as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize]
+                as cmdidx_T;
             if c2 as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                 && c2 as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
             {
                 (*eap).cmdidx = ((*eap).cmdidx as ::core::ffi::c_int
-                    + cmdidxs2[(c1 as uint8_t as ::core::ffi::c_int
-                        - 'a' as ::core::ffi::c_int)
-                        as usize][(c2 as uint8_t as ::core::ffi::c_int
-                        - 'a' as ::core::ffi::c_int) as usize] as ::core::ffi::c_int)
-                    as cmdidx_T;
+                    + cmdidxs2
+                        [(c1 as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize]
+                        [(c2 as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int) as usize]
+                        as ::core::ffi::c_int) as cmdidx_T;
             }
-        } else if *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+        } else if *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+            >= 'A' as ::core::ffi::c_uint
+            && *(*eap).cmd.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
+                <= 'Z' as ::core::ffi::c_uint
         {
             (*eap).cmdidx = CMD_Next;
         } else {
             (*eap).cmdidx = CMD_bang;
         }
         '_c2rust_label: {
-            if (*eap).cmdidx as ::core::ffi::c_int >= 0 as ::core::ffi::c_int {} else {
+            if (*eap).cmdidx as ::core::ffi::c_int >= 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"eap->cmdidx >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     3236 as ::core::ffi::c_uint,
                     b"char *find_ex_command(exarg_T *, int *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -10292,14 +10008,15 @@ pub unsafe extern "C" fn find_ex_command(
                 if !full.is_null()
                     && *cmdnames[(*eap).cmdidx as ::core::ffi::c_int as usize]
                         .cmd_name
-                        .offset(len as isize) as ::core::ffi::c_int == NUL
+                        .offset(len as isize) as ::core::ffi::c_int
+                        == NUL
                 {
                     *full = true_0;
                 }
                 break;
             } else {
-                (*eap).cmdidx = ((*eap).cmdidx as ::core::ffi::c_int
-                    + 1 as ::core::ffi::c_int) as cmdidx_T;
+                (*eap).cmdidx =
+                    ((*eap).cmdidx as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as cmdidx_T;
             }
         }
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int
@@ -10330,167 +10047,139 @@ pub unsafe extern "C" fn find_ex_command(
 }
 static mut cmdmods: [cmdmod; 24] = [
     cmdmod {
-        name: b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"aboveleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"belowright\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"belowright\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"botright\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"botright\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 2 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"browse\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"browse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"confirm\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"confirm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 4 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"filter\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"filter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 4 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"hide\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"horizontal\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"horizontal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"keepalt\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"keepalt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 5 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"keepjumps\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"keepjumps\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 5 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"keepmarks\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"keepmarks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"keeppatterns\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 5 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"leftabove\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"leftabove\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 5 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"lockmarks\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"lockmarks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"noautocmd\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"noautocmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"noswapfile\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"noswapfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"rightbelow\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"rightbelow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 6 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"sandbox\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"sandbox\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"silent\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"silent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"tab\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: true_0,
     },
     cmdmod {
-        name: b"topleft\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"topleft\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 2 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"unsilent\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"unsilent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 3 as ::core::ffi::c_int,
         has_count: false_0,
     },
     cmdmod {
-        name: b"verbose\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"verbose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 4 as ::core::ffi::c_int,
         has_count: true_0,
     },
     cmdmod {
-        name: b"vertical\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        name: b"vertical\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         minlen: 4 as ::core::ffi::c_int,
         has_count: false_0,
     },
 ];
 #[no_mangle]
-pub unsafe extern "C" fn modifier_len(
-    mut cmd: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn modifier_len(mut cmd: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = cmd;
     if ascii_isdigit(*cmd as ::core::ffi::c_int) {
         p = skipwhite(skipdigits(cmd.offset(1 as ::core::ffi::c_int as isize)));
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i
-        < ::core::mem::size_of::<[cmdmod; 24]>()
-            .wrapping_div(::core::mem::size_of::<cmdmod>())
-            .wrapping_div(
-                (::core::mem::size_of::<[cmdmod; 24]>()
-                    .wrapping_rem(::core::mem::size_of::<cmdmod>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) as ::core::ffi::c_int
+    while i < ::core::mem::size_of::<[cmdmod; 24]>()
+        .wrapping_div(::core::mem::size_of::<cmdmod>())
+        .wrapping_div(
+            (::core::mem::size_of::<[cmdmod; 24]>().wrapping_rem(::core::mem::size_of::<cmdmod>())
+                == 0) as ::core::ffi::c_int as usize,
+        ) as ::core::ffi::c_int
     {
         let mut j: ::core::ffi::c_int = 0;
         j = 0 as ::core::ffi::c_int;
@@ -10503,14 +10192,10 @@ pub unsafe extern "C" fn modifier_len(
             j += 1;
         }
         if j >= cmdmods[i as usize].minlen
-            && !(*p.offset(j as isize) as ::core::ffi::c_uint
-                >= 'A' as ::core::ffi::c_uint
-                && *p.offset(j as isize) as ::core::ffi::c_uint
-                    <= 'Z' as ::core::ffi::c_uint
-                || *p.offset(j as isize) as ::core::ffi::c_uint
-                    >= 'a' as ::core::ffi::c_uint
-                    && *p.offset(j as isize) as ::core::ffi::c_uint
-                        <= 'z' as ::core::ffi::c_uint)
+            && !(*p.offset(j as isize) as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+                && *p.offset(j as isize) as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+                || *p.offset(j as isize) as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
+                    && *p.offset(j as isize) as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
             && (p == cmd || cmdmods[i as usize].has_count != 0)
         {
             return j + p.offset_from(cmd) as ::core::ffi::c_int;
@@ -10520,18 +10205,14 @@ pub unsafe extern "C" fn modifier_len(
     return 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn cmd_exists(
-    name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn cmd_exists(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i
-        < ::core::mem::size_of::<[cmdmod; 24]>()
-            .wrapping_div(::core::mem::size_of::<cmdmod>())
-            .wrapping_div(
-                (::core::mem::size_of::<[cmdmod; 24]>()
-                    .wrapping_rem(::core::mem::size_of::<cmdmod>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) as ::core::ffi::c_int
+    while i < ::core::mem::size_of::<[cmdmod; 24]>()
+        .wrapping_div(::core::mem::size_of::<cmdmod>())
+        .wrapping_div(
+            (::core::mem::size_of::<[cmdmod; 24]>().wrapping_rem(::core::mem::size_of::<cmdmod>())
+                == 0) as ::core::ffi::c_int as usize,
+        ) as ::core::ffi::c_int
     {
         let mut j: ::core::ffi::c_int = 0;
         j = 0 as ::core::ffi::c_int;
@@ -10543,12 +10224,9 @@ pub unsafe extern "C" fn cmd_exists(
             }
             j += 1;
         }
-        if *name.offset(j as isize) as ::core::ffi::c_int == NUL
-            && j >= cmdmods[i as usize].minlen
+        if *name.offset(j as isize) as ::core::ffi::c_int == NUL && j >= cmdmods[i as usize].minlen
         {
-            return if *cmdmods[i as usize].name.offset(j as isize) as ::core::ffi::c_int
-                == NUL
-            {
+            return if *cmdmods[i as usize].name.offset(j as isize) as ::core::ffi::c_int == NUL {
                 2 as ::core::ffi::c_int
             } else {
                 1 as ::core::ffi::c_int
@@ -10628,9 +10306,8 @@ pub unsafe extern "C" fn f_fullcommand(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut name: *mut ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    ) as *mut ::core::ffi::c_char;
+    let mut name: *mut ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_char;
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     while *name as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
@@ -10682,10 +10359,8 @@ pub unsafe extern "C" fn f_fullcommand(
     };
     ea.cmdidx = CMD_append;
     ea.flags = 0 as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = find_ex_command(
-        &raw mut ea,
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    );
+    let mut p: *mut ::core::ffi::c_char =
+        find_ex_command(&raw mut ea, ::core::ptr::null_mut::<::core::ffi::c_int>());
     if p.is_null() || ea.cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int {
         return;
     }
@@ -10703,8 +10378,11 @@ pub unsafe extern "C" fn excmd_get_cmdidx(
     mut len: size_t,
 ) -> cmdidx_T {
     if len == 3 as size_t
-        && strncmp(b"def\0".as_ptr() as *const ::core::ffi::c_char, cmd, 3 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            b"def\0".as_ptr() as *const ::core::ffi::c_char,
+            cmd,
+            3 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         return CMD_SIZE;
     }
@@ -10712,8 +10390,11 @@ pub unsafe extern "C" fn excmd_get_cmdidx(
     if one_letter_cmd(cmd, &raw mut idx) == 0 {
         idx = CMD_append;
         while (idx as ::core::ffi::c_int) < CMD_SIZE as ::core::ffi::c_int {
-            if strncmp(cmdnames[idx as ::core::ffi::c_int as usize].cmd_name, cmd, len)
-                == 0 as ::core::ffi::c_int
+            if strncmp(
+                cmdnames[idx as ::core::ffi::c_int as usize].cmd_name,
+                cmd,
+                len,
+            ) == 0 as ::core::ffi::c_int
             {
                 break;
             }
@@ -10732,10 +10413,10 @@ pub unsafe extern "C" fn skip_range(
     mut ctx: *mut ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     while !vim_strchr(
-            b" \t0123456789.$%'/?-+,;\\\0".as_ptr() as *const ::core::ffi::c_char,
-            *cmd as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b" \t0123456789.$%'/?-+,;\\\0".as_ptr() as *const ::core::ffi::c_char,
+        *cmd as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         if *cmd as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
             if !(*cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -10760,8 +10441,7 @@ pub unsafe extern "C" fn skip_range(
             cmd = cmd.offset(1);
             let mut delim: ::core::ffi::c_uint = *c2rust_fresh27 as ::core::ffi::c_uint;
             while *cmd as ::core::ffi::c_int != NUL
-                && *cmd as ::core::ffi::c_int
-                    != delim as ::core::ffi::c_char as ::core::ffi::c_int
+                && *cmd as ::core::ffi::c_int != delim as ::core::ffi::c_char as ::core::ffi::c_int
             {
                 let c2rust_fresh28 = cmd;
                 cmd = cmd.offset(1);
@@ -10785,15 +10465,11 @@ pub unsafe extern "C" fn skip_range(
     }
     return cmd as *mut ::core::ffi::c_char;
 }
-unsafe extern "C" fn addr_error(
-    mut addr_type: cmd_addr_T,
-) -> *const ::core::ffi::c_char {
-    if addr_type as ::core::ffi::c_uint
-        == ADDR_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return gettext(&raw const e_norange as *const ::core::ffi::c_char)
+unsafe extern "C" fn addr_error(mut addr_type: cmd_addr_T) -> *const ::core::ffi::c_char {
+    if addr_type as ::core::ffi::c_uint == ADDR_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
+        return gettext(&raw const e_norange as *const ::core::ffi::c_char);
     } else {
-        return gettext(&raw const e_invrange as *const ::core::ffi::c_char)
+        return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
     };
 }
 #[no_mangle]
@@ -10830,8 +10506,7 @@ pub unsafe extern "C" fn get_address(
                         lnum = current_win_nr(curwin) as linenr_T;
                     }
                     2 => {
-                        lnum = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int)
-                            as linenr_T;
+                        lnum = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
                     }
                     3 | 4 => {
                         lnum = (*curbuf).handle as linenr_T;
@@ -10879,8 +10554,7 @@ pub unsafe extern "C" fn get_address(
                         lnum = (*lastbuf).handle as linenr_T;
                     }
                     5 => {
-                        lnum = current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
-                            as linenr_T;
+                        lnum = current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) as linenr_T;
                     }
                     11 | 6 | 9 => {
                         *errormsg = addr_error(addr_type);
@@ -10917,8 +10591,8 @@ pub unsafe extern "C" fn get_address(
                     cmd = cmd.offset(1);
                 } else {
                     let mut flag: MarkGet = (if to_other_file != 0
-                        && *cmd.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == NUL
+                        && *cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == NUL
                     {
                         kMarkAll as ::core::ffi::c_int
                     } else {
@@ -10940,7 +10614,8 @@ pub unsafe extern "C" fn get_address(
                         break;
                     } else {
                         '_c2rust_label: {
-                            if !fm.is_null() {} else {
+                            if !fm.is_null() {
+                            } else {
                                 __assert_fail(
                                     b"fm != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                                     b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
@@ -10973,11 +10648,8 @@ pub unsafe extern "C" fn get_address(
                 } else {
                     let mut flags: ::core::ffi::c_int = 0;
                     pos = (*curwin).w_cursor;
-                    if lnum > 0 as linenr_T
-                        && lnum != MAXLNUM as ::core::ffi::c_int as linenr_T
-                    {
-                        (*curwin).w_cursor.lnum = if lnum > (*curbuf).b_ml.ml_line_count
-                        {
+                    if lnum > 0 as linenr_T && lnum != MAXLNUM as ::core::ffi::c_int as linenr_T {
+                        (*curwin).w_cursor.lnum = if lnum > (*curbuf).b_ml.ml_line_count {
                             (*curbuf).b_ml.ml_line_count
                         } else {
                             lnum
@@ -10994,8 +10666,7 @@ pub unsafe extern "C" fn get_address(
                     flags = if silent as ::core::ffi::c_int != 0 {
                         SEARCH_KEEP as ::core::ffi::c_int
                     } else {
-                        SEARCH_HIS as ::core::ffi::c_int
-                            | SEARCH_MSG as ::core::ffi::c_int
+                        SEARCH_HIS as ::core::ffi::c_int | SEARCH_MSG as ::core::ffi::c_int
                     };
                     if do_search(
                         ::core::ptr::null_mut::<oparg_T>(),
@@ -11034,9 +10705,7 @@ pub unsafe extern "C" fn get_address(
                     {
                         i = RE_SEARCH as ::core::ffi::c_int;
                     } else {
-                        *errormsg = gettext(
-                            &raw const e_backslash as *const ::core::ffi::c_char,
-                        );
+                        *errormsg = gettext(&raw const e_backslash as *const ::core::ffi::c_char);
                         cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
                         break;
                     }
@@ -11046,9 +10715,7 @@ pub unsafe extern "C" fn get_address(
                         } else {
                             (*curwin).w_cursor.lnum
                         };
-                        pos.col = (if *cmd as ::core::ffi::c_int
-                            != '?' as ::core::ffi::c_int
-                        {
+                        pos.col = (if *cmd as ::core::ffi::c_int != '?' as ::core::ffi::c_int {
                             MAXCOL as ::core::ffi::c_int
                         } else {
                             0 as ::core::ffi::c_int
@@ -11084,8 +10751,7 @@ pub unsafe extern "C" fn get_address(
             }
             _ => {
                 if ascii_isdigit(*cmd as ::core::ffi::c_int) {
-                    lnum = getdigits(&raw mut cmd, false_0 != 0, 0 as intmax_t)
-                        as linenr_T;
+                    lnum = getdigits(&raw mut cmd, false_0 != 0, 0 as intmax_t) as linenr_T;
                 }
             }
         }
@@ -11106,8 +10772,7 @@ pub unsafe extern "C" fn get_address(
                         lnum = current_win_nr(curwin) as linenr_T;
                     }
                     2 => {
-                        lnum = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int)
-                            as linenr_T;
+                        lnum = ((*curwin).w_arg_idx + 1 as ::core::ffi::c_int) as linenr_T;
                     }
                     3 | 4 => {
                         lnum = (*curbuf).handle as linenr_T;
@@ -11147,8 +10812,7 @@ pub unsafe extern "C" fn get_address(
                 ) as linenr_T;
                 if n == MAXLNUM as ::core::ffi::c_int as linenr_T {
                     *errormsg = gettext(
-                        &raw const e_line_number_out_of_range
-                            as *const ::core::ffi::c_char,
+                        &raw const e_line_number_out_of_range as *const ::core::ffi::c_char,
                     );
                     cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
                     break '_error;
@@ -11191,8 +10855,7 @@ pub unsafe extern "C" fn get_address(
                     lnum -= n;
                 } else if lnum >= 0 as linenr_T && n >= INT32_MAX as linenr_T - lnum {
                     *errormsg = gettext(
-                        &raw const e_line_number_out_of_range
-                            as *const ::core::ffi::c_char,
+                        &raw const e_line_number_out_of_range as *const ::core::ffi::c_char,
                     );
                     cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
                     break '_error;
@@ -11212,10 +10875,10 @@ pub unsafe extern "C" fn get_address(
 }
 unsafe extern "C" fn get_flags(mut eap: *mut exarg_T) {
     while !vim_strchr(
-            b"lp#\0".as_ptr() as *const ::core::ffi::c_char,
-            *(*eap).arg as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"lp#\0".as_ptr() as *const ::core::ffi::c_char,
+        *(*eap).arg as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         if *(*eap).arg as ::core::ffi::c_int == 'l' as ::core::ffi::c_int {
             (*eap).flags |= EXFLAG_LIST;
@@ -11245,13 +10908,9 @@ unsafe extern "C" fn ex_script_ni(mut eap: *mut exarg_T) {
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn invalid_range(
-    mut eap: *mut exarg_T,
-) -> *mut ::core::ffi::c_char {
+pub unsafe extern "C" fn invalid_range(mut eap: *mut exarg_T) -> *mut ::core::ffi::c_char {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    if (*eap).line1 < 0 as linenr_T || (*eap).line2 < 0 as linenr_T
-        || (*eap).line1 > (*eap).line2
-    {
+    if (*eap).line1 < 0 as linenr_T || (*eap).line2 < 0 as linenr_T || (*eap).line1 > (*eap).line2 {
         return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
     }
     if (*eap).argt & EX_RANGE as uint32_t != 0 {
@@ -11259,10 +10918,10 @@ pub unsafe extern "C" fn invalid_range(
             0 => {
                 if (*eap).line2
                     > (*curbuf).b_ml.ml_line_count
-                        + ((*eap).cmdidx as ::core::ffi::c_int
-                            == CMD_diffget as ::core::ffi::c_int
+                        + ((*eap).cmdidx as ::core::ffi::c_int == CMD_diffget as ::core::ffi::c_int
                             || (*eap).cmdidx as ::core::ffi::c_int
-                                == CMD_diffput as ::core::ffi::c_int) as ::core::ffi::c_int
+                                == CMD_diffput as ::core::ffi::c_int)
+                            as ::core::ffi::c_int
                 {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
@@ -11276,9 +10935,7 @@ pub unsafe extern "C" fn invalid_range(
                 }
             }
             4 => {
-                if (*eap).line1 < 1 as linenr_T
-                    || (*eap).line2 > get_highest_fnum() as linenr_T
-                {
+                if (*eap).line1 < 1 as linenr_T || (*eap).line2 > get_highest_fnum() as linenr_T {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
             }
@@ -11286,9 +10943,7 @@ pub unsafe extern "C" fn invalid_range(
                 buf = firstbuf;
                 while (*buf).b_ml.ml_mfp.is_null() {
                     if (*buf).b_next.is_null() {
-                        return gettext(
-                            &raw const e_invrange as *const ::core::ffi::c_char,
-                        );
+                        return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                     }
                     buf = (*buf).b_next;
                 }
@@ -11298,9 +10953,7 @@ pub unsafe extern "C" fn invalid_range(
                 buf = lastbuf;
                 while (*buf).b_ml.ml_mfp.is_null() {
                     if (*buf).b_prev.is_null() {
-                        return gettext(
-                            &raw const e_invrange as *const ::core::ffi::c_char,
-                        );
+                        return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                     }
                     buf = (*buf).b_prev;
                 }
@@ -11309,26 +10962,23 @@ pub unsafe extern "C" fn invalid_range(
                 }
             }
             1 => {
-                if (*eap).line2
-                    > current_win_nr(::core::ptr::null::<win_T>()) as linenr_T
-                {
+                if (*eap).line2 > current_win_nr(::core::ptr::null::<win_T>()) as linenr_T {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
             }
             5 => {
-                if (*eap).line2
-                    > current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) as linenr_T
-                {
+                if (*eap).line2 > current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) as linenr_T {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
             }
             8 => {
                 '_c2rust_label: {
-                    if (*eap).line2 >= 0 as linenr_T {} else {
+                    if (*eap).line2 >= 0 as linenr_T {
+                    } else {
                         __assert_fail(
                             b"eap->line2 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                             3906 as ::core::ffi::c_uint,
                             b"char *invalid_range(exarg_T *)\0".as_ptr()
                                 as *const ::core::ffi::c_char,
@@ -11337,16 +10987,13 @@ pub unsafe extern "C" fn invalid_range(
                 };
                 if (*eap).line2 <= 0 as linenr_T {
                     if (*eap).addr_count == 0 as ::core::ffi::c_int {
-                        return gettext(
-                            &raw const e_no_errors as *const ::core::ffi::c_char,
-                        );
+                        return gettext(&raw const e_no_errors as *const ::core::ffi::c_char);
                     }
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 }
             }
             7 => {
-                if (*eap).line2 != 1 as linenr_T
-                    && (*eap).line2 as size_t > qf_get_valid_size(eap)
+                if (*eap).line2 != 1 as linenr_T && (*eap).line2 as size_t > qf_get_valid_size(eap)
                     || (*eap).line2 < 0 as linenr_T
                 {
                     return gettext(&raw const e_invrange as *const ::core::ffi::c_char);
@@ -11372,10 +11019,8 @@ unsafe extern "C" fn skip_grep_pat(mut eap: *mut exarg_T) -> *mut ::core::ffi::c
     if *p as ::core::ffi::c_int != NUL
         && ((*eap).cmdidx as ::core::ffi::c_int == CMD_vimgrep as ::core::ffi::c_int
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_lvimgrep as ::core::ffi::c_int
-            || (*eap).cmdidx as ::core::ffi::c_int
-                == CMD_vimgrepadd as ::core::ffi::c_int
-            || (*eap).cmdidx as ::core::ffi::c_int
-                == CMD_lvimgrepadd as ::core::ffi::c_int
+            || (*eap).cmdidx as ::core::ffi::c_int == CMD_vimgrepadd as ::core::ffi::c_int
+            || (*eap).cmdidx as ::core::ffi::c_int == CMD_lvimgrepadd as ::core::ffi::c_int
             || grep_internal((*eap).cmdidx) != 0)
     {
         p = skip_vimgrep_pat(
@@ -11395,18 +11040,16 @@ pub unsafe extern "C" fn replace_makeprg(
     mut arg: *mut ::core::ffi::c_char,
     mut cmdlinep: *mut *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    let mut isgrep: bool = (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_grep as ::core::ffi::c_int
+    let mut isgrep: bool = (*eap).cmdidx as ::core::ffi::c_int == CMD_grep as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_lgrep as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_grepadd as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_lgrepadd as ::core::ffi::c_int;
     if ((*eap).cmdidx as ::core::ffi::c_int == CMD_make as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_lmake as ::core::ffi::c_int
-        || isgrep as ::core::ffi::c_int != 0) && grep_internal((*eap).cmdidx) == 0
+        || isgrep as ::core::ffi::c_int != 0)
+        && grep_internal((*eap).cmdidx) == 0
     {
-        let mut program: *const ::core::ffi::c_char = if isgrep as ::core::ffi::c_int
-            != 0
-        {
+        let mut program: *const ::core::ffi::c_char = if isgrep as ::core::ffi::c_int != 0 {
             if *(*curbuf).b_p_gp as ::core::ffi::c_int == NUL {
                 p_gp
             } else {
@@ -11418,17 +11061,14 @@ pub unsafe extern "C" fn replace_makeprg(
             (*curbuf).b_p_mp
         };
         arg = skipwhite(arg);
-        let mut new_cmdline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
-        new_cmdline = strrep(
-            program,
-            b"$*\0".as_ptr() as *const ::core::ffi::c_char,
-            arg,
-        );
+        let mut new_cmdline: *mut ::core::ffi::c_char =
+            ::core::ptr::null_mut::<::core::ffi::c_char>();
+        new_cmdline = strrep(program, b"$*\0".as_ptr() as *const ::core::ffi::c_char, arg);
         if new_cmdline.is_null() {
             new_cmdline = xmalloc(
-                strlen(program).wrapping_add(strlen(arg)).wrapping_add(2 as size_t),
+                strlen(program)
+                    .wrapping_add(strlen(arg))
+                    .wrapping_add(2 as size_t),
             ) as *mut ::core::ffi::c_char;
             strcpy(new_cmdline, program as *mut ::core::ffi::c_char);
             strcat(new_cmdline, b" \0".as_ptr() as *const ::core::ffi::c_char);
@@ -11461,10 +11101,10 @@ pub unsafe extern "C" fn expand_filename(
                 p = p.offset(1);
             }
         } else if vim_strchr(
-                b"%#<\0".as_ptr() as *const ::core::ffi::c_char,
-                *p as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"%#<\0".as_ptr() as *const ::core::ffi::c_char,
+            *p as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
         {
             p = p.offset(1);
         } else {
@@ -11492,34 +11132,23 @@ pub unsafe extern "C" fn expand_filename(
                     repl = expand_env_save(repl);
                     xfree(l as *mut ::core::ffi::c_void);
                 }
-                if (*eap).usefilter == 0 && escaped == 0
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_bang as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_grep as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_grepadd as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_lgrep as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_lgrepadd as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_lmake as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_make as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int
-                        != CMD_terminal as ::core::ffi::c_int
+                if (*eap).usefilter == 0
+                    && escaped == 0
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_bang as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_grep as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_grepadd as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_lgrep as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_lgrepadd as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_lmake as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_make as ::core::ffi::c_int
+                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_terminal as ::core::ffi::c_int
                     && (*eap).argt & EX_NOSPC as uint32_t == 0
                 {
-                    let mut l_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                        ::core::ffi::c_char,
-                    >();
+                    let mut l_0: *mut ::core::ffi::c_char =
+                        ::core::ptr::null_mut::<::core::ffi::c_char>();
                     l_0 = repl;
                     while *l_0 != 0 {
-                        if !vim_strchr(
-                                escape_chars,
-                                *l_0 as uint8_t as ::core::ffi::c_int,
-                            )
+                        if !vim_strchr(escape_chars, *l_0 as uint8_t as ::core::ffi::c_int)
                             .is_null()
                         {
                             l_0 = vim_strsave_escaped(repl, escape_chars);
@@ -11532,17 +11161,12 @@ pub unsafe extern "C" fn expand_filename(
                     }
                 }
                 if ((*eap).usefilter != 0
-                    || (*eap).cmdidx as ::core::ffi::c_int
-                        == CMD_bang as ::core::ffi::c_int
-                    || (*eap).cmdidx as ::core::ffi::c_int
-                        == CMD_terminal as ::core::ffi::c_int)
-                    && !strpbrk(repl, b"!\0".as_ptr() as *const ::core::ffi::c_char)
-                        .is_null()
+                    || (*eap).cmdidx as ::core::ffi::c_int == CMD_bang as ::core::ffi::c_int
+                    || (*eap).cmdidx as ::core::ffi::c_int == CMD_terminal as ::core::ffi::c_int)
+                    && !strpbrk(repl, b"!\0".as_ptr() as *const ::core::ffi::c_char).is_null()
                 {
-                    let mut l_1: *mut ::core::ffi::c_char = vim_strsave_escaped(
-                        repl,
-                        b"!\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    let mut l_1: *mut ::core::ffi::c_char =
+                        vim_strsave_escaped(repl, b"!\0".as_ptr() as *const ::core::ffi::c_char);
                     xfree(repl as *mut ::core::ffi::c_void);
                     repl = l_1;
                 }
@@ -11564,9 +11188,7 @@ pub unsafe extern "C" fn expand_filename(
                     true_0 != 0,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 );
-                has_wildcards = path_has_wildcard(
-                    &raw mut NameBuff as *mut ::core::ffi::c_char,
-                );
+                has_wildcards = path_has_wildcard(&raw mut NameBuff as *mut ::core::ffi::c_char);
                 p = &raw mut NameBuff as *mut ::core::ffi::c_char;
             } else {
                 p = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -11608,8 +11230,8 @@ pub unsafe extern "C" fn expand_filename(
                     coladd: 0,
                 },
             };
-            let mut options: ::core::ffi::c_int = WILD_LIST_NOTFOUND
-                as ::core::ffi::c_int | WILD_NOERROR as ::core::ffi::c_int
+            let mut options: ::core::ffi::c_int = WILD_LIST_NOTFOUND as ::core::ffi::c_int
+                | WILD_NOERROR as ::core::ffi::c_int
                 | WILD_ADD_SLASH as ::core::ffi::c_int;
             ExpandInit(&raw mut xpc);
             xpc.xp_context = EXPAND_FILES as ::core::ffi::c_int;
@@ -11647,8 +11269,7 @@ unsafe extern "C" fn repl_cmdline(
     if !(*eap).nextcmd.is_null() {
         i = i.wrapping_add(strlen((*eap).nextcmd));
     }
-    let mut new_cmdline: *mut ::core::ffi::c_char = xmalloc(i)
-        as *mut ::core::ffi::c_char;
+    let mut new_cmdline: *mut ::core::ffi::c_char = xmalloc(i) as *mut ::core::ffi::c_char;
     let mut offset: size_t = src.offset_from(*cmdlinep) as size_t;
     i = offset;
     memmove(
@@ -11675,23 +11296,19 @@ unsafe extern "C" fn repl_cmdline(
     while j < (*eap).argc {
         if offset >= (*(*eap).args.offset(j as isize)).offset_from(*cmdlinep) as size_t {
             *(*eap).args.offset(j as isize) = new_cmdline
-                .offset(
-                    (*(*eap).args.offset(j as isize)).offset_from(*cmdlinep) as isize,
-                );
+                .offset((*(*eap).args.offset(j as isize)).offset_from(*cmdlinep) as isize);
         } else {
-            *(*eap).args.offset(j as isize) = new_cmdline
-                .offset(
-                    ((*(*eap).args.offset(j as isize)).offset_from(*cmdlinep)
-                        + len.wrapping_sub(srclen) as isize) as isize,
-                );
+            *(*eap).args.offset(j as isize) = new_cmdline.offset(
+                ((*(*eap).args.offset(j as isize)).offset_from(*cmdlinep)
+                    + len.wrapping_sub(srclen) as isize) as isize,
+            );
         }
         j = j.wrapping_add(1);
     }
     if !(*eap).do_ecmd_cmd.is_null()
         && (*eap).do_ecmd_cmd != &raw mut dollar_command as *mut ::core::ffi::c_char
     {
-        (*eap).do_ecmd_cmd = new_cmdline
-            .offset((*eap).do_ecmd_cmd.offset_from(*cmdlinep) as isize);
+        (*eap).do_ecmd_cmd = new_cmdline.offset((*eap).do_ecmd_cmd.offset_from(*cmdlinep) as isize);
     }
     xfree(*cmdlinep as *mut ::core::ffi::c_void);
     *cmdlinep = new_cmdline;
@@ -11707,10 +11324,8 @@ pub unsafe extern "C" fn separate_nextcmd(mut eap: *mut exarg_T) {
             } else {
                 memmove(
                     p as *mut ::core::ffi::c_void,
-                    p.offset(1 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
-                    strlen(p.offset(1 as ::core::ffi::c_int as isize))
-                        .wrapping_add(1 as size_t),
+                    p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                    strlen(p.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
                 );
             }
             if *p as ::core::ffi::c_int == NUL {
@@ -11719,7 +11334,8 @@ pub unsafe extern "C" fn separate_nextcmd(mut eap: *mut exarg_T) {
         } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '`' as ::core::ffi::c_int
             && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '=' as ::core::ffi::c_int && (*eap).argt & EX_XFILE as uint32_t != 0
+                == '=' as ::core::ffi::c_int
+            && (*eap).argt & EX_XFILE as uint32_t != 0
         {
             p = p.offset(2 as ::core::ffi::c_int as isize);
             skip_expr(&raw mut p, ::core::ptr::null_mut::<evalarg_T>());
@@ -11735,22 +11351,17 @@ pub unsafe extern "C" fn separate_nextcmd(mut eap: *mut exarg_T) {
                 || *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     != '@' as ::core::ffi::c_int)
             || *p as ::core::ffi::c_int == '|' as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int
-                    != CMD_append as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int
-                    != CMD_change as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int
-                    != CMD_insert as ::core::ffi::c_int
+                && (*eap).cmdidx as ::core::ffi::c_int != CMD_append as ::core::ffi::c_int
+                && (*eap).cmdidx as ::core::ffi::c_int != CMD_change as ::core::ffi::c_int
+                && (*eap).cmdidx as ::core::ffi::c_int != CMD_insert as ::core::ffi::c_int
             || *p as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
         {
-            if (vim_strchr(p_cpo, CPO_BAR).is_null()
-                || (*eap).argt & EX_CTRLV as uint32_t == 0)
+            if (vim_strchr(p_cpo, CPO_BAR).is_null() || (*eap).argt & EX_CTRLV as uint32_t == 0)
                 && *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
             {
                 memmove(
-                    p.offset(-(1 as ::core::ffi::c_int as isize))
-                        as *mut ::core::ffi::c_void,
+                    p.offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void,
                     p as *const ::core::ffi::c_void,
                     strlen(p).wrapping_add(1 as size_t),
                 );
@@ -11772,9 +11383,7 @@ pub unsafe extern "C" fn getargcmd(
     mut argp: *mut *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut arg: *mut ::core::ffi::c_char = *argp;
-    let mut command: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut command: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int {
         arg = arg.offset(1);
         if ascii_isspace(*arg as ::core::ffi::c_int) as ::core::ffi::c_int != 0
@@ -11807,10 +11416,8 @@ pub unsafe extern "C" fn skip_cmd_arg(
             if rembs {
                 memmove(
                     p as *mut ::core::ffi::c_void,
-                    p.offset(1 as ::core::ffi::c_int as isize)
-                        as *const ::core::ffi::c_void,
-                    strlen(p.offset(1 as ::core::ffi::c_int as isize))
-                        .wrapping_add(1 as size_t),
+                    p.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+                    strlen(p.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
                 );
             } else {
                 p = p.offset(1);
@@ -11837,13 +11444,12 @@ pub unsafe extern "C" fn get_bad_opt(
     ) == 0 as ::core::ffi::c_int
     {
         (*eap).bad_char = BAD_DROP;
-    } else if utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int
-        == 1 as ::core::ffi::c_int
+    } else if utf8len_tab[*p as uint8_t as usize] as ::core::ffi::c_int == 1 as ::core::ffi::c_int
         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
     {
         (*eap).bad_char = *p as uint8_t as ::core::ffi::c_int;
     } else {
-        return FAIL
+        return FAIL;
     }
     return OK;
 }
@@ -11871,15 +11477,19 @@ unsafe extern "C" fn get_bad_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
-    let mut arg: *mut ::core::ffi::c_char = (*eap)
-        .arg
-        .offset(2 as ::core::ffi::c_int as isize);
+    let mut arg: *mut ::core::ffi::c_char = (*eap).arg.offset(2 as ::core::ffi::c_int as isize);
     let mut pp: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let mut bad_char_idx: ::core::ffi::c_int = 0;
-    if strncmp(arg, b"bin\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-        == 0 as ::core::ffi::c_int
-        || strncmp(arg, b"nobin\0".as_ptr() as *const ::core::ffi::c_char, 5 as size_t)
-            == 0 as ::core::ffi::c_int
+    if strncmp(
+        arg,
+        b"bin\0".as_ptr() as *const ::core::ffi::c_char,
+        3 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        || strncmp(
+            arg,
+            b"nobin\0".as_ptr() as *const ::core::ffi::c_char,
+            5 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         if *arg as ::core::ffi::c_int == 'n' as ::core::ffi::c_int {
             arg = arg.offset(2 as ::core::ffi::c_int as isize);
@@ -11897,8 +11507,11 @@ pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int 
         (*eap).arg = skipwhite(arg);
         return OK;
     }
-    if strncmp(arg, b"edit\0".as_ptr() as *const ::core::ffi::c_char, 4 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        arg,
+        b"edit\0".as_ptr() as *const ::core::ffi::c_char,
+        4 as size_t,
+    ) == 0 as ::core::ffi::c_int
         && !(*arg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
             >= 'A' as ::core::ffi::c_uint
             && *arg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
@@ -11927,8 +11540,11 @@ pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int 
         (*eap).arg = skipwhite(arg.offset(1 as ::core::ffi::c_int as isize));
         return OK;
     }
-    if strncmp(arg, b"ff\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        arg,
+        b"ff\0".as_ptr() as *const ::core::ffi::c_char,
+        2 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         arg = arg.offset(2 as ::core::ffi::c_int as isize);
         pp = &raw mut (*eap).force_ff;
@@ -11940,8 +11556,11 @@ pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int 
     {
         arg = arg.offset(10 as ::core::ffi::c_int as isize);
         pp = &raw mut (*eap).force_ff;
-    } else if strncmp(arg, b"enc\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-        == 0 as ::core::ffi::c_int
+    } else if strncmp(
+        arg,
+        b"enc\0".as_ptr() as *const ::core::ffi::c_char,
+        3 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         if strncmp(
             arg,
@@ -11954,8 +11573,11 @@ pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int 
             arg = arg.offset(3 as ::core::ffi::c_int as isize);
         }
         pp = &raw mut (*eap).force_enc;
-    } else if strncmp(arg, b"bad\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-        == 0 as ::core::ffi::c_int
+    } else if strncmp(
+        arg,
+        b"bad\0".as_ptr() as *const ::core::ffi::c_char,
+        3 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         arg = arg.offset(3 as ::core::ffi::c_int as isize);
         pp = &raw mut bad_char_idx;
@@ -11972,25 +11594,22 @@ pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int 
         if check_ff_value((*eap).cmd.offset((*eap).force_ff as isize)) == FAIL {
             return FAIL;
         }
-        (*eap).force_ff = *(*eap).cmd.offset((*eap).force_ff as isize) as uint8_t
-            as ::core::ffi::c_int;
+        (*eap).force_ff =
+            *(*eap).cmd.offset((*eap).force_ff as isize) as uint8_t as ::core::ffi::c_int;
     } else if pp == &raw mut (*eap).force_enc {
-        let mut p: *mut ::core::ffi::c_char = (*eap)
-            .cmd
-            .offset((*eap).force_enc as isize);
+        let mut p: *mut ::core::ffi::c_char = (*eap).cmd.offset((*eap).force_enc as isize);
         while *p as ::core::ffi::c_int != NUL {
             *p = (if (*p as ::core::ffi::c_int) < 'A' as ::core::ffi::c_int
                 || *p as ::core::ffi::c_int > 'Z' as ::core::ffi::c_int
             {
                 *p as ::core::ffi::c_int
             } else {
-                *p as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
+                *p as ::core::ffi::c_int + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
             }) as ::core::ffi::c_char;
             p = p.offset(1);
         }
     } else if get_bad_opt((*eap).cmd.offset(bad_char_idx as isize), eap) == FAIL {
-        return FAIL
+        return FAIL;
     }
     return OK;
 }
@@ -11999,10 +11618,8 @@ unsafe extern "C" fn get_argopt_name(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut p_opt_values: [*mut ::core::ffi::c_char; 7] = [
-        b"fileformat=\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
-        b"encoding=\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        b"fileformat=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        b"encoding=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"binary\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"nobinary\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         b"bad=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -12031,13 +11648,12 @@ pub unsafe extern "C" fn expand_argopt(
     mut numMatches: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     if (*xp).xp_pattern > (*xp).xp_line
-        && *(*xp).xp_pattern.offset(-(1 as ::core::ffi::c_int as isize))
-            as ::core::ffi::c_int == '=' as ::core::ffi::c_int
+        && *(*xp).xp_pattern.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
+            == '=' as ::core::ffi::c_int
     {
         let mut cb: CompleteListItemGetter = None;
-        let mut name_end: *mut ::core::ffi::c_char = (*xp)
-            .xp_pattern
-            .offset(-(1 as ::core::ffi::c_int as isize));
+        let mut name_end: *mut ::core::ffi::c_char =
+            (*xp).xp_pattern.offset(-(1 as ::core::ffi::c_int as isize));
         if name_end.offset_from((*xp).xp_line) >= 2 as isize
             && strncmp(
                 name_end.offset(-(2 as ::core::ffi::c_int as isize)),
@@ -12125,9 +11741,8 @@ pub unsafe extern "C" fn expand_argopt(
         *matches = xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>())
             as *mut *mut ::core::ffi::c_char;
         *numMatches = 1 as ::core::ffi::c_int;
-        *(*matches).offset(0 as ::core::ffi::c_int as isize) = xstrdup(
-            b"fileformat=\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        *(*matches).offset(0 as ::core::ffi::c_int as isize) =
+            xstrdup(b"fileformat=\0".as_ptr() as *const ::core::ffi::c_char);
         return OK;
     }
     ExpandGeneric(
@@ -12149,13 +11764,12 @@ pub unsafe extern "C" fn expand_argopt(
 }
 unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
     let mut tab_number: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut unaccept_arg0: ::core::ffi::c_int = if (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_tabmove as ::core::ffi::c_int
-    {
-        0 as ::core::ffi::c_int
-    } else {
-        1 as ::core::ffi::c_int
-    };
+    let mut unaccept_arg0: ::core::ffi::c_int =
+        if (*eap).cmdidx as ::core::ffi::c_int == CMD_tabmove as ::core::ffi::c_int {
+            0 as ::core::ffi::c_int
+        } else {
+            1 as ::core::ffi::c_int
+        };
     '_theend: {
         if !(*eap).arg.is_null() && *(*eap).arg as ::core::ffi::c_int != NUL {
             let mut p: *mut ::core::ffi::c_char = (*eap).arg;
@@ -12168,8 +11782,8 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
                 p = p.offset(1);
             }
             let mut p_save: *mut ::core::ffi::c_char = p;
-            tab_number = getdigits(&raw mut p, false_0 != 0, tab_number as intmax_t)
-                as ::core::ffi::c_int;
+            tab_number =
+                getdigits(&raw mut p, false_0 != 0, tab_number as intmax_t) as ::core::ffi::c_int;
             if relative == 0 as ::core::ffi::c_int {
                 if strcmp(p, b"$\0".as_ptr() as *const ::core::ffi::c_char)
                     == 0 as ::core::ffi::c_int
@@ -12228,9 +11842,7 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
             }
         } else if (*eap).addr_count > 0 as ::core::ffi::c_int {
             if unaccept_arg0 != 0 && (*eap).line2 == 0 as linenr_T {
-                (*eap).errmsg = gettext(
-                    &raw const e_invrange as *const ::core::ffi::c_char,
-                );
+                (*eap).errmsg = gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                 tab_number = 0 as ::core::ffi::c_int;
             } else {
                 tab_number = (*eap).line2 as ::core::ffi::c_int;
@@ -12239,10 +11851,11 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
                     loop {
                         cmdp = cmdp.offset(-1);
                         if !(cmdp > *(*eap).cmdlinep
-                            && (ascii_iswhite(*cmdp as ::core::ffi::c_int)
-                                as ::core::ffi::c_int != 0
+                            && (ascii_iswhite(*cmdp as ::core::ffi::c_int) as ::core::ffi::c_int
+                                != 0
                                 || ascii_isdigit(*cmdp as ::core::ffi::c_int)
-                                    as ::core::ffi::c_int != 0))
+                                    as ::core::ffi::c_int
+                                    != 0))
                         {
                             break;
                         }
@@ -12250,9 +11863,8 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
                     if *cmdp as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
                         tab_number -= 1;
                         if tab_number < unaccept_arg0 {
-                            (*eap).errmsg = gettext(
-                                &raw const e_invrange as *const ::core::ffi::c_char,
-                            );
+                            (*eap).errmsg =
+                                gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                         }
                     }
                 }
@@ -12261,8 +11873,7 @@ unsafe extern "C" fn get_tabpage_arg(mut eap: *mut exarg_T) -> ::core::ffi::c_in
             match (*eap).cmdidx as ::core::ffi::c_int {
                 461 => {
                     tab_number = tabpage_index(curtab) + 1 as ::core::ffi::c_int;
-                    if tab_number > current_tab_nr(::core::ptr::null_mut::<tabpage_T>())
-                    {
+                    if tab_number > current_tab_nr(::core::ptr::null_mut::<tabpage_T>()) {
                         tab_number = 1 as ::core::ffi::c_int;
                     }
                 }
@@ -12289,8 +11900,8 @@ unsafe extern "C" fn ex_autocmd(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn ex_doautocmd(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    let mut call_do_modelines: ::core::ffi::c_int = check_nomodeline(&raw mut arg)
-        as ::core::ffi::c_int;
+    let mut call_do_modelines: ::core::ffi::c_int =
+        check_nomodeline(&raw mut arg) as ::core::ffi::c_int;
     let mut did_aucmd: bool = false;
     do_doautocmd(arg, false_0 != 0, &raw mut did_aucmd);
     if call_do_modelines != 0 && did_aucmd as ::core::ffi::c_int != 0 {
@@ -12301,9 +11912,7 @@ unsafe extern "C" fn ex_bunload(mut eap: *mut exarg_T) {
     (*eap).errmsg = do_bufdel(
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_bdelete as ::core::ffi::c_int {
             DOBUF_DEL as ::core::ffi::c_int
-        } else if (*eap).cmdidx as ::core::ffi::c_int
-            == CMD_bwipeout as ::core::ffi::c_int
-        {
+        } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_bwipeout as ::core::ffi::c_int {
             DOBUF_WIPE as ::core::ffi::c_int
         } else {
             DOBUF_UNLOAD as ::core::ffi::c_int
@@ -12402,7 +12011,9 @@ unsafe extern "C" fn ex_blast(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ends_excmd(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return (c == NUL || c == '|' as ::core::ffi::c_int || c == '"' as ::core::ffi::c_int
+    return (c == NUL
+        || c == '|' as ::core::ffi::c_int
+        || c == '"' as ::core::ffi::c_int
         || c == '\n' as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
 #[no_mangle]
@@ -12431,19 +12042,18 @@ pub unsafe extern "C" fn check_nextcmd(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn check_more(
-    mut message: bool,
-    mut forceit: bool,
-) -> ::core::ffi::c_int {
-    let mut n: ::core::ffi::c_int = (*(*curwin).w_alist).al_ga.ga_len
-        - (*curwin).w_arg_idx - 1 as ::core::ffi::c_int;
-    if !forceit && only_one_window() as ::core::ffi::c_int != 0
-        && (*(*curwin).w_alist).al_ga.ga_len > 1 as ::core::ffi::c_int && !arg_had_last
-        && n > 0 as ::core::ffi::c_int && quitmore == 0 as ::core::ffi::c_int
+unsafe extern "C" fn check_more(mut message: bool, mut forceit: bool) -> ::core::ffi::c_int {
+    let mut n: ::core::ffi::c_int =
+        (*(*curwin).w_alist).al_ga.ga_len - (*curwin).w_arg_idx - 1 as ::core::ffi::c_int;
+    if !forceit
+        && only_one_window() as ::core::ffi::c_int != 0
+        && (*(*curwin).w_alist).al_ga.ga_len > 1 as ::core::ffi::c_int
+        && !arg_had_last
+        && n > 0 as ::core::ffi::c_int
+        && quitmore == 0 as ::core::ffi::c_int
     {
         if message {
-            if (p_confirm != 0
-                || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+            if (p_confirm != 0 || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
                 && !(*curbuf).b_fname.is_null()
             {
                 let mut buff: [::core::ffi::c_char; 1000] = [0; 1000];
@@ -12472,10 +12082,8 @@ unsafe extern "C" fn check_more(
             }
             semsg(
                 ngettext(
-                    b"E173: %d more file to edit\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"E173: %d more files to edit\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                    b"E173: %d more file to edit\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"E173: %d more files to edit\0".as_ptr() as *const ::core::ffi::c_char,
                     n as ::core::ffi::c_ulong,
                 ),
                 n,
@@ -12498,15 +12106,10 @@ pub unsafe extern "C" fn get_command_name(
 }
 unsafe extern "C" fn ex_colorscheme(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
-        let mut expr: *mut ::core::ffi::c_char = xstrdup(
-            b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let mut expr: *mut ::core::ffi::c_char =
+            xstrdup(b"g:colors_name\0".as_ptr() as *const ::core::ffi::c_char);
         emsg_off += 1;
-        let mut p: *mut ::core::ffi::c_char = eval_to_string(
-            expr,
-            false_0 != 0,
-            false_0 != 0,
-        );
+        let mut p: *mut ::core::ffi::c_char = eval_to_string(expr, false_0 != 0, false_0 != 0);
         emsg_off -= 1;
         xfree(expr as *mut ::core::ffi::c_void);
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
@@ -12521,10 +12124,7 @@ unsafe extern "C" fn ex_colorscheme(mut eap: *mut exarg_T) {
         }
     } else if load_colors((*eap).arg) == FAIL {
         semsg(
-            gettext(
-                b"E185: Cannot find color scheme '%s'\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"E185: Cannot find color scheme '%s'\0".as_ptr() as *const ::core::ffi::c_char),
             (*eap).arg,
         );
     }
@@ -12571,7 +12171,8 @@ pub unsafe extern "C" fn before_quit_autocmds(
         false_0 != 0,
         (*wp).w_buffer,
     );
-    if !win_valid(wp) || curbuf_locked() as ::core::ffi::c_int != 0
+    if !win_valid(wp)
+        || curbuf_locked() as ::core::ffi::c_int != 0
         || (*(*wp).w_buffer).b_nwindows == 1 as ::core::ffi::c_int
             && (*(*wp).w_buffer).b_locked > 0 as ::core::ffi::c_int
     {
@@ -12583,8 +12184,7 @@ pub unsafe extern "C" fn before_quit_autocmds(
         return true_0 != 0;
     }
     if quit_all as ::core::ffi::c_int != 0
-        || check_more(false_0 != 0, forceit) == OK
-            && only_one_window() as ::core::ffi::c_int != 0
+        || check_more(false_0 != 0, forceit) == OK && only_one_window() as ::core::ffi::c_int != 0
     {
         apply_autocmds(
             EVENT_EXITPRE,
@@ -12593,7 +12193,8 @@ pub unsafe extern "C" fn before_quit_autocmds(
             false_0 != 0,
             curbuf,
         );
-        if !win_valid(wp) || curbuf_locked() as ::core::ffi::c_int != 0
+        if !win_valid(wp)
+            || curbuf_locked() as ::core::ffi::c_int != 0
             || (*curbuf).b_nwindows == 1 as ::core::ffi::c_int
                 && (*curbuf).b_locked > 0 as ::core::ffi::c_int
         {
@@ -12649,17 +12250,16 @@ unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
                 CCGD_AW as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-                | (if (*eap).forceit != 0 {
-                    CCGD_FORCEIT as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }) | CCGD_EXCMD as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+            }) | (if (*eap).forceit != 0 {
+                CCGD_FORCEIT as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }) | CCGD_EXCMD as ::core::ffi::c_int,
+        ) as ::core::ffi::c_int
+            != 0
         || check_more(true_0 != 0, (*eap).forceit != 0) == FAIL
         || only_one_window() as ::core::ffi::c_int != 0
-            && check_changed_any((*eap).forceit != 0, true_0 != 0) as ::core::ffi::c_int
-                != 0
+            && check_changed_any((*eap).forceit != 0, true_0 != 0) as ::core::ffi::c_int != 0
     {
         not_exiting(save_exiting);
     } else {
@@ -12725,25 +12325,16 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
     };
     let mut servername_args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_14 { boolean: false },
     }; 1];
     let mut result: Object = Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_14 { boolean: false },
     };
-    let mut listen_addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut quit_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut quit_cmd_copy: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut listen_addr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut quit_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut quit_cmd_copy: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut result_mem: ArenaMem = ::core::ptr::null_mut::<consumed_blk>();
     let mut detach_args: Array = Array {
         size: 0,
@@ -12752,9 +12343,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
     };
     let mut detach_args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_14 { boolean: false },
     }; 1];
     let mut chanclose_expr_args: Array = Array {
         size: 0,
@@ -12763,9 +12352,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
     };
     let mut chanclose_expr_args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_14 { boolean: false },
     }; 1];
     let mut err: Error = Error {
         type_0: kErrorTypeNone,
@@ -12780,39 +12367,34 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
         ::core::mem::size_of::<*mut ::core::ffi::c_char>(),
     ) as *mut *mut ::core::ffi::c_char;
     let mut i: size_t = 0 as size_t;
-    let mut listen_arg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut listen_arg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut li: *const listitem_T = (*l).lv_first;
     while !li.is_null() {
         let mut arg: *const ::core::ffi::c_char = tv_get_string(&raw const (*li).li_tv);
         if i > 0 as size_t
-            && strequal(arg, b"--\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int != 0
+            && strequal(arg, b"--\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+                != 0
         {
             break;
         }
         if i > 0 as size_t
-            && strequal(arg, b"-s\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int != 0
+            && strequal(arg, b"-s\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
+                != 0
         {
             li = (*li).li_next;
         } else {
             if i > 0 as size_t
                 && strequal(arg, b"--listen\0".as_ptr() as *const ::core::ffi::c_char)
-                    as ::core::ffi::c_int != 0
+                    as ::core::ffi::c_int
+                    != 0
             {
                 let mut next_li: *const listitem_T = (*li).li_next;
                 if !next_li.is_null() {
-                    let mut addr: *const ::core::ffi::c_char = tv_get_string(
-                        &raw const (*next_li).li_tv,
-                    );
-                    if !strstr(addr, b":\0".as_ptr() as *const ::core::ffi::c_char)
-                        .is_null()
-                        || !strstr(addr, b"/\0".as_ptr() as *const ::core::ffi::c_char)
-                            .is_null()
-                        || !strstr(addr, b"\\\0".as_ptr() as *const ::core::ffi::c_char)
-                            .is_null()
+                    let mut addr: *const ::core::ffi::c_char =
+                        tv_get_string(&raw const (*next_li).li_tv);
+                    if !strstr(addr, b":\0".as_ptr() as *const ::core::ffi::c_char).is_null()
+                        || !strstr(addr, b"/\0".as_ptr() as *const ::core::ffi::c_char).is_null()
+                        || !strstr(addr, b"\\\0".as_ptr() as *const ::core::ffi::c_char).is_null()
                     {
                         listen_arg = addr;
                     }
@@ -12820,10 +12402,8 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
             }
             if i == 0 as size_t
                 || !strequal(arg, b"--embed\0".as_ptr() as *const ::core::ffi::c_char)
-                    && !strequal(
-                        arg,
-                        b"--headless\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) && !strequal(arg, b"-\0".as_ptr() as *const ::core::ffi::c_char)
+                    && !strequal(arg, b"--headless\0".as_ptr() as *const ::core::ffi::c_char)
+                    && !strequal(arg, b"-\0".as_ptr() as *const ::core::ffi::c_char)
             {
                 let c2rust_fresh4 = i;
                 i = i.wrapping_add(1);
@@ -12832,19 +12412,15 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                 if i == 1 as size_t {
                     let c2rust_fresh5 = i;
                     i = i.wrapping_add(1);
-                    let c2rust_lvalue_ptr_0 = &raw mut *argv
-                        .offset(c2rust_fresh5 as isize);
-                    *c2rust_lvalue_ptr_0 = xstrdup(
-                        b"--embed\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
+                    let c2rust_lvalue_ptr_0 = &raw mut *argv.offset(c2rust_fresh5 as isize);
+                    *c2rust_lvalue_ptr_0 =
+                        xstrdup(b"--embed\0".as_ptr() as *const ::core::ffi::c_char);
                     if no_ui {
                         let c2rust_fresh6 = i;
                         i = i.wrapping_add(1);
-                        let c2rust_lvalue_ptr_1 = &raw mut *argv
-                            .offset(c2rust_fresh6 as isize);
-                        *c2rust_lvalue_ptr_1 = xstrdup(
-                            b"--headless\0".as_ptr() as *const ::core::ffi::c_char,
-                        );
+                        let c2rust_lvalue_ptr_1 = &raw mut *argv.offset(c2rust_fresh6 as isize);
+                        *c2rust_lvalue_ptr_1 =
+                            xstrdup(b"--headless\0".as_ptr() as *const ::core::ffi::c_char);
                     }
                 }
             }
@@ -12919,9 +12495,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
         };
         detach_args__items = [Object {
             type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_14 {
-                boolean: false,
-            },
+            data: C2Rust_Unnamed_14 { boolean: false },
         }; 1];
         detach_args.capacity = 1 as size_t;
         detach_args.items = &raw mut detach_args__items as *mut Object;
@@ -12955,20 +12529,15 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                         },
                         value: Object {
                             type_0: kObjectTypeNil,
-                            data: C2Rust_Unnamed_14 {
-                                boolean: false,
-                            },
+                            data: C2Rust_Unnamed_14 { boolean: false },
                         },
                     }; 3];
                     autocmd_opts.capacity = 3 as size_t;
-                    autocmd_opts.items = &raw mut autocmd_opts__items
-                        as *mut KeyValuePair;
+                    autocmd_opts.items = &raw mut autocmd_opts__items as *mut KeyValuePair;
                     let c2rust_fresh8 = autocmd_opts.size;
                     autocmd_opts.size = autocmd_opts.size.wrapping_add(1);
                     *autocmd_opts.items.offset(c2rust_fresh8 as isize) = key_value_pair {
-                        key: cstr_as_string(
-                            b"once\0".as_ptr() as *const ::core::ffi::c_char,
-                        ),
+                        key: cstr_as_string(b"once\0".as_ptr() as *const ::core::ffi::c_char),
                         value: object {
                             type_0: kObjectTypeBoolean,
                             data: C2Rust_Unnamed_14 { boolean: true },
@@ -12977,9 +12546,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                     let c2rust_fresh9 = autocmd_opts.size;
                     autocmd_opts.size = autocmd_opts.size.wrapping_add(1);
                     *autocmd_opts.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                        key: cstr_as_string(
-                            b"nested\0".as_ptr() as *const ::core::ffi::c_char,
-                        ),
+                        key: cstr_as_string(b"nested\0".as_ptr() as *const ::core::ffi::c_char),
                         value: object {
                             type_0: kObjectTypeBoolean,
                             data: C2Rust_Unnamed_14 { boolean: true },
@@ -12988,9 +12555,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                     let c2rust_fresh10 = autocmd_opts.size;
                     autocmd_opts.size = autocmd_opts.size.wrapping_add(1);
                     *autocmd_opts.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-                        key: cstr_as_string(
-                            b"command\0".as_ptr() as *const ::core::ffi::c_char,
-                        ),
+                        key: cstr_as_string(b"command\0".as_ptr() as *const ::core::ffi::c_char),
                         value: object {
                             type_0: kObjectTypeString,
                             data: C2Rust_Unnamed_14 {
@@ -13005,9 +12570,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                     };
                     let mut autocmd_args__items: [Object; 2] = [Object {
                         type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed_14 {
-                            boolean: false,
-                        },
+                        data: C2Rust_Unnamed_14 { boolean: false },
                     }; 2];
                     autocmd_args.capacity = 2 as size_t;
                     autocmd_args.items = &raw mut autocmd_args__items as *mut Object;
@@ -13017,7 +12580,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                         type_0: kObjectTypeString,
                         data: C2Rust_Unnamed_14 {
                             string: cstr_as_string(
-                                b"UIEnter\0".as_ptr() as *const ::core::ffi::c_char,
+                                b"UIEnter\0".as_ptr() as *const ::core::ffi::c_char
                             ),
                         },
                     };
@@ -13025,9 +12588,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                     autocmd_args.size = autocmd_args.size.wrapping_add(1);
                     *autocmd_args.items.offset(c2rust_fresh12 as isize) = object {
                         type_0: kObjectTypeDict,
-                        data: C2Rust_Unnamed_14 {
-                            dict: autocmd_opts,
-                        },
+                        data: C2Rust_Unnamed_14 { dict: autocmd_opts },
                     };
                     rpc_send_call(
                         (*channel).id,
@@ -13036,9 +12597,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                         &raw mut result_mem,
                         &raw mut err,
                     );
-                    if err.type_0 as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_fail_2;
                     } else {
                         arena_mem_free(result_mem);
@@ -13052,9 +12611,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                 };
                 servername_args__items = [Object {
                     type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed_14 {
-                        boolean: false,
-                    },
+                    data: C2Rust_Unnamed_14 { boolean: false },
                 }; 1];
                 servername_args.capacity = 1 as size_t;
                 servername_args.items = &raw mut servername_args__items as *mut Object;
@@ -13064,7 +12621,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                     type_0: kObjectTypeString,
                     data: C2Rust_Unnamed_14 {
                         string: cstr_as_string(
-                            b"servername\0".as_ptr() as *const ::core::ffi::c_char,
+                            b"servername\0".as_ptr() as *const ::core::ffi::c_char
                         ),
                     },
                 };
@@ -13075,9 +12632,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                     &raw mut result_mem,
                     &raw mut err,
                 );
-                if err.type_0 as ::core::ffi::c_int
-                    == kErrorTypeNone as ::core::ffi::c_int
-                {
+                if err.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
                     if result.type_0 as ::core::ffi::c_uint
                         != kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                         || result.data.string.size == 0 as size_t
@@ -13117,16 +12672,13 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
                         }
                         nvim_command(cstr_as_string(quit_cmd), &raw mut err);
                         xfree(quit_cmd_copy as *mut ::core::ffi::c_void);
-                        if err.type_0 as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             emsg(err.msg);
                             api_clear_error(&raw mut err);
                         } else if !exiting {
-                            emsg(
-                                b"restart failed: +cmd did not quit the server\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
+                            emsg(b"restart failed: +cmd did not quit the server\0".as_ptr()
+                                as *const ::core::ffi::c_char);
                         }
                     }
                 }
@@ -13150,9 +12702,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
         };
         chanclose_expr_args__items = [Object {
             type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_14 {
-                boolean: false,
-            },
+            data: C2Rust_Unnamed_14 { boolean: false },
         }; 1];
         chanclose_expr_args.capacity = 1 as size_t;
         chanclose_expr_args.items = &raw mut chanclose_expr_args__items as *mut Object;
@@ -13162,7 +12712,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
             type_0: kObjectTypeString,
             data: C2Rust_Unnamed_14 {
                 string: cstr_as_string(
-                    b"chanclose(v:stderr)\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"chanclose(v:stderr)\0".as_ptr() as *const ::core::ffi::c_char
                 ),
             },
         };
@@ -13182,10 +12732,7 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
             ::core::ptr::null_mut::<MultiQueue>(),
         ) < 0 as ::core::ffi::c_int
         {
-            emsg(
-                b"killing new nvim server failed\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            emsg(b"killing new nvim server failed\0".as_ptr() as *const ::core::ffi::c_char);
         }
     }
     if server_stopped as ::core::ffi::c_int != 0
@@ -13249,7 +12796,9 @@ pub unsafe extern "C" fn ex_win_close(
     mut tp: *mut tabpage_T,
 ) {
     if is_aucmd_win(win) {
-        emsg(gettext(&raw const e_autocmd_close as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_autocmd_close as *const ::core::ffi::c_char,
+        ));
         return;
     }
     if !(*win).w_floating && window_layout_locked(CMD_close) as ::core::ffi::c_int != 0 {
@@ -13259,8 +12808,7 @@ pub unsafe extern "C" fn ex_win_close(
     let mut need_hide: bool = bufIsChanged(buf) as ::core::ffi::c_int != 0
         && (*buf).b_nwindows <= 1 as ::core::ffi::c_int;
     if need_hide as ::core::ffi::c_int != 0 && !buf_hide(buf) && forceit == 0 {
-        if (p_confirm != 0
-            || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
+        if (p_confirm != 0 || cmdmod.cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
             && p_write != 0
         {
             let mut bufref: bufref_T = bufref_T {
@@ -13299,12 +12847,9 @@ unsafe extern "C" fn ex_tabclose(mut eap: *mut exarg_T) {
         return;
     }
     if (*first_tabpage).tp_next.is_null() {
-        emsg(
-            gettext(
-                b"E784: Cannot close last tab page\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E784: Cannot close last tab page\0".as_ptr() as *const ::core::ffi::c_char
+        ));
         return;
     }
     if window_layout_locked(CMD_tabclose) {
@@ -13334,9 +12879,7 @@ unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
     }
     if (*first_tabpage).tp_next.is_null() {
         msg(
-            gettext(
-                b"Already only one tab page\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
+            gettext(b"Already only one tab page\0".as_ptr() as *const ::core::ffi::c_char),
             0 as ::core::ffi::c_int,
         );
         return;
@@ -13364,14 +12907,14 @@ unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
             }
         }
         '_c2rust_label: {
-            if !first_tabpage.is_null() {} else {
+            if !first_tabpage.is_null() {
+            } else {
                 __assert_fail(
                     b"first_tabpage\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    5361 as ::core::ffi::c_uint,
-                    b"void ex_tabonly(exarg_T *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    5361 as ::core::ffi::c_uint,
+                    b"void ex_tabonly(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -13521,13 +13064,13 @@ unsafe extern "C" fn ex_exit(mut eap: *mut exarg_T) {
         exiting = true_0 != 0;
     }
     if ((*eap).cmdidx as ::core::ffi::c_int == CMD_wq as ::core::ffi::c_int
-        || curbufIsChanged() as ::core::ffi::c_int != 0) && do_write(eap) == FAIL
-        || before_quit_autocmds(curwin, false_0 != 0, (*eap).forceit != 0)
-            as ::core::ffi::c_int != 0
+        || curbufIsChanged() as ::core::ffi::c_int != 0)
+        && do_write(eap) == FAIL
+        || before_quit_autocmds(curwin, false_0 != 0, (*eap).forceit != 0) as ::core::ffi::c_int
+            != 0
         || check_more(true_0 != 0, (*eap).forceit != 0) == FAIL
         || only_one_window() as ::core::ffi::c_int != 0
-            && check_changed_any((*eap).forceit != 0, false_0 != 0) as ::core::ffi::c_int
-                != 0
+            && check_changed_any((*eap).forceit != 0, false_0 != 0) as ::core::ffi::c_int != 0
     {
         not_exiting(save_exiting);
     } else {
@@ -13540,15 +13083,16 @@ unsafe extern "C" fn ex_exit(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn ex_print(mut eap: *mut exarg_T) {
     if (*curbuf).b_ml.ml_flags & ML_EMPTY != 0 {
-        emsg(gettext(&raw const e_empty_buffer as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_empty_buffer as *const ::core::ffi::c_char,
+        ));
     } else {
         let mut line: linenr_T = (*eap).line1;
         while line <= (*eap).line2 && !got_int {
             print_line(
                 line,
                 (*eap).cmdidx as ::core::ffi::c_int == CMD_number as ::core::ffi::c_int
-                    || (*eap).cmdidx as ::core::ffi::c_int
-                        == CMD_pound as ::core::ffi::c_int
+                    || (*eap).cmdidx as ::core::ffi::c_int == CMD_pound as ::core::ffi::c_int
                     || (*eap).flags & EXFLAG_NR != 0,
                 (*eap).cmdidx as ::core::ffi::c_int == CMD_list as ::core::ffi::c_int
                     || (*eap).flags & EXFLAG_LIST != 0,
@@ -13582,15 +13126,15 @@ unsafe extern "C" fn ex_recover(mut eap: *mut exarg_T) {
                 CCGD_FORCEIT as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            }) | CCGD_EXCMD as ::core::ffi::c_int,
-    )
-        && (*(*eap).arg as ::core::ffi::c_int == NUL
-            || setfname(
-                curbuf,
-                (*eap).arg,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                true_0 != 0,
-            ) == OK)
+            })
+            | CCGD_EXCMD as ::core::ffi::c_int,
+    ) && (*(*eap).arg as ::core::ffi::c_int == NUL
+        || setfname(
+            curbuf,
+            (*eap).arg,
+            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            true_0 != 0,
+        ) == OK)
     {
         ml_recover(true_0 != 0);
     }
@@ -13658,12 +13202,9 @@ unsafe extern "C" fn call_findfunc(
                 get_copyID(),
             );
         } else {
-            emsg(
-                gettext(
-                    &raw const e_invalid_return_type_from_findfunc
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                &raw const e_invalid_return_type_from_findfunc as *const ::core::ffi::c_char,
+            ));
         }
         tv_clear(&raw mut rettv);
     }
@@ -13686,9 +13227,8 @@ pub unsafe extern "C" fn expand_findfunc(
         tv_list_free(l);
         return FAIL;
     }
-    *files = xmalloc(
-        ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(len as size_t),
-    ) as *mut *mut ::core::ffi::c_char;
+    *files = xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(len as size_t))
+        as *mut *mut ::core::ffi::c_char;
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let l_: *const list_T = l;
     if !l_.is_null() {
@@ -13712,32 +13252,23 @@ unsafe extern "C" fn findfunc_find_file(
     mut findarg_len: size_t,
     mut count: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut ret_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ret_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let cc: ::core::ffi::c_char = *findarg.offset(findarg_len as isize);
     *findarg.offset(findarg_len as isize) = NUL as ::core::ffi::c_char;
     let mut fname_list: *mut list_T = call_findfunc(findarg, kBoolVarFalse);
     let mut fname_count: ::core::ffi::c_int = tv_list_len(fname_list);
     if fname_count == 0 as ::core::ffi::c_int {
         semsg(
-            gettext(
-                &raw const e_cant_find_file_str_in_path as *const ::core::ffi::c_char,
-            ),
+            gettext(&raw const e_cant_find_file_str_in_path as *const ::core::ffi::c_char),
             findarg,
         );
     } else if count > fname_count {
         semsg(
-            gettext(
-                &raw const e_no_more_file_str_found_in_path as *const ::core::ffi::c_char,
-            ),
+            gettext(&raw const e_no_more_file_str_found_in_path as *const ::core::ffi::c_char),
             findarg,
         );
     } else {
-        let mut li: *mut listitem_T = tv_list_find(
-            fname_list,
-            count - 1 as ::core::ffi::c_int,
-        );
+        let mut li: *mut listitem_T = tv_list_find(fname_list, count - 1 as ::core::ffi::c_int);
         if !li.is_null()
             && (*li).li_tv.v_type as ::core::ffi::c_uint
                 == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -13752,9 +13283,7 @@ unsafe extern "C" fn findfunc_find_file(
     return ret_fname;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_findfunc(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_findfunc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut retval: ::core::ffi::c_int = 0;
     if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
@@ -13768,8 +13297,7 @@ pub unsafe extern "C" fn did_set_findfunc(
     if retval == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
-    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp
-        as *mut *mut ::core::ffi::c_char;
+    let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     let mut name: *mut ::core::ffi::c_char = get_scriptlocal_funcname(*varp);
     if !name.is_null() {
         free_string_option(*varp);
@@ -13795,15 +13323,11 @@ pub unsafe extern "C" fn set_ref_in_findfunc(mut copyID: ::core::ffi::c_int) -> 
 #[no_mangle]
 pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
     let mut old_curwin: *mut win_T = curwin;
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let use_tab: bool = (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_tabedit as ::core::ffi::c_int
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let use_tab: bool = (*eap).cmdidx as ::core::ffi::c_int == CMD_tabedit as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabfind as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_tabnew as ::core::ffi::c_int;
-    if bt_quickfix(curbuf) as ::core::ffi::c_int != 0
-        && cmdmod.cmod_tab == 0 as ::core::ffi::c_int
+    if bt_quickfix(curbuf) as ::core::ffi::c_int != 0 && cmdmod.cmod_tab == 0 as ::core::ffi::c_int
     {
         if (*eap).cmdidx as ::core::ffi::c_int == CMD_split as ::core::ffi::c_int {
             (*eap).cmdidx = CMD_new;
@@ -13827,12 +13351,10 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
                     },
                 );
             } else {
-                let mut file_to_find: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                    ::core::ffi::c_char,
-                >();
-                let mut search_ctx: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                    ::core::ffi::c_char,
-                >();
+                let mut file_to_find: *mut ::core::ffi::c_char =
+                    ::core::ptr::null_mut::<::core::ffi::c_char>();
+                let mut search_ctx: *mut ::core::ffi::c_char =
+                    ::core::ptr::null_mut::<::core::ffi::c_char>();
                 fname = find_file_in_path(
                     (*eap).arg,
                     strlen((*eap).arg),
@@ -13853,18 +13375,18 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
         }
         if use_tab {
             if !win_new_tabpage(
-                    if cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
-                        cmdmod.cmod_tab
-                    } else if (*eap).addr_count == 0 as ::core::ffi::c_int {
-                        0 as ::core::ffi::c_int
-                    } else {
-                        (*eap).line2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int
-                    },
-                    (*eap).arg,
-                    true_0 != 0,
-                    ::core::ptr::null_mut::<*mut win_T>(),
-                )
-                .is_null()
+                if cmdmod.cmod_tab != 0 as ::core::ffi::c_int {
+                    cmdmod.cmod_tab
+                } else if (*eap).addr_count == 0 as ::core::ffi::c_int {
+                    0 as ::core::ffi::c_int
+                } else {
+                    (*eap).line2 as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+                },
+                (*eap).arg,
+                true_0 != 0,
+                ::core::ptr::null_mut::<*mut win_T>(),
+            )
+            .is_null()
             {
                 do_exedit(eap, old_curwin);
                 apply_autocmds(
@@ -13915,8 +13437,7 @@ pub unsafe extern "C" fn tabpage_new() {
         arglens: ::core::ptr::null_mut::<size_t>(),
         argc: 0,
         nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        cmd: b"tabn\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        cmd: b"tabn\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
         cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         cmdidx: CMD_tabnew,
@@ -13961,8 +13482,8 @@ unsafe extern "C" fn ex_tabnext(mut eap: *mut exarg_T) {
             if !(*eap).arg.is_null() && *(*eap).arg as ::core::ffi::c_int != NUL {
                 let mut p: *mut ::core::ffi::c_char = (*eap).arg;
                 let mut p_save: *mut ::core::ffi::c_char = p;
-                tab_number = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t)
-                    as ::core::ffi::c_int;
+                tab_number =
+                    getdigits(&raw mut p, false_0 != 0, 0 as intmax_t) as ::core::ffi::c_int;
                 if p == p_save
                     || *p_save as ::core::ffi::c_int == '-' as ::core::ffi::c_int
                     || *p_save as ::core::ffi::c_int == '+' as ::core::ffi::c_int
@@ -13980,9 +13501,7 @@ unsafe extern "C" fn ex_tabnext(mut eap: *mut exarg_T) {
             } else {
                 tab_number = (*eap).line2 as ::core::ffi::c_int;
                 if tab_number < 1 as ::core::ffi::c_int {
-                    (*eap).errmsg = gettext(
-                        &raw const e_invrange as *const ::core::ffi::c_char,
-                    );
+                    (*eap).errmsg = gettext(&raw const e_invrange as *const ::core::ffi::c_char);
                     return;
                 }
             }
@@ -14007,8 +13526,7 @@ unsafe extern "C" fn ex_tabs(mut eap: *mut exarg_T) {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_start();
     msg_scroll = true_0;
-    let mut lastused_win: *mut win_T = if valid_tabpage(lastused_tabpage)
-        as ::core::ffi::c_int != 0
+    let mut lastused_win: *mut win_T = if valid_tabpage(lastused_tabpage) as ::core::ffi::c_int != 0
     {
         (*lastused_tabpage).tp_curwin
     } else {
@@ -14036,32 +13554,30 @@ unsafe extern "C" fn ex_tabs(mut eap: *mut exarg_T) {
             false_0 != 0,
         );
         os_breakcheck();
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if got_int {
                 break;
             }
-            if !(!(*wp).w_config.focusable
-                || (*wp).w_config.hide as ::core::ffi::c_int != 0)
-            {
+            if !(!(*wp).w_config.focusable || (*wp).w_config.hide as ::core::ffi::c_int != 0) {
                 msg_putchar('\n' as ::core::ffi::c_int);
-                msg_putchar(
-                    if wp == curwin {
-                        '>' as ::core::ffi::c_int
-                    } else if wp == lastused_win {
-                        '#' as ::core::ffi::c_int
-                    } else {
-                        ' ' as ::core::ffi::c_int
-                    },
-                );
+                msg_putchar(if wp == curwin {
+                    '>' as ::core::ffi::c_int
+                } else if wp == lastused_win {
+                    '#' as ::core::ffi::c_int
+                } else {
+                    ' ' as ::core::ffi::c_int
+                });
                 msg_putchar(' ' as ::core::ffi::c_int);
-                msg_putchar(
-                    if bufIsChanged((*wp).w_buffer) as ::core::ffi::c_int != 0 {
-                        '+' as ::core::ffi::c_int
-                    } else {
-                        ' ' as ::core::ffi::c_int
-                    },
-                );
+                msg_putchar(if bufIsChanged((*wp).w_buffer) as ::core::ffi::c_int != 0 {
+                    '+' as ::core::ffi::c_int
+                } else {
+                    ' ' as ::core::ffi::c_int
+                });
                 msg_putchar(' ' as ::core::ffi::c_int);
                 if !buf_spname((*wp).w_buffer).is_null() {
                     xstrlcpy(
@@ -14119,9 +13635,7 @@ unsafe extern "C" fn ex_detach(mut eap: *mut exarg_T) {
             api_clear_error(&raw mut err2);
             return;
         }
-        let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         let mut rv: bool = channel_close((*chan).id, kChannelPartAll, &raw mut err);
         if !rv && !err.is_null() {
             emsg(err);
@@ -14165,7 +13679,9 @@ unsafe extern "C" fn ex_mode(mut eap: *mut exarg_T) {
         must_redraw = UPD_CLEAR as ::core::ffi::c_int;
         ex_redraw(eap);
     } else {
-        emsg(gettext(&raw const e_screenmode as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_screenmode as *const ::core::ffi::c_char,
+        ));
     };
 }
 unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
@@ -14173,12 +13689,10 @@ unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
         let mut n: ::core::ffi::c_int = (*eap).line2 as ::core::ffi::c_int;
         wp = firstwin;
-        while !(*wp).w_next.is_null()
-            && {
-                n -= 1;
-                n > 0 as ::core::ffi::c_int
-            }
-        {
+        while !(*wp).w_next.is_null() && {
+            n -= 1;
+            n > 0 as ::core::ffi::c_int
+        } {
             wp = (*wp).w_next;
         }
     }
@@ -14189,8 +13703,7 @@ unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
         {
             n_0 += (*wp).w_width;
         } else if n_0 == 0 as ::core::ffi::c_int
-            && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL
+            && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
             n_0 = Columns;
         }
@@ -14201,8 +13714,7 @@ unsafe extern "C" fn ex_resize(mut eap: *mut exarg_T) {
         {
             n_0 += (*wp).w_height;
         } else if n_0 == 0 as ::core::ffi::c_int
-            && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == NUL
+            && *(*eap).arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
         {
             n_0 = Rows - 1 as ::core::ffi::c_int;
         }
@@ -14213,9 +13725,7 @@ unsafe extern "C" fn ex_find(mut eap: *mut exarg_T) {
     if !check_can_set_curbuf_forceit((*eap).forceit) {
         return;
     }
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *get_findfunc() as ::core::ffi::c_int != NUL {
         fname = findfunc_find_file(
             (*eap).arg,
@@ -14227,12 +13737,10 @@ unsafe extern "C" fn ex_find(mut eap: *mut exarg_T) {
             },
         );
     } else {
-        let mut file_to_find: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
-        let mut search_ctx: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut file_to_find: *mut ::core::ffi::c_char =
+            ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let mut search_ctx: *mut ::core::ffi::c_char =
+            ::core::ptr::null_mut::<::core::ffi::c_char>();
         fname = find_file_in_path(
             (*eap).arg,
             strlen((*eap).arg),
@@ -14244,12 +13752,10 @@ unsafe extern "C" fn ex_find(mut eap: *mut exarg_T) {
         );
         if (*eap).addr_count > 0 as ::core::ffi::c_int {
             let mut count: linenr_T = (*eap).line2;
-            while !fname.is_null()
-                && {
-                    count -= 1;
-                    count > 0 as linenr_T
-                }
-            {
+            while !fname.is_null() && {
+                count -= 1;
+                count > 0 as linenr_T
+            } {
                 xfree(fname as *mut ::core::ffi::c_void);
                 fname = find_file_in_path(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -14273,13 +13779,12 @@ unsafe extern "C" fn ex_find(mut eap: *mut exarg_T) {
     xfree(fname as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn ex_edit(mut eap: *mut exarg_T) {
-    let mut ffname: *mut ::core::ffi::c_char = if (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_enew as ::core::ffi::c_int
-    {
-        ::core::ptr::null_mut::<::core::ffi::c_char>()
-    } else {
-        (*eap).arg
-    };
+    let mut ffname: *mut ::core::ffi::c_char =
+        if (*eap).cmdidx as ::core::ffi::c_int == CMD_enew as ::core::ffi::c_int {
+            ::core::ptr::null_mut::<::core::ffi::c_char>()
+        } else {
+            (*eap).arg
+        };
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_badd as ::core::ffi::c_int
         && (*eap).cmdidx as ::core::ffi::c_int != CMD_balt as ::core::ffi::c_int
         && (is_other_file(0 as ::core::ffi::c_int, ffname) as ::core::ffi::c_int != 0
@@ -14350,7 +13855,11 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
                 } else {
                     0 as ::core::ffi::c_int
                 }),
-            if old_curwin.is_null() { curwin } else { ::core::ptr::null_mut::<win_T>() },
+            if old_curwin.is_null() {
+                curwin
+            } else {
+                ::core::ptr::null_mut::<win_T>()
+            },
         );
     } else if (*eap).cmdidx as ::core::ffi::c_int != CMD_split as ::core::ffi::c_int
         && (*eap).cmdidx as ::core::ffi::c_int != CMD_vsplit as ::core::ffi::c_int
@@ -14388,31 +13897,23 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
                 ECMD_HIDE as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            })
-                + (if (*eap).forceit != 0 {
-                    ECMD_FORCEIT as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                + (if !old_curwin.is_null() {
-                    ECMD_OLDBUF as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                + (if (*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_badd as ::core::ffi::c_int
-                {
-                    ECMD_ADDBUF as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                + (if (*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_balt as ::core::ffi::c_int
-                {
-                    ECMD_ALTBUF as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }),
+            }) + (if (*eap).forceit != 0 {
+                ECMD_FORCEIT as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }) + (if !old_curwin.is_null() {
+                ECMD_OLDBUF as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }) + (if (*eap).cmdidx as ::core::ffi::c_int == CMD_badd as ::core::ffi::c_int {
+                ECMD_ADDBUF as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }) + (if (*eap).cmdidx as ::core::ffi::c_int == CMD_balt as ::core::ffi::c_int {
+                ECMD_ALTBUF as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }),
             (if old_curwin.is_null() {
                 curwin
             } else {
@@ -14449,21 +13950,20 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
             maketitle();
         }
     }
-    if !old_curwin.is_null() && *(*eap).arg as ::core::ffi::c_int != NUL
-        && curwin != old_curwin && win_valid(old_curwin) as ::core::ffi::c_int != 0
+    if !old_curwin.is_null()
+        && *(*eap).arg as ::core::ffi::c_int != NUL
+        && curwin != old_curwin
+        && win_valid(old_curwin) as ::core::ffi::c_int != 0
         && (*old_curwin).w_buffer != curbuf
-        && cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int
-            == 0 as ::core::ffi::c_int
+        && cmdmod.cmod_flags & CMOD_KEEPALT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
         (*old_curwin).w_alt_fnum = (*curbuf).handle as ::core::ffi::c_int;
     }
     ex_no_reprint = true_0 != 0;
 }
 unsafe extern "C" fn ex_nogui(mut eap: *mut exarg_T) {
-    (*eap).errmsg = gettext(
-        b"E25: Nvim does not have a built-in GUI\0".as_ptr()
-            as *const ::core::ffi::c_char,
-    );
+    (*eap).errmsg =
+        gettext(b"E25: Nvim does not have a built-in GUI\0".as_ptr() as *const ::core::ffi::c_char);
 }
 unsafe extern "C" fn ex_popup(mut eap: *mut exarg_T) {
     pum_make_popup((*eap).arg, (*eap).forceit);
@@ -14491,16 +13991,19 @@ unsafe extern "C" fn ex_syncbind(mut eap: *mut exarg_T) {
         };
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_scb != 0 && !(*wp).w_buffer.is_null() {
-                let mut y: linenr_T = plines_m_win_fill(
-                    wp,
-                    1 as linenr_T,
-                    (*(*wp).w_buffer).b_ml.ml_line_count,
-                ) as linenr_T - get_scrolloff_value(curwin) as linenr_T;
+                let mut y: linenr_T =
+                    plines_m_win_fill(wp, 1 as linenr_T, (*(*wp).w_buffer).b_ml.ml_line_count)
+                        as linenr_T
+                        - get_scrolloff_value(curwin) as linenr_T;
                 vtopline = if vtopline < y { vtopline } else { y };
             }
             wp = (*wp).w_next;
         }
-        vtopline = if vtopline > 1 as linenr_T { vtopline } else { 1 as linenr_T };
+        vtopline = if vtopline > 1 as linenr_T {
+            vtopline
+        } else {
+            1 as linenr_T
+        };
     } else {
         vtopline = 1 as ::core::ffi::c_int as linenr_T;
     }
@@ -14511,8 +14014,7 @@ unsafe extern "C" fn ex_syncbind(mut eap: *mut exarg_T) {
     };
     while !wp_0.is_null() {
         if (*wp_0).w_onebuf_opt.wo_scb != 0 {
-            let mut y_0: ::core::ffi::c_int = vtopline as ::core::ffi::c_int
-                - get_vtopline(wp_0);
+            let mut y_0: ::core::ffi::c_int = vtopline as ::core::ffi::c_int - get_vtopline(wp_0);
             if y_0 > 0 as ::core::ffi::c_int {
                 scrollup(wp_0, y_0 as linenr_T, true_0 != 0);
             } else {
@@ -14545,7 +14047,13 @@ unsafe extern "C" fn ex_syncbind(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
     let mut empty: ::core::ffi::c_int = (*curbuf).b_ml.ml_flags & ML_EMPTY;
     if (*eap).usefilter != 0 {
-        do_bang(1 as ::core::ffi::c_int, eap, false_0 != 0, false_0 != 0, true_0 != 0);
+        do_bang(
+            1 as ::core::ffi::c_int,
+            eap,
+            false_0 != 0,
+            false_0 != 0,
+            true_0 != 0,
+        );
         return;
     }
     if u_save((*eap).line2, (*eap).line2 + 1 as linenr_T) == FAIL {
@@ -14596,13 +14104,9 @@ unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
             } else {
                 lnum = 1 as ::core::ffi::c_int as linenr_T;
             }
-            if *ml_get(lnum) as ::core::ffi::c_int == NUL
-                && u_savedel(lnum, 1 as linenr_T) == OK
-            {
+            if *ml_get(lnum) as ::core::ffi::c_int == NUL && u_savedel(lnum, 1 as linenr_T) == OK {
                 ml_delete(lnum);
-                if (*curwin).w_cursor.lnum > 1 as linenr_T
-                    && (*curwin).w_cursor.lnum >= lnum
-                {
+                if (*curwin).w_cursor.lnum > 1 as linenr_T && (*curwin).w_cursor.lnum >= lnum {
                     (*curwin).w_cursor.lnum -= 1;
                 }
                 deleted_lines_mark(lnum, 1 as ::core::ffi::c_int);
@@ -14611,9 +14115,7 @@ unsafe extern "C" fn ex_read(mut eap: *mut exarg_T) {
         redraw_curbuf_later(UPD_VALID as ::core::ffi::c_int);
     };
 }
-static mut prev_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut prev_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 unsafe extern "C" fn get_prevdir(mut scope: CdScope) -> *mut ::core::ffi::c_char {
     match scope as ::core::ffi::c_int {
         1 => return (*curtab).tp_prevdir,
@@ -14622,14 +14124,14 @@ unsafe extern "C" fn get_prevdir(mut scope: CdScope) -> *mut ::core::ffi::c_char
     };
 }
 unsafe extern "C" fn post_chdir(mut scope: CdScope, mut trigger_dirchanged: bool) {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*curwin).w_localdir
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*curwin).w_localdir as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_1;
     *ptr_;
     if scope as ::core::ffi::c_int >= kCdScopeTabpage as ::core::ffi::c_int {
-        let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut (*curtab).tp_localdir
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr__0: *mut *mut ::core::ffi::c_void =
+            &raw mut (*curtab).tp_localdir as *mut *mut ::core::ffi::c_void;
         xfree(*ptr__0);
         *ptr__0 = NULL_1;
         *ptr__0;
@@ -14646,8 +14148,8 @@ unsafe extern "C" fn post_chdir(mut scope: CdScope, mut trigger_dirchanged: bool
     }
     match scope as ::core::ffi::c_int {
         2 => {
-            let mut ptr__1: *mut *mut ::core::ffi::c_void = &raw mut globaldir
-                as *mut *mut ::core::ffi::c_void;
+            let mut ptr__1: *mut *mut ::core::ffi::c_void =
+                &raw mut globaldir as *mut *mut ::core::ffi::c_void;
             xfree(*ptr__1);
             *ptr__1 = NULL_1;
             *ptr__1;
@@ -14682,26 +14184,21 @@ pub unsafe extern "C" fn changedir_func(
     if new_dir.is_null() || allbuf_locked() as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }
-    let mut pdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    if strcmp(new_dir, b"-\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-    {
+    let mut pdir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    if strcmp(new_dir, b"-\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int {
         pdir = get_prevdir(scope);
         if pdir.is_null() {
-            emsg(
-                gettext(
-                    b"E186: No previous directory\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E186: No previous directory\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             return false_0 != 0;
         }
         new_dir = pdir;
     }
-    if os_dirname(&raw mut NameBuff as *mut ::core::ffi::c_char, MAXPATHL as size_t)
-        == OK
+    if os_dirname(
+        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        MAXPATHL as size_t,
+    ) == OK
     {
         pdir = xstrdup(&raw mut NameBuff as *mut ::core::ffi::c_char);
     } else {
@@ -14709,8 +14206,7 @@ pub unsafe extern "C" fn changedir_func(
     }
     if *new_dir as ::core::ffi::c_int == NUL && p_cdh != 0 {
         expand_env(
-            b"$HOME\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"$HOME\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             &raw mut NameBuff as *mut ::core::ffi::c_char,
             MAXPATHL,
         );
@@ -14726,9 +14222,7 @@ pub unsafe extern "C" fn changedir_func(
             return false_0 != 0;
         }
     }
-    let mut pp: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut pp: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     match scope as ::core::ffi::c_int {
         1 => {
             pp = &raw mut (*curtab).tp_prevdir;
@@ -14769,20 +14263,22 @@ pub unsafe extern "C" fn ex_cd(mut eap: *mut exarg_T) {
     }
 }
 unsafe extern "C" fn ex_pwd(mut eap: *mut exarg_T) {
-    if os_dirname(&raw mut NameBuff as *mut ::core::ffi::c_char, MAXPATHL as size_t)
-        == OK
+    if os_dirname(
+        &raw mut NameBuff as *mut ::core::ffi::c_char,
+        MAXPATHL as size_t,
+    ) == OK
     {
         if p_verbose > 0 as OptInt {
-            let mut context: *mut ::core::ffi::c_char = b"global\0".as_ptr()
-                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            let mut context: *mut ::core::ffi::c_char =
+                b"global\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             if !last_chdir_reason.is_null() {
                 context = last_chdir_reason;
             } else if !(*curwin).w_localdir.is_null() {
-                context = b"window\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                context =
+                    b"window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             } else if !(*curtab).tp_localdir.is_null() {
-                context = b"tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
+                context =
+                    b"tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             }
             smsg(
                 0 as ::core::ffi::c_int,
@@ -14791,10 +14287,15 @@ unsafe extern "C" fn ex_pwd(mut eap: *mut exarg_T) {
                 &raw mut NameBuff as *mut ::core::ffi::c_char,
             );
         } else {
-            msg(&raw mut NameBuff as *mut ::core::ffi::c_char, 0 as ::core::ffi::c_int);
+            msg(
+                &raw mut NameBuff as *mut ::core::ffi::c_char,
+                0 as ::core::ffi::c_int,
+            );
         }
     } else {
-        emsg(gettext(b"E187: Unknown\0".as_ptr() as *const ::core::ffi::c_char));
+        emsg(gettext(
+            b"E187: Unknown\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     };
 }
 unsafe extern "C" fn ex_equal(mut eap: *mut exarg_T) {
@@ -14856,8 +14357,7 @@ pub unsafe extern "C" fn do_sleep(mut msec: int64_t, mut hide_cursor: bool) {
             continue;
         }
         let mut now: uint64_t = os_hrtime();
-        remaining
-            -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
+        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
         before = now;
         if remaining <= 0 as int64_t {
             break;
@@ -14873,30 +14373,25 @@ pub unsafe extern "C" fn do_sleep(mut msec: int64_t, mut hide_cursor: bool) {
 unsafe extern "C" fn ex_winsize(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     if !ascii_isdigit(*arg as ::core::ffi::c_int) {
-        semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), arg);
+        semsg(
+            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+            arg,
+        );
         return;
     }
-    let mut w: ::core::ffi::c_int = getdigits_int(
-        &raw mut arg,
-        false_0 != 0,
-        10 as ::core::ffi::c_int,
-    );
+    let mut w: ::core::ffi::c_int =
+        getdigits_int(&raw mut arg, false_0 != 0, 10 as ::core::ffi::c_int);
     arg = skipwhite(arg);
     let mut p: *mut ::core::ffi::c_char = arg;
-    let mut h: ::core::ffi::c_int = getdigits_int(
-        &raw mut arg,
-        false_0 != 0,
-        10 as ::core::ffi::c_int,
-    );
+    let mut h: ::core::ffi::c_int =
+        getdigits_int(&raw mut arg, false_0 != 0, 10 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != NUL && *arg as ::core::ffi::c_int == NUL {
         screen_resize(w, h);
     } else {
-        emsg(
-            gettext(
-                b"E465: :winsize requires two number arguments\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E465: :winsize requires two number arguments\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
     };
 }
 unsafe extern "C" fn ex_wincmd(mut eap: *mut exarg_T) {
@@ -14905,14 +14400,12 @@ unsafe extern "C" fn ex_wincmd(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == 'g' as ::core::ffi::c_int
         || *(*eap).arg as ::core::ffi::c_int == Ctrl_G
     {
-        if *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == NUL
-        {
+        if *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL {
             emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
             return;
         }
-        xchar = *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-            as ::core::ffi::c_int;
+        xchar =
+            *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int;
         p = (*eap).arg.offset(2 as ::core::ffi::c_int as isize);
     } else {
         p = (*eap).arg.offset(1 as ::core::ffi::c_int as isize);
@@ -14999,7 +14492,9 @@ unsafe extern "C" fn ex_operators(mut eap: *mut exarg_T) {
         }
         _ => {
             if ((*eap).cmdidx as ::core::ffi::c_int == CMD_rshift as ::core::ffi::c_int)
-                as ::core::ffi::c_int ^ (*curwin).w_onebuf_opt.wo_rl != 0
+                as ::core::ffi::c_int
+                ^ (*curwin).w_onebuf_opt.wo_rl
+                != 0
             {
                 oa.op_type = OP_RSHIFT as ::core::ffi::c_int;
             } else {
@@ -15046,14 +14541,13 @@ unsafe extern "C" fn ex_iput(mut eap: *mut exarg_T) {
             FORWARD as ::core::ffi::c_int
         },
         1 as ::core::ffi::c_int,
-        PUT_LINE as ::core::ffi::c_int | PUT_CURSLINE as ::core::ffi::c_int
+        PUT_LINE as ::core::ffi::c_int
+            | PUT_CURSLINE as ::core::ffi::c_int
             | PUT_FIXINDENT as ::core::ffi::c_int,
     );
 }
 unsafe extern "C" fn ex_copymove(mut eap: *mut exarg_T) {
-    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut n: linenr_T = get_address(
         eap,
         &raw mut (*eap).arg,
@@ -15072,7 +14566,8 @@ unsafe extern "C" fn ex_copymove(mut eap: *mut exarg_T) {
         return;
     }
     get_flags(eap);
-    if n == MAXLNUM as ::core::ffi::c_int as linenr_T || n < 0 as linenr_T
+    if n == MAXLNUM as ::core::ffi::c_int as linenr_T
+        || n < 0 as linenr_T
         || n > (*curbuf).b_ml.ml_line_count
     {
         emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
@@ -15103,9 +14598,7 @@ pub unsafe extern "C" fn ex_may_print(mut eap: *mut exarg_T) {
 }
 unsafe extern "C" fn ex_submagic(mut eap: *mut exarg_T) {
     let saved: optmagic_T = magic_overruled;
-    magic_overruled = (if (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_smagic as ::core::ffi::c_int
-    {
+    magic_overruled = (if (*eap).cmdidx as ::core::ffi::c_int == CMD_smagic as ::core::ffi::c_int {
         OPTION_MAGIC_ON as ::core::ffi::c_int
     } else {
         OPTION_MAGIC_OFF as ::core::ffi::c_int
@@ -15119,18 +14612,12 @@ unsafe extern "C" fn ex_submagic_preview(
     mut cmdpreview_bufnr: handle_T,
 ) -> ::core::ffi::c_int {
     let saved: optmagic_T = magic_overruled;
-    magic_overruled = (if (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_smagic as ::core::ffi::c_int
-    {
+    magic_overruled = (if (*eap).cmdidx as ::core::ffi::c_int == CMD_smagic as ::core::ffi::c_int {
         OPTION_MAGIC_ON as ::core::ffi::c_int
     } else {
         OPTION_MAGIC_OFF as ::core::ffi::c_int
     }) as optmagic_T;
-    let mut retv: ::core::ffi::c_int = ex_substitute_preview(
-        eap,
-        cmdpreview_ns,
-        cmdpreview_bufnr,
-    );
+    let mut retv: ::core::ffi::c_int = ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
     magic_overruled = saved;
     return retv;
 }
@@ -15195,7 +14682,13 @@ unsafe extern "C" fn ex_at(mut eap: *mut exarg_T) {
     exec_from_reg = save_efr;
 }
 unsafe extern "C" fn ex_bang(mut eap: *mut exarg_T) {
-    do_bang((*eap).addr_count, eap, (*eap).forceit != 0, true_0 != 0, true_0 != 0);
+    do_bang(
+        (*eap).addr_count,
+        eap,
+        (*eap).forceit != 0,
+        true_0 != 0,
+        true_0 != 0,
+    );
 }
 unsafe extern "C" fn ex_undo(mut eap: *mut exarg_T) {
     if (*eap).addr_count != 1 as ::core::ffi::c_int {
@@ -15209,12 +14702,9 @@ unsafe extern "C" fn ex_undo(mut eap: *mut exarg_T) {
     let mut step: linenr_T = (*eap).line2;
     if (*eap).forceit != 0 {
         if step >= (*curbuf).b_u_seq_cur as linenr_T {
-            emsg(
-                gettext(
-                    &raw const e_undobang_cannot_redo_or_move_branch
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                &raw const e_undobang_cannot_redo_or_move_branch as *const ::core::ffi::c_char,
+            ));
             return;
         }
         let mut uhp: *mut u_header_T = ::core::ptr::null_mut::<u_header_T>();
@@ -15228,25 +14718,31 @@ unsafe extern "C" fn ex_undo(mut eap: *mut exarg_T) {
             uhp = (*uhp).uh_next.ptr;
             count += 1;
         }
-        if step != 0 as linenr_T && (uhp.is_null() || ((*uhp).uh_seq as linenr_T) < step)
-        {
-            emsg(
-                gettext(
-                    &raw const e_undobang_cannot_redo_or_move_branch
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+        if step != 0 as linenr_T && (uhp.is_null() || ((*uhp).uh_seq as linenr_T) < step) {
+            emsg(gettext(
+                &raw const e_undobang_cannot_redo_or_move_branch as *const ::core::ffi::c_char,
+            ));
             return;
         }
         u_undo_and_forget(count, true_0 != 0);
     } else {
-        undo_time(step as ::core::ffi::c_int, false_0 != 0, false_0 != 0, true_0 != 0);
+        undo_time(
+            step as ::core::ffi::c_int,
+            false_0 != 0,
+            false_0 != 0,
+            true_0 != 0,
+        );
     };
 }
 unsafe extern "C" fn ex_wundo(mut eap: *mut exarg_T) {
     let mut hash: [uint8_t; 32] = [0; 32];
     u_compute_hash(curbuf, &raw mut hash as *mut uint8_t);
-    u_write_undo((*eap).arg, (*eap).forceit != 0, curbuf, &raw mut hash as *mut uint8_t);
+    u_write_undo(
+        (*eap).arg,
+        (*eap).forceit != 0,
+        curbuf,
+        &raw mut hash as *mut uint8_t,
+    );
 }
 unsafe extern "C" fn ex_rundo(mut eap: *mut exarg_T) {
     let mut hash: [uint8_t; 32] = [0; 32];
@@ -15291,9 +14787,8 @@ unsafe extern "C" fn ex_later(mut eap: *mut exarg_T) {
             100 => {
                 p = p.offset(1);
                 sec = true_0 != 0;
-                count
-                    *= 24 as ::core::ffi::c_int * 60 as ::core::ffi::c_int
-                        * 60 as ::core::ffi::c_int;
+                count *=
+                    24 as ::core::ffi::c_int * 60 as ::core::ffi::c_int * 60 as ::core::ffi::c_int;
             }
             102 => {
                 p = p.offset(1);
@@ -15303,7 +14798,10 @@ unsafe extern "C" fn ex_later(mut eap: *mut exarg_T) {
         }
     }
     if *p as ::core::ffi::c_int != NUL {
-        semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), (*eap).arg);
+        semsg(
+            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+            (*eap).arg,
+        );
     } else {
         undo_time(
             if (*eap).cmdidx as ::core::ffi::c_int == CMD_earlier as ::core::ffi::c_int {
@@ -15327,16 +14825,12 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
         close_redir();
     } else if *arg as ::core::ffi::c_int == '>' as ::core::ffi::c_int {
         arg = arg.offset(1);
-        let mut mode: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut mode: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if *arg as ::core::ffi::c_int == '>' as ::core::ffi::c_int {
             arg = arg.offset(1);
-            mode = b"a\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            mode = b"a\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
-            mode = b"w\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            mode = b"w\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         arg = skipwhite(arg);
         close_redir();
@@ -15349,8 +14843,8 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
     } else if *arg as ::core::ffi::c_int == '@' as ::core::ffi::c_int {
         close_redir();
         arg = arg.offset(1);
-        if valid_yank_reg(*arg as ::core::ffi::c_int, true_0 != 0) as ::core::ffi::c_int
-            != 0 && *arg as ::core::ffi::c_int != '_' as ::core::ffi::c_int
+        if valid_yank_reg(*arg as ::core::ffi::c_int, true_0 != 0) as ::core::ffi::c_int != 0
+            && *arg as ::core::ffi::c_int != '_' as ::core::ffi::c_int
         {
             let c2rust_fresh15 = arg;
             arg = arg.offset(1);
@@ -15365,10 +14859,10 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
                     arg = arg.offset(1);
                 }
                 if *arg as ::core::ffi::c_int == NUL
-                    && *(*__ctype_b_loc()).offset(redir_reg as isize)
-                        as ::core::ffi::c_int
+                    && *(*__ctype_b_loc()).offset(redir_reg as isize) as ::core::ffi::c_int
                         & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort
-                            as ::core::ffi::c_int == 0
+                            as ::core::ffi::c_int
+                        == 0
                 {
                     write_reg_contents(
                         redir_reg,
@@ -15403,7 +14897,10 @@ unsafe extern "C" fn ex_redir(mut eap: *mut exarg_T) {
             redir_vname = true_0 != 0;
         }
     } else {
-        semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), (*eap).arg);
+        semsg(
+            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+            (*eap).arg,
+        );
     }
     if !redir_fd.is_null() || redir_reg != 0 || redir_vname as ::core::ffi::c_int != 0 {
         redir_off = false_0 != 0;
@@ -15506,16 +15003,19 @@ pub unsafe extern "C" fn open_exfile(
     mut mode: *mut ::core::ffi::c_char,
 ) -> *mut FILE {
     if os_isdir(fname) {
-        semsg(gettext(&raw const e_isadir2 as *const ::core::ffi::c_char), fname);
+        semsg(
+            gettext(&raw const e_isadir2 as *const ::core::ffi::c_char),
+            fname,
+        );
         return ::core::ptr::null_mut::<FILE>();
     }
-    if forceit == 0 && *mode as ::core::ffi::c_int != 'a' as ::core::ffi::c_int
+    if forceit == 0
+        && *mode as ::core::ffi::c_int != 'a' as ::core::ffi::c_int
         && os_path_exists(fname) as ::core::ffi::c_int != 0
     {
         semsg(
             gettext(
-                b"E189: \"%s\" exists (add ! to override)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"E189: \"%s\" exists (add ! to override)\0".as_ptr() as *const ::core::ffi::c_char
             ),
             fname,
         );
@@ -15526,8 +15026,7 @@ pub unsafe extern "C" fn open_exfile(
     if fd.is_null() {
         semsg(
             gettext(
-                b"E190: Cannot open \"%s\" for writing\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"E190: Cannot open \"%s\" for writing\0".as_ptr() as *const ::core::ffi::c_char
             ),
             fname,
         );
@@ -15539,8 +15038,7 @@ unsafe extern "C" fn ex_mark(mut eap: *mut exarg_T) {
         emsg(gettext(&raw const e_argreq as *const ::core::ffi::c_char));
         return;
     }
-    if *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-    {
+    if *(*eap).arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
         semsg(
             gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
             (*eap).arg,
@@ -15551,12 +15049,10 @@ unsafe extern "C" fn ex_mark(mut eap: *mut exarg_T) {
     (*curwin).w_cursor.lnum = (*eap).line2;
     beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
     if setmark(*(*eap).arg as ::core::ffi::c_int) == FAIL {
-        emsg(
-            gettext(
-                b"E191: Argument must be a letter or forward/backward quote\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E191: Argument must be a letter or forward/backward quote\0".as_ptr()
+                as *const ::core::ffi::c_char,
+        ));
     }
     (*curwin).w_cursor = pos;
 }
@@ -15597,8 +15093,8 @@ pub unsafe extern "C" fn restore_current_state(mut sst: *mut save_state_T) {
     opcount = (*sst).save_opcount;
     reg_executing = (*sst).save_reg_executing;
     pending_end_reg_executing = (*sst).save_pending_end_reg_executing;
-    msg_didout = msg_didout as ::core::ffi::c_int
-        | (*sst).save_msg_didout as ::core::ffi::c_int != 0;
+    msg_didout =
+        msg_didout as ::core::ffi::c_int | (*sst).save_msg_didout as ::core::ffi::c_int != 0;
     State = (*sst).save_State;
     ui_cursor_shape();
 }
@@ -15607,28 +15103,20 @@ pub unsafe extern "C" fn expr_map_locked() -> bool {
     return expr_map_lock > 0 as ::core::ffi::c_int && (*curbuf).b_flags & BF_DUMMY == 0;
 }
 unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
-    if !(*curbuf).terminal.is_null() && State & MODE_TERMINAL as ::core::ffi::c_int != 0
-    {
-        emsg(
-            b"Can't re-enter normal mode from terminal mode\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
+    if !(*curbuf).terminal.is_null() && State & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+        emsg(b"Can't re-enter normal mode from terminal mode\0".as_ptr()
+            as *const ::core::ffi::c_char);
         return;
     }
-    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if expr_map_locked() {
         emsg(gettext(&raw const e_secure as *const ::core::ffi::c_char));
         return;
     }
     if ex_normal_busy as OptInt >= p_mmd {
-        emsg(
-            gettext(
-                b"E192: Recursive use of :normal too deep\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E192: Recursive use of :normal too deep\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -15638,9 +15126,7 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
         l = utfc_ptr2len(p) - 1 as ::core::ffi::c_int;
         while l > 0 as ::core::ffi::c_int {
             p = p.offset(1);
-            if *p as ::core::ffi::c_int
-                == K_SPECIAL as ::core::ffi::c_char as ::core::ffi::c_int
-            {
+            if *p as ::core::ffi::c_int == K_SPECIAL as ::core::ffi::c_char as ::core::ffi::c_int {
                 len += 2 as ::core::ffi::c_int;
             }
             l -= 1;
@@ -15649,7 +15135,9 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
     }
     if len > 0 as ::core::ffi::c_int {
         arg = xmalloc(
-            strlen((*eap).arg).wrapping_add(len as size_t).wrapping_add(1 as size_t),
+            strlen((*eap).arg)
+                .wrapping_add(len as size_t)
+                .wrapping_add(1 as size_t),
         ) as *mut ::core::ffi::c_char;
         len = 0 as ::core::ffi::c_int;
         let mut p_0: *mut ::core::ffi::c_char = (*eap).arg;
@@ -15668,12 +15156,10 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
                 {
                     let c2rust_fresh19 = len;
                     len = len + 1;
-                    *arg.offset(c2rust_fresh19 as isize) = KS_SPECIAL
-                        as ::core::ffi::c_char;
+                    *arg.offset(c2rust_fresh19 as isize) = KS_SPECIAL as ::core::ffi::c_char;
                     let c2rust_fresh20 = len;
                     len = len + 1;
-                    *arg.offset(c2rust_fresh20 as isize) = KE_FILLER
-                        as ::core::ffi::c_char;
+                    *arg.offset(c2rust_fresh20 as isize) = KE_FILLER as ::core::ffi::c_char;
                 }
                 l -= 1;
             }
@@ -15753,7 +15239,8 @@ unsafe extern "C" fn ex_normal(mut eap: *mut exarg_T) {
                 false_0 != 0,
             );
             if !((*eap).addr_count > 0 as ::core::ffi::c_int
-                && (*eap).line1 <= (*eap).line2 && !got_int)
+                && (*eap).line1 <= (*eap).line2
+                && !got_int)
             {
                 break;
             }
@@ -15778,9 +15265,7 @@ unsafe extern "C" fn ex_startinsert(mut eap: *mut exarg_T) {
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_startinsert as ::core::ffi::c_int {
         restart_edit = 'a' as ::core::ffi::c_int;
-    } else if (*eap).cmdidx as ::core::ffi::c_int
-        == CMD_startreplace as ::core::ffi::c_int
-    {
+    } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_startreplace as ::core::ffi::c_int {
         restart_edit = 'R' as ::core::ffi::c_int;
     } else {
         restart_edit = 'V' as ::core::ffi::c_int;
@@ -15853,7 +15338,9 @@ pub unsafe extern "C" fn exec_normal(mut was_typed: bool, mut use_vpeekc: bool) 
             && {
                 c = vpeekc();
                 c != NUL
-            } && c != Ctrl_C) && !got_int
+            }
+            && c != Ctrl_C)
+        && !got_int
     {
         update_topline_cursor();
         normal_cmd(&raw mut oa, true_0 != 0);
@@ -15931,10 +15418,8 @@ unsafe extern "C" fn ex_findpat(mut eap: *mut exarg_T) {
             *c2rust_fresh16 = NUL as ::core::ffi::c_char;
             p = skipwhite(p);
             if ends_excmd(*p as ::core::ffi::c_int) == 0 {
-                (*eap).errmsg = ex_errmsg(
-                    &raw const e_trailing_arg as *const ::core::ffi::c_char,
-                    p,
-                );
+                (*eap).errmsg =
+                    ex_errmsg(&raw const e_trailing_arg as *const ::core::ffi::c_char, p);
             } else {
                 (*eap).nextcmd = check_nextcmd(p);
             }
@@ -16010,10 +15495,7 @@ unsafe extern "C" fn ex_stag(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_tag(mut eap: *mut exarg_T) {
     ex_tag_cmd(eap, cmdnames[(*eap).cmdidx as usize].cmd_name);
 }
-unsafe extern "C" fn ex_tag_cmd(
-    mut eap: *mut exarg_T,
-    mut name: *const ::core::ffi::c_char,
-) {
+unsafe extern "C" fn ex_tag_cmd(mut eap: *mut exarg_T, mut name: *const ::core::ffi::c_char) {
     let mut cmd: ::core::ffi::c_int = 0;
     match *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
         106 => {
@@ -16081,14 +15563,13 @@ pub unsafe extern "C" fn find_cmdline_var(
         b"<SID>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     ];
     let mut i: size_t = 0 as size_t;
-    while i
-        < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 15]>()
-            .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-            .wrapping_div(
-                (::core::mem::size_of::<[*mut ::core::ffi::c_char; 15]>()
-                    .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
+    while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 15]>()
+        .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+        .wrapping_div(
+            (::core::mem::size_of::<[*mut ::core::ffi::c_char; 15]>()
+                .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                == 0) as ::core::ffi::c_int as usize,
+        )
     {
         let mut len: size_t = strlen(spec_str[i as usize] as *const ::core::ffi::c_char);
         if strncmp(src, spec_str[i as usize] as *const ::core::ffi::c_char, len)
@@ -16096,11 +15577,12 @@ pub unsafe extern "C" fn find_cmdline_var(
         {
             *usedlen = len;
             '_c2rust_label: {
-                if i <= 9223372036854775807 as ::core::ffi::c_long as size_t {} else {
+                if i <= 9223372036854775807 as ::core::ffi::c_long as size_t {
+                } else {
                     __assert_fail(
                         b"i <= SSIZE_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         7692 as ::core::ffi::c_uint,
                         b"ssize_t find_cmdline_var(const char *, size_t *)\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -16123,14 +15605,12 @@ pub unsafe extern "C" fn eval_vars(
     mut escaped: *mut ::core::ffi::c_int,
     mut empty_is_error: bool,
 ) -> *mut ::core::ffi::c_char {
-    let mut result: *mut ::core::ffi::c_char = b"\0".as_ptr()
-        as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    let mut resultbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut result: *mut ::core::ffi::c_char =
+        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    let mut resultbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut resultlen: size_t = 0;
-    let mut valid: ::core::ffi::c_int = VALID_HEAD as ::core::ffi::c_int
-        | VALID_PATH as ::core::ffi::c_int;
+    let mut valid: ::core::ffi::c_int =
+        VALID_HEAD as ::core::ffi::c_int | VALID_PATH as ::core::ffi::c_int;
     let mut tilde_file: bool = false_0 != 0;
     let mut skip_mod: bool = false_0 != 0;
     let mut strbuf: [::core::ffi::c_char; 30] = [0; 30];
@@ -16164,7 +15644,8 @@ pub unsafe extern "C" fn eval_vars(
             if spec_idx == SPEC_CWORD as ::core::ffi::c_int as ssize_t {
                 FIND_IDENT as ::core::ffi::c_int | FIND_STRING as ::core::ffi::c_int
             } else if spec_idx == SPEC_CEXPR as ::core::ffi::c_int as ssize_t {
-                FIND_IDENT as ::core::ffi::c_int | FIND_STRING as ::core::ffi::c_int
+                FIND_IDENT as ::core::ffi::c_int
+                    | FIND_STRING as ::core::ffi::c_int
                     | FIND_EVAL as ::core::ffi::c_int
             } else {
                 FIND_STRING as ::core::ffi::c_int
@@ -16176,22 +15657,18 @@ pub unsafe extern "C" fn eval_vars(
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
     } else {
-        let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         let mut i: ::core::ffi::c_int = 0;
         match spec_idx {
             0 => {
                 if (*curbuf).b_fname.is_null() {
-                    result = b"\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char;
+                    result =
+                        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
                     valid = 0 as ::core::ffi::c_int;
                 } else {
                     result = (*curbuf).b_fname;
-                    tilde_file = strcmp(
-                        result,
-                        b"~\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) == 0 as ::core::ffi::c_int;
+                    tilde_file = strcmp(result, b"~\0".as_ptr() as *const ::core::ffi::c_char)
+                        == 0 as ::core::ffi::c_int;
                 }
             }
             1 => {
@@ -16212,14 +15689,14 @@ pub unsafe extern "C" fn eval_vars(
                     }
                     i = getdigits_int(&raw mut s, false_0 != 0, 0 as ::core::ffi::c_int);
                     if s == src.offset(2 as ::core::ffi::c_int as isize)
-                        && *src.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '-' as ::core::ffi::c_int
+                        && *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '-' as ::core::ffi::c_int
                     {
                         s = s.offset(-1);
                     }
                     *usedlen = s.offset_from(src) as size_t;
-                    if *src.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '<' as ::core::ffi::c_int
+                    if *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '<' as ::core::ffi::c_int
                         && i != 0 as ::core::ffi::c_int
                     {
                         if *usedlen < 2 as size_t {
@@ -16236,8 +15713,8 @@ pub unsafe extern "C" fn eval_vars(
                         }
                     } else {
                         if i == 0 as ::core::ffi::c_int
-                            && *src.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int == '<' as ::core::ffi::c_int
+                            && *src.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                == '<' as ::core::ffi::c_int
                             && *usedlen > 1 as size_t
                         {
                             *usedlen = 1 as size_t;
@@ -16245,8 +15722,8 @@ pub unsafe extern "C" fn eval_vars(
                         let mut buf: *mut buf_T = buflist_findnr(i);
                         if buf.is_null() {
                             *errormsg = gettext(
-                                b"E194: No alternate file name to substitute for '#'\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
+                                b"E194: No alternate file name to substitute for '#'\0".as_ptr()
+                                    as *const ::core::ffi::c_char,
                             );
                             return ::core::ptr::null_mut::<::core::ffi::c_char>();
                         }
@@ -16259,10 +15736,9 @@ pub unsafe extern "C" fn eval_vars(
                             valid = 0 as ::core::ffi::c_int;
                         } else {
                             result = (*buf).b_fname;
-                            tilde_file = strcmp(
-                                result,
-                                b"~\0".as_ptr() as *const ::core::ffi::c_char,
-                            ) == 0 as ::core::ffi::c_int;
+                            tilde_file =
+                                strcmp(result, b"~\0".as_ptr() as *const ::core::ffi::c_char)
+                                    == 0 as ::core::ffi::c_int;
                         }
                     }
                 }
@@ -16358,15 +15834,15 @@ pub unsafe extern "C" fn eval_vars(
             7 => {
                 if (*(exestack.ga_data as *mut estack_T)
                     .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                    .es_name
-                    .is_null()
+                .es_name
+                .is_null()
                     || (*(exestack.ga_data as *mut estack_T)
                         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum == 0 as linenr_T
+                    .es_lnum
+                        == 0 as linenr_T
                 {
                     *errormsg = gettext(
-                        &raw const e_no_line_number_to_use_for_slnum
-                            as *const ::core::ffi::c_char,
+                        &raw const e_no_line_number_to_use_for_slnum as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
@@ -16376,7 +15852,7 @@ pub unsafe extern "C" fn eval_vars(
                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
                     (*(exestack.ga_data as *mut estack_T)
                         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum,
+                    .es_lnum,
                 );
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
@@ -16384,11 +15860,11 @@ pub unsafe extern "C" fn eval_vars(
                 if current_sctx.sc_lnum
                     + (*(exestack.ga_data as *mut estack_T)
                         .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
-                        .es_lnum == 0 as linenr_T
+                    .es_lnum
+                    == 0 as linenr_T
                 {
                     *errormsg = gettext(
-                        &raw const e_no_line_number_to_use_for_sflnum
-                            as *const ::core::ffi::c_char,
+                        &raw const e_no_line_number_to_use_for_sflnum as *const ::core::ffi::c_char,
                     );
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
@@ -16398,18 +15874,14 @@ pub unsafe extern "C" fn eval_vars(
                     b"%d\0".as_ptr() as *const ::core::ffi::c_char,
                     current_sctx.sc_lnum
                         + (*(exestack.ga_data as *mut estack_T)
-                            .offset(
-                                (exestack.ga_len - 1 as ::core::ffi::c_int) as isize,
-                            ))
-                            .es_lnum,
+                            .offset((exestack.ga_len - 1 as ::core::ffi::c_int) as isize))
+                        .es_lnum,
                 );
                 result = &raw mut strbuf as *mut ::core::ffi::c_char;
             }
             14 => {
                 if current_sctx.sc_sid <= 0 as ::core::ffi::c_int {
-                    *errormsg = gettext(
-                        &raw const e_usingsid as *const ::core::ffi::c_char,
-                    );
+                    *errormsg = gettext(&raw const e_usingsid as *const ::core::ffi::c_char);
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
                 snprintf(
@@ -16425,27 +15897,22 @@ pub unsafe extern "C" fn eval_vars(
             }
         }
         resultlen = strlen(result);
-        if *src.offset(*usedlen as isize) as ::core::ffi::c_int
-            == '<' as ::core::ffi::c_int
-        {
+        if *src.offset(*usedlen as isize) as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
             *usedlen = (*usedlen).wrapping_add(1);
-            let mut s_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut s_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             s_0 = strrchr(result, '.' as ::core::ffi::c_int);
             if !s_0.is_null() && s_0 >= path_tail(result) {
                 resultlen = s_0.offset_from(result) as size_t;
             }
         } else if !skip_mod {
-            valid
-                |= modify_fname(
-                    src,
-                    tilde_file,
-                    usedlen,
-                    &raw mut result,
-                    &raw mut resultbuf,
-                    &raw mut resultlen,
-                );
+            valid |= modify_fname(
+                src,
+                tilde_file,
+                usedlen,
+                &raw mut result,
+                &raw mut resultbuf,
+                &raw mut resultlen,
+            );
             if result.is_null() {
                 *errormsg = b"\0".as_ptr() as *const ::core::ffi::c_char;
                 return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -16456,24 +15923,21 @@ pub unsafe extern "C" fn eval_vars(
         || valid != VALID_HEAD as ::core::ffi::c_int + VALID_PATH as ::core::ffi::c_int
     {
         if empty_is_error {
-            if valid
-                != VALID_HEAD as ::core::ffi::c_int + VALID_PATH as ::core::ffi::c_int
-            {
+            if valid != VALID_HEAD as ::core::ffi::c_int + VALID_PATH as ::core::ffi::c_int {
                 *errormsg = gettext(
-                    b"E499: Empty file name for '%' or '#', only works with \":p:h\"\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            } else {
-                *errormsg = gettext(
-                    b"E500: Evaluates to an empty string\0".as_ptr()
+                    b"E499: Empty file name for '%' or '#', only works with \":p:h\"\0".as_ptr()
                         as *const ::core::ffi::c_char,
                 );
+            } else {
+                *errormsg =
+                    gettext(b"E500: Evaluates to an empty string\0".as_ptr()
+                        as *const ::core::ffi::c_char);
             }
         }
         result = ::core::ptr::null_mut::<::core::ffi::c_char>();
     } else {
-        result = xmemdupz(result as *const ::core::ffi::c_void, resultlen)
-            as *mut ::core::ffi::c_char;
+        result =
+            xmemdupz(result as *const ::core::ffi::c_void, resultlen) as *mut ::core::ffi::c_char;
     }
     xfree(resultbuf as *mut ::core::ffi::c_void);
     return result;
@@ -16485,15 +15949,17 @@ pub unsafe extern "C" fn expand_sfile(
     let mut result: *mut ::core::ffi::c_char = xstrdup(arg);
     let mut p: *mut ::core::ffi::c_char = result;
     while *p != 0 {
-        if strncmp(p, b"<sfile>\0".as_ptr() as *const ::core::ffi::c_char, 7 as size_t)
-            != 0 as ::core::ffi::c_int
+        if strncmp(
+            p,
+            b"<sfile>\0".as_ptr() as *const ::core::ffi::c_char,
+            7 as size_t,
+        ) != 0 as ::core::ffi::c_int
         {
             p = p.offset(1);
         } else {
             let mut srclen: size_t = 0;
-            let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<
-                ::core::ffi::c_char,
-            >();
+            let mut errormsg: *const ::core::ffi::c_char =
+                ::core::ptr::null::<::core::ffi::c_char>();
             let mut repl: *mut ::core::ffi::c_char = eval_vars(
                 p,
                 result,
@@ -16517,8 +15983,7 @@ pub unsafe extern "C" fn expand_sfile(
                     .wrapping_sub(srclen)
                     .wrapping_add(strlen(repl))
                     .wrapping_add(1 as size_t);
-                let mut newres: *mut ::core::ffi::c_char = xmalloc(len)
-                    as *mut ::core::ffi::c_char;
+                let mut newres: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
                 memmove(
                     newres as *mut ::core::ffi::c_void,
                     result as *const ::core::ffi::c_void,
@@ -16539,8 +16004,7 @@ pub unsafe extern "C" fn expand_sfile(
 unsafe extern "C" fn ex_shada(mut eap: *mut exarg_T) {
     let mut save_shada: *mut ::core::ffi::c_char = p_shada;
     if *p_shada as ::core::ffi::c_int == NUL {
-        p_shada = b"'100\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        p_shada = b"'100\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_rviminfo as ::core::ffi::c_int
         || (*eap).cmdidx as ::core::ffi::c_int == CMD_rshada as ::core::ffi::c_int
@@ -16560,7 +16024,12 @@ pub unsafe extern "C" fn dialog_msg(
     if fname.is_null() {
         fname = gettext(b"Untitled\0".as_ptr() as *const ::core::ffi::c_char);
     }
-    vim_snprintf(buff, DIALOG_MSG_SIZE as ::core::ffi::c_int as size_t, format, fname);
+    vim_snprintf(
+        buff,
+        DIALOG_MSG_SIZE as ::core::ffi::c_int as size_t,
+        format,
+        fname,
+    );
 }
 static mut filetype_detect: TriState = kNone;
 static mut filetype_plugin: TriState = kNone;
@@ -16569,8 +16038,7 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
         smsg(
             0 as ::core::ffi::c_int,
-            b"filetype detection:%s  plugin:%s  indent:%s\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b"filetype detection:%s  plugin:%s  indent:%s\0".as_ptr() as *const ::core::ffi::c_char,
             if filetype_detect as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
                 b"ON\0".as_ptr() as *const ::core::ffi::c_char
             } else {
@@ -16601,8 +16069,11 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
     let mut plugin: bool = false_0 != 0;
     let mut indent: bool = false_0 != 0;
     loop {
-        if strncmp(arg, b"plugin\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-            == 0 as ::core::ffi::c_int
+        if strncmp(
+            arg,
+            b"plugin\0".as_ptr() as *const ::core::ffi::c_char,
+            6 as size_t,
+        ) == 0 as ::core::ffi::c_int
         {
             plugin = true_0 != 0;
             arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
@@ -16619,8 +16090,7 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
             arg = skipwhite(arg.offset(6 as ::core::ffi::c_int as isize));
         }
     }
-    if strcmp(arg, b"on\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
+    if strcmp(arg, b"on\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
         || strcmp(arg, b"detect\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int
     {
@@ -16682,7 +16152,10 @@ unsafe extern "C" fn ex_filetype(mut eap: *mut exarg_T) {
             filetype_detect = kFalse;
         }
     } else {
-        semsg(gettext(&raw const e_invarg2 as *const ::core::ffi::c_char), arg);
+        semsg(
+            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
+            arg,
+        );
     };
 }
 #[no_mangle]
@@ -16717,8 +16190,11 @@ unsafe extern "C" fn ex_setfiletype(mut eap: *mut exarg_T) {
         return;
     }
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
-    if strncmp(arg, b"FALLBACK \0".as_ptr() as *const ::core::ffi::c_char, 9 as size_t)
-        == 0 as ::core::ffi::c_int
+    if strncmp(
+        arg,
+        b"FALLBACK \0".as_ptr() as *const ::core::ffi::c_char,
+        9 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         arg = arg.offset(9 as ::core::ffi::c_int as isize);
     }
@@ -16799,8 +16275,8 @@ unsafe extern "C" fn ex_folddo(mut eap: *mut exarg_T) {
             ::core::ptr::null_mut::<linenr_T>(),
             ::core::ptr::null_mut::<linenr_T>(),
         ) as ::core::ffi::c_int
-            == ((*eap).cmdidx as ::core::ffi::c_int
-                == CMD_folddoclosed as ::core::ffi::c_int) as ::core::ffi::c_int
+            == ((*eap).cmdidx as ::core::ffi::c_int == CMD_folddoclosed as ::core::ffi::c_int)
+                as ::core::ffi::c_int
         {
             ml_setmarked(lnum);
         }
@@ -16814,8 +16290,10 @@ pub unsafe extern "C" fn is_loclist_cmd(mut cmdidx: ::core::ffi::c_int) -> bool 
     if cmdidx < 0 as ::core::ffi::c_int || cmdidx >= CMD_SIZE as ::core::ffi::c_int {
         return false_0 != 0;
     }
-    return *cmdnames[cmdidx as usize].cmd_name.offset(0 as ::core::ffi::c_int as isize)
-        as ::core::ffi::c_int == 'l' as ::core::ffi::c_int;
+    return *cmdnames[cmdidx as usize]
+        .cmd_name
+        .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+        == 'l' as ::core::ffi::c_int;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_pressedreturn() -> bool {
@@ -16837,18 +16315,14 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
     };
     let mut args__items: [Object; 2] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_14 { boolean: false },
     }; 2];
     args.capacity = 2 as size_t;
     args.items = &raw mut args__items as *mut Object;
     let mut mods: [::core::ffi::c_char; 1024] = [0; 1024];
     let mut mods_len: size_t = 0 as size_t;
     mods[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-    if cmdmod.cmod_tab > 0 as ::core::ffi::c_int
-        || cmdmod.cmod_split != 0 as ::core::ffi::c_int
-    {
+    if cmdmod.cmod_tab > 0 as ::core::ffi::c_int || cmdmod.cmod_split != 0 as ::core::ffi::c_int {
         let mut multi_mods: bool = false_0 != 0;
         mods_len = add_win_cmd_modifiers(
             &raw mut mods as *mut ::core::ffi::c_char,
@@ -16856,14 +16330,14 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
             &raw mut multi_mods,
         );
         '_c2rust_label: {
-            if mods_len < ::core::mem::size_of::<[::core::ffi::c_char; 1024]>() {} else {
+            if mods_len < ::core::mem::size_of::<[::core::ffi::c_char; 1024]>() {
+            } else {
                 __assert_fail(
                     b"mods_len < sizeof(mods)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    8263 as ::core::ffi::c_uint,
-                    b"void ex_checkhealth(exarg_T *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    8263 as ::core::ffi::c_uint,
+                    b"void ex_checkhealth(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -16891,8 +16365,7 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
         String_0 {
             data: b"vim.health._check(...)\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
-            size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>()
-                .wrapping_sub(1 as size_t),
+            size: ::core::mem::size_of::<[::core::ffi::c_char; 23]>().wrapping_sub(1 as size_t),
         },
         ::core::ptr::null::<::core::ffi::c_char>(),
         args,
@@ -16903,33 +16376,23 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
     if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         return;
     }
-    let mut vimruntime_env: *mut ::core::ffi::c_char = os_getenv_noalloc(
-        b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut vimruntime_env: *mut ::core::ffi::c_char =
+        os_getenv_noalloc(b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char);
     if vimruntime_env.is_null() {
-        emsg(
-            gettext(
-                b"E5009: $VIMRUNTIME is empty or unset\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E5009: $VIMRUNTIME is empty or unset\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     } else {
         let mut rtp_ok: bool = !strstr(p_rtp, vimruntime_env).is_null();
         if rtp_ok {
             semsg(
-                gettext(
-                    b"E5009: Invalid $VIMRUNTIME: %s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E5009: Invalid $VIMRUNTIME: %s\0".as_ptr() as *const ::core::ffi::c_char),
                 vimruntime_env,
             );
         } else {
-            emsg(
-                gettext(
-                    b"E5009: Invalid 'runtimepath'\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E5009: Invalid 'runtimepath'\0".as_ptr() as *const ::core::ffi::c_char
+            ));
         }
     }
     semsg_multiline(b"emsg\0".as_ptr() as *const ::core::ffi::c_char, err.msg);
@@ -16938,9 +16401,7 @@ unsafe extern "C" fn ex_checkhealth(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
     let mut ex_cmd: [::core::ffi::c_char; 1024] = [0; 1024];
     let mut len: size_t = 0 as size_t;
-    if cmdmod.cmod_tab > 0 as ::core::ffi::c_int
-        || cmdmod.cmod_split != 0 as ::core::ffi::c_int
-    {
+    if cmdmod.cmod_tab > 0 as ::core::ffi::c_int || cmdmod.cmod_split != 0 as ::core::ffi::c_int {
         let mut multi_mods: bool = false_0 != 0;
         ex_cmd[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         len = add_win_cmd_modifiers(
@@ -16949,14 +16410,14 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             &raw mut multi_mods,
         );
         '_c2rust_label: {
-            if len < ::core::mem::size_of::<[::core::ffi::c_char; 1024]>() {} else {
+            if len < ::core::mem::size_of::<[::core::ffi::c_char; 1024]>() {
+            } else {
                 __assert_fail(
                     b"len < sizeof(ex_cmd)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    8298 as ::core::ffi::c_uint,
-                    b"void ex_terminal(exarg_T *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    8298 as ::core::ffi::c_uint,
+                    b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -16966,14 +16427,14 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             b" new\0".as_ptr() as *const ::core::ffi::c_char,
         );
         '_c2rust_label_0: {
-            if result > 0 as ::core::ffi::c_int {} else {
+            if result > 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"result > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    8300 as ::core::ffi::c_uint,
-                    b"void ex_terminal(exarg_T *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    8300 as ::core::ffi::c_uint,
+                    b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
@@ -16990,21 +16451,22 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             },
         );
         '_c2rust_label_1: {
-            if result_0 > 0 as ::core::ffi::c_int {} else {
+            if result_0 > 0 as ::core::ffi::c_int {
+            } else {
                 __assert_fail(
                     b"result > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    8304 as ::core::ffi::c_uint,
-                    b"void ex_terminal(exarg_T *)\0".as_ptr()
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
+                    8304 as ::core::ffi::c_uint,
+                    b"void ex_terminal(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
             }
         };
         len = len.wrapping_add(result_0 as size_t);
     }
     '_c2rust_label_2: {
-        if len < ::core::mem::size_of::<[::core::ffi::c_char; 1024]>() {} else {
+        if len < ::core::mem::size_of::<[::core::ffi::c_char; 1024]>() {
+        } else {
             __assert_fail(
                 b"len < sizeof(ex_cmd)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/ex_docmd.c\0".as_ptr()
@@ -17015,21 +16477,20 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
         }
     };
     if *(*eap).arg as ::core::ffi::c_int != NUL {
-        let mut name: *mut ::core::ffi::c_char = vim_strsave_escaped(
-            (*eap).arg,
-            b"\"\\\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        let mut name: *mut ::core::ffi::c_char =
+            vim_strsave_escaped((*eap).arg, b"\"\\\0".as_ptr() as *const ::core::ffi::c_char);
         snprintf(
             (&raw mut ex_cmd as *mut ::core::ffi::c_char).offset(len as isize),
             ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(len),
-            b" | call jobstart(\"%s\",{'term':v:true})\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b" | call jobstart(\"%s\",{'term':v:true})\0".as_ptr() as *const ::core::ffi::c_char,
             name,
         );
         xfree(name as *mut ::core::ffi::c_void);
     } else {
         if *p_sh as ::core::ffi::c_int == NUL {
-            emsg(gettext(&raw const e_shellempty as *const ::core::ffi::c_char));
+            emsg(gettext(
+                &raw const e_shellempty as *const ::core::ffi::c_char,
+            ));
             return;
         }
         let mut argv: *mut *mut ::core::ffi::c_char = shell_build_argv(
@@ -17553,10 +17014,8 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
             0,
         ];
         while !(*p).is_null() {
-            let mut escaped: *mut ::core::ffi::c_char = vim_strsave_escaped(
-                *p,
-                b"\"\\\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            let mut escaped: *mut ::core::ffi::c_char =
+                vim_strsave_escaped(*p, b"\"\\\0".as_ptr() as *const ::core::ffi::c_char);
             snprintf(
                 &raw mut tempstring as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 512]>(),
@@ -17575,8 +17034,7 @@ unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
         snprintf(
             (&raw mut ex_cmd as *mut ::core::ffi::c_char).offset(len as isize),
             ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(len),
-            b" | call jobstart([%s], {'term':v:true})\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            b" | call jobstart([%s], {'term':v:true})\0".as_ptr() as *const ::core::ffi::c_char,
             (&raw mut shell_argv as *mut ::core::ffi::c_char)
                 .offset(1 as ::core::ffi::c_int as isize),
         );
@@ -17595,9 +17053,7 @@ unsafe extern "C" fn ex_lsp(mut eap: *mut exarg_T) {
     };
     let mut args__items: [Object; 1] = [Object {
         type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 {
-            boolean: false,
-        },
+        data: C2Rust_Unnamed_14 { boolean: false },
     }; 1];
     args.capacity = 1 as size_t;
     args.items = &raw mut args__items as *mut Object;
@@ -17611,10 +17067,9 @@ unsafe extern "C" fn ex_lsp(mut eap: *mut exarg_T) {
     };
     nlua_exec(
         String_0 {
-            data: b"require'vim._core.ex_cmd'.ex_lsp(...)\0".as_ptr()
-                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            size: ::core::mem::size_of::<[::core::ffi::c_char; 38]>()
-                .wrapping_sub(1 as size_t),
+            data: b"require'vim._core.ex_cmd'.ex_lsp(...)\0".as_ptr() as *const ::core::ffi::c_char
+                as *mut ::core::ffi::c_char,
+            size: ::core::mem::size_of::<[::core::ffi::c_char; 38]>().wrapping_sub(1 as size_t),
         },
         ::core::ptr::null::<::core::ffi::c_char>(),
         args,
@@ -17637,9 +17092,7 @@ unsafe extern "C" fn ex_fclose(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn verify_command(mut cmd: *mut ::core::ffi::c_char) {
-    if strcmp(b"smile\0".as_ptr() as *const ::core::ffi::c_char, cmd)
-        != 0 as ::core::ffi::c_int
-    {
+    if strcmp(b"smile\0".as_ptr() as *const ::core::ffi::c_char, cmd) != 0 as ::core::ffi::c_int {
         return;
     }
     let mut a: ::core::ffi::c_int = HLF_E as ::core::ffi::c_int;
@@ -17679,28 +17132,28 @@ pub unsafe extern "C" fn verify_command(mut cmd: *mut ::core::ffi::c_char) {
         a,
     );
     msg(
-        b" n#######n      x####` *######+`       :M#####M  ,####n      `x#####xW###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n#######n      x####` *######+`       :M#####M  ,####n      `x#####xW###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n########*     x####``@####@;          `x#####i ,####n       ,#####@W###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n########*     x####``@####@;          `x#####i ,####n       ,#####@W###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n########@     x####`*#####i            `M####M ,####n        x#########@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n########@     x####`*#####i            `M####M ,####n        x#########@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n#########     x####`M####z              :#####:,####n        z#########@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n#########     x####`M####z              :#####:,####n        z#########@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n#########*    x####,#####.               n####+,####n        n#########@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n#########*    x####,#####.               n####+,####n        n#########@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
@@ -17739,28 +17192,28 @@ pub unsafe extern "C" fn verify_command(mut cmd: *mut ::core::ffi::c_char) {
         a,
     );
     msg(
-        b" n####.   ,##########,#####.               n####+,##############n.   W###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n####.   ,##########,#####.               n####+,##############n.   W###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n####.    ##########`M####z              :#####:,###########Wz:     W###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n####.    ##########`M####z              :#####:,###########Wz:     W###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n####.    x#########`*#####i            `M####M ,####x.....`        W###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n####.    x#########`*#####i            `M####M ,####x.....`        W###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n####.    ,@########``@####@;          `x#####i ,####n              W###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n####.    ,@########``@####@;          `x#####i ,####n              W###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
-        b" n####.     *########` *#####@+`       ,M#####M  ,####n              W###@`\0"
-            .as_ptr() as *const ::core::ffi::c_char,
+        b" n####.     *########` *#####@+`       ,M#####M  ,####n              W###@`\0".as_ptr()
+            as *const ::core::ffi::c_char,
         a,
     );
     msg(
@@ -18362,30 +17815,21 @@ pub unsafe extern "C" fn is_map_cmd(mut cmdidx: cmdidx_T) -> bool {
         || func == Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())
         || func == Some(ex_abclear as unsafe extern "C" fn(*mut exarg_T) -> ());
 }
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const FILETYPE_FILE: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 26],
-        [::core::ffi::c_char; 26],
-    >(*b"filetype.lua filetype.vim\0")
+    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"filetype.lua filetype.vim\0")
 };
-pub const FTPLUGIN_FILE: [::core::ffi::c_char; 13] = unsafe {
-    ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"ftplugin.vim\0")
-};
-pub const INDENT_FILE: [::core::ffi::c_char; 11] = unsafe {
-    ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"indent.vim\0")
-};
-pub const FTOFF_FILE: [::core::ffi::c_char; 10] = unsafe {
-    ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"ftoff.vim\0")
-};
-pub const FTPLUGOF_FILE: [::core::ffi::c_char; 13] = unsafe {
-    ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"ftplugof.vim\0")
-};
-pub const INDOFF_FILE: [::core::ffi::c_char; 11] = unsafe {
-    ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"indoff.vim\0")
-};
+pub const FTPLUGIN_FILE: [::core::ffi::c_char; 13] =
+    unsafe { ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"ftplugin.vim\0") };
+pub const INDENT_FILE: [::core::ffi::c_char; 11] =
+    unsafe { ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"indent.vim\0") };
+pub const FTOFF_FILE: [::core::ffi::c_char; 10] =
+    unsafe { ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"ftoff.vim\0") };
+pub const FTPLUGOF_FILE: [::core::ffi::c_char; 13] =
+    unsafe { ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"ftplugof.vim\0") };
+pub const INDOFF_FILE: [::core::ffi::c_char; 11] =
+    unsafe { ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"indoff.vim\0") };
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
@@ -18411,7 +17855,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18433,14 +17879,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"all\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"all\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18450,8 +17897,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"amenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"amenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18472,8 +17918,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"args\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"args\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18499,14 +17944,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_argdelete as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_argdelete as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 271 as uint32_t,
             cmd_addr_type: ADDR_ARGUMENTS,
         },
         CommandDefinition {
-            cmd_name: b"argdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"argdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18521,7 +17967,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_argdedupe as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_argdedupe as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18565,14 +18013,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_argument as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_argument as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 148743 as uint32_t,
             cmd_addr_type: ADDR_ARGUMENTS,
         },
         CommandDefinition {
-            cmd_name: b"ascii\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ascii\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18626,30 +18075,31 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_BUFFERS,
         },
         CommandDefinition {
-            cmd_name: b"bNext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"bNext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17667 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"ball\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ball\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 1281 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"badd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"badd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18659,8 +18109,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"balt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"balt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18686,7 +18135,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18703,8 +18154,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"blast\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"blast\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18719,14 +18169,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_bmodified as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_bmodified as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17667 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"bnext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"bnext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18741,7 +18192,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18752,7 +18205,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17667 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -18769,8 +18224,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"break\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"break\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18785,7 +18239,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_breakadd as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_breakadd as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18796,7 +18252,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_breakdel as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_breakdel as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18807,7 +18265,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_breaklist as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_breaklist as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18818,7 +18278,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17303684 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18829,14 +18291,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(buflist_list as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                buflist_list as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301766 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"bufdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"bufdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18879,8 +18342,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"cNext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cNext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18906,7 +18368,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -18978,8 +18442,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"call\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"call\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -18989,8 +18452,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"catch\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"catch\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19044,8 +18506,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cc\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19066,8 +18527,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19077,8 +18537,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19099,8 +18558,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"cexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cexpr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19110,8 +18568,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19121,8 +18578,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cfdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cfdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19176,8 +18632,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"chdir\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"chdir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19203,7 +18658,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_checkhealth as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_checkhealth as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 260 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19214,7 +18671,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_checkpath as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_checkpath as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301762 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19225,7 +18684,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_checktime as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_checktime as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 34053 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -19242,8 +18703,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"clist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"clist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19253,8 +18713,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"clast\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"clast\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19264,8 +18723,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"close\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"close\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19280,14 +18738,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_clearjumps as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_clearjumps as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19302,14 +18761,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"cmenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cmenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19319,8 +18779,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"cnext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cnext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19368,7 +18827,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19385,12 +18846,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"copy\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"copy\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_copymove as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_copymove as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 18350405 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -19412,7 +18874,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_colorscheme as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_colorscheme as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301780 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19434,7 +18898,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_comclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_comclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19445,7 +18911,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_compiler as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_compiler as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301782 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19456,7 +18924,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_continue as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_continue as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563904 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19467,7 +18937,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17303684 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19484,8 +18956,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"const\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"const\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19495,8 +18966,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"copen\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"copen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19528,8 +18998,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"cquit\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"cquit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> !>,
                 ex_func_T,
@@ -19566,7 +19035,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19599,7 +19070,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_operators as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_operators as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 18351937 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -19610,14 +19083,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_delmarks as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_delmarks as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301766 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"debug\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"debug\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19632,14 +19106,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_debuggreedy as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_debuggreedy as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17305857 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"defer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"defer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19654,7 +19129,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_delcommand as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_delcommand as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301910 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19665,7 +19142,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_delfunction as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_delfunction as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301654 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19698,7 +19177,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_diffupdate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_diffupdate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 258 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19709,7 +19190,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_diffgetput as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_diffgetput as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 1052933 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -19731,7 +19214,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_diffpatch as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_diffpatch as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 1048860 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19742,7 +19227,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_diffgetput as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_diffgetput as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 4357 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -19753,7 +19240,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_diffsplit as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_diffsplit as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 284 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19764,7 +19253,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_diffthis as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_diffthis as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19775,14 +19266,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_digraphs as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_digraphs as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301766 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"djump\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"djump\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19792,8 +19284,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"dlist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"dlist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19808,7 +19299,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_doautocmd as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_doautocmd as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19819,14 +19312,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_doautoall as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_doautoall as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"drop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"drop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19858,8 +19352,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"edit\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"edit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19880,8 +19373,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"echo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"echo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19924,8 +19416,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"echon\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"echon\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19935,8 +19426,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"else\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"else\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19957,8 +19447,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"emenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"emenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19968,8 +19457,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"endif\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"endif\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -19984,7 +19472,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_endfunction as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_endfunction as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -19995,7 +19485,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_endwhile as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_endwhile as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563904 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20017,14 +19509,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_endwhile as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_endwhile as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563904 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"enew\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"enew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20034,8 +19527,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"eval\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"eval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20045,8 +19537,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"ex\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ex\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20067,8 +19558,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"exit\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"exit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20089,8 +19579,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"file\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"file\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20100,12 +19589,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"files\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"files\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(buflist_list as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                buflist_list as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301766 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20116,7 +19606,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_filetype as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_filetype as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20127,14 +19619,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2182 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"find\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"find\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20166,8 +19659,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"first\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"first\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20177,8 +19669,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"fold\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"fold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20193,7 +19684,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_foldopen as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_foldopen as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563971 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -20226,14 +19719,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_foldopen as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_foldopen as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563971 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"for\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"for\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20248,7 +19742,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_function as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_function as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563654 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20276,8 +19772,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"goto\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"goto\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20287,8 +19782,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"grep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"grep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20309,8 +19803,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"gui\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"gui\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20320,8 +19813,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"gvim\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"gvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20331,8 +19823,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"help\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"help\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20347,7 +19838,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_helpclose as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_helpclose as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20358,7 +19851,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_helpgrep as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_helpgrep as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20369,7 +19864,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_helptags as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_helptags as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301900 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20380,14 +19877,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_highlight as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_highlight as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563910 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"hide\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"hide\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20413,7 +19911,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20435,7 +19935,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20452,8 +19954,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"if\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"if\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20463,8 +19964,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"ijump\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ijump\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20474,8 +19974,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"ilist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ilist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20485,8 +19984,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"imap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"imap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20501,14 +19999,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"imenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"imenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20534,7 +20033,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20551,8 +20052,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"intro\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"intro\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20562,8 +20062,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"iput\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"iput\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20611,7 +20110,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20628,8 +20129,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"join\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"join\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20639,8 +20139,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"jumps\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"jumps\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20650,8 +20149,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"k\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"k\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20666,7 +20164,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20677,7 +20177,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20688,7 +20190,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20699,14 +20203,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"list\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"list\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20716,8 +20221,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"lNext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lNext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20738,8 +20242,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"last\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"last\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20765,7 +20268,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_language as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_language as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -20815,8 +20320,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"later\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"later\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20870,8 +20374,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lcd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lcd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20903,8 +20406,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"ldo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ldo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20914,8 +20416,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_QUICKFIX_VALID,
         },
         CommandDefinition {
-            cmd_name: b"left\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"left\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20930,14 +20431,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"let\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"let\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20947,8 +20449,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lexpr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20958,8 +20459,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -20969,8 +20469,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lfdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lfdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21024,8 +20523,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21051,7 +20549,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_helpgrep as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_helpgrep as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21068,8 +20568,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"ll\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ll\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21079,8 +20578,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_QUICKFIX,
         },
         CommandDefinition {
-            cmd_name: b"llast\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"llast\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21090,8 +20588,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"llist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"llist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21101,8 +20598,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21117,14 +20613,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lmake\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lmake\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21145,8 +20642,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lnext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lnext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21183,7 +20679,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_loadview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_loadview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 284 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21194,7 +20692,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_loadkeymap as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_loadkeymap as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301504 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21205,7 +20705,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21233,8 +20735,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"lopen\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lopen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21277,8 +20778,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_UNSIGNED,
         },
         CommandDefinition {
-            cmd_name: b"ltag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ltag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21299,8 +20799,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lua\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lua\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21310,8 +20809,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"luado\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"luado\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21365,19 +20863,19 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"ls\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ls\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(buflist_list as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                buflist_list as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301766 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"lsp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"lsp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21387,19 +20885,19 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"move\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"move\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_copymove as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_copymove as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 18350405 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"mark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"mark\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21409,8 +20907,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"make\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"make\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21420,8 +20917,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"map\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"map\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21436,14 +20932,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301766 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"marks\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"marks\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21453,8 +20950,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"match\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"match\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21464,8 +20960,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"menu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"menu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21480,7 +20975,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_menutranslate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_menutranslate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21491,7 +20988,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_messages as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_messages as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301765 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -21552,8 +21051,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21568,7 +21066,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563813 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -21585,8 +21085,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"next\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"next\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21596,19 +21095,19 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"new\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"new\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 147743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"nmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"nmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21623,14 +21122,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"nmenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"nmenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21678,7 +21178,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21689,7 +21191,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_nohlsearch as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_nohlsearch as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563904 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21700,7 +21204,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21722,7 +21228,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21777,14 +21285,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_oldfiles as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_oldfiles as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563906 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"omap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"omap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21799,14 +21308,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"omenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"omenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21816,8 +21326,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"only\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"only\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21887,14 +21396,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_ownsyntax as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_ownsyntax as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17565700 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"print\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"print\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21920,7 +21430,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_packloadall as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_packloadall as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17563906 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -21948,8 +21460,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"perl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21975,14 +21486,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_perlfile as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_perlfile as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301661 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"pedit\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"pedit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -21992,8 +21504,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"pop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"pop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22003,8 +21514,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"popup\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"popup\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22014,8 +21524,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"ppop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ppop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22030,7 +21539,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_preserve as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_preserve as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22041,7 +21552,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_previous as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_previous as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 148743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22063,7 +21576,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_breakdel as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_breakdel as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22080,8 +21595,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"ptag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ptag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22179,8 +21693,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"put\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"put\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22190,8 +21703,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"pwd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"pwd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22212,8 +21724,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"pydo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"pydo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22234,8 +21745,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"py3\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"py3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22245,8 +21755,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"py3do\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"py3do\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22278,8 +21787,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"pyx\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"pyx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22289,8 +21797,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"pyxdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"pyxdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22322,8 +21829,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"quit\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"quit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22344,8 +21850,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"qall\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"qall\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22355,8 +21860,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"read\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"read\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22377,8 +21881,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"redo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"redo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22388,8 +21891,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"redir\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"redir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22415,7 +21917,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_redrawstatus as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_redrawstatus as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301762 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22426,7 +21930,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_redrawtabline as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_redrawtabline as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22465,8 +21971,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"retab\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"retab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22498,8 +22003,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"right\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"right\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22514,7 +22018,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22542,8 +22048,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"rundo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"rundo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22553,8 +22058,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"ruby\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22580,7 +22084,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_rubyfile as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_rubyfile as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301661 as uint32_t,
             cmd_addr_type: ADDR_LINES,
@@ -22602,7 +22108,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_substitute as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_substitute as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: Some(
                 ex_substitute_preview
                     as unsafe extern "C" fn(
@@ -22615,12 +22123,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"sNext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sNext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_previous as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_previous as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 148743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22631,14 +22140,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_argument as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_argument as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 148743 as uint32_t,
             cmd_addr_type: ADDR_ARGUMENTS,
         },
         CommandDefinition {
-            cmd_name: b"sall\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sall\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22653,7 +22163,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22686,18 +22198,21 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17665 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"sball\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sball\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17665 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22730,7 +22245,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_bmodified as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_bmodified as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17665 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22752,7 +22269,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_bprevious as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17665 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22774,7 +22293,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_scriptnames as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_scriptnames as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17302799 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22785,14 +22306,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_scriptencoding as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_scriptencoding as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301780 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"set\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"set\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22807,7 +22329,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_setfiletype as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_setfiletype as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301892 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -22835,12 +22359,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"sfind\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sfind\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 147871 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -22868,8 +22393,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"sign\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sign\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22884,14 +22408,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17565830 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"sleep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sleep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22901,8 +22426,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"slast\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"slast\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22917,7 +22441,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_submagic as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_submagic as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: Some(
                 ex_submagic_preview
                     as unsafe extern "C" fn(
@@ -22930,8 +22456,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"smap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"smap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22946,14 +22471,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"smenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"smenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22963,8 +22489,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"snext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"snext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -22979,7 +22504,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_submagic as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_submagic as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: Some(
                 ex_submagic_preview
                     as unsafe extern "C" fn(
@@ -23025,8 +22552,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"sort\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sort\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23036,12 +22562,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"split\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"split\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 147743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -23063,7 +22590,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_spelldump as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_spelldump as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 258 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23074,7 +22603,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_spellinfo as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_spellinfo as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23085,7 +22616,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_spellrepall as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_spellrepall as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23129,7 +22662,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_previous as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_previous as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 148743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -23146,8 +22681,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"stop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"stop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23157,8 +22691,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"stag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"stag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23173,7 +22706,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_startinsert as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_startinsert as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301762 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23184,7 +22719,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_startinsert as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_startinsert as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301762 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23195,7 +22732,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_startinsert as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_startinsert as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301762 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23206,7 +22745,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_stopinsert as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_stopinsert as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301762 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23239,7 +22780,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 1281 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -23278,12 +22821,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"sview\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"sview\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 147743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -23294,7 +22838,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_swapname as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_swapname as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23327,25 +22873,27 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_syncbind as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_syncbind as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 256 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"t\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"t\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_copymove as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_copymove as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 18350405 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"tcd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tcd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23366,8 +22914,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tNext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tNext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23377,8 +22924,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"tag\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tag\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23388,8 +22934,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"tags\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tags\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23399,12 +22944,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tab\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tab\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 6277 as uint32_t,
             cmd_addr_type: ADDR_TABS,
@@ -23415,14 +22961,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_tabclose as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_tabclose as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17305879 as uint32_t,
             cmd_addr_type: ADDR_TABS,
         },
         CommandDefinition {
-            cmd_name: b"tabdo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tabdo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23437,7 +22984,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 151839 as uint32_t,
             cmd_addr_type: ADDR_TABS,
@@ -23448,7 +22997,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 151967 as uint32_t,
             cmd_addr_type: ADDR_TABS,
@@ -23503,7 +23054,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 151839 as uint32_t,
             cmd_addr_type: ADDR_TABS,
@@ -23553,8 +23106,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tabs\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tabs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23564,19 +23116,19 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tcl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tcl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_script_ni as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301637 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"tcldo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tcldo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23602,7 +23154,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_terminal as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_terminal as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301518 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23619,8 +23173,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"throw\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"throw\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23630,8 +23183,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tjump\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tjump\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23641,8 +23193,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tlast\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tlast\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23685,8 +23236,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tmenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tmenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23696,8 +23246,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"tmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23712,14 +23261,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"tnext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"tnext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23745,7 +23295,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23773,8 +23325,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"trust\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"trust\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23784,8 +23335,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"try\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"try\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23828,8 +23378,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"undo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"undo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23844,7 +23393,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_undojoin as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_undojoin as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23855,7 +23406,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_undolist as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_undolist as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301760 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23866,7 +23419,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_abbreviate as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17312004 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23877,14 +23432,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_buffer_all as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 1281 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"uniq\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"uniq\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23894,8 +23450,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"unlet\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"unlet\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23916,8 +23471,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"unmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"unmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -23943,7 +23497,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17565828 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -23987,7 +23543,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17565829 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -23998,7 +23556,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_wrongmodifier as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 2180 as uint32_t,
             cmd_addr_type: ADDR_NONE,
@@ -24015,8 +23575,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"view\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"view\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24059,8 +23618,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"vmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"vmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24075,14 +23633,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"vmenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"vmenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24103,12 +23662,13 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"vnew\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"vnew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 147743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -24130,7 +23690,9 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_splitview as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 147743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,
@@ -24158,8 +23720,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"write\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"write\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24169,8 +23730,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"wNext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"wNext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24180,8 +23740,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"wall\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"wall\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24191,8 +23750,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"while\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"while\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24224,8 +23782,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"windo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"windo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24246,8 +23803,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"wnext\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"wnext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24268,8 +23824,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_OTHER,
         },
         CommandDefinition {
-            cmd_name: b"wq\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"wq\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24279,8 +23834,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"wqall\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"wqall\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24301,8 +23855,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"wundo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"wundo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24323,8 +23876,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"xit\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"xit\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24334,8 +23886,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"xall\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"xall\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24345,8 +23896,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"xmap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"xmap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24361,14 +23911,15 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_mapclear as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17301764 as uint32_t,
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"xmenu\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"xmenu\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24422,19 +23973,19 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_NONE,
         },
         CommandDefinition {
-            cmd_name: b"yank\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"yank\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_operators as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_operators as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 17303361 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"z\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"z\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24444,8 +23995,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"!\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"!\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24455,8 +24005,7 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"#\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"#\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24466,30 +24015,31 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"&\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"&\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_substitute as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_substitute as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 18350149 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"<\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"<\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_operators as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_operators as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 20448577 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"=\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24499,19 +24049,19 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b">\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b">\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_operators as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_operators as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 20448577 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"@\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"@\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
@@ -24521,23 +24071,25 @@ static mut cmdnames: [CommandDefinition; 557] = unsafe {
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"~\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"~\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_substitute as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_substitute as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 18350149 as uint32_t,
             cmd_addr_type: ADDR_LINES,
         },
         CommandDefinition {
-            cmd_name: b"Next\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            cmd_name: b"Next\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             cmd_func: ::core::mem::transmute::<
                 Option<unsafe extern "C" fn(*mut exarg_T) -> ()>,
                 ex_func_T,
-            >(Some(ex_previous as unsafe extern "C" fn(*mut exarg_T) -> ())),
+            >(Some(
+                ex_previous as unsafe extern "C" fn(*mut exarg_T) -> (),
+            )),
             cmd_preview_func: None,
             cmd_argt: 148743 as uint32_t,
             cmd_addr_type: ADDR_OTHER,

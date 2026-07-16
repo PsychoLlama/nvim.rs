@@ -172,9 +172,8 @@ pub struct uv__io_s {
     pub events: ::core::ffi::c_uint,
     pub fd: ::core::ffi::c_int,
 }
-pub type uv__io_cb = Option<
-    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
->;
+pub type uv__io_cb =
+    Option<unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> ()>;
 pub type uv_signal_t = uv_signal_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -201,9 +200,7 @@ pub struct C2Rust_Unnamed {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-pub type uv_signal_cb = Option<
-    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
 pub type uv_handle_t = uv_handle_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -334,9 +331,8 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-pub type uv_connection_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_connection_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
 pub type uv_stream_t = uv_stream_s;
 pub type uv_shutdown_t = uv_shutdown_s;
 #[derive(Copy, Clone)]
@@ -348,9 +344,8 @@ pub struct uv_shutdown_s {
     pub handle: *mut uv_stream_t,
     pub cb: uv_shutdown_cb,
 }
-pub type uv_shutdown_cb = Option<
-    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_shutdown_cb =
+    Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
 pub type uv_connect_t = uv_connect_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -362,15 +357,10 @@ pub struct uv_connect_s {
     pub handle: *mut uv_stream_t,
     pub queue: uv__queue,
 }
-pub type uv_connect_cb = Option<
-    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
->;
-pub type uv_read_cb = Option<
-    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
->;
-pub type uv_alloc_cb = Option<
-    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
->;
+pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
+pub type uv_read_cb =
+    Option<unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> ()>;
+pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_5 {
@@ -510,9 +500,8 @@ pub struct uv_process_s {
     pub queue: uv__queue,
     pub status: ::core::ffi::c_int,
 }
-pub type uv_exit_cb = Option<
-    unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> (),
->;
+pub type uv_exit_cb =
+    Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_process_t = uv_process_s;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -632,9 +621,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -2248,12 +2236,10 @@ pub struct proc {
 }
 pub type MultiQueue = multiqueue;
 pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
-pub type proc_state_cb = Option<
-    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
->;
-pub type proc_exit_cb = Option<
-    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
->;
+pub type proc_state_cb =
+    Option<unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;
+pub type proc_exit_cb =
+    Option<unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type RStream = rstream;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -2300,12 +2286,10 @@ pub struct stream {
     pub curmem: size_t,
     pub maxmem: size_t,
 }
-pub type stream_write_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
->;
-pub type stream_close_cb = Option<
-    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
->;
+pub type stream_write_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
+pub type stream_close_cb =
+    Option<unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2Rust_Unnamed_28 {
@@ -2499,9 +2483,7 @@ pub struct winsize {
     pub ws_xpixel: ::core::ffi::c_ushort,
     pub ws_ypixel: ::core::ffi::c_ushort,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
@@ -2522,11 +2504,9 @@ pub unsafe extern "C" fn f_rpcstart(
     }
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-            as ::core::ffi::c_uint
+        || (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
             != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type
-                as ::core::ffi::c_uint
+            && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
                 != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
@@ -2537,7 +2517,9 @@ pub unsafe extern "C" fn f_rpcstart(
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        args = (*argvars.offset(1 as ::core::ffi::c_int as isize)).vval.v_list;
+        args = (*argvars.offset(1 as ::core::ffi::c_int as isize))
+            .vval
+            .v_list;
         argsl = tv_list_len(args);
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let l_: *const list_T = args;
@@ -2549,8 +2531,8 @@ pub unsafe extern "C" fn f_rpcstart(
                 {
                     semsg(
                         gettext(
-                            b"E5010: List item %d of the second argument is not a string\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"E5010: List item %d of the second argument is not a string\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         i,
                     );
@@ -2561,21 +2543,29 @@ pub unsafe extern "C" fn f_rpcstart(
             }
         }
     }
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_string.is_null()
+    if (*argvars.offset(0 as ::core::ffi::c_int as isize))
+        .vval
+        .v_string
+        .is_null()
         || *(*argvars.offset(0 as ::core::ffi::c_int as isize))
             .vval
             .v_string
-            .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+            .offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+            == NUL
     {
-        emsg(gettext(&raw const e_api_spawn_failed as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_api_spawn_failed as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut argvl: ::core::ffi::c_int = argsl + 2 as ::core::ffi::c_int;
-    let mut argv: *mut *mut ::core::ffi::c_char = xmalloc(
-        ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(argvl as size_t),
-    ) as *mut *mut ::core::ffi::c_char;
+    let mut argv: *mut *mut ::core::ffi::c_char =
+        xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(argvl as size_t))
+            as *mut *mut ::core::ffi::c_char;
     *argv.offset(0 as ::core::ffi::c_int as isize) = xstrdup(
-        (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_string,
+        (*argvars.offset(0 as ::core::ffi::c_int as isize))
+            .vval
+            .v_string,
     );
     let mut i_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     if argsl > 0 as ::core::ffi::c_int {
@@ -2667,12 +2657,11 @@ pub unsafe extern "C" fn f_rpcstop(
     if !find_job(id, false_0 != 0).is_null() {
         f_jobstop(argvars, rettv, fptr);
     } else {
-        let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<
-            ::core::ffi::c_char,
-        >();
+        let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         (*rettv).vval.v_number = channel_close(
-            (*argvars.offset(0 as ::core::ffi::c_int as isize)).vval.v_number
-                as uint64_t,
+            (*argvars.offset(0 as ::core::ffi::c_int as isize))
+                .vval
+                .v_number as uint64_t,
             kChannelPartRpc,
             &raw mut error,
         ) as varnumber_T;
@@ -2712,7 +2701,9 @@ pub unsafe extern "C" fn f_termopen(
     {
         must_free = true_0 != 0;
         (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type = VAR_DICT;
-        (*argvars.offset(1 as ::core::ffi::c_int as isize)).vval.v_dict = tv_dict_alloc();
+        (*argvars.offset(1 as ::core::ffi::c_int as isize))
+            .vval
+            .v_dict = tv_dict_alloc();
     }
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -2724,14 +2715,20 @@ pub unsafe extern "C" fn f_termopen(
         return;
     }
     tv_dict_add_bool(
-        (*argvars.offset(1 as ::core::ffi::c_int as isize)).vval.v_dict,
+        (*argvars.offset(1 as ::core::ffi::c_int as isize))
+            .vval
+            .v_dict,
         b"term\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         kBoolVarTrue,
     );
     f_jobstart(argvars, rettv, fptr);
     if must_free {
-        tv_dict_free((*argvars.offset(1 as ::core::ffi::c_int as isize)).vval.v_dict);
+        tv_dict_free(
+            (*argvars.offset(1 as ::core::ffi::c_int as isize))
+                .vval
+                .v_dict,
+        );
     }
 }
 #[inline]

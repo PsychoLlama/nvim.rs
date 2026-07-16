@@ -265,9 +265,7 @@ pub struct Map_uint64_t_MTDamagePair {
     pub set: Set_uint64_t,
     pub values: *mut MTDamagePair,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const MTDAMAGE_INIT: MTDamage = MTDamage {
     old: ::core::ptr::null_mut::<MTNode>(),
@@ -394,13 +392,11 @@ pub unsafe extern "C" fn mh_realloc(mut h: *mut MapHash, mut n_min_buckets: uint
     n_buckets |= n_buckets >> 8 as ::core::ffi::c_int;
     n_buckets |= n_buckets >> 16 as ::core::ffi::c_int;
     n_buckets = n_buckets.wrapping_add(1);
-    (*h).hash = xcalloc(n_buckets as size_t, ::core::mem::size_of::<uint32_t>())
-        as *mut uint32_t;
+    (*h).hash = xcalloc(n_buckets as size_t, ::core::mem::size_of::<uint32_t>()) as *mut uint32_t;
     (*h).size = 0 as uint32_t;
     (*h).n_occupied = (*h).size;
     (*h).n_buckets = n_buckets;
-    (*h).upper_bound = ((*h).n_buckets as ::core::ffi::c_double * UPPER_FILL + 0.5f64)
-        as uint32_t;
+    (*h).upper_bound = ((*h).n_buckets as ::core::ffi::c_double * UPPER_FILL + 0.5f64) as uint32_t;
 }
 #[no_mangle]
 pub unsafe extern "C" fn mh_clear(mut h: *mut MapHash) {
@@ -452,7 +448,7 @@ pub unsafe extern "C" fn mh_find_bucket_int(
             .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize)
             == key
         {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -484,11 +480,8 @@ pub unsafe extern "C" fn mh_get_int(
 pub unsafe extern "C" fn mh_rehash_int(mut set: *mut Set_int) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_int(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_int(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -506,16 +499,14 @@ pub unsafe extern "C" fn mh_put_int(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -532,9 +523,7 @@ pub unsafe extern "C" fn mh_put_int(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh0;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
@@ -553,8 +542,7 @@ pub unsafe extern "C" fn mh_put_int(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !(*(*set).keys.offset(pos_0 as isize) == key) {
             abort();
         }
@@ -571,19 +559,15 @@ pub unsafe extern "C" fn mh_delete_int(
     }
     let mut idx: uint32_t = mh_find_bucket_int(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_int(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_int(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -619,12 +603,11 @@ pub unsafe extern "C" fn mh_find_bucket_cstr_t(
         } else if strequal(
             *(*set)
                 .keys
-                .offset(
-                    (*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize,
-                ) as *const ::core::ffi::c_char,
+                .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize)
+                as *const ::core::ffi::c_char,
             key as *const ::core::ffi::c_char,
         ) {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -638,10 +621,7 @@ pub unsafe extern "C" fn mh_find_bucket_cstr_t(
     return site;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_get_cstr_t(
-    mut set: *mut Set_cstr_t,
-    mut key: cstr_t,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_get_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
@@ -656,11 +636,8 @@ pub unsafe extern "C" fn mh_get_cstr_t(
 pub unsafe extern "C" fn mh_rehash_cstr_t(mut set: *mut Set_cstr_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_cstr_t(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_cstr_t(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -678,16 +655,14 @@ pub unsafe extern "C" fn mh_put_cstr_t(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -704,17 +679,14 @@ pub unsafe extern "C" fn mh_put_cstr_t(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh1;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<cstr_t>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<cstr_t>()),
             ) as *mut cstr_t;
             *new = kMHNewKeyRealloc;
         } else {
@@ -725,8 +697,7 @@ pub unsafe extern "C" fn mh_put_cstr_t(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !strequal(
             *(*set).keys.offset(pos_0 as isize) as *const ::core::ffi::c_char,
             key as *const ::core::ffi::c_char,
@@ -746,19 +717,15 @@ pub unsafe extern "C" fn mh_delete_cstr_t(
     }
     let mut idx: uint32_t = mh_find_bucket_cstr_t(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_cstr_t(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_cstr_t(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -780,7 +747,8 @@ pub unsafe extern "C" fn mh_find_bucket_ptr_t(
     let mut mask: uint32_t = (*h).n_buckets.wrapping_sub(1 as uint32_t);
     let mut k: uint32_t = (key.expose_addr() as uint64_t >> 33 as ::core::ffi::c_int
         ^ key.expose_addr() as uint64_t
-        ^ (key.expose_addr() as uint64_t) << 11 as ::core::ffi::c_int) as uint32_t;
+        ^ (key.expose_addr() as uint64_t) << 11 as ::core::ffi::c_int)
+        as uint32_t;
     let mut i: uint32_t = k & mask;
     let mut last: uint32_t = i;
     let mut site: uint32_t = if put as ::core::ffi::c_int != 0 {
@@ -795,12 +763,11 @@ pub unsafe extern "C" fn mh_find_bucket_ptr_t(
             }
         } else if (*(*set)
             .keys
-            .offset(
-                (*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize,
-            ))
-            .expose_addr() as uint64_t == key.expose_addr() as uint64_t
+            .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize))
+        .expose_addr() as uint64_t
+            == key.expose_addr() as uint64_t
         {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -814,10 +781,7 @@ pub unsafe extern "C" fn mh_find_bucket_ptr_t(
     return site;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_get_ptr_t(
-    mut set: *mut Set_ptr_t,
-    mut key: ptr_t,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_get_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
@@ -832,11 +796,8 @@ pub unsafe extern "C" fn mh_get_ptr_t(
 pub unsafe extern "C" fn mh_rehash_ptr_t(mut set: *mut Set_ptr_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_ptr_t(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_ptr_t(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -854,16 +815,14 @@ pub unsafe extern "C" fn mh_put_ptr_t(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -880,17 +839,14 @@ pub unsafe extern "C" fn mh_put_ptr_t(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh2;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<ptr_t>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<ptr_t>()),
             ) as *mut ptr_t;
             *new = kMHNewKeyRealloc;
         } else {
@@ -901,8 +857,7 @@ pub unsafe extern "C" fn mh_put_ptr_t(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !((*(*set).keys.offset(pos_0 as isize)).expose_addr() as uint64_t
             == key.expose_addr() as uint64_t)
         {
@@ -912,28 +867,21 @@ pub unsafe extern "C" fn mh_put_ptr_t(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_delete_ptr_t(
-    mut set: *mut Set_ptr_t,
-    mut key: *mut ptr_t,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_delete_ptr_t(mut set: *mut Set_ptr_t, mut key: *mut ptr_t) -> uint32_t {
     if (*set).h.size == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
     let mut idx: uint32_t = mh_find_bucket_ptr_t(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_ptr_t(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_ptr_t(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -953,8 +901,8 @@ pub unsafe extern "C" fn mh_find_bucket_uint64_t(
     let mut h: *mut MapHash = &raw mut (*set).h;
     let mut step: uint32_t = 0 as uint32_t;
     let mut mask: uint32_t = (*h).n_buckets.wrapping_sub(1 as uint32_t);
-    let mut k: uint32_t = (key >> 33 as ::core::ffi::c_int ^ key
-        ^ key << 11 as ::core::ffi::c_int) as uint32_t;
+    let mut k: uint32_t =
+        (key >> 33 as ::core::ffi::c_int ^ key ^ key << 11 as ::core::ffi::c_int) as uint32_t;
     let mut i: uint32_t = k & mask;
     let mut last: uint32_t = i;
     let mut site: uint32_t = if put as ::core::ffi::c_int != 0 {
@@ -972,7 +920,7 @@ pub unsafe extern "C" fn mh_find_bucket_uint64_t(
             .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize)
             == key
         {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -1004,11 +952,8 @@ pub unsafe extern "C" fn mh_get_uint64_t(
 pub unsafe extern "C" fn mh_rehash_uint64_t(mut set: *mut Set_uint64_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_uint64_t(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_uint64_t(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -1026,16 +971,14 @@ pub unsafe extern "C" fn mh_put_uint64_t(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -1052,17 +995,14 @@ pub unsafe extern "C" fn mh_put_uint64_t(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh3;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<uint64_t>()),
             ) as *mut uint64_t;
             *new = kMHNewKeyRealloc;
         } else {
@@ -1073,8 +1013,7 @@ pub unsafe extern "C" fn mh_put_uint64_t(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !(*(*set).keys.offset(pos_0 as isize) == key) {
             abort();
         }
@@ -1091,19 +1030,15 @@ pub unsafe extern "C" fn mh_delete_uint64_t(
     }
     let mut idx: uint32_t = mh_find_bucket_uint64_t(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_uint64_t(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_uint64_t(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -1123,7 +1058,8 @@ pub unsafe extern "C" fn mh_find_bucket_int64_t(
     let mut h: *mut MapHash = &raw mut (*set).h;
     let mut step: uint32_t = 0 as uint32_t;
     let mut mask: uint32_t = (*h).n_buckets.wrapping_sub(1 as uint32_t);
-    let mut k: uint32_t = (key as uint64_t >> 33 as ::core::ffi::c_int ^ key as uint64_t
+    let mut k: uint32_t = (key as uint64_t >> 33 as ::core::ffi::c_int
+        ^ key as uint64_t
         ^ (key as uint64_t) << 11 as ::core::ffi::c_int) as uint32_t;
     let mut i: uint32_t = k & mask;
     let mut last: uint32_t = i;
@@ -1142,7 +1078,7 @@ pub unsafe extern "C" fn mh_find_bucket_int64_t(
             .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize)
             == key
         {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -1156,10 +1092,7 @@ pub unsafe extern "C" fn mh_find_bucket_int64_t(
     return site;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_get_int64_t(
-    mut set: *mut Set_int64_t,
-    mut key: int64_t,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_get_int64_t(mut set: *mut Set_int64_t, mut key: int64_t) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
@@ -1174,11 +1107,8 @@ pub unsafe extern "C" fn mh_get_int64_t(
 pub unsafe extern "C" fn mh_rehash_int64_t(mut set: *mut Set_int64_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_int64_t(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_int64_t(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -1196,16 +1126,14 @@ pub unsafe extern "C" fn mh_put_int64_t(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -1222,17 +1150,14 @@ pub unsafe extern "C" fn mh_put_int64_t(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh4;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<int64_t>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<int64_t>()),
             ) as *mut int64_t;
             *new = kMHNewKeyRealloc;
         } else {
@@ -1243,8 +1168,7 @@ pub unsafe extern "C" fn mh_put_int64_t(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !(*(*set).keys.offset(pos_0 as isize) == key) {
             abort();
         }
@@ -1261,19 +1185,15 @@ pub unsafe extern "C" fn mh_delete_int64_t(
     }
     let mut idx: uint32_t = mh_find_bucket_int64_t(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_int64_t(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_int64_t(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -1311,7 +1231,7 @@ pub unsafe extern "C" fn mh_find_bucket_uint32_t(
             .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize)
             == key
         {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -1343,11 +1263,8 @@ pub unsafe extern "C" fn mh_get_uint32_t(
 pub unsafe extern "C" fn mh_rehash_uint32_t(mut set: *mut Set_uint32_t) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_uint32_t(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_uint32_t(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -1365,16 +1282,14 @@ pub unsafe extern "C" fn mh_put_uint32_t(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -1391,17 +1306,14 @@ pub unsafe extern "C" fn mh_put_uint32_t(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh5;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             ) as *mut uint32_t;
             *new = kMHNewKeyRealloc;
         } else {
@@ -1412,8 +1324,7 @@ pub unsafe extern "C" fn mh_put_uint32_t(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !(*(*set).keys.offset(pos_0 as isize) == key) {
             abort();
         }
@@ -1430,19 +1341,15 @@ pub unsafe extern "C" fn mh_delete_uint32_t(
     }
     let mut idx: uint32_t = mh_find_bucket_uint32_t(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_uint32_t(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_uint32_t(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -1478,12 +1385,10 @@ pub unsafe extern "C" fn mh_find_bucket_String(
         } else if equal_String(
             *(*set)
                 .keys
-                .offset(
-                    (*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize,
-                ),
+                .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize),
             key,
         ) {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -1497,10 +1402,7 @@ pub unsafe extern "C" fn mh_find_bucket_String(
     return site;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_get_String(
-    mut set: *mut Set_String,
-    mut key: String_0,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_get_String(mut set: *mut Set_String, mut key: String_0) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
@@ -1515,11 +1417,8 @@ pub unsafe extern "C" fn mh_get_String(
 pub unsafe extern "C" fn mh_rehash_String(mut set: *mut Set_String) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_String(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_String(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -1537,16 +1436,14 @@ pub unsafe extern "C" fn mh_put_String(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -1563,17 +1460,14 @@ pub unsafe extern "C" fn mh_put_String(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh6;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<String_0>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<String_0>()),
             ) as *mut String_0;
             *new = kMHNewKeyRealloc;
         } else {
@@ -1584,8 +1478,7 @@ pub unsafe extern "C" fn mh_put_String(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !equal_String(*(*set).keys.offset(pos_0 as isize), key) {
             abort();
         }
@@ -1602,19 +1495,15 @@ pub unsafe extern "C" fn mh_delete_String(
     }
     let mut idx: uint32_t = mh_find_bucket_String(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_String(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_String(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -1650,12 +1539,10 @@ pub unsafe extern "C" fn mh_find_bucket_HlEntry(
         } else if equal_HlEntry(
             *(*set)
                 .keys
-                .offset(
-                    (*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize,
-                ),
+                .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize),
             key,
         ) {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -1669,10 +1556,7 @@ pub unsafe extern "C" fn mh_find_bucket_HlEntry(
     return site;
 }
 #[no_mangle]
-pub unsafe extern "C" fn mh_get_HlEntry(
-    mut set: *mut Set_HlEntry,
-    mut key: HlEntry,
-) -> uint32_t {
+pub unsafe extern "C" fn mh_get_HlEntry(mut set: *mut Set_HlEntry, mut key: HlEntry) -> uint32_t {
     if (*set).h.n_buckets == 0 as uint32_t {
         return MH_TOMBSTONE as uint32_t;
     }
@@ -1687,11 +1571,8 @@ pub unsafe extern "C" fn mh_get_HlEntry(
 pub unsafe extern "C" fn mh_rehash_HlEntry(mut set: *mut Set_HlEntry) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_HlEntry(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_HlEntry(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -1709,16 +1590,14 @@ pub unsafe extern "C" fn mh_put_HlEntry(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -1735,17 +1614,14 @@ pub unsafe extern "C" fn mh_put_HlEntry(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh7;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<HlEntry>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<HlEntry>()),
             ) as *mut HlEntry;
             *new = kMHNewKeyRealloc;
         } else {
@@ -1756,8 +1632,7 @@ pub unsafe extern "C" fn mh_put_HlEntry(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !equal_HlEntry(*(*set).keys.offset(pos_0 as isize), key) {
             abort();
         }
@@ -1774,19 +1649,15 @@ pub unsafe extern "C" fn mh_delete_HlEntry(
     }
     let mut idx: uint32_t = mh_find_bucket_HlEntry(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_HlEntry(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_HlEntry(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -1822,12 +1693,10 @@ pub unsafe extern "C" fn mh_find_bucket_ColorKey(
         } else if equal_ColorKey(
             *(*set)
                 .keys
-                .offset(
-                    (*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize,
-                ),
+                .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize),
             key,
         ) {
-            return i
+            return i;
         }
         step = step.wrapping_add(1);
         i = i.wrapping_add(step) & mask;
@@ -1859,11 +1728,8 @@ pub unsafe extern "C" fn mh_get_ColorKey(
 pub unsafe extern "C" fn mh_rehash_ColorKey(mut set: *mut Set_ColorKey) {
     let mut k: uint32_t = 0 as uint32_t;
     while k < (*set).h.n_keys {
-        let mut idx: uint32_t = mh_find_bucket_ColorKey(
-            set,
-            *(*set).keys.offset(k as isize),
-            true_0 != 0,
-        );
+        let mut idx: uint32_t =
+            mh_find_bucket_ColorKey(set, *(*set).keys.offset(k as isize), true_0 != 0);
         if !(*(*set).h.hash.offset(idx as isize) == 0 as uint32_t) {
             abort();
         }
@@ -1881,16 +1747,14 @@ pub unsafe extern "C" fn mh_put_ColorKey(
 ) -> uint32_t {
     let mut h: *mut MapHash = &raw mut (*set).h;
     if (*h).n_occupied >= (*h).upper_bound {
-        if (*h).size as ::core::ffi::c_double
-            >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
+        if (*h).size as ::core::ffi::c_double >= (*h).upper_bound as ::core::ffi::c_double * 0.9f64
         {
             mh_realloc(h, (*h).n_buckets.wrapping_add(1 as uint32_t));
         } else {
             memset(
                 (*h).hash as *mut ::core::ffi::c_void,
                 0 as ::core::ffi::c_int,
-                ((*h).n_buckets as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint32_t>()),
+                ((*h).n_buckets as size_t).wrapping_mul(::core::mem::size_of::<uint32_t>()),
             );
             (*h).n_occupied = 0 as uint32_t;
             (*h).size = (*h).n_occupied;
@@ -1907,17 +1771,14 @@ pub unsafe extern "C" fn mh_put_ColorKey(
         (*h).n_keys = (*h).n_keys.wrapping_add(1);
         let mut pos: uint32_t = c2rust_fresh8;
         if pos >= (*h).keys_capacity {
-            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t)
-                > 8 as uint32_t
-            {
+            (*h).keys_capacity = if (*h).keys_capacity.wrapping_mul(2 as uint32_t) > 8 as uint32_t {
                 (*h).keys_capacity.wrapping_mul(2 as uint32_t)
             } else {
                 8 as uint32_t
             };
             (*set).keys = xrealloc(
                 (*set).keys as *mut ::core::ffi::c_void,
-                ((*h).keys_capacity as size_t)
-                    .wrapping_mul(::core::mem::size_of::<ColorKey>()),
+                ((*h).keys_capacity as size_t).wrapping_mul(::core::mem::size_of::<ColorKey>()),
             ) as *mut ColorKey;
             *new = kMHNewKeyRealloc;
         } else {
@@ -1928,8 +1789,7 @@ pub unsafe extern "C" fn mh_put_ColorKey(
         return pos;
     } else {
         *new = kMHExisting;
-        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         if !equal_ColorKey(*(*set).keys.offset(pos_0 as isize), key) {
             abort();
         }
@@ -1946,19 +1806,15 @@ pub unsafe extern "C" fn mh_delete_ColorKey(
     }
     let mut idx: uint32_t = mh_find_bucket_ColorKey(set, *key, false_0 != 0);
     if idx != MH_TOMBSTONE as uint32_t {
-        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize))
-            .wrapping_sub(1 as uint32_t);
+        let mut k: uint32_t = (*(*set).h.hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
         *(*set).h.hash.offset(idx as isize) = MH_TOMBSTONE as uint32_t;
         (*set).h.n_keys = (*set).h.n_keys.wrapping_sub(1);
         let mut last: uint32_t = (*set).h.n_keys;
         *key = *(*set).keys.offset(k as isize);
         (*set).h.size = (*set).h.size.wrapping_sub(1);
         if last != k {
-            let mut idx2: uint32_t = mh_find_bucket_ColorKey(
-                set,
-                *(*set).keys.offset(last as isize),
-                false_0 != 0,
-            );
+            let mut idx2: uint32_t =
+                mh_find_bucket_ColorKey(set, *(*set).keys.offset(last as isize), false_0 != 0);
             if *(*set).h.hash.offset(idx2 as isize) != last.wrapping_add(1 as uint32_t) {
                 abort();
             }
@@ -1995,9 +1851,7 @@ pub unsafe extern "C" fn map_put_ref_int_int(
 ) -> *mut ::core::ffi::c_int {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_int(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2034,9 +1888,7 @@ pub unsafe extern "C" fn map_del_int_int(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2064,9 +1916,7 @@ pub unsafe extern "C" fn map_put_ref_int_ptr_t(
 ) -> *mut ptr_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_int(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2103,9 +1953,7 @@ pub unsafe extern "C" fn map_del_int_ptr_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2133,9 +1981,7 @@ pub unsafe extern "C" fn map_put_ref_cstr_t_ptr_t(
 ) -> *mut ptr_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_cstr_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2172,9 +2018,7 @@ pub unsafe extern "C" fn map_del_cstr_t_ptr_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2202,9 +2046,7 @@ pub unsafe extern "C" fn map_put_ref_cstr_t_int(
 ) -> *mut ::core::ffi::c_int {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_cstr_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2241,9 +2083,7 @@ pub unsafe extern "C" fn map_del_cstr_t_int(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2271,9 +2111,7 @@ pub unsafe extern "C" fn map_put_ref_ptr_t_ptr_t(
 ) -> *mut ptr_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_ptr_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2310,9 +2148,7 @@ pub unsafe extern "C" fn map_del_ptr_t_ptr_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2340,9 +2176,7 @@ pub unsafe extern "C" fn map_put_ref_uint32_t_ptr_t(
 ) -> *mut ptr_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint32_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2379,9 +2213,7 @@ pub unsafe extern "C" fn map_del_uint32_t_ptr_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2409,9 +2241,7 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_ptr_t(
 ) -> *mut ptr_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2448,9 +2278,7 @@ pub unsafe extern "C" fn map_del_uint64_t_ptr_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2478,9 +2306,7 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_ssize_t(
 ) -> *mut ssize_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2517,9 +2343,7 @@ pub unsafe extern "C" fn map_del_uint64_t_ssize_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2547,9 +2371,7 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_uint64_t(
 ) -> *mut uint64_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2586,9 +2408,7 @@ pub unsafe extern "C" fn map_del_uint64_t_uint64_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2616,9 +2436,7 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_int(
 ) -> *mut ::core::ffi::c_int {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2655,9 +2473,7 @@ pub unsafe extern "C" fn map_del_uint64_t_int(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2685,9 +2501,7 @@ pub unsafe extern "C" fn map_put_ref_int64_t_int64_t(
 ) -> *mut int64_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_int64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2724,9 +2538,7 @@ pub unsafe extern "C" fn map_del_int64_t_int64_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2754,9 +2566,7 @@ pub unsafe extern "C" fn map_put_ref_int64_t_ptr_t(
 ) -> *mut ptr_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_int64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2793,9 +2603,7 @@ pub unsafe extern "C" fn map_del_int64_t_ptr_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2823,9 +2631,7 @@ pub unsafe extern "C" fn map_put_ref_uint32_t_uint32_t(
 ) -> *mut uint32_t {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint32_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2862,9 +2668,7 @@ pub unsafe extern "C" fn map_del_uint32_t_uint32_t(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2892,9 +2696,7 @@ pub unsafe extern "C" fn map_put_ref_String_int(
 ) -> *mut ::core::ffi::c_int {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_String(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -2931,9 +2733,7 @@ pub unsafe extern "C" fn map_del_String_int(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -2961,9 +2761,7 @@ pub unsafe extern "C" fn map_put_ref_int_String(
 ) -> *mut String_0 {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_int(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -3000,9 +2798,7 @@ pub unsafe extern "C" fn map_del_int_String(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -3030,9 +2826,7 @@ pub unsafe extern "C" fn map_put_ref_ColorKey_ColorItem(
 ) -> *mut ColorItem {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_ColorKey(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -3069,9 +2863,7 @@ pub unsafe extern "C" fn map_del_ColorKey_ColorItem(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }
@@ -3099,9 +2891,7 @@ pub unsafe extern "C" fn map_put_ref_uint64_t_MTDamagePair(
 ) -> *mut MTDamagePair {
     let mut status: MHPutStatus = kMHExisting;
     let mut k: uint32_t = mh_put_uint64_t(&raw mut (*map).set, key, &raw mut status);
-    if status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
         if status as ::core::ffi::c_uint
             == kMHNewKeyRealloc as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -3138,9 +2928,7 @@ pub unsafe extern "C" fn map_del_uint64_t_MTDamagePair(
     }
     rv = *(*map).values.offset(k as isize);
     if k != (*map).set.h.n_keys {
-        *(*map).values.offset(k as isize) = *(*map)
-            .values
-            .offset((*map).set.h.n_keys as isize);
+        *(*map).values.offset(k as isize) = *(*map).values.offset((*map).set.h.n_keys as isize);
     }
     return rv;
 }

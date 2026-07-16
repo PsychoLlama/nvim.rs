@@ -32,10 +32,8 @@ extern "C" {
         __c: ::core::ffi::c_int,
         __n: size_t,
     ) -> *mut ::core::ffi::c_void;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
     fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
@@ -66,18 +64,10 @@ extern "C" {
         size: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    fn utf_char2bytes(
-        c: ::core::ffi::c_int,
-        buf: *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn mb_copy_char(
-        fp: *mut *const ::core::ffi::c_char,
-        tp: *mut *mut ::core::ffi::c_char,
-    );
-    fn viml_parser_get_remaining_line(
-        pstate: *mut ParserState,
-        ret_pline: *mut ParserLine,
-    ) -> bool;
+    fn utf_char2bytes(c: ::core::ffi::c_int, buf: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
+    fn mb_copy_char(fp: *mut *const ::core::ffi::c_char, tp: *mut *mut ::core::ffi::c_char);
+    fn viml_parser_get_remaining_line(pstate: *mut ParserState, ret_pline: *mut ParserLine)
+        -> bool;
 }
 pub type size_t = usize;
 pub type int64_t = i64;
@@ -117,9 +107,8 @@ pub struct ParserLine {
     pub size: size_t,
     pub allocated: bool,
 }
-pub type ParserLineGetter = Option<
-    unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> (),
->;
+pub type ParserLineGetter =
+    Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ParserPosition {
@@ -570,12 +559,8 @@ pub struct C2Rust_Unnamed_35 {
     pub items: *mut StringShift,
     pub init_array: [StringShift; 16],
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[inline(always)]
 unsafe extern "C" fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,
@@ -583,8 +568,7 @@ unsafe extern "C" fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -637,7 +621,8 @@ unsafe extern "C" fn ascii_isident(mut c: ::core::ffi::c_int) -> bool {
         && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
         || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
             && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-        || ascii_isdigit(c) as ::core::ffi::c_int != 0 || c == '_' as ::core::ffi::c_int;
+        || ascii_isdigit(c) as ::core::ffi::c_int != 0
+        || c == '_' as ::core::ffi::c_int;
 }
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 #[inline(always)]
@@ -651,7 +636,8 @@ unsafe extern "C" fn scale_number(
         return num;
     }
     '_c2rust_label: {
-        if base != 0 {} else {
+        if base != 0 {
+        } else {
             __assert_fail(
                 b"base\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -714,18 +700,15 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
         match schar as ::core::ffi::c_int {
             40 | 41 => {
                 ret.type_0 = kExprLexParenthesis;
-                ret.data.brc.closing = schar as ::core::ffi::c_int
-                    == ')' as ::core::ffi::c_int;
+                ret.data.brc.closing = schar as ::core::ffi::c_int == ')' as ::core::ffi::c_int;
             }
             91 | 93 => {
                 ret.type_0 = kExprLexBracket;
-                ret.data.brc.closing = schar as ::core::ffi::c_int
-                    == ']' as ::core::ffi::c_int;
+                ret.data.brc.closing = schar as ::core::ffi::c_int == ']' as ::core::ffi::c_int;
             }
             123 | 125 => {
                 ret.type_0 = kExprLexFigureBrace;
-                ret.data.brc.closing = schar as ::core::ffi::c_int
-                    == '}' as ::core::ffi::c_int;
+                ret.data.brc.closing = schar as ::core::ffi::c_int == '}' as ::core::ffi::c_int;
             }
             63 => {
                 ret.type_0 = kExprLexQuestion;
@@ -751,37 +734,16 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             32 | TAB => {
                 ret.type_0 = kExprLexSpacing;
                 while ret.len < pline.size
-                    && ascii_iswhite(
-                        *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                    && ascii_iswhite(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
             }
-            Ctrl_A
-            | Ctrl_B
-            | Ctrl_C
-            | Ctrl_D
-            | Ctrl_E
-            | Ctrl_F
-            | Ctrl_G
-            | Ctrl_H
-            | Ctrl_K
-            | Ctrl_L
-            | Ctrl_M
-            | Ctrl_N
-            | Ctrl_O
-            | Ctrl_P
-            | Ctrl_Q
-            | Ctrl_R
-            | Ctrl_S
-            | Ctrl_T
-            | Ctrl_U
-            | Ctrl_V
-            | Ctrl_W
-            | Ctrl_X
-            | Ctrl_Y
-            | Ctrl_Z => {
+            Ctrl_A | Ctrl_B | Ctrl_C | Ctrl_D | Ctrl_E | Ctrl_F | Ctrl_G | Ctrl_H | Ctrl_K
+            | Ctrl_L | Ctrl_M | Ctrl_N | Ctrl_O | Ctrl_P | Ctrl_Q | Ctrl_R | Ctrl_S | Ctrl_T
+            | Ctrl_U | Ctrl_V | Ctrl_W | Ctrl_X | Ctrl_Y | Ctrl_Z => {
                 ret.type_0 = kExprLexInvalid;
                 while ret.len < pline.size
                     && (*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
@@ -804,9 +766,9 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 let mut exp_negative: bool = false_0 != 0;
                 ret.type_0 = kExprLexNumber;
                 while ret.len < pline.size
-                    && ascii_isdigit(
-                        *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                    && ascii_isdigit(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
@@ -820,7 +782,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                                 .data
                                 .offset(ret.len.wrapping_add(1 as size_t) as isize)
                                 as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int != 0
+                        ) as ::core::ffi::c_int
+                            != 0
                     {
                         ret.len = ret.len.wrapping_add(1);
                         frac_start = ret.len;
@@ -828,8 +791,9 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                         ret.data.num.is_float = true_0 != 0;
                         while ret.len < pline.size
                             && ascii_isdigit(
-                                *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                            ) as ::core::ffi::c_int != 0
+                                *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                            ) as ::core::ffi::c_int
+                                != 0
                         {
                             if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                 != '0' as ::core::ffi::c_int
@@ -839,38 +803,43 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             ret.len = ret.len.wrapping_add(1);
                         }
                         if pline.size > ret.len.wrapping_add(1 as size_t)
-                            && (*pline.data.offset(ret.len as isize)
-                                as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-                                || *pline.data.offset(ret.len as isize)
-                                    as ::core::ffi::c_int == 'E' as ::core::ffi::c_int)
+                            && (*pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                                == 'e' as ::core::ffi::c_int
+                                || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                                    == 'E' as ::core::ffi::c_int)
                             && (pline.size > ret.len.wrapping_add(2 as size_t)
                                 && (*pline
                                     .data
                                     .offset(ret.len.wrapping_add(1 as size_t) as isize)
-                                    as ::core::ffi::c_int == '+' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    == '+' as ::core::ffi::c_int
                                     || *pline
                                         .data
                                         .offset(ret.len.wrapping_add(1 as size_t) as isize)
-                                        as ::core::ffi::c_int == '-' as ::core::ffi::c_int)
+                                        as ::core::ffi::c_int
+                                        == '-' as ::core::ffi::c_int)
                                 && ascii_isdigit(
                                     *pline
                                         .data
                                         .offset(ret.len.wrapping_add(2 as size_t) as isize)
                                         as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                                ) as ::core::ffi::c_int
+                                    != 0
                                 || ascii_isdigit(
                                     *pline
                                         .data
                                         .offset(ret.len.wrapping_add(1 as size_t) as isize)
                                         as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0)
+                                ) as ::core::ffi::c_int
+                                    != 0)
                         {
                             ret.len = ret.len.wrapping_add(1);
                             if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                 == '+' as ::core::ffi::c_int
                                 || {
                                     exp_negative = *pline.data.offset(ret.len as isize)
-                                        as ::core::ffi::c_int == '-' as ::core::ffi::c_int;
+                                        as ::core::ffi::c_int
+                                        == '-' as ::core::ffi::c_int;
                                     exp_negative as ::core::ffi::c_int != 0
                                 }
                             {
@@ -880,8 +849,9 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             ret.type_0 = kExprLexNumber;
                             while ret.len < pline.size
                                 && ascii_isdigit(
-                                    *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                                    *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                                ) as ::core::ffi::c_int
+                                    != 0
                             {
                                 ret.len = ret.len.wrapping_add(1);
                             }
@@ -890,21 +860,20 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     if pline.size > ret.len
                         && (*pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                             == '.' as ::core::ffi::c_int
-                            || (*pline.data.offset(ret.len as isize)
-                                as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                                && *pline.data.offset(ret.len as isize)
-                                    as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                                || *pline.data.offset(ret.len as isize)
-                                    as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                                    && *pline.data.offset(ret.len as isize)
-                                        as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint))
+                            || (*pline.data.offset(ret.len as isize) as ::core::ffi::c_uint
+                                >= 'A' as ::core::ffi::c_uint
+                                && *pline.data.offset(ret.len as isize) as ::core::ffi::c_uint
+                                    <= 'Z' as ::core::ffi::c_uint
+                                || *pline.data.offset(ret.len as isize) as ::core::ffi::c_uint
+                                    >= 'a' as ::core::ffi::c_uint
+                                    && *pline.data.offset(ret.len as isize) as ::core::ffi::c_uint
+                                        <= 'z' as ::core::ffi::c_uint))
                     {
                         ret = non_float_ret;
                     }
                 }
                 if ret.data.num.is_float {
-                    let mut significand_part: float_T = 0 as ::core::ffi::c_int
-                        as float_T;
+                    let mut significand_part: float_T = 0 as ::core::ffi::c_int as float_T;
                     let mut exp_part: uvarnumber_T = 0 as uvarnumber_T;
                     let frac_size: size_t = frac_end.wrapping_sub(frac_start);
                     let mut i: size_t = 0 as size_t;
@@ -913,7 +882,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             significand_part = significand_part
                                 * 10 as ::core::ffi::c_int as float_T
                                 + (*pline.data.offset(i as isize) as ::core::ffi::c_int
-                                    - '0' as ::core::ffi::c_int) as float_T;
+                                    - '0' as ::core::ffi::c_int)
+                                    as float_T;
                         }
                         i = i.wrapping_add(1);
                     }
@@ -936,19 +906,14 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             as uvarnumber_T;
                     } else if exp_part < frac_size as uvarnumber_T {
                         exp_negative = true_0 != 0;
-                        exp_part = frac_size.wrapping_sub(exp_part as size_t)
-                            as uvarnumber_T;
+                        exp_part = frac_size.wrapping_sub(exp_part as size_t) as uvarnumber_T;
                     } else {
                         exp_part = (exp_part as ::core::ffi::c_ulong)
                             .wrapping_sub(frac_size as ::core::ffi::c_ulong)
                             as uvarnumber_T;
                     }
-                    ret.data.num.val.floating = scale_number(
-                        significand_part,
-                        10 as uint8_t,
-                        exp_part,
-                        exp_negative,
-                    );
+                    ret.data.num.val.floating =
+                        scale_number(significand_part, 10 as uint8_t, exp_part, exp_negative);
                 } else {
                     let mut len: ::core::ffi::c_int = 0;
                     let mut prep: ::core::ffi::c_int = 0;
@@ -1093,24 +1058,24 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             36 => {
                 ret.type_0 = kExprLexEnv;
                 while ret.len < pline.size
-                    && ascii_isident(
-                        *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                    && ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
             }
-            97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105 | 106 | 107 | 108 | 109
-            | 110 | 111 | 112 | 113 | 114 | 115 | 116 | 117 | 118 | 119 | 120 | 121 | 122
-            | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79
-            | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 95 => {
+            97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105 | 106 | 107 | 108 | 109 | 110
+            | 111 | 112 | 113 | 114 | 115 | 116 | 117 | 118 | 119 | 120 | 121 | 122 | 65 | 66
+            | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82
+            | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 95 => {
                 ret.data.var.scope = kExprVarScopeMissing;
                 ret.data.var.autoload = false_0 != 0;
                 ret.type_0 = kExprLexPlainIdentifier;
                 while ret.len < pline.size
-                    && ascii_isident(
-                        *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                    ) as ::core::ffi::c_int != 0
+                    && ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
+                        as ::core::ffi::c_int
+                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
@@ -1135,46 +1100,38 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.data.cmp.inv = ret.len == 5 as size_t;
                     if ret.len < pline.size
                         && !strchr(
-                                b"?#\0".as_ptr() as *const ::core::ffi::c_char,
-                                *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                            )
-                            .is_null()
+                            b"?#\0".as_ptr() as *const ::core::ffi::c_char,
+                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
+                        )
+                        .is_null()
                     {
-                        ret.data.cmp.ccs = *pline.data.offset(ret.len as isize)
-                            as ExprCaseCompareStrategy;
+                        ret.data.cmp.ccs =
+                            *pline.data.offset(ret.len as isize) as ExprCaseCompareStrategy;
                         ret.len = ret.len.wrapping_add(1);
                     } else {
                         ret.data.cmp.ccs = kCCStrategyUseOption;
                     }
-                } else if ret.len == 1 as size_t && pline.size > 1 as size_t
+                } else if ret.len == 1 as size_t
+                    && pline.size > 1 as size_t
                     && {
                         let mut c2rust_lvalue: [::core::ffi::c_char; 9] = [
-                            kExprVarScopeScript as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeGlobal as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeVim as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeBuffer as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeWindow as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeTabpage as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeLocal as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeBuffer as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
-                            kExprVarScopeArguments as ::core::ffi::c_int
-                                as ::core::ffi::c_char,
+                            kExprVarScopeScript as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeGlobal as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeVim as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeBuffer as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeWindow as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeTabpage as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeLocal as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeBuffer as ::core::ffi::c_int as ::core::ffi::c_char,
+                            kExprVarScopeArguments as ::core::ffi::c_int as ::core::ffi::c_char,
                         ];
                         !memchr(
-                                &raw mut c2rust_lvalue as *mut ::core::ffi::c_char
-                                    as *const ::core::ffi::c_void,
-                                schar as ::core::ffi::c_int,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 9]>(),
-                            )
-                            .is_null()
+                            &raw mut c2rust_lvalue as *mut ::core::ffi::c_char
+                                as *const ::core::ffi::c_void,
+                            schar as ::core::ffi::c_int,
+                            ::core::mem::size_of::<[::core::ffi::c_char; 9]>(),
+                        )
+                        .is_null()
                     }
                     && *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                         == ':' as ::core::ffi::c_int
@@ -1184,31 +1141,30 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.data.var.scope = schar as ExprVarScope;
                     ret.type_0 = kExprLexPlainIdentifier;
                     while ret.len < pline.size
-                        && (ascii_isident(
-                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int != 0
+                        && (ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
+                            as ::core::ffi::c_int
+                            != 0
                             || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                 == AUTOLOAD_CHAR)
                     {
                         ret.len = ret.len.wrapping_add(1);
                     }
                     ret.data.var.autoload = !memchr(
-                            pline.data.offset(2 as ::core::ffi::c_int as isize)
-                                as *const ::core::ffi::c_void,
-                            AUTOLOAD_CHAR,
-                            ret.len.wrapping_sub(2 as size_t),
-                        )
-                        .is_null();
+                        pline.data.offset(2 as ::core::ffi::c_int as isize)
+                            as *const ::core::ffi::c_void,
+                        AUTOLOAD_CHAR,
+                        ret.len.wrapping_sub(2 as size_t),
+                    )
+                    .is_null();
                 } else if pline.size > ret.len
-                    && *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
-                        == AUTOLOAD_CHAR
+                    && *pline.data.offset(ret.len as isize) as ::core::ffi::c_int == AUTOLOAD_CHAR
                 {
                     ret.data.var.autoload = true_0 != 0;
                     ret.type_0 = kExprLexPlainIdentifier;
                     while ret.len < pline.size
-                        && (ascii_isident(
-                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int != 0
+                        && (ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
+                            as ::core::ffi::c_int
+                            != 0
                             || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                 == AUTOLOAD_CHAR)
                     {
@@ -1218,71 +1174,66 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             38 => {
                 if pline.size > 1 as size_t
-                    && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '&' as ::core::ffi::c_int
+                    && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '&' as ::core::ffi::c_int
                 {
                     ret.type_0 = kExprLexAnd;
                     ret.len = ret.len.wrapping_add(1);
                 } else if pline.size == 1 as size_t
                     || !(*pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
+                        as ::core::ffi::c_uint
+                        >= 'A' as ::core::ffi::c_uint
                         && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
+                            as ::core::ffi::c_uint
+                            <= 'Z' as ::core::ffi::c_uint
                         || *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
+                            as ::core::ffi::c_uint
+                            >= 'a' as ::core::ffi::c_uint
                             && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
+                                as ::core::ffi::c_uint
+                                <= 'z' as ::core::ffi::c_uint)
                 {
                     ret.type_0 = kExprLexInvalid;
                     ret.data.err.type_0 = kExprLexOption;
-                    ret.data.err.msg = gettext(
-                        b"E112: Option name missing: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
+                    ret.data.err.msg =
+                        gettext(b"E112: Option name missing: %.*s\0".as_ptr()
+                            as *const ::core::ffi::c_char);
                 } else {
                     ret.type_0 = kExprLexOption;
                     if pline.size > 2 as size_t
                         && *pline.data.offset(2 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == ':' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            == ':' as ::core::ffi::c_int
                         && {
                             let mut c2rust_lvalue_0: [::core::ffi::c_char; 2] = [
-                                kExprOptScopeGlobal as ::core::ffi::c_int
-                                    as ::core::ffi::c_char,
-                                kExprOptScopeLocal as ::core::ffi::c_int
-                                    as ::core::ffi::c_char,
+                                kExprOptScopeGlobal as ::core::ffi::c_int as ::core::ffi::c_char,
+                                kExprOptScopeLocal as ::core::ffi::c_int as ::core::ffi::c_char,
                             ];
                             !memchr(
-                                    &raw mut c2rust_lvalue_0 as *mut ::core::ffi::c_char
-                                        as *const ::core::ffi::c_void,
-                                    *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>(),
-                                )
-                                .is_null()
+                                &raw mut c2rust_lvalue_0 as *mut ::core::ffi::c_char
+                                    as *const ::core::ffi::c_void,
+                                *pline.data.offset(1 as ::core::ffi::c_int as isize)
+                                    as ::core::ffi::c_int,
+                                ::core::mem::size_of::<[::core::ffi::c_char; 2]>(),
+                            )
+                            .is_null()
                         }
                     {
                         ret.len = ret.len.wrapping_add(2 as size_t);
-                        ret.data.opt.scope = *pline
-                            .data
-                            .offset(1 as ::core::ffi::c_int as isize) as ExprOptScope;
-                        ret.data.opt.name = pline
-                            .data
-                            .offset(3 as ::core::ffi::c_int as isize);
+                        ret.data.opt.scope =
+                            *pline.data.offset(1 as ::core::ffi::c_int as isize) as ExprOptScope;
+                        ret.data.opt.name = pline.data.offset(3 as ::core::ffi::c_int as isize);
                     } else {
                         ret.data.opt.scope = kExprOptScopeUnspecified;
-                        ret.data.opt.name = pline
-                            .data
-                            .offset(1 as ::core::ffi::c_int as isize);
+                        ret.data.opt.name = pline.data.offset(1 as ::core::ffi::c_int as isize);
                     }
                     let mut p: *const ::core::ffi::c_char = ret.data.opt.name;
-                    let e: *const ::core::ffi::c_char = pline
-                        .data
-                        .offset(pline.size as isize);
+                    let e: *const ::core::ffi::c_char = pline.data.offset(pline.size as isize);
                     if e.offset_from(p) >= 4 as isize
-                        && *p.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 't' as ::core::ffi::c_int
-                        && *p.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == '_' as ::core::ffi::c_int
+                        && *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == 't' as ::core::ffi::c_int
+                        && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == '_' as ::core::ffi::c_int
                     {
                         ret.data.opt.len = 4 as size_t;
                         ret.len = ret.len.wrapping_add(4 as size_t);
@@ -1299,10 +1250,9 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                         if ret.data.opt.len == 0 as size_t {
                             ret.type_0 = kExprLexInvalid;
                             ret.data.err.type_0 = kExprLexOption;
-                            ret.data.err.msg = gettext(
-                                b"E112: Option name missing: %.*s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            );
+                            ret.data.err.msg =
+                                gettext(b"E112: Option name missing: %.*s\0".as_ptr()
+                                    as *const ::core::ffi::c_char);
                         } else {
                             ret.len = ret.len.wrapping_add(ret.data.opt.len);
                         }
@@ -1313,10 +1263,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 ret.type_0 = kExprLexRegister;
                 if pline.size > 1 as size_t {
                     ret.len = ret.len.wrapping_add(1);
-                    ret.data.reg.name = *pline
-                        .data
-                        .offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                        as ::core::ffi::c_int;
+                    ret.data.reg.name = *pline.data.offset(1 as ::core::ffi::c_int as isize)
+                        as uint8_t as ::core::ffi::c_int;
                 } else {
                     ret.data.reg.name = -1 as ::core::ffi::c_int;
                 }
@@ -1332,7 +1280,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             && *pline
                                 .data
                                 .offset(ret.len.wrapping_add(1 as size_t) as isize)
-                                as ::core::ffi::c_int == '\'' as ::core::ffi::c_int
+                                as ::core::ffi::c_int
+                                == '\'' as ::core::ffi::c_int
                         {
                             ret.len = ret.len.wrapping_add(1);
                         } else {
@@ -1362,9 +1311,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             33 | 61 => {
                 if pline.size == 1 as size_t {
-                    ret.type_0 = (if schar as ::core::ffi::c_int
-                        == '!' as ::core::ffi::c_int
-                    {
+                    ret.type_0 = (if schar as ::core::ffi::c_int == '!' as ::core::ffi::c_int {
                         kExprLexNot as ::core::ffi::c_int
                     } else {
                         kExprLexAssignment as ::core::ffi::c_int
@@ -1372,15 +1319,15 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.data.ass.type_0 = kExprAsgnPlain;
                 } else {
                     ret.type_0 = kExprLexComparison;
-                    ret.data.cmp.inv = schar as ::core::ffi::c_int
-                        == '!' as ::core::ffi::c_int;
-                    if *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '=' as ::core::ffi::c_int
+                    ret.data.cmp.inv = schar as ::core::ffi::c_int == '!' as ::core::ffi::c_int;
+                    if *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '=' as ::core::ffi::c_int
                     {
                         ret.data.cmp.type_0 = kExprCmpEqual;
                         ret.len = ret.len.wrapping_add(1);
                     } else if *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '~' as ::core::ffi::c_int
+                        as ::core::ffi::c_int
+                        == '~' as ::core::ffi::c_int
                     {
                         ret.data.cmp.type_0 = kExprCmpMatches;
                         ret.len = ret.len.wrapping_add(1);
@@ -1392,13 +1339,13 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     }
                     if ret.len < pline.size
                         && !strchr(
-                                b"?#\0".as_ptr() as *const ::core::ffi::c_char,
-                                *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                            )
-                            .is_null()
+                            b"?#\0".as_ptr() as *const ::core::ffi::c_char,
+                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
+                        )
+                        .is_null()
                     {
-                        ret.data.cmp.ccs = *pline.data.offset(ret.len as isize)
-                            as ExprCaseCompareStrategy;
+                        ret.data.cmp.ccs =
+                            *pline.data.offset(ret.len as isize) as ExprCaseCompareStrategy;
                         ret.len = ret.len.wrapping_add(1);
                     } else {
                         ret.data.cmp.ccs = kCCStrategyUseOption;
@@ -1408,28 +1355,28 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             62 | 60 => {
                 ret.type_0 = kExprLexComparison;
                 let haseqsign: bool = pline.size > 1 as size_t
-                    && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '=' as ::core::ffi::c_int;
+                    && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '=' as ::core::ffi::c_int;
                 if haseqsign {
                     ret.len = ret.len.wrapping_add(1);
                 }
                 if ret.len < pline.size
                     && !strchr(
-                            b"?#\0".as_ptr() as *const ::core::ffi::c_char,
-                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
-                        )
-                        .is_null()
+                        b"?#\0".as_ptr() as *const ::core::ffi::c_char,
+                        *pline.data.offset(ret.len as isize) as ::core::ffi::c_int,
+                    )
+                    .is_null()
                 {
-                    ret.data.cmp.ccs = *pline.data.offset(ret.len as isize)
-                        as ExprCaseCompareStrategy;
+                    ret.data.cmp.ccs =
+                        *pline.data.offset(ret.len as isize) as ExprCaseCompareStrategy;
                     ret.len = ret.len.wrapping_add(1);
                 } else {
                     ret.data.cmp.ccs = kCCStrategyUseOption;
                 }
-                ret.data.cmp.inv = schar as ::core::ffi::c_int
-                    == '<' as ::core::ffi::c_int;
+                ret.data.cmp.inv = schar as ::core::ffi::c_int == '<' as ::core::ffi::c_int;
                 ret.data.cmp.type_0 = (if ret.data.cmp.inv as ::core::ffi::c_int
-                    ^ haseqsign as ::core::ffi::c_int != 0
+                    ^ haseqsign as ::core::ffi::c_int
+                    != 0
                 {
                     kExprCmpGreaterOrEqual as ::core::ffi::c_int
                 } else {
@@ -1438,14 +1385,14 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             45 => {
                 if pline.size > 1 as size_t
-                    && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '>' as ::core::ffi::c_int
+                    && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '>' as ::core::ffi::c_int
                 {
                     ret.len = ret.len.wrapping_add(1);
                     ret.type_0 = kExprLexArrow;
                 } else if pline.size > 1 as size_t
-                    && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '=' as ::core::ffi::c_int
+                    && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '=' as ::core::ffi::c_int
                 {
                     ret.len = ret.len.wrapping_add(1);
                     ret.type_0 = kExprLexAssignment;
@@ -1456,8 +1403,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             43 => {
                 if pline.size > 1 as size_t
-                    && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '=' as ::core::ffi::c_int
+                    && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '=' as ::core::ffi::c_int
                 {
                     ret.len = ret.len.wrapping_add(1);
                     ret.type_0 = kExprLexAssignment;
@@ -1468,8 +1415,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             46 => {
                 if pline.size > 1 as size_t
-                    && *pline.data.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int == '=' as ::core::ffi::c_int
+                    && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                        == '=' as ::core::ffi::c_int
                 {
                     ret.len = ret.len.wrapping_add(1);
                     ret.type_0 = kExprLexAssignment;
@@ -1481,10 +1428,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             NUL | NL => {
                 if flags & kELFlagForbidEOC as ::core::ffi::c_int != 0 {
                     ret.type_0 = kExprLexInvalid;
-                    ret.data.err.msg = gettext(
-                        b"E15: Unexpected EOC character: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
+                    ret.data.err.msg = gettext(b"E15: Unexpected EOC character: %.*s\0".as_ptr()
+                        as *const ::core::ffi::c_char);
                     ret.data.err.type_0 = kExprLexSpacing;
                 } else {
                     ret.type_0 = kExprLexEOC;
@@ -1499,24 +1444,20 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.type_0 = kExprLexOr;
                 } else if flags & kELFlagForbidEOC as ::core::ffi::c_int != 0 {
                     ret.type_0 = kExprLexInvalid;
-                    ret.data.err.msg = gettext(
-                        b"E15: Unexpected EOC character: %.*s\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
+                    ret.data.err.msg = gettext(b"E15: Unexpected EOC character: %.*s\0".as_ptr()
+                        as *const ::core::ffi::c_char);
                     ret.data.err.type_0 = kExprLexOr;
                 } else {
                     ret.type_0 = kExprLexEOC;
                 }
             }
             _ => {
-                ret.len = utfc_ptr2len_len(pline.data, pline.size as ::core::ffi::c_int)
-                    as size_t;
+                ret.len = utfc_ptr2len_len(pline.data, pline.size as ::core::ffi::c_int) as size_t;
                 ret.type_0 = kExprLexInvalid;
                 ret.data.err.type_0 = kExprLexPlainIdentifier;
-                ret.data.err.msg = gettext(
-                    b"E15: Unidentified character: %.*s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
+                ret.data.err.msg =
+                    gettext(b"E15: Unidentified character: %.*s\0".as_ptr()
+                        as *const ::core::ffi::c_char);
             }
         }
     }
@@ -1763,196 +1704,142 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
     let e: *const ::core::ffi::c_char = (&raw mut ret as *mut ::core::ffi::c_char)
         .offset(1024 as ::core::ffi::c_int as isize)
         .offset(-(1 as ::core::ffi::c_int as isize));
-    p = p
-        .offset(
-            snprintf(
-                p,
-                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                    .wrapping_sub(
-                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
-                    ),
-                b"%zu:%zu:%s\0".as_ptr() as *const ::core::ffi::c_char,
-                token.start.line,
-                token.start.col,
-                eltkn_type_tab[token.type_0 as usize],
-            ) as isize,
-        );
+    p = p.offset(snprintf(
+        p,
+        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
+            .wrapping_sub(p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize),
+        b"%zu:%zu:%s\0".as_ptr() as *const ::core::ffi::c_char,
+        token.start.line,
+        token.start.col,
+        eltkn_type_tab[token.type_0 as usize],
+    ) as isize);
     '_viml_pexpr_repr_token_end: {
         if p < e as *mut ::core::ffi::c_char {
             match token.type_0 as ::core::ffi::c_uint {
                 8 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(type=%s,ccs=%s,inv=%i)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                eltkn_cmp_type_tab[token.data.cmp.type_0 as usize],
-                                ccs_tab[token.data.cmp.ccs as usize],
-                                token.data.cmp.inv as ::core::ffi::c_int,
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(type=%s,ccs=%s,inv=%i)\0".as_ptr() as *const ::core::ffi::c_char,
+                        eltkn_cmp_type_tab[token.data.cmp.type_0 as usize],
+                        ccs_tab[token.data.cmp.ccs as usize],
+                        token.data.cmp.inv as ::core::ffi::c_int,
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 12 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(type=%s)\0".as_ptr() as *const ::core::ffi::c_char,
-                                eltkn_mul_type_tab[token.data.mul.type_0 as usize],
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(type=%s)\0".as_ptr() as *const ::core::ffi::c_char,
+                        eltkn_mul_type_tab[token.data.mul.type_0 as usize],
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 26 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(type=%s)\0".as_ptr() as *const ::core::ffi::c_char,
-                                expr_asgn_type_tab[token.data.ass.type_0 as usize],
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(type=%s)\0".as_ptr() as *const ::core::ffi::c_char,
+                        expr_asgn_type_tab[token.data.ass.type_0 as usize],
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 18 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(name=%s)\0".as_ptr() as *const ::core::ffi::c_char,
-                                intchar2str(token.data.reg.name),
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(name=%s)\0".as_ptr() as *const ::core::ffi::c_char,
+                        intchar2str(token.data.reg.name),
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 16 | 15 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(closed=%i)\0".as_ptr() as *const ::core::ffi::c_char,
-                                token.data.str.closed as ::core::ffi::c_int,
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(closed=%i)\0".as_ptr() as *const ::core::ffi::c_char,
+                        token.data.str.closed as ::core::ffi::c_int,
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 17 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(scope=%s,name=%.*s)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                eltkn_opt_scope_tab[token.data.opt.scope as usize],
-                                token.data.opt.len as ::core::ffi::c_int,
-                                token.data.opt.name,
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(scope=%s,name=%.*s)\0".as_ptr() as *const ::core::ffi::c_char,
+                        eltkn_opt_scope_tab[token.data.opt.scope as usize],
+                        token.data.opt.len as ::core::ffi::c_int,
+                        token.data.opt.name,
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 20 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(scope=%s,autoload=%i)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                intchar2str(token.data.var.scope as ::core::ffi::c_int),
-                                token.data.var.autoload as ::core::ffi::c_int,
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(scope=%s,autoload=%i)\0".as_ptr() as *const ::core::ffi::c_char,
+                        intchar2str(token.data.var.scope as ::core::ffi::c_int),
+                        token.data.var.autoload as ::core::ffi::c_int,
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 14 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(is_float=%i,base=%i,val=%lg)\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                token.data.num.is_float as ::core::ffi::c_int,
-                                token.data.num.base as ::core::ffi::c_int,
-                                if token.data.num.is_float as ::core::ffi::c_int != 0 {
-                                    token.data.num.val.floating
-                                } else {
-                                    token.data.num.val.integer as ::core::ffi::c_double
-                                },
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(is_float=%i,base=%i,val=%lg)\0".as_ptr() as *const ::core::ffi::c_char,
+                        token.data.num.is_float as ::core::ffi::c_int,
+                        token.data.num.base as ::core::ffi::c_int,
+                        if token.data.num.is_float as ::core::ffi::c_int != 0 {
+                            token.data.num.val.floating
+                        } else {
+                            token.data.num.val.integer as ::core::ffi::c_double
+                        },
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
                 }
                 0 => {
-                    p = p
-                        .offset(
-                            snprintf(
-                                p,
-                                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                    .wrapping_sub(
-                                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                            as usize,
-                                    ),
-                                b"(msg=%s)\0".as_ptr() as *const ::core::ffi::c_char,
-                                token.data.err.msg,
-                            ) as isize,
-                        );
+                    p = p.offset(snprintf(
+                        p,
+                        ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                            p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                        ),
+                        b"(msg=%s)\0".as_ptr() as *const ::core::ffi::c_char,
+                        token.data.err.msg,
+                    ) as isize);
                     if p >= e as *mut ::core::ffi::c_char {
                         break '_viml_pexpr_repr_token_end;
                     }
@@ -1960,19 +1847,14 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                 _ => {}
             }
             if pstate.is_null() {
-                p = p
-                    .offset(
-                        snprintf(
-                            p,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 1024]>()
-                                .wrapping_sub(
-                                    p.offset_from(&raw mut ret as *mut ::core::ffi::c_char)
-                                        as usize,
-                                ),
-                            b"::%zu\0".as_ptr() as *const ::core::ffi::c_char,
-                            token.len,
-                        ) as isize,
-                    );
+                p = p.offset(snprintf(
+                    p,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 1024]>().wrapping_sub(
+                        p.offset_from(&raw mut ret as *mut ::core::ffi::c_char) as usize,
+                    ),
+                    b"::%zu\0".as_ptr() as *const ::core::ffi::c_char,
+                    token.len,
+                ) as isize);
                 p >= e as *mut ::core::ffi::c_char;
             } else {
                 let c2rust_fresh0 = p;
@@ -1980,9 +1862,14 @@ pub unsafe extern "C" fn viml_pexpr_repr_token(
                 *c2rust_fresh0 = ':' as ::core::ffi::c_char;
                 memmove(
                     p as *mut ::core::ffi::c_void,
-                    (*(*pstate).reader.lines.items.offset(token.start.line as isize))
-                        .data
-                        .offset(token.start.col as isize) as *const ::core::ffi::c_void,
+                    (*(*pstate)
+                        .reader
+                        .lines
+                        .items
+                        .offset(token.start.line as isize))
+                    .data
+                    .offset(token.start.col as isize)
+                        as *const ::core::ffi::c_void,
                     token.len,
                 );
                 p = p.offset(token.len as isize);
@@ -2113,8 +2000,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
         .wrapping_div(
             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     ast_stack.size = 0 as size_t;
     ast_stack.items = &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode;
@@ -2126,8 +2013,7 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                     (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                         .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         == 0) as ::core::ffi::c_int as usize,
-                )
-        {
+                ) {
             ast_stack.capacity << 1 as ::core::ffi::c_int
         } else {
             ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
@@ -2145,11 +2031,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                     (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                         .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         == 0) as ::core::ffi::c_int as usize,
-                )
-        {
-            (if ast_stack.items
-                == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-            {
+                ) {
+            (if ast_stack.items == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode {
                 ast_stack.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -2162,16 +2045,12 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 )
             })
         } else {
-            (if ast_stack.items
-                == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-            {
+            (if ast_stack.items == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode {
                 memcpy(
                     xmalloc(
                         ast_stack
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     ),
                     ast_stack.items as *const ::core::ffi::c_void,
                     ast_stack
@@ -2187,22 +2066,24 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 )
             })
         }) as *mut *mut *mut ExprASTNode;
-    } else {};
+    } else {
+    };
     let c2rust_fresh1 = ast_stack.size;
     ast_stack.size = ast_stack.size.wrapping_add(1);
     let c2rust_lvalue_ptr = &raw mut *ast_stack.items.offset(c2rust_fresh1 as isize);
     *c2rust_lvalue_ptr = &raw mut ast.root;
     while ast_stack.size != 0 {
-        let cur_node: *mut *mut ExprASTNode = *ast_stack
-            .items
-            .offset(
-                ast_stack.size.wrapping_sub(0 as size_t).wrapping_sub(1 as size_t)
-                    as isize,
-            );
+        let cur_node: *mut *mut ExprASTNode = *ast_stack.items.offset(
+            ast_stack
+                .size
+                .wrapping_sub(0 as size_t)
+                .wrapping_sub(1 as size_t) as isize,
+        );
         let mut i: size_t = 0 as size_t;
         while i < ast_stack.size.wrapping_sub(1 as size_t) {
             '_c2rust_label: {
-                if **ast_stack.items.offset(i as isize) != *cur_node {} else {
+                if **ast_stack.items.offset(i as isize) != *cur_node {
+                } else {
                     __assert_fail(
                         b"*kv_A(ast_stack, i) != *cur_node\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2218,7 +2099,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
         }
         if (*cur_node).is_null() {
             '_c2rust_label_0: {
-                if ast_stack.size == 1 as size_t {} else {
+                if ast_stack.size == 1 as size_t {
+                } else {
                     __assert_fail(
                         b"kv_size(ast_stack) == 1\0".as_ptr()
                             as *const ::core::ffi::c_char,
@@ -2234,7 +2116,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
         } else if !(**cur_node).children.is_null() {
             let maxchildren: uint8_t = node_maxchildren[(**cur_node).type_0 as usize];
             '_c2rust_label_1: {
-                if maxchildren as ::core::ffi::c_int > 0 as ::core::ffi::c_int {} else {
+                if maxchildren as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
                         b"maxchildren > 0\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -2246,7 +2129,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 }
             };
             '_c2rust_label_2: {
-                if maxchildren as ::core::ffi::c_int <= 2 as ::core::ffi::c_int {} else {
+                if maxchildren as ::core::ffi::c_int <= 2 as ::core::ffi::c_int {
+                } else {
                     __assert_fail(
                         b"maxchildren <= 2\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -2265,7 +2149,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                         || (*(*(**cur_node).children).next).next.is_null())
                         as ::core::ffi::c_int
                 }) != 0
-                {} else {
+                {
+                } else {
                     __assert_fail(
                         b"maxchildren == 1 ? (*cur_node)->children->next == NULL : ((*cur_node)->children->next == NULL || (*cur_node)->children->next->next == NULL)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
@@ -2283,20 +2168,17 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         .wrapping_div(
                             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                .wrapping_rem(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ) == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     ast_stack.capacity << 1 as ::core::ffi::c_int
                 } else {
                     ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         .wrapping_div(
                             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                .wrapping_rem(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ) == 0) as ::core::ffi::c_int as size_t,
+                                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                                == 0) as ::core::ffi::c_int as size_t,
                         )
                 });
                 ast_stack.items = (if ast_stack.capacity
@@ -2304,11 +2186,9 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         .wrapping_div(
                             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                .wrapping_rem(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ) == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (if ast_stack.items
                         == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
                     {
@@ -2320,9 +2200,7 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                             ast_stack.items as *mut ::core::ffi::c_void,
                             ast_stack
                                 .size
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         )
                     })
                 } else {
@@ -2333,34 +2211,27 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                             xmalloc(
                                 ast_stack
                                     .capacity
-                                    .wrapping_mul(
-                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                    ),
+                                    .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                             ),
                             ast_stack.items as *const ::core::ffi::c_void,
                             ast_stack
                                 .size
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         )
                     } else {
                         xrealloc(
                             ast_stack.items as *mut ::core::ffi::c_void,
                             ast_stack
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         )
                     })
                 }) as *mut *mut *mut ExprASTNode;
-            } else {};
+            } else {
+            };
             let c2rust_fresh2 = ast_stack.size;
             ast_stack.size = ast_stack.size.wrapping_add(1);
-            let c2rust_lvalue_ptr_0 = &raw mut *ast_stack
-                .items
-                .offset(c2rust_fresh2 as isize);
+            let c2rust_lvalue_ptr_0 = &raw mut *ast_stack.items.offset(c2rust_fresh2 as isize);
             *c2rust_lvalue_ptr_0 = &raw mut (**cur_node).children;
         } else if !(**cur_node).next.is_null() {
             if ast_stack.size == ast_stack.capacity {
@@ -2369,20 +2240,17 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         .wrapping_div(
                             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                .wrapping_rem(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ) == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     ast_stack.capacity << 1 as ::core::ffi::c_int
                 } else {
                     ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         .wrapping_div(
                             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                .wrapping_rem(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ) == 0) as ::core::ffi::c_int as size_t,
+                                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                                == 0) as ::core::ffi::c_int as size_t,
                         )
                 });
                 ast_stack.items = (if ast_stack.capacity
@@ -2390,11 +2258,9 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         .wrapping_div(
                             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                .wrapping_rem(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ) == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
+                                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        ) {
                     (if ast_stack.items
                         == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
                     {
@@ -2406,9 +2272,7 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                             ast_stack.items as *mut ::core::ffi::c_void,
                             ast_stack
                                 .size
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         )
                     })
                 } else {
@@ -2419,34 +2283,27 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                             xmalloc(
                                 ast_stack
                                     .capacity
-                                    .wrapping_mul(
-                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                    ),
+                                    .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                             ),
                             ast_stack.items as *const ::core::ffi::c_void,
                             ast_stack
                                 .size
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         )
                     } else {
                         xrealloc(
                             ast_stack.items as *mut ::core::ffi::c_void,
                             ast_stack
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         )
                     })
                 }) as *mut *mut *mut ExprASTNode;
-            } else {};
+            } else {
+            };
             let c2rust_fresh3 = ast_stack.size;
             ast_stack.size = ast_stack.size.wrapping_add(1);
-            let c2rust_lvalue_ptr_1 = &raw mut *ast_stack
-                .items
-                .offset(c2rust_fresh3 as isize);
+            let c2rust_lvalue_ptr_1 = &raw mut *ast_stack.items.offset(c2rust_fresh3 as isize);
             *c2rust_lvalue_ptr_1 = &raw mut (**cur_node).next;
         } else if !(*cur_node).is_null() {
             ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
@@ -2454,17 +2311,17 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
                 27 | 26 => {
                     xfree((**cur_node).data.str.value as *mut ::core::ffi::c_void);
                 }
-                0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
-                | 17 | 38 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 28 | 29 | 30 | 31
-                | 32 | 33 | 34 | 35 | 36 | 37 | _ => {}
+                0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17
+                | 38 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 28 | 29 | 30 | 31 | 32 | 33 | 34
+                | 35 | 36 | 37 | _ => {}
             }
             xfree(*cur_node as *mut ::core::ffi::c_void);
             *cur_node = ::core::ptr::null_mut::<ExprASTNode>();
         }
     }
     if ast_stack.items != &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut ast_stack.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut ast_stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -2472,8 +2329,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
 }
 #[inline]
 unsafe extern "C" fn viml_pexpr_new_node(type_0: ExprASTNodeType) -> *mut ExprASTNode {
-    let mut ret: *mut ExprASTNode = xmalloc(::core::mem::size_of::<ExprASTNode>())
-        as *mut ExprASTNode;
+    let mut ret: *mut ExprASTNode =
+        xmalloc(::core::mem::size_of::<ExprASTNode>()) as *mut ExprASTNode;
     (*ret).type_0 = type_0;
     (*ret).children = ::core::ptr::null_mut::<ExprASTNode>();
     (*ret).next = ::core::ptr::null_mut::<ExprASTNode>();
@@ -2653,14 +2510,13 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
     ast_err: *mut ExprASTError,
 ) -> bool {
     let mut ret: bool = true_0 != 0;
-    let mut top_node_p: *mut *mut ExprASTNode = ::core::ptr::null_mut::<
-        *mut ExprASTNode,
-    >();
+    let mut top_node_p: *mut *mut ExprASTNode = ::core::ptr::null_mut::<*mut ExprASTNode>();
     let mut top_node: *mut ExprASTNode = ::core::ptr::null_mut::<ExprASTNode>();
     let mut top_node_lvl: ExprOpLvl = kEOpLvlInvalid;
     let mut top_node_ass: ExprOpAssociativity = 0 as ExprOpAssociativity;
     '_c2rust_label: {
-        if (*ast_stack).size != 0 {} else {
+        if (*ast_stack).size != 0 {
+        } else {
             __assert_fail(
                 b"kv_size(*ast_stack)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -2681,15 +2537,16 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
         node_lvl(*bop_node) as ::core::ffi::c_uint
     }) as ExprOpLvl;
     loop {
-        let mut new_top_node_p: *mut *mut ExprASTNode = *(*ast_stack)
-            .items
-            .offset(
-                (*ast_stack).size.wrapping_sub(0 as size_t).wrapping_sub(1 as size_t)
-                    as isize,
-            );
+        let mut new_top_node_p: *mut *mut ExprASTNode = *(*ast_stack).items.offset(
+            (*ast_stack)
+                .size
+                .wrapping_sub(0 as size_t)
+                .wrapping_sub(1 as size_t) as isize,
+        );
         let mut new_top_node: *mut ExprASTNode = *new_top_node_p;
         '_c2rust_label_0: {
-            if !new_top_node.is_null() {} else {
+            if !new_top_node.is_null() {
+            } else {
                 __assert_fail(
                     b"new_top_node != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -2703,10 +2560,8 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
         let new_top_node_lvl: ExprOpLvl = node_lvl(*new_top_node);
         let new_top_node_ass: ExprOpAssociativity = node_ass(*new_top_node);
         if !top_node_p.is_null()
-            && (bop_node_lvl as ::core::ffi::c_uint
-                > new_top_node_lvl as ::core::ffi::c_uint
-                || bop_node_lvl as ::core::ffi::c_uint
-                    == new_top_node_lvl as ::core::ffi::c_uint
+            && (bop_node_lvl as ::core::ffi::c_uint > new_top_node_lvl as ::core::ffi::c_uint
+                || bop_node_lvl as ::core::ffi::c_uint == new_top_node_lvl as ::core::ffi::c_uint
                     && new_top_node_ass as ::core::ffi::c_uint
                         == kEOpAssNo as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
@@ -2734,7 +2589,8 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
         *top_node_p = bop_node;
         (*bop_node).children = top_node;
         '_c2rust_label_1: {
-            if (*(*bop_node).children).next.is_null() {} else {
+            if (*(*bop_node).children).next.is_null() {
+            } else {
                 __assert_fail(
                     b"bop_node->children->next == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2752,20 +2608,17 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*ast_stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*ast_stack).items = (if (*ast_stack).capacity
@@ -2773,11 +2626,9 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*ast_stack).items
                     == &raw mut (*ast_stack).init_array as *mut *mut *mut ExprASTNode
                 {
@@ -2789,9 +2640,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             } else {
@@ -2802,34 +2651,27 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         xmalloc(
                             (*ast_stack)
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         ),
                         (*ast_stack).items as *const ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 } else {
                     xrealloc(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             }) as *mut *mut *mut ExprASTNode;
-        } else {};
+        } else {
+        };
         let c2rust_fresh29 = (*ast_stack).size;
         (*ast_stack).size = (*ast_stack).size.wrapping_add(1);
-        let c2rust_lvalue_ptr = &raw mut *(*ast_stack)
-            .items
-            .offset(c2rust_fresh29 as isize);
+        let c2rust_lvalue_ptr = &raw mut *(*ast_stack).items.offset(c2rust_fresh29 as isize);
         *c2rust_lvalue_ptr = top_node_p;
         if (*ast_stack).size == (*ast_stack).capacity {
             (*ast_stack).capacity = (if (*ast_stack).capacity << 1 as ::core::ffi::c_int
@@ -2837,20 +2679,17 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*ast_stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*ast_stack).items = (if (*ast_stack).capacity
@@ -2858,11 +2697,9 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*ast_stack).items
                     == &raw mut (*ast_stack).init_array as *mut *mut *mut ExprASTNode
                 {
@@ -2874,9 +2711,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             } else {
@@ -2887,41 +2722,35 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         xmalloc(
                             (*ast_stack)
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         ),
                         (*ast_stack).items as *const ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 } else {
                     xrealloc(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             }) as *mut *mut *mut ExprASTNode;
-        } else {};
+        } else {
+        };
         let c2rust_fresh30 = (*ast_stack).size;
         (*ast_stack).size = (*ast_stack).size.wrapping_add(1);
-        let c2rust_lvalue_ptr_0 = &raw mut *(*ast_stack)
-            .items
-            .offset(c2rust_fresh30 as isize);
+        let c2rust_lvalue_ptr_0 = &raw mut *(*ast_stack).items.offset(c2rust_fresh30 as isize);
         *c2rust_lvalue_ptr_0 = &raw mut (*(*bop_node).children).next;
     } else {
         '_c2rust_label_2: {
             if top_node_lvl as ::core::ffi::c_uint == bop_node_lvl as ::core::ffi::c_uint
                 && top_node_ass as ::core::ffi::c_uint
                     == kEOpAssRight as ::core::ffi::c_int as ::core::ffi::c_uint
-            {} else {
+            {
+            } else {
                 __assert_fail(
                     b"top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -2934,8 +2763,8 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
             }
         };
         '_c2rust_label_3: {
-            if !(*top_node).children.is_null() && !(*(*top_node).children).next.is_null()
-            {} else {
+            if !(*top_node).children.is_null() && !(*(*top_node).children).next.is_null() {
+            } else {
                 __assert_fail(
                     b"top_node->children != NULL && top_node->children->next != NULL\0"
                         .as_ptr() as *const ::core::ffi::c_char,
@@ -2950,7 +2779,8 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
         (*bop_node).children = (*(*top_node).children).next;
         (*(*top_node).children).next = bop_node;
         '_c2rust_label_4: {
-            if (*(*bop_node).children).next.is_null() {} else {
+            if (*(*bop_node).children).next.is_null() {
+            } else {
                 __assert_fail(
                     b"bop_node->children->next == NULL\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -2968,20 +2798,17 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*ast_stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*ast_stack).items = (if (*ast_stack).capacity
@@ -2989,11 +2816,9 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*ast_stack).items
                     == &raw mut (*ast_stack).init_array as *mut *mut *mut ExprASTNode
                 {
@@ -3005,9 +2830,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             } else {
@@ -3018,34 +2841,27 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         xmalloc(
                             (*ast_stack)
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         ),
                         (*ast_stack).items as *const ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 } else {
                     xrealloc(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             }) as *mut *mut *mut ExprASTNode;
-        } else {};
+        } else {
+        };
         let c2rust_fresh31 = (*ast_stack).size;
         (*ast_stack).size = (*ast_stack).size.wrapping_add(1);
-        let c2rust_lvalue_ptr_1 = &raw mut *(*ast_stack)
-            .items
-            .offset(c2rust_fresh31 as isize);
+        let c2rust_lvalue_ptr_1 = &raw mut *(*ast_stack).items.offset(c2rust_fresh31 as isize);
         *c2rust_lvalue_ptr_1 = top_node_p;
         if (*ast_stack).size == (*ast_stack).capacity {
             (*ast_stack).capacity = (if (*ast_stack).capacity << 1 as ::core::ffi::c_int
@@ -3053,20 +2869,17 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*ast_stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*ast_stack).items = (if (*ast_stack).capacity
@@ -3074,11 +2887,9 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*ast_stack).items
                     == &raw mut (*ast_stack).init_array as *mut *mut *mut ExprASTNode
                 {
@@ -3090,9 +2901,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             } else {
@@ -3103,34 +2912,27 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         xmalloc(
                             (*ast_stack)
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         ),
                         (*ast_stack).items as *const ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 } else {
                     xrealloc(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             }) as *mut *mut *mut ExprASTNode;
-        } else {};
+        } else {
+        };
         let c2rust_fresh32 = (*ast_stack).size;
         (*ast_stack).size = (*ast_stack).size.wrapping_add(1);
-        let c2rust_lvalue_ptr_2 = &raw mut *(*ast_stack)
-            .items
-            .offset(c2rust_fresh32 as isize);
+        let c2rust_lvalue_ptr_2 = &raw mut *(*ast_stack).items.offset(c2rust_fresh32 as isize);
         *c2rust_lvalue_ptr_2 = &raw mut (*(*top_node).children).next;
         if (*ast_stack).size == (*ast_stack).capacity {
             (*ast_stack).capacity = (if (*ast_stack).capacity << 1 as ::core::ffi::c_int
@@ -3138,20 +2940,17 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (*ast_stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as size_t,
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as size_t,
                     )
             });
             (*ast_stack).items = (if (*ast_stack).capacity
@@ -3159,11 +2958,9 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                     .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
                     .wrapping_div(
                         (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                            .wrapping_rem(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ) == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                            .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                            == 0) as ::core::ffi::c_int as usize,
+                    ) {
                 (if (*ast_stack).items
                     == &raw mut (*ast_stack).init_array as *mut *mut *mut ExprASTNode
                 {
@@ -3175,9 +2972,7 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             } else {
@@ -3188,34 +2983,27 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
                         xmalloc(
                             (*ast_stack)
                                 .capacity
-                                .wrapping_mul(
-                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                ),
+                                .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                         ),
                         (*ast_stack).items as *const ::core::ffi::c_void,
                         (*ast_stack)
                             .size
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 } else {
                     xrealloc(
                         (*ast_stack).items as *mut ::core::ffi::c_void,
                         (*ast_stack)
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     )
                 })
             }) as *mut *mut *mut ExprASTNode;
-        } else {};
+        } else {
+        };
         let c2rust_fresh33 = (*ast_stack).size;
         (*ast_stack).size = (*ast_stack).size.wrapping_add(1);
-        let c2rust_lvalue_ptr_3 = &raw mut *(*ast_stack)
-            .items
-            .offset(c2rust_fresh33 as isize);
+        let c2rust_lvalue_ptr_3 = &raw mut *(*ast_stack).items.offset(c2rust_fresh33 as isize);
         *c2rust_lvalue_ptr_3 = &raw mut (*(*bop_node).children).next;
         if (*bop_node).type_0 as ::core::ffi::c_uint
             == kExprNodeComparison as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3223,10 +3011,8 @@ unsafe extern "C" fn viml_pexpr_handle_bop(
             east_set_error(
                 pstate,
                 ast_err,
-                gettext(
-                    b"E15: Operator is not associative: %.*s\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E15: Operator is not associative: %.*s\0".as_ptr()
+                    as *const ::core::ffi::c_char),
                 (*bop_node).start,
             );
             ret = false_0 != 0;
@@ -3313,8 +3099,8 @@ unsafe extern "C" fn parse_quoted_string(
         .wrapping_div(::core::mem::size_of::<StringShift>())
         .wrapping_div(
             (::core::mem::size_of::<[StringShift; 16]>()
-                .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<StringShift>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     shifts.size = 0 as size_t;
     shifts.items = &raw mut shifts.init_array as *mut StringShift;
@@ -3347,18 +3133,19 @@ unsafe extern "C" fn parse_quoted_string(
                             .wrapping_div(::core::mem::size_of::<StringShift>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[StringShift; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
+                                    .wrapping_rem(::core::mem::size_of::<StringShift>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
                         shifts.capacity << 1 as ::core::ffi::c_int
                     } else {
                         ::core::mem::size_of::<[StringShift; 16]>()
                             .wrapping_div(::core::mem::size_of::<StringShift>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[StringShift; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                                    as ::core::ffi::c_int as size_t,
+                                    .wrapping_rem(::core::mem::size_of::<StringShift>())
+                                    == 0) as ::core::ffi::c_int
+                                    as size_t,
                             )
                     });
                     shifts.items = (if shifts.capacity
@@ -3366,13 +3153,11 @@ unsafe extern "C" fn parse_quoted_string(
                             .wrapping_div(::core::mem::size_of::<StringShift>())
                             .wrapping_div(
                                 (::core::mem::size_of::<[StringShift; 16]>()
-                                    .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                                    as ::core::ffi::c_int as usize,
-                            )
-                    {
-                        (if shifts.items
-                            == &raw mut shifts.init_array as *mut StringShift
-                        {
+                                    .wrapping_rem(::core::mem::size_of::<StringShift>())
+                                    == 0) as ::core::ffi::c_int
+                                    as usize,
+                            ) {
+                        (if shifts.items == &raw mut shifts.init_array as *mut StringShift {
                             shifts.items as *mut ::core::ffi::c_void
                         } else {
                             _memcpy_free(
@@ -3385,9 +3170,7 @@ unsafe extern "C" fn parse_quoted_string(
                             )
                         })
                     } else {
-                        (if shifts.items
-                            == &raw mut shifts.init_array as *mut StringShift
-                        {
+                        (if shifts.items == &raw mut shifts.init_array as *mut StringShift {
                             memcpy(
                                 xmalloc(
                                     shifts
@@ -3408,7 +3191,8 @@ unsafe extern "C" fn parse_quoted_string(
                             )
                         })
                     }) as *mut StringShift;
-                } else {};
+                } else {
+                };
                 let c2rust_fresh35 = shifts.size;
                 shifts.size = shifts.size.wrapping_add(1);
                 *shifts.items.offset(c2rust_fresh35 as isize) = StringShift {
@@ -3426,9 +3210,7 @@ unsafe extern "C" fn parse_quoted_string(
         if size == 0 as size_t {
             (*node).data.str.value = ::core::ptr::null_mut::<::core::ffi::c_char>();
         } else {
-            let mut v_p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut v_p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
             (*node).data.str.value = xmallocz(size) as *mut ::core::ffi::c_char;
             v_p = (*node).data.str.value;
             p = s.offset(1 as ::core::ffi::c_int as isize);
@@ -3437,7 +3219,8 @@ unsafe extern "C" fn parse_quoted_string(
                     p as *const ::core::ffi::c_void,
                     '\'' as ::core::ffi::c_int,
                     e.offset_from(p) as size_t,
-                ) as *const ::core::ffi::c_char;
+                )
+                    as *const ::core::ffi::c_char;
                 if chunk_e_0.is_null() {
                     memcpy(
                         v_p as *mut ::core::ffi::c_void,
@@ -3451,13 +3234,10 @@ unsafe extern "C" fn parse_quoted_string(
                         p as *const ::core::ffi::c_void,
                         chunk_e_0.offset_from(p) as size_t,
                     );
-                    v_p = v_p
-                        .offset(
-                            (chunk_e_0.offset_from(p) as size_t)
-                                .wrapping_add(1 as size_t) as isize,
-                        );
-                    *v_p.offset(-1 as ::core::ffi::c_int as isize) = '\''
-                        as ::core::ffi::c_char;
+                    v_p = v_p.offset(
+                        (chunk_e_0.offset_from(p) as size_t).wrapping_add(1 as size_t) as isize,
+                    );
+                    *v_p.offset(-1 as ::core::ffi::c_int as isize) = '\'' as ::core::ffi::c_char;
                     p = chunk_e_0.offset(2 as ::core::ffi::c_int as isize);
                 }
             }
@@ -3490,15 +3270,14 @@ unsafe extern "C" fn parse_quoted_string(
                         120 | 88 => {
                             size = size.wrapping_sub(1);
                             if ascii_isxdigit(
-                                *p.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
+                                *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             ) {
                                 size = size.wrapping_sub(1);
                                 if p.offset(2 as ::core::ffi::c_int as isize) < e
-                                    && ascii_isxdigit(
-                                        *p.offset(2 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int,
-                                    ) as ::core::ffi::c_int != 0
+                                    && ascii_isxdigit(*p.offset(2 as ::core::ffi::c_int as isize)
+                                        as ::core::ffi::c_int)
+                                        as ::core::ffi::c_int
+                                        != 0
                                 {
                                     size = size.wrapping_sub(1);
                                 }
@@ -3506,13 +3285,12 @@ unsafe extern "C" fn parse_quoted_string(
                         }
                         117 | 85 => {
                             let esc_start: *const ::core::ffi::c_char = p;
-                            let mut n: size_t = (if *p as ::core::ffi::c_int
-                                == 'u' as ::core::ffi::c_int
-                            {
-                                4 as ::core::ffi::c_int
-                            } else {
-                                8 as ::core::ffi::c_int
-                            }) as size_t;
+                            let mut n: size_t =
+                                (if *p as ::core::ffi::c_int == 'u' as ::core::ffi::c_int {
+                                    4 as ::core::ffi::c_int
+                                } else {
+                                    8 as ::core::ffi::c_int
+                                }) as size_t;
                             let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                             p = p.offset(1);
                             while p.offset(1 as ::core::ffi::c_int as isize) < e
@@ -3521,22 +3299,21 @@ unsafe extern "C" fn parse_quoted_string(
                                     n = n.wrapping_sub(1);
                                     c2rust_fresh36 != 0
                                 }
-                                && ascii_isxdigit(
-                                    *p.offset(1 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int != 0
+                                && ascii_isxdigit(*p.offset(1 as ::core::ffi::c_int as isize)
+                                    as ::core::ffi::c_int)
+                                    as ::core::ffi::c_int
+                                    != 0
                             {
                                 p = p.offset(1);
                                 nr = (nr << 4 as ::core::ffi::c_int)
                                     + hex2nr(*p as ::core::ffi::c_int);
                             }
-                            size = size
-                                .wrapping_sub(
-                                    (p
-                                        .offset_from(
-                                            esc_start.offset(-(1 as ::core::ffi::c_int as isize)),
-                                        ) - utf_char2len(nr) as isize) as size_t,
-                                );
+                            size = size.wrapping_sub(
+                                (p.offset_from(
+                                    esc_start.offset(-(1 as ::core::ffi::c_int as isize)),
+                                ) - utf_char2len(nr) as isize)
+                                    as size_t,
+                            );
                             p = p.offset(-1);
                         }
                         48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 => {
@@ -3568,9 +3345,8 @@ unsafe extern "C" fn parse_quoted_string(
             (*node).data.str.value = ::core::ptr::null_mut::<::core::ffi::c_char>();
             (*node).data.str.size = 0 as size_t;
         } else {
-            let mut v_p_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut v_p_0: *mut ::core::ffi::c_char =
+                ::core::ptr::null_mut::<::core::ffi::c_char>();
             (*node).data.str.value = xmalloc(size) as *mut ::core::ffi::c_char;
             v_p_0 = (*node).data.str.value;
             p = s.offset(1 as ::core::ffi::c_int as isize);
@@ -3579,7 +3355,8 @@ unsafe extern "C" fn parse_quoted_string(
                     p as *const ::core::ffi::c_void,
                     '\\' as ::core::ffi::c_int,
                     e.offset_from(p) as size_t,
-                ) as *const ::core::ffi::c_char;
+                )
+                    as *const ::core::ffi::c_char;
                 if chunk_e_1.is_null() {
                     memcpy(
                         v_p_0 as *mut ::core::ffi::c_void,
@@ -3655,10 +3432,10 @@ unsafe extern "C" fn parse_quoted_string(
                             }
                             88 | 120 | 117 | 85 => {
                                 if p.offset(1 as ::core::ffi::c_int as isize) < e
-                                    && ascii_isxdigit(
-                                        *p.offset(1 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int,
-                                    ) as ::core::ffi::c_int != 0
+                                    && ascii_isxdigit(*p.offset(1 as ::core::ffi::c_int as isize)
+                                        as ::core::ffi::c_int)
+                                        as ::core::ffi::c_int
+                                        != 0
                                 {
                                     let mut n_0: size_t = 0;
                                     let mut nr_0: ::core::ffi::c_int = 0;
@@ -3667,8 +3444,7 @@ unsafe extern "C" fn parse_quoted_string(
                                         || *p as ::core::ffi::c_int == 'X' as ::core::ffi::c_int;
                                     if is_hex {
                                         n_0 = 2 as size_t;
-                                    } else if *p as ::core::ffi::c_int
-                                        == 'u' as ::core::ffi::c_int
+                                    } else if *p as ::core::ffi::c_int == 'u' as ::core::ffi::c_int
                                     {
                                         n_0 = 4 as size_t;
                                     } else {
@@ -3684,7 +3460,9 @@ unsafe extern "C" fn parse_quoted_string(
                                         && ascii_isxdigit(
                                             *p.offset(1 as ::core::ffi::c_int as isize)
                                                 as ::core::ffi::c_int,
-                                        ) as ::core::ffi::c_int != 0
+                                        )
+                                            as ::core::ffi::c_int
+                                            != 0
                                     {
                                         p = p.offset(1);
                                         nr_0 = (nr_0 << 4 as ::core::ffi::c_int)
@@ -3710,17 +3488,18 @@ unsafe extern "C" fn parse_quoted_string(
                                 let c2rust_fresh49 = p;
                                 p = p.offset(1);
                                 let mut ch: uint8_t = (*c2rust_fresh49 as ::core::ffi::c_int
-                                    - '0' as ::core::ffi::c_int) as uint8_t;
+                                    - '0' as ::core::ffi::c_int)
+                                    as uint8_t;
                                 if p < e
                                     && *p as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
                                     && *p as ::core::ffi::c_int <= '7' as ::core::ffi::c_int
                                 {
                                     let c2rust_fresh50 = p;
                                     p = p.offset(1);
-                                    ch = (((ch as ::core::ffi::c_int)
-                                        << 3 as ::core::ffi::c_int)
+                                    ch = (((ch as ::core::ffi::c_int) << 3 as ::core::ffi::c_int)
                                         + *c2rust_fresh50 as ::core::ffi::c_int
-                                        - '0' as ::core::ffi::c_int) as uint8_t;
+                                        - '0' as ::core::ffi::c_int)
+                                        as uint8_t;
                                     if p < e
                                         && *p as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
                                         && *p as ::core::ffi::c_int <= '7' as ::core::ffi::c_int
@@ -3730,7 +3509,8 @@ unsafe extern "C" fn parse_quoted_string(
                                         ch = (((ch as ::core::ffi::c_int)
                                             << 3 as ::core::ffi::c_int)
                                             + *c2rust_fresh51 as ::core::ffi::c_int
-                                            - '0' as ::core::ffi::c_int) as uint8_t;
+                                            - '0' as ::core::ffi::c_int)
+                                            as uint8_t;
                                     }
                                 }
                                 let c2rust_fresh52 = v_p_0;
@@ -3739,9 +3519,10 @@ unsafe extern "C" fn parse_quoted_string(
                             }
                             60 => {
                                 let mut flags: ::core::ffi::c_int = FSK_KEYCODE
-                                    as ::core::ffi::c_int | FSK_IN_STRING as ::core::ffi::c_int;
-                                if *p.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int != '*' as ::core::ffi::c_int
+                                    as ::core::ffi::c_int
+                                    | FSK_IN_STRING as ::core::ffi::c_int;
+                                if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                                    != '*' as ::core::ffi::c_int
                                 {
                                     flags |= FSK_SIMPLIFY as ::core::ffi::c_int;
                                 }
@@ -3752,7 +3533,8 @@ unsafe extern "C" fn parse_quoted_string(
                                     flags,
                                     false_0 != 0,
                                     ::core::ptr::null_mut::<bool>(),
-                                ) as size_t;
+                                )
+                                    as size_t;
                                 if special_len != 0 as size_t {
                                     v_p_0 = v_p_0.offset(special_len as isize);
                                 } else {
@@ -3767,24 +3549,26 @@ unsafe extern "C" fn parse_quoted_string(
                         }
                         if !(*pstate).colors.is_null() {
                             if shifts.size == shifts.capacity {
-                                shifts.capacity = (if shifts.capacity
-                                    << 1 as ::core::ffi::c_int
+                                shifts.capacity = (if shifts.capacity << 1 as ::core::ffi::c_int
                                     > ::core::mem::size_of::<[StringShift; 16]>()
                                         .wrapping_div(::core::mem::size_of::<StringShift>())
                                         .wrapping_div(
                                             (::core::mem::size_of::<[StringShift; 16]>()
-                                                .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                                                as ::core::ffi::c_int as usize,
-                                        )
-                                {
+                                                .wrapping_rem(::core::mem::size_of::<StringShift>())
+                                                == 0)
+                                                as ::core::ffi::c_int
+                                                as usize,
+                                        ) {
                                     shifts.capacity << 1 as ::core::ffi::c_int
                                 } else {
                                     ::core::mem::size_of::<[StringShift; 16]>()
                                         .wrapping_div(::core::mem::size_of::<StringShift>())
                                         .wrapping_div(
                                             (::core::mem::size_of::<[StringShift; 16]>()
-                                                .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                                                as ::core::ffi::c_int as size_t,
+                                                .wrapping_rem(::core::mem::size_of::<StringShift>())
+                                                == 0)
+                                                as ::core::ffi::c_int
+                                                as size_t,
                                         )
                                 });
                                 shifts.items = (if shifts.capacity
@@ -3792,10 +3576,11 @@ unsafe extern "C" fn parse_quoted_string(
                                         .wrapping_div(::core::mem::size_of::<StringShift>())
                                         .wrapping_div(
                                             (::core::mem::size_of::<[StringShift; 16]>()
-                                                .wrapping_rem(::core::mem::size_of::<StringShift>()) == 0)
-                                                as ::core::ffi::c_int as usize,
-                                        )
-                                {
+                                                .wrapping_rem(::core::mem::size_of::<StringShift>())
+                                                == 0)
+                                                as ::core::ffi::c_int
+                                                as usize,
+                                        ) {
                                     (if shifts.items
                                         == &raw mut shifts.init_array as *mut StringShift
                                     {
@@ -3833,8 +3618,10 @@ unsafe extern "C" fn parse_quoted_string(
                                                 .wrapping_mul(::core::mem::size_of::<StringShift>()),
                                         )
                                     })
-                                }) as *mut StringShift;
-                            } else {};
+                                })
+                                    as *mut StringShift;
+                            } else {
+                            };
                             let c2rust_fresh53 = shifts.size;
                             shifts.size = shifts.size.wrapping_add(1);
                             *shifts.items.offset(c2rust_fresh53 as isize) = StringShift {
@@ -3843,8 +3630,7 @@ unsafe extern "C" fn parse_quoted_string(
                                     .col
                                     .wrapping_add(chunk_e_1.offset_from(s) as size_t),
                                 orig_len: p.offset_from(chunk_e_1) as size_t,
-                                act_len: v_p_0
-                                    .offset_from(v_p_start as *mut ::core::ffi::c_char)
+                                act_len: v_p_0.offset_from(v_p_start as *mut ::core::ffi::c_char)
                                     as size_t,
                                 escape_not_known: is_unknown,
                             };
@@ -3857,9 +3643,7 @@ unsafe extern "C" fn parse_quoted_string(
     }
     if !(*pstate).colors.is_null() {
         let mut next_col: size_t = token.start.col.wrapping_add(1 as size_t);
-        let body_str: *const ::core::ffi::c_char = if is_double as ::core::ffi::c_int
-            != 0
-        {
+        let body_str: *const ::core::ffi::c_char = if is_double as ::core::ffi::c_int != 0 {
             if is_invalid as ::core::ffi::c_int != 0 {
                 b"NvimInvalidDoubleQuotedBody\0".as_ptr() as *const ::core::ffi::c_char
             } else {
@@ -3870,8 +3654,7 @@ unsafe extern "C" fn parse_quoted_string(
         } else {
             b"NvimSingleQuotedBody\0".as_ptr() as *const ::core::ffi::c_char
         };
-        let esc_str: *const ::core::ffi::c_char = if is_double as ::core::ffi::c_int != 0
-        {
+        let esc_str: *const ::core::ffi::c_char = if is_double as ::core::ffi::c_int != 0 {
             if is_invalid as ::core::ffi::c_int != 0 {
                 b"NvimInvalidDoubleQuotedEscape\0".as_ptr() as *const ::core::ffi::c_char
             } else {
@@ -3882,18 +3665,14 @@ unsafe extern "C" fn parse_quoted_string(
         } else {
             b"NvimSingleQuotedQuote\0".as_ptr() as *const ::core::ffi::c_char
         };
-        let ukn_esc_str: *const ::core::ffi::c_char = if is_double as ::core::ffi::c_int
-            != 0
-        {
+        let ukn_esc_str: *const ::core::ffi::c_char = if is_double as ::core::ffi::c_int != 0 {
             if is_invalid as ::core::ffi::c_int != 0 {
-                b"NvimInvalidDoubleQuotedUnknownEscape\0".as_ptr()
-                    as *const ::core::ffi::c_char
+                b"NvimInvalidDoubleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"NvimDoubleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
             }
         } else if is_invalid as ::core::ffi::c_int != 0 {
-            b"NvimInvalidSingleQuotedUnknownEscape\0".as_ptr()
-                as *const ::core::ffi::c_char
+            b"NvimInvalidSingleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"NvimSingleQuotedUnknownEscape\0".as_ptr() as *const ::core::ffi::c_char
         };
@@ -3963,8 +3742,8 @@ unsafe extern "C" fn parse_quoted_string(
         }
     }
     if shifts.items != &raw mut shifts.init_array as *mut StringShift {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut shifts.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut shifts.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -4001,9 +3780,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
     let mut can_be_ternary: bool = false;
     let mut is_subscript: bool = false;
     let mut i_0: size_t = 0;
-    let mut eastnode_p: *const *mut ExprASTNode = ::core::ptr::null::<
-        *mut ExprASTNode,
-    >();
+    let mut eastnode_p: *const *mut ExprASTNode = ::core::ptr::null::<*mut ExprASTNode>();
     let mut eastnode_type: ExprASTNodeType = kExprNodeMissing;
     let mut eastnode_lvl: ExprOpLvl = kEOpLvlInvalid;
     let mut pline: ParserLine = ParserLine {
@@ -4011,9 +3788,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         size: 0,
         allocated: false,
     };
-    let mut top_node_p: *mut *mut ExprASTNode = ::core::ptr::null_mut::<
-        *mut ExprASTNode,
-    >();
+    let mut top_node_p: *mut *mut ExprASTNode = ::core::ptr::null_mut::<*mut ExprASTNode>();
     let mut cur_node: *mut ExprASTNode = ::core::ptr::null_mut::<ExprASTNode>();
     let mut want_value: bool = false;
     let mut node_is_key: bool = false;
@@ -4037,8 +3812,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         .wrapping_div(::core::mem::size_of::<*mut *mut ExprASTNode>())
         .wrapping_div(
             (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     ast_stack.size = 0 as size_t;
     ast_stack.items = &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode;
@@ -4050,8 +3825,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                         .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         == 0) as ::core::ffi::c_int as usize,
-                )
-        {
+                ) {
             ast_stack.capacity << 1 as ::core::ffi::c_int
         } else {
             ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
@@ -4069,11 +3843,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
                         .wrapping_rem(::core::mem::size_of::<*mut *mut ExprASTNode>())
                         == 0) as ::core::ffi::c_int as usize,
-                )
-        {
-            (if ast_stack.items
-                == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-            {
+                ) {
+            (if ast_stack.items == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode {
                 ast_stack.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -4086,16 +3857,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                 )
             })
         } else {
-            (if ast_stack.items
-                == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-            {
+            (if ast_stack.items == &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode {
                 memcpy(
                     xmalloc(
                         ast_stack
                             .capacity
-                            .wrapping_mul(
-                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                            ),
+                            .wrapping_mul(::core::mem::size_of::<*mut *mut ExprASTNode>()),
                     ),
                     ast_stack.items as *const ::core::ffi::c_void,
                     ast_stack
@@ -4111,7 +3878,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                 )
             })
         }) as *mut *mut *mut ExprASTNode;
-    } else {};
+    } else {
+    };
     let c2rust_fresh4 = ast_stack.size;
     ast_stack.size = ast_stack.size.wrapping_add(1);
     let c2rust_lvalue_ptr = &raw mut *ast_stack.items.offset(c2rust_fresh4 as isize);
@@ -4127,8 +3895,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
         .wrapping_div(
             (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>()) == 0)
-                as ::core::ffi::c_int as usize,
+                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
+                == 0) as ::core::ffi::c_int as usize,
         ) as size_t;
     pt_stack.size = 0 as size_t;
     pt_stack.items = &raw mut pt_stack.init_array as *mut ExprASTParseType;
@@ -4138,18 +3906,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                 .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<ExprASTParseType>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
+                        .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
             pt_stack.capacity << 1 as ::core::ffi::c_int
         } else {
             ::core::mem::size_of::<[ExprASTParseType; 4]>()
                 .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<ExprASTParseType>()) == 0)
-                        as ::core::ffi::c_int as size_t,
+                        .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
+                        == 0) as ::core::ffi::c_int as size_t,
                 )
         });
         pt_stack.items = (if pt_stack.capacity
@@ -4157,10 +3924,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                 .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<ExprASTParseType>()) == 0)
-                        as ::core::ffi::c_int as usize,
-                )
-        {
+                        .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
+                        == 0) as ::core::ffi::c_int as usize,
+                ) {
             (if pt_stack.items == &raw mut pt_stack.init_array as *mut ExprASTParseType {
                 pt_stack.items as *mut ::core::ffi::c_void
             } else {
@@ -4195,7 +3961,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                 )
             })
         }) as *mut ExprASTParseType;
-    } else {};
+    } else {
+    };
     let c2rust_fresh5 = pt_stack.size;
     pt_stack.size = pt_stack.size.wrapping_add(1);
     *pt_stack.items.offset(c2rust_fresh5 as isize) = kEPTExpr;
@@ -4208,8 +3975,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (::core::mem::size_of::<[ExprASTParseType; 4]>()
                             .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
                             == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
+                    ) {
                 pt_stack.capacity << 1 as ::core::ffi::c_int
             } else {
                 ::core::mem::size_of::<[ExprASTParseType; 4]>()
@@ -4227,11 +3993,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (::core::mem::size_of::<[ExprASTParseType; 4]>()
                             .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
                             == 0) as ::core::ffi::c_int as usize,
-                    )
-            {
-                (if pt_stack.items
-                    == &raw mut pt_stack.init_array as *mut ExprASTParseType
-                {
+                    ) {
+                (if pt_stack.items == &raw mut pt_stack.init_array as *mut ExprASTParseType {
                     pt_stack.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -4244,9 +4007,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     )
                 })
             } else {
-                (if pt_stack.items
-                    == &raw mut pt_stack.init_array as *mut ExprASTParseType
-                {
+                (if pt_stack.items == &raw mut pt_stack.init_array as *mut ExprASTParseType {
                     memcpy(
                         xmalloc(
                             pt_stack
@@ -4267,7 +4028,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     )
                 })
             }) as *mut ExprASTParseType;
-        } else {};
+        } else {
+        };
         let c2rust_fresh6 = pt_stack.size;
         pt_stack.size = pt_stack.size.wrapping_add(1);
         *pt_stack.items.offset(c2rust_fresh6 as isize) = kEPTAssignment;
@@ -4291,17 +4053,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         let is_concat_or_subscript: bool = want_node as ::core::ffi::c_uint
             == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
             && ast_stack.size > 1 as size_t
-            && (***ast_stack
-                .items
-                .offset(
-                    ast_stack.size.wrapping_sub(1 as size_t).wrapping_sub(1 as size_t)
-                        as isize,
-                ))
-                .type_0 as ::core::ffi::c_uint
-                == kExprNodeConcatOrSubscript as ::core::ffi::c_int
-                    as ::core::ffi::c_uint;
-        let lexer_additional_flags: ::core::ffi::c_int = kELFlagPeek
-            as ::core::ffi::c_int
+            && (***ast_stack.items.offset(
+                ast_stack
+                    .size
+                    .wrapping_sub(1 as size_t)
+                    .wrapping_sub(1 as size_t) as isize,
+            ))
+            .type_0 as ::core::ffi::c_uint
+                == kExprNodeConcatOrSubscript as ::core::ffi::c_int as ::core::ffi::c_uint;
+        let lexer_additional_flags: ::core::ffi::c_int = kELFlagPeek as ::core::ffi::c_int
             | (if flags & kExprFlagsDisallowEOC as ::core::ffi::c_int != 0 {
                 kELFlagForbidEOC as ::core::ffi::c_int
             } else {
@@ -4310,25 +4070,21 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             | (if want_node as ::core::ffi::c_uint
                 == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
                 && (ast_stack.size == 1 as size_t
-                    || (***ast_stack
-                        .items
-                        .offset(
+                    || (***ast_stack.items.offset(
+                        ast_stack
+                            .size
+                            .wrapping_sub(1 as size_t)
+                            .wrapping_sub(1 as size_t) as isize,
+                    ))
+                    .type_0 as ::core::ffi::c_uint
+                        != kExprNodeConcat as ::core::ffi::c_int as ::core::ffi::c_uint
+                        && (***ast_stack.items.offset(
                             ast_stack
                                 .size
                                 .wrapping_sub(1 as size_t)
                                 .wrapping_sub(1 as size_t) as isize,
                         ))
                         .type_0 as ::core::ffi::c_uint
-                        != kExprNodeConcat as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && (***ast_stack
-                            .items
-                            .offset(
-                                ast_stack
-                                    .size
-                                    .wrapping_sub(1 as size_t)
-                                    .wrapping_sub(1 as size_t) as isize,
-                            ))
-                            .type_0 as ::core::ffi::c_uint
                             != kExprNodeConcatOrSubscript as ::core::ffi::c_int
                                 as ::core::ffi::c_uint)
             {
@@ -4355,12 +4111,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     loop {
                         cur_token = viml_pexpr_next_token(
                             pstate,
-                            want_node_to_lexer_flags[want_node as usize]
-                                | lexer_additional_flags,
+                            want_node_to_lexer_flags[want_node as usize] | lexer_additional_flags,
                         );
                         if tok_type as ::core::ffi::c_uint
-                            == kExprLexSpacing as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
+                            == kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             if is_invalid {
                                 viml_parser_highlight(
@@ -4379,8 +4133,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         } else {
                             if is_invalid as ::core::ffi::c_int != 0
                                 && prev_token.type_0 as ::core::ffi::c_uint
-                                    == kExprLexSpacing as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint && !highlighted_prev_spacing
+                                    == kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint
+                                && !highlighted_prev_spacing
                             {
                                 viml_parser_highlight(
                                     pstate,
@@ -4401,16 +4155,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 .lines
                                 .items
                                 .offset(cur_token.start.line as isize);
-                            top_node_p = *ast_stack
-                                .items
-                                .offset(
-                                    ast_stack
-                                        .size
-                                        .wrapping_sub(0 as size_t)
-                                        .wrapping_sub(1 as size_t) as isize,
-                                );
+                            top_node_p = *ast_stack.items.offset(
+                                ast_stack
+                                    .size
+                                    .wrapping_sub(0 as size_t)
+                                    .wrapping_sub(1 as size_t)
+                                    as isize,
+                            );
                             '_c2rust_label: {
-                                if ast_stack.size >= 1 as size_t {} else {
+                                if ast_stack.size >= 1 as size_t {
+                                } else {
                                     __assert_fail(
                                         b"kv_size(ast_stack) >= 1\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -4428,7 +4182,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             '_c2rust_label_0: {
                                 if want_value as ::core::ffi::c_int
                                     == (*top_node_p).is_null() as ::core::ffi::c_int
-                                {} else {
+                                {
+                                } else {
                                     __assert_fail(
                                         b"want_value == (*top_node_p == NULL)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -4443,7 +4198,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             '_c2rust_label_1: {
                                 if *ast_stack.items.offset(0 as ::core::ffi::c_int as isize)
                                     == &raw mut ast.root
-                                {} else {
+                                {
+                                } else {
                                     __assert_fail(
                                         b"kv_A(ast_stack, 0) == &ast.root\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -4465,12 +4221,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             .items
                                             .offset(i.wrapping_add(1 as size_t) as isize)
                                         && (if item_null as ::core::ffi::c_int != 0 {
-                                            (***ast_stack.items.offset(i as isize)).children.is_null()
+                                            (***ast_stack.items.offset(i as isize))
+                                                .children
+                                                .is_null()
                                                 as ::core::ffi::c_int
                                         } else {
                                             (*(***ast_stack.items.offset(i as isize)).children)
                                                 .next
-                                                .is_null() as ::core::ffi::c_int
+                                                .is_null()
+                                                as ::core::ffi::c_int
                                         }) != 0
                                         || &raw mut (*(***ast_stack.items.offset(i as isize))
                                             .children)
@@ -4481,13 +4240,18 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             && (if item_null as ::core::ffi::c_int != 0 {
                                                 (*(***ast_stack.items.offset(i as isize)).children)
                                                     .next
-                                                    .is_null() as ::core::ffi::c_int
+                                                    .is_null()
+                                                    as ::core::ffi::c_int
                                             } else {
-                                                (*(*(***ast_stack.items.offset(i as isize)).children).next)
+                                                (*(*(***ast_stack.items.offset(i as isize))
+                                                    .children)
+                                                    .next)
                                                     .next
-                                                    .is_null() as ::core::ffi::c_int
+                                                    .is_null()
+                                                    as ::core::ffi::c_int
                                             }) != 0
-                                    {} else {
+                                    {
+                                    } else {
                                         __assert_fail(
                                             b"(&(*kv_A(ast_stack, i))->children == kv_A(ast_stack, i + 1) && (item_null ? (*kv_A(ast_stack, i))->children == NULL : (*kv_A(ast_stack, i))->children->next == NULL)) || ((&(*kv_A(ast_stack, i))->children->next == kv_A(ast_stack, i + 1)) && (item_null ? (*kv_A(ast_stack, i))->children->next == NULL : (*kv_A(ast_stack, i))->children->next->next == NULL))\0"
                                                 .as_ptr() as *const ::core::ffi::c_char,
@@ -4501,8 +4265,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 };
                                 i = i.wrapping_add(1);
                             }
-                            node_is_key = is_concat_or_subscript as ::core::ffi::c_int
-                                != 0
+                            node_is_key = is_concat_or_subscript as ::core::ffi::c_int != 0
                                 && (if cur_token.type_0 as ::core::ffi::c_uint
                                     == kExprLexPlainIdentifier as ::core::ffi::c_int
                                         as ::core::ffi::c_uint
@@ -4510,46 +4273,43 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     (!cur_token.data.var.autoload
                                         && cur_token.data.var.scope as ::core::ffi::c_uint
                                             == kExprVarScopeMissing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint) as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint)
+                                        as ::core::ffi::c_int
                                 } else {
                                     (cur_token.type_0 as ::core::ffi::c_uint
                                         == kExprLexNumber as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint) as ::core::ffi::c_int
+                                            as ::core::ffi::c_uint)
+                                        as ::core::ffi::c_int
                                 }) != 0
                                 && prev_token.type_0 as ::core::ffi::c_uint
-                                    != kExprLexSpacing as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint;
-                            if is_concat_or_subscript as ::core::ffi::c_int != 0
-                                && !node_is_key
-                            {
-                                (***ast_stack
-                                    .items
-                                    .offset(
-                                        ast_stack
-                                            .size
-                                            .wrapping_sub(1 as size_t)
-                                            .wrapping_sub(1 as size_t) as isize,
-                                    ))
-                                    .type_0 = kExprNodeConcat;
-                            }
-                            is_single_assignment = *pt_stack
-                                .items
-                                .offset(
-                                    pt_stack
+                                    != kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint;
+                            if is_concat_or_subscript as ::core::ffi::c_int != 0 && !node_is_key {
+                                (***ast_stack.items.offset(
+                                    ast_stack
                                         .size
-                                        .wrapping_sub(0 as size_t)
-                                        .wrapping_sub(1 as size_t) as isize,
-                                ) as ::core::ffi::c_uint
+                                        .wrapping_sub(1 as size_t)
+                                        .wrapping_sub(1 as size_t)
+                                        as isize,
+                                ))
+                                .type_0 = kExprNodeConcat;
+                            }
+                            is_single_assignment = *pt_stack.items.offset(
+                                pt_stack
+                                    .size
+                                    .wrapping_sub(0 as size_t)
+                                    .wrapping_sub(1 as size_t)
+                                    as isize,
+                            )
+                                as ::core::ffi::c_uint
                                 == kEPTSingleAssignment as ::core::ffi::c_int
                                     as ::core::ffi::c_uint;
-                            match *pt_stack
-                                .items
-                                .offset(
-                                    pt_stack
-                                        .size
-                                        .wrapping_sub(0 as size_t)
-                                        .wrapping_sub(1 as size_t) as isize,
-                                ) as ::core::ffi::c_uint
+                            match *pt_stack.items.offset(
+                                pt_stack
+                                    .size
+                                    .wrapping_sub(0 as size_t)
+                                    .wrapping_sub(1 as size_t)
+                                    as isize,
+                            ) as ::core::ffi::c_uint
                             {
                                 1 => {
                                     if want_node as ::core::ffi::c_uint
@@ -4562,21 +4322,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             != kExprLexArrow as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
                                         || want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == kENodeValue as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                             && !(cur_token.type_0 as ::core::ffi::c_uint
                                                 == kExprLexPlainIdentifier as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
                                                 && cur_token.data.var.scope as ::core::ffi::c_uint
                                                     == kExprVarScopeMissing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint && !cur_token.data.var.autoload)
+                                                        as ::core::ffi::c_uint
+                                                && !cur_token.data.var.autoload)
                                             && tok_type as ::core::ffi::c_uint
                                                 != kExprLexArrow as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
                                     {
-                                        (*lambda_node).data.fig.type_guesses.allow_lambda = false_0
-                                            != 0;
+                                        (*lambda_node).data.fig.type_guesses.allow_lambda =
+                                            false_0 != 0;
                                         if !(*lambda_node).children.is_null()
-                                            && (*(*lambda_node).children).type_0 as ::core::ffi::c_uint
+                                            && (*(*lambda_node).children).type_0
+                                                as ::core::ffi::c_uint
                                                 == kExprNodeComma as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
                                         {
@@ -4608,13 +4371,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         && (tok_type as ::core::ffi::c_uint
                                             != kExprLexFigureBrace as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
-                                            || cur_token.data.brc.closing as ::core::ffi::c_int != 0)
+                                            || cur_token.data.brc.closing as ::core::ffi::c_int
+                                                != 0)
                                         && !(node_is_key as ::core::ffi::c_int != 0
                                             && tok_type as ::core::ffi::c_uint
                                                 == kExprLexNumber as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint)
                                         && tok_type as ::core::ffi::c_uint
-                                            != kExprLexEnv as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            != kExprLexEnv as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         && tok_type as ::core::ffi::c_uint
                                             != kExprLexOption as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
@@ -4642,12 +4407,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         && (tok_type as ::core::ffi::c_uint
                                             != kExprLexFigureBrace as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
-                                            || cur_token.data.brc.closing as ::core::ffi::c_int != 0)
+                                            || cur_token.data.brc.closing as ::core::ffi::c_int
+                                                != 0)
                                         && tok_type as ::core::ffi::c_uint
-                                            != kExprLexDot as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            != kExprLexDot as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         && (tok_type as ::core::ffi::c_uint
                                             != kExprLexComma as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint || !is_single_assignment)
+                                                as ::core::ffi::c_uint
+                                            || !is_single_assignment)
                                         && tok_type as ::core::ffi::c_uint
                                             != kExprLexAssignment as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
@@ -4656,7 +4424,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                             || tok_type as ::core::ffi::c_uint
                                                 == kExprLexFigureBrace as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint && !cur_token.data.brc.closing)
+                                                    as ::core::ffi::c_uint
+                                                && !cur_token.data.brc.closing)
                                             && prev_token.type_0 as ::core::ffi::c_uint
                                                 != kExprLexSpacing as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint)
@@ -4679,7 +4448,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         pt_stack.size = pt_stack.size.wrapping_sub(1 as size_t);
                                     }
                                     '_c2rust_label_3: {
-                                        if pt_stack.size != 0 {} else {
+                                        if pt_stack.size != 0 {
+                                        } else {
                                             __assert_fail(
                                                 b"kv_size(pt_stack)\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
@@ -4695,7 +4465,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 0 | _ => {}
                             }
                             '_c2rust_label_4: {
-                                if pt_stack.size != 0 {} else {
+                                if pt_stack.size != 0 {
+                                } else {
                                     __assert_fail(
                                         b"kv_size(pt_stack)\0".as_ptr()
                                             as *const ::core::ffi::c_char,
@@ -4707,20 +4478,20 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     );
                                 }
                             };
-                            cur_pt = *pt_stack
-                                .items
-                                .offset(
-                                    pt_stack
-                                        .size
-                                        .wrapping_sub(0 as size_t)
-                                        .wrapping_sub(1 as size_t) as isize,
-                                );
+                            cur_pt = *pt_stack.items.offset(
+                                pt_stack
+                                    .size
+                                    .wrapping_sub(0 as size_t)
+                                    .wrapping_sub(1 as size_t)
+                                    as isize,
+                            );
                             '_c2rust_label_5: {
                                 if lambda_node.is_null()
                                     || cur_pt as ::core::ffi::c_uint
                                         == kEPTLambdaArguments as ::core::ffi::c_int
                                             as ::core::ffi::c_uint
-                                {} else {
+                                {
+                                } else {
                                     __assert_fail(
                                         b"lambda_node == NULL || cur_pt == kEPTLambdaArguments\0"
                                             .as_ptr() as *const ::core::ffi::c_char,
@@ -4757,7 +4528,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_6: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -4773,10 +4545,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -4787,9 +4557,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -4799,7 +4568,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeRegister);
                                         (*cur_node).start = cur_token.start;
@@ -4809,9 +4580,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).data.reg.name = cur_token.data.reg.name;
                                         *top_node_p = cur_node;
@@ -4824,7 +4594,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidRegister\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimRegister\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimRegister\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                         break '_viml_pexpr_parse_cycle_end;
@@ -4842,99 +4613,139 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         *top_node_p = cur_node;
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh7 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_0 = &raw mut *ast_stack
@@ -4949,7 +4760,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidUnaryPlus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimUnaryPlus\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimUnaryPlus\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                     } else {
@@ -4961,9 +4773,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         is_invalid = is_invalid as ::core::ffi::c_int
                                             | !viml_pexpr_handle_bop(
@@ -4972,7 +4783,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
@@ -4981,7 +4794,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidBinaryPlus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimBinaryPlus\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimBinaryPlus\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                     }
@@ -5000,99 +4814,139 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         *top_node_p = cur_node;
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh8 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_1 = &raw mut *ast_stack
@@ -5107,7 +4961,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidUnaryMinus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimUnaryMinus\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimUnaryMinus\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                     } else {
@@ -5119,9 +4974,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         is_invalid = is_invalid as ::core::ffi::c_int
                                             | !viml_pexpr_handle_bop(
@@ -5130,7 +4984,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
@@ -5139,7 +4995,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidBinaryMinus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimBinaryMinus\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimBinaryMinus\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                     }
@@ -5168,9 +5025,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -5183,16 +5039,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*cur_node).start = prev_token.start;
-                                        (*cur_node).len = (*cur_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*cur_node).len =
+                                            (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
-                                            b"NvimInvalidOr\0".as_ptr() as *const ::core::ffi::c_char
+                                            b"NvimInvalidOr\0".as_ptr()
+                                                as *const ::core::ffi::c_char
                                         } else {
                                             b"NvimOr\0".as_ptr() as *const ::core::ffi::c_char
                                         },
@@ -5204,7 +5060,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 7 => {
@@ -5229,9 +5087,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -5244,16 +5101,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*cur_node).start = prev_token.start;
-                                        (*cur_node).len = (*cur_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*cur_node).len =
+                                            (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
-                                            b"NvimInvalidAnd\0".as_ptr() as *const ::core::ffi::c_char
+                                            b"NvimInvalidAnd\0".as_ptr()
+                                                as *const ::core::ffi::c_char
                                         } else {
                                             b"NvimAnd\0".as_ptr() as *const ::core::ffi::c_char
                                         },
@@ -5265,7 +5122,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 12 => {
@@ -5290,9 +5149,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -5307,9 +5165,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             viml_parser_highlight(
                                                 pstate,
@@ -5333,9 +5190,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             viml_parser_highlight(
                                                 pstate,
@@ -5345,7 +5201,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     b"NvimInvalidDivision\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimDivision\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimDivision\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         }
@@ -5358,18 +5215,19 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidMod\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimInvalidMod\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimMod\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimMod\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         }
@@ -5382,7 +5240,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 17 => {
@@ -5396,7 +5256,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_7: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -5412,10 +5273,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -5426,9 +5285,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -5438,7 +5296,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeOption);
                                         (*cur_node).start = cur_token.start;
@@ -5448,9 +5308,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         if cur_token.type_0 as ::core::ffi::c_uint
                                             == kExprLexInvalid as ::core::ffi::c_int
@@ -5459,12 +5318,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             '_c2rust_label_8: {
                                                 if cur_token.len == 1 as size_t
                                                     || cur_token.len == 3 as size_t
-                                                        && *pline
-                                                            .data
-                                                            .offset(
-                                                                cur_token.start.col.wrapping_add(2 as size_t) as isize,
-                                                            ) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                                                {} else {
+                                                        && *pline.data.offset(
+                                                            cur_token
+                                                                .start
+                                                                .col
+                                                                .wrapping_add(2 as size_t)
+                                                                as isize,
+                                                        )
+                                                            as ::core::ffi::c_int
+                                                            == ':' as ::core::ffi::c_int
+                                                {
+                                                } else {
                                                     __assert_fail(
                                                         b"cur_token.len == 1 || (cur_token.len == 3 && pline.data[cur_token.start.col + 2] == ':')\0"
                                                             .as_ptr() as *const ::core::ffi::c_char,
@@ -5484,15 +5348,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*cur_node).data.opt.scope = (if cur_token.len
                                                 == 3 as size_t
                                             {
-                                                *pline
-                                                    .data
-                                                    .offset(
-                                                        cur_token.start.col.wrapping_add(1 as size_t) as isize,
-                                                    ) as ExprOptScope as ::core::ffi::c_uint
+                                                *pline.data.offset(
+                                                    cur_token.start.col.wrapping_add(1 as size_t)
+                                                        as isize,
+                                                )
+                                                    as ExprOptScope
+                                                    as ::core::ffi::c_uint
                                             } else {
                                                 kExprOptScopeUnspecified as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
-                                            }) as ExprOptScope;
+                                            })
+                                                as ExprOptScope;
                                         } else {
                                             (*cur_node).data.opt.ident = cur_token.data.opt.name;
                                             (*cur_node).data.opt.ident_len = cur_token.data.opt.len;
@@ -5508,7 +5374,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidOptionSigil\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimOptionSigil\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimOptionSigil\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                         let scope_shift: size_t = (if cur_token.data.opt.scope
@@ -5519,7 +5386,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             0 as ::core::ffi::c_int
                                         } else {
                                             2 as ::core::ffi::c_int
-                                        }) as size_t;
+                                        })
+                                            as size_t;
                                         if scope_shift != 0 {
                                             viml_parser_highlight(
                                                 pstate,
@@ -5529,7 +5397,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     b"NvimInvalidOptionScope\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimOptionScope\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimOptionScope\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                             viml_parser_highlight(
@@ -5551,14 +5420,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                                 scope_shift.wrapping_add(1 as size_t),
                                             ),
-                                            cur_token
-                                                .len
-                                                .wrapping_sub(scope_shift.wrapping_add(1 as size_t)),
+                                            cur_token.len.wrapping_sub(
+                                                scope_shift.wrapping_add(1 as size_t),
+                                            ),
                                             if is_invalid as ::core::ffi::c_int != 0 {
                                                 b"NvimInvalidOptionName\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimOptionName\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimOptionName\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                         break '_viml_pexpr_parse_cycle_end;
@@ -5575,7 +5445,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_9: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -5591,10 +5462,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -5605,9 +5474,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -5617,7 +5485,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeEnvironment);
                                         (*cur_node).start = cur_token.start;
@@ -5627,24 +5497,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).data.env.ident = pline
                                             .data
                                             .offset(cur_token.start.col as isize)
                                             .offset(1 as ::core::ffi::c_int as isize);
-                                        (*cur_node).data.env.ident_len = cur_token
-                                            .len
-                                            .wrapping_sub(1 as size_t);
+                                        (*cur_node).data.env.ident_len =
+                                            cur_token.len.wrapping_sub(1 as size_t);
                                         if (*cur_node).data.env.ident_len == 0 as size_t {
                                             is_invalid = true_0 != 0;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
                                                 gettext(
-                                                    b"E15: Environment variable name missing\0".as_ptr()
+                                                    b"E15: Environment variable name missing\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                                 cur_token.start,
@@ -5690,7 +5559,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_10: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -5706,10 +5576,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -5720,9 +5588,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -5732,7 +5599,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeNot);
                                         (*cur_node).start = cur_token.start;
@@ -5742,99 +5611,139 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         *top_node_p = cur_node;
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh9 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_2 = &raw mut *ast_stack
@@ -5846,7 +5755,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
-                                                b"NvimInvalidNot\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimInvalidNot\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             } else {
                                                 b"NvimNot\0".as_ptr() as *const ::core::ffi::c_char
                                             },
@@ -5876,9 +5786,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -5891,9 +5800,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*cur_node).start = prev_token.start;
-                                        (*cur_node).len = (*cur_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*cur_node).len =
+                                            (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     if cur_token.type_0 as ::core::ffi::c_uint
                                         == kExprLexInvalid as ::core::ffi::c_int
@@ -5914,7 +5822,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     if cur_token.data.cmp.ccs as ::core::ffi::c_uint
                                         != kCCStrategyUseOption as ::core::ffi::c_int
                                             as ::core::ffi::c_uint
@@ -5927,7 +5837,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidComparison\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimComparison\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimComparison\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                         viml_parser_highlight(
@@ -5954,7 +5865,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidComparison\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimComparison\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimComparison\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                     }
@@ -5964,11 +5876,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 24 => {
                                     '_c2rust_label_11: {
                                         if !(want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == kENodeValue as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                             && cur_pt as ::core::ffi::c_uint
                                                 == kEPTLambdaArguments as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint)
-                                        {} else {
+                                        {
+                                        } else {
                                             __assert_fail(
                                                 b"!(want_node == kENodeValue && cur_pt == kEPTLambdaArguments)\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
@@ -6001,9 +5915,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         *top_node_p = cur_node;
@@ -6014,7 +5927,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         '_c2rust_label_12: {
-                                            if !lambda_node.is_null() {} else {
+                                            if !lambda_node.is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"lambda_node != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -6027,8 +5941,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             }
                                         };
                                         '_c2rust_label_13: {
-                                            if (*lambda_node).data.fig.type_guesses.allow_lambda
-                                            {} else {
+                                            if (*lambda_node).data.fig.type_guesses.allow_lambda {
+                                            } else {
                                                 __assert_fail(
                                                     b"lambda_node->data.fig.type_guesses.allow_lambda\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
@@ -6048,7 +5962,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 || (*node_).type_0 as ::core::ffi::c_uint
                                                     == kExprNodeLambda as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
-                                            {} else {
+                                            {
+                                            } else {
                                                 __assert_fail(
                                                     b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeLambda\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
@@ -6062,14 +5977,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         };
                                         (*node_).type_0 = kExprNodeLambda;
                                         if !(*pstate).colors.is_null() {
-                                            (*(*(*pstate).colors)
-                                                .items
-                                                .offset((*node_).data.fig.opening_hl_idx as isize))
-                                                .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                            (*(*(*pstate).colors).items.offset(
+                                                (*node_).data.fig.opening_hl_idx as isize,
+                                            ))
+                                            .group = if is_invalid as ::core::ffi::c_int != 0 {
                                                 b"NvimInvalidLambda\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimLambda\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimLambda\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             };
                                         }
                                     }
@@ -6081,12 +5997,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     if i_0 >= ast_stack.size {
                                                         break 's_2222;
                                                     }
-                                                    eastnode_p = *ast_stack
-                                                        .items
-                                                        .offset(
-                                                            ast_stack.size.wrapping_sub(i_0).wrapping_sub(1 as size_t)
-                                                                as isize,
-                                                        ) as *const *mut ExprASTNode;
+                                                    eastnode_p = *ast_stack.items.offset(
+                                                        ast_stack
+                                                            .size
+                                                            .wrapping_sub(i_0)
+                                                            .wrapping_sub(1 as size_t)
+                                                            as isize,
+                                                    )
+                                                        as *const *mut ExprASTNode;
                                                     eastnode_type = (**eastnode_p).type_0;
                                                     eastnode_lvl = node_lvl(**eastnode_p);
                                                     if eastnode_type as ::core::ffi::c_uint
@@ -6095,12 +6013,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     {
                                                         '_c2rust_label_15: {
                                                             if cur_pt as ::core::ffi::c_uint
-                                                                == kEPTLambdaArguments as ::core::ffi::c_int
+                                                                == kEPTLambdaArguments
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                                 && want_node as ::core::ffi::c_uint
-                                                                    == kENodeOperator as ::core::ffi::c_int
+                                                                    == kENodeOperator
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint
-                                                            {} else {
+                                                            {
+                                                            } else {
                                                                 __assert_fail(
                                                                     b"cur_pt == kEPTLambdaArguments && want_node == kENodeOperator\0"
                                                                         .as_ptr() as *const ::core::ffi::c_char,
@@ -6115,13 +6036,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         break 's_2222;
                                                     } else {
                                                         if eastnode_type as ::core::ffi::c_uint
-                                                            == kExprNodeDictLiteral as ::core::ffi::c_int
+                                                            == kExprNodeDictLiteral
+                                                                as ::core::ffi::c_int
                                                                 as ::core::ffi::c_uint
                                                             || eastnode_type as ::core::ffi::c_uint
-                                                                == kExprNodeListLiteral as ::core::ffi::c_int
+                                                                == kExprNodeListLiteral
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             || eastnode_type as ::core::ffi::c_uint
-                                                                == kExprNodeCall as ::core::ffi::c_int
+                                                                == kExprNodeCall
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                         {
                                                             break 's_2222;
@@ -6130,14 +6054,20 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             == kExprNodeComma as ::core::ffi::c_int
                                                                 as ::core::ffi::c_uint
                                                             || eastnode_type as ::core::ffi::c_uint
-                                                                == kExprNodeColon as ::core::ffi::c_int
+                                                                == kExprNodeColon
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             || eastnode_lvl as ::core::ffi::c_uint
-                                                                > kEOpLvlComma as ::core::ffi::c_int as ::core::ffi::c_uint)
+                                                                > kEOpLvlComma as ::core::ffi::c_int
+                                                                    as ::core::ffi::c_uint)
                                                         {
                                                             break '_viml_pexpr_parse_invalid_comma;
                                                         }
-                                                        if i_0 == ast_stack.size.wrapping_sub(1 as size_t) {
+                                                        if i_0
+                                                            == ast_stack
+                                                                .size
+                                                                .wrapping_sub(1 as size_t)
+                                                        {
                                                             break '_viml_pexpr_parse_invalid_comma;
                                                         }
                                                         i_0 = i_0.wrapping_add(1);
@@ -6164,9 +6094,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*cur_node).start = prev_token.start;
-                                        (*cur_node).len = (*cur_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*cur_node).len =
+                                            (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     is_invalid = is_invalid as ::core::ffi::c_int
                                         | !viml_pexpr_handle_bop(
@@ -6175,13 +6104,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
-                                            b"NvimInvalidComma\0".as_ptr() as *const ::core::ffi::c_char
+                                            b"NvimInvalidComma\0".as_ptr()
+                                                as *const ::core::ffi::c_char
                                         } else {
                                             b"NvimComma\0".as_ptr() as *const ::core::ffi::c_char
                                         },
@@ -6198,37 +6130,53 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     is_subscript = false_0 != 0;
                                                     let mut i_1: size_t = 1 as size_t;
                                                     while i_1 < ast_stack.size {
-                                                        let eastnode_p_0: *const *mut ExprASTNode = *ast_stack
-                                                            .items
-                                                            .offset(
-                                                                ast_stack.size.wrapping_sub(i_1).wrapping_sub(1 as size_t)
+                                                        let eastnode_p_0: *const *mut ExprASTNode =
+                                                            *ast_stack.items.offset(
+                                                                ast_stack
+                                                                    .size
+                                                                    .wrapping_sub(i_1)
+                                                                    .wrapping_sub(1 as size_t)
                                                                     as isize,
-                                                            ) as *const *mut ExprASTNode;
-                                                        let eastnode_type_0: ExprASTNodeType = (**eastnode_p_0)
-                                                            .type_0;
-                                                        let eastnode_lvl_0: ExprOpLvl = node_lvl(**eastnode_p_0);
+                                                            )
+                                                                as *const *mut ExprASTNode;
+                                                        let eastnode_type_0: ExprASTNodeType =
+                                                            (**eastnode_p_0).type_0;
+                                                        let eastnode_lvl_0: ExprOpLvl =
+                                                            node_lvl(**eastnode_p_0);
                                                         if can_be_ternary as ::core::ffi::c_int != 0
-                                                            && eastnode_type_0 as ::core::ffi::c_uint
-                                                                == kExprNodeTernaryValue as ::core::ffi::c_int
+                                                            && eastnode_type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprNodeTernaryValue
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             && !(**eastnode_p_0).data.ter.got_colon
                                                         {
-                                                            ast_stack.size = ast_stack.size.wrapping_sub(i_1);
-                                                            (**eastnode_p_0).start = cur_token.start;
+                                                            ast_stack.size =
+                                                                ast_stack.size.wrapping_sub(i_1);
+                                                            (**eastnode_p_0).start =
+                                                                cur_token.start;
                                                             (**eastnode_p_0).len = cur_token.len;
-                                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                                == kExprLexSpacing as ::core::ffi::c_int
+                                                            if prev_token.type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprLexSpacing
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             {
-                                                                (**eastnode_p_0).start = prev_token.start;
-                                                                (**eastnode_p_0).len = (**eastnode_p_0)
-                                                                    .len
-                                                                    .wrapping_add(prev_token.len);
+                                                                (**eastnode_p_0).start =
+                                                                    prev_token.start;
+                                                                (**eastnode_p_0).len =
+                                                                    (**eastnode_p_0)
+                                                                        .len
+                                                                        .wrapping_add(
+                                                                            prev_token.len,
+                                                                        );
                                                             }
                                                             is_ternary = true_0 != 0;
-                                                            (**eastnode_p_0).data.ter.got_colon = true_0 != 0;
+                                                            (**eastnode_p_0).data.ter.got_colon =
+                                                                true_0 != 0;
                                                             if want_node as ::core::ffi::c_uint
-                                                                == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                                == kENodeValue as ::core::ffi::c_int
+                                                                    as ::core::ffi::c_uint
                                                             {
                                                                 is_invalid = true_0 != 0;
                                                                 east_set_error(
@@ -6240,23 +6188,36 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     ),
                                                                     cur_token.start,
                                                                 );
-                                                                *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
-                                                                (**top_node_p).start = cur_token.start;
+                                                                *top_node_p = viml_pexpr_new_node(
+                                                                    kExprNodeMissing,
+                                                                );
+                                                                (**top_node_p).start =
+                                                                    cur_token.start;
                                                                 (**top_node_p).len = cur_token.len;
-                                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                                    == kExprLexSpacing as ::core::ffi::c_int
+                                                                if prev_token.type_0
+                                                                    as ::core::ffi::c_uint
+                                                                    == kExprLexSpacing
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint
                                                                 {
-                                                                    (**top_node_p).start = prev_token.start;
-                                                                    (**top_node_p).len = (**top_node_p)
-                                                                        .len
-                                                                        .wrapping_add(prev_token.len);
+                                                                    (**top_node_p).start =
+                                                                        prev_token.start;
+                                                                    (**top_node_p).len =
+                                                                        (**top_node_p)
+                                                                            .len
+                                                                            .wrapping_add(
+                                                                                prev_token.len,
+                                                                            );
                                                                 }
                                                                 (**top_node_p).len = 0 as size_t;
                                                                 want_node = kENodeOperator;
                                                             }
                                                             '_c2rust_label_16: {
-                                                                if !(**eastnode_p_0).children.is_null() {} else {
+                                                                if !(**eastnode_p_0)
+                                                                    .children
+                                                                    .is_null()
+                                                                {
+                                                                } else {
                                                                     __assert_fail(
                                                                         b"(*eastnode_p)->children != NULL\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
@@ -6269,7 +6230,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 }
                                                             };
                                                             '_c2rust_label_17: {
-                                                                if (*(**eastnode_p_0).children).next.is_null() {} else {
+                                                                if (*(**eastnode_p_0).children)
+                                                                    .next
+                                                                    .is_null()
+                                                                {
+                                                                } else {
                                                                     __assert_fail(
                                                                         b"(*eastnode_p)->children->next == NULL\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
@@ -6281,7 +6246,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     );
                                                                 }
                                                             };
-                                                            if ast_stack.size == ast_stack.capacity {
+                                                            if ast_stack.size == ast_stack.capacity
+                                                            {
                                                                 ast_stack.capacity = (if ast_stack.capacity
                                                                     << 1 as ::core::ffi::c_int
                                                                     > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
@@ -6368,28 +6334,41 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                         )
                                                                     })
                                                                 }) as *mut *mut *mut ExprASTNode;
-                                                            } else {};
+                                                            } else {
+                                                            };
                                                             let c2rust_fresh10 = ast_stack.size;
-                                                            ast_stack.size = ast_stack.size.wrapping_add(1);
-                                                            let c2rust_lvalue_ptr_3 = &raw mut *ast_stack
-                                                                .items
-                                                                .offset(c2rust_fresh10 as isize);
-                                                            *c2rust_lvalue_ptr_3 = &raw mut (*(**eastnode_p_0).children)
-                                                                .next;
+                                                            ast_stack.size =
+                                                                ast_stack.size.wrapping_add(1);
+                                                            let c2rust_lvalue_ptr_3 =
+                                                                &raw mut *ast_stack.items.offset(
+                                                                    c2rust_fresh10 as isize,
+                                                                );
+                                                            *c2rust_lvalue_ptr_3 =
+                                                                &raw mut (*(**eastnode_p_0)
+                                                                    .children)
+                                                                    .next;
                                                             break;
-                                                        } else if eastnode_type_0 as ::core::ffi::c_uint
-                                                            == kExprNodeUnknownFigure as ::core::ffi::c_int
+                                                        } else if eastnode_type_0
+                                                            as ::core::ffi::c_uint
+                                                            == kExprNodeUnknownFigure
+                                                                as ::core::ffi::c_int
                                                                 as ::core::ffi::c_uint
                                                         {
-                                                            let node__0: *mut ExprASTNode = *eastnode_p_0;
+                                                            let node__0: *mut ExprASTNode =
+                                                                *eastnode_p_0;
                                                             '_c2rust_label_18: {
-                                                                if (*node__0).type_0 as ::core::ffi::c_uint
-                                                                    == kExprNodeUnknownFigure as ::core::ffi::c_int
+                                                                if (*node__0).type_0
+                                                                    as ::core::ffi::c_uint
+                                                                    == kExprNodeUnknownFigure
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint
-                                                                    || (*node__0).type_0 as ::core::ffi::c_uint
-                                                                        == kExprNodeDictLiteral as ::core::ffi::c_int
+                                                                    || (*node__0).type_0
+                                                                        as ::core::ffi::c_uint
+                                                                        == kExprNodeDictLiteral
+                                                                            as ::core::ffi::c_int
                                                                             as ::core::ffi::c_uint
-                                                                {} else {
+                                                                {
+                                                                } else {
                                                                     __assert_fail(
                                                                         b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeDictLiteral\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
@@ -6401,12 +6380,22 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     );
                                                                 }
                                                             };
-                                                            (*node__0).type_0 = kExprNodeDictLiteral;
+                                                            (*node__0).type_0 =
+                                                                kExprNodeDictLiteral;
                                                             if !(*pstate).colors.is_null() {
                                                                 (*(*(*pstate).colors)
                                                                     .items
-                                                                    .offset((*node__0).data.fig.opening_hl_idx as isize))
-                                                                    .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                                                    .offset(
+                                                                        (*node__0)
+                                                                            .data
+                                                                            .fig
+                                                                            .opening_hl_idx
+                                                                            as isize,
+                                                                    ))
+                                                                .group = if is_invalid
+                                                                    as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -6414,19 +6403,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             }
                                                             break;
                                                         } else {
-                                                            if eastnode_type_0 as ::core::ffi::c_uint
-                                                                == kExprNodeDictLiteral as ::core::ffi::c_int
+                                                            if eastnode_type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprNodeDictLiteral
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             {
                                                                 break;
                                                             }
-                                                            if eastnode_type_0 as ::core::ffi::c_uint
-                                                                == kExprNodeSubscript as ::core::ffi::c_int
+                                                            if eastnode_type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprNodeSubscript
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             {
                                                                 is_subscript = true_0 != 0;
                                                                 '_c2rust_label_19: {
-                                                                    if !is_ternary {} else {
+                                                                    if !is_ternary {
+                                                                    } else {
                                                                         __assert_fail(
                                                                             b"!is_ternary\0".as_ptr() as *const ::core::ffi::c_char,
                                                                             b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -6439,24 +6433,35 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 };
                                                                 break;
                                                             } else {
-                                                                if eastnode_type_0 as ::core::ffi::c_uint
-                                                                    == kExprNodeColon as ::core::ffi::c_int
+                                                                if eastnode_type_0
+                                                                    as ::core::ffi::c_uint
+                                                                    == kExprNodeColon
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint
                                                                 {
                                                                     break '_viml_pexpr_parse_invalid_colon;
                                                                 }
-                                                                if (eastnode_lvl_0 as ::core::ffi::c_uint)
-                                                                    < kEOpLvlTernaryValue as ::core::ffi::c_int
+                                                                if (eastnode_lvl_0
+                                                                    as ::core::ffi::c_uint)
+                                                                    < kEOpLvlTernaryValue
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint
                                                                 {
-                                                                    if (eastnode_lvl_0 as ::core::ffi::c_uint)
-                                                                        < kEOpLvlComma as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                                    if (eastnode_lvl_0
+                                                                        as ::core::ffi::c_uint)
+                                                                        < kEOpLvlComma
+                                                                            as ::core::ffi::c_int
+                                                                            as ::core::ffi::c_uint
                                                                     {
                                                                         break '_viml_pexpr_parse_invalid_colon;
                                                                     }
                                                                     can_be_ternary = false_0 != 0;
                                                                 }
-                                                                if i_1 == ast_stack.size.wrapping_sub(1 as size_t) {
+                                                                if i_1
+                                                                    == ast_stack
+                                                                        .size
+                                                                        .wrapping_sub(1 as size_t)
+                                                                {
                                                                     break '_viml_pexpr_parse_invalid_colon;
                                                                 }
                                                                 i_1 = i_1.wrapping_add(1);
@@ -6465,7 +6470,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                     if is_subscript {
                                                         '_c2rust_label_20: {
-                                                            if ast_stack.size > 1 as size_t {} else {
+                                                            if ast_stack.size > 1 as size_t {
+                                                            } else {
                                                                 __assert_fail(
                                                                     b"kv_size(ast_stack) > 1\0".as_ptr()
                                                                         as *const ::core::ffi::c_char,
@@ -6478,27 +6484,34 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             }
                                                         };
                                                         if want_node as ::core::ffi::c_uint
-                                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                                            && (***ast_stack
-                                                                .items
-                                                                .offset(
-                                                                    ast_stack
-                                                                        .size
-                                                                        .wrapping_sub(1 as size_t)
-                                                                        .wrapping_sub(1 as size_t) as isize,
-                                                                ))
-                                                                .type_0 as ::core::ffi::c_uint
-                                                                == kExprNodeSubscript as ::core::ffi::c_int
+                                                            == kENodeValue as ::core::ffi::c_int
+                                                                as ::core::ffi::c_uint
+                                                            && (***ast_stack.items.offset(
+                                                                ast_stack
+                                                                    .size
+                                                                    .wrapping_sub(1 as size_t)
+                                                                    .wrapping_sub(1 as size_t)
+                                                                    as isize,
+                                                            ))
+                                                            .type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprNodeSubscript
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                         {
-                                                            *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
+                                                            *top_node_p = viml_pexpr_new_node(
+                                                                kExprNodeMissing,
+                                                            );
                                                             (**top_node_p).start = cur_token.start;
                                                             (**top_node_p).len = cur_token.len;
-                                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                                == kExprLexSpacing as ::core::ffi::c_int
+                                                            if prev_token.type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprLexSpacing
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             {
-                                                                (**top_node_p).start = prev_token.start;
+                                                                (**top_node_p).start =
+                                                                    prev_token.start;
                                                                 (**top_node_p).len = (**top_node_p)
                                                                     .len
                                                                     .wrapping_add(prev_token.len);
@@ -6506,7 +6519,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (**top_node_p).len = 0 as size_t;
                                                             want_node = kENodeOperator;
                                                         } else if want_node as ::core::ffi::c_uint
-                                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                            == kENodeValue as ::core::ffi::c_int
+                                                                as ::core::ffi::c_uint
                                                         {
                                                             is_invalid = true_0 != 0;
                                                             east_set_error(
@@ -6518,14 +6532,19 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 ),
                                                                 cur_token.start,
                                                             );
-                                                            *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
+                                                            *top_node_p = viml_pexpr_new_node(
+                                                                kExprNodeMissing,
+                                                            );
                                                             (**top_node_p).start = cur_token.start;
                                                             (**top_node_p).len = cur_token.len;
-                                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                                == kExprLexSpacing as ::core::ffi::c_int
+                                                            if prev_token.type_0
+                                                                as ::core::ffi::c_uint
+                                                                == kExprLexSpacing
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
                                                             {
-                                                                (**top_node_p).start = prev_token.start;
+                                                                (**top_node_p).start =
+                                                                    prev_token.start;
                                                                 (**top_node_p).len = (**top_node_p)
                                                                     .len
                                                                     .wrapping_add(prev_token.len);
@@ -6533,7 +6552,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (**top_node_p).len = 0 as size_t;
                                                             want_node = kENodeOperator;
                                                         }
-                                                        cur_node = viml_pexpr_new_node(kExprNodeColon);
+                                                        cur_node =
+                                                            viml_pexpr_new_node(kExprNodeColon);
                                                         (*cur_node).start = cur_token.start;
                                                         (*cur_node).len = cur_token.len;
                                                         if prev_token.type_0 as ::core::ffi::c_uint
@@ -6545,20 +6565,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 .len
                                                                 .wrapping_add(prev_token.len);
                                                         }
-                                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                                        is_invalid = is_invalid
+                                                            as ::core::ffi::c_int
                                                             | !viml_pexpr_handle_bop(
                                                                 pstate,
                                                                 &raw mut ast_stack,
                                                                 cur_node,
                                                                 &raw mut want_node,
                                                                 &raw mut ast.err,
-                                                            ) as ::core::ffi::c_int != 0;
+                                                            )
+                                                                as ::core::ffi::c_int
+                                                            != 0;
                                                         viml_parser_highlight(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0 {
-                                                                b"NvimInvalidSubscriptColon\0".as_ptr()
+                                                            if is_invalid as ::core::ffi::c_int != 0
+                                                            {
+                                                                b"NvimInvalidSubscriptColon\0"
+                                                                    .as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
                                                                 b"NvimSubscriptColon\0".as_ptr()
@@ -6583,14 +6608,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                         }
                                         if want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == kENodeValue as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         {
                                             is_invalid = true_0 != 0;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
                                                 gettext(
-                                                    b"E15: Expected value, got colon: %.*s\0".as_ptr()
+                                                    b"E15: Expected value, got colon: %.*s\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                                 cur_token.start,
@@ -6603,9 +6630,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (**top_node_p).start = prev_token.start;
-                                                (**top_node_p).len = (**top_node_p)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (**top_node_p).len =
+                                                    (**top_node_p).len.wrapping_add(prev_token.len);
                                             }
                                             (**top_node_p).len = 0 as size_t;
                                             want_node = kENodeOperator;
@@ -6619,7 +6645,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     b"NvimInvalidTernaryColon\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimTernaryColon\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimTernaryColon\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         } else {
@@ -6631,9 +6658,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             is_invalid = is_invalid as ::core::ffi::c_int
                                                 | !viml_pexpr_handle_bop(
@@ -6642,15 +6668,19 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     cur_node,
                                                     &raw mut want_node,
                                                     &raw mut ast.err,
-                                                ) as ::core::ffi::c_int != 0;
+                                                )
+                                                    as ::core::ffi::c_int
+                                                != 0;
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidColon\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimInvalidColon\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimColon\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimColon\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         }
@@ -6660,16 +6690,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 }
                                 21 => {
                                     if cur_token.data.brc.closing {
-                                        let mut new_top_node: *mut ExprASTNode = ::core::ptr::null_mut::<
-                                            ExprASTNode,
-                                        >();
-                                        let mut new_top_node_p: *mut *mut ExprASTNode = ::core::ptr::null_mut::<
-                                            *mut ExprASTNode,
-                                        >();
+                                        let mut new_top_node: *mut ExprASTNode =
+                                            ::core::ptr::null_mut::<ExprASTNode>();
+                                        let mut new_top_node_p: *mut *mut ExprASTNode =
+                                            ::core::ptr::null_mut::<*mut ExprASTNode>();
                                         ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
                                         's_3146: {
                                             if ast_stack.size == 0 {
-                                                cur_node = viml_pexpr_new_node(kExprNodeListLiteral);
+                                                cur_node =
+                                                    viml_pexpr_new_node(kExprNodeListLiteral);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
                                                 if prev_token.type_0 as ::core::ffi::c_uint
@@ -6683,7 +6712,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                                 (*cur_node).len = 0 as size_t;
                                                 if want_node as ::core::ffi::c_uint
-                                                    != kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                    != kENodeValue as ::core::ffi::c_int
+                                                        as ::core::ffi::c_uint
                                                 {
                                                     (*cur_node).children = *top_node_p;
                                                 }
@@ -6691,39 +6721,41 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 new_top_node_p = top_node_p;
                                             } else {
                                                 if want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                    == kENodeValue as ::core::ffi::c_int
+                                                        as ::core::ffi::c_uint
                                                 {
-                                                    if (***ast_stack
-                                                        .items
-                                                        .offset(
+                                                    if (***ast_stack.items.offset(
+                                                        ast_stack
+                                                            .size
+                                                            .wrapping_sub(0 as size_t)
+                                                            .wrapping_sub(1 as size_t)
+                                                            as isize,
+                                                    ))
+                                                    .type_0
+                                                        as ::core::ffi::c_uint
+                                                        != kExprNodeListLiteral
+                                                            as ::core::ffi::c_int
+                                                            as ::core::ffi::c_uint
+                                                        && (***ast_stack.items.offset(
                                                             ast_stack
                                                                 .size
                                                                 .wrapping_sub(0 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
+                                                                .wrapping_sub(1 as size_t)
+                                                                as isize,
                                                         ))
-                                                        .type_0 as ::core::ffi::c_uint
-                                                        != kExprNodeListLiteral as ::core::ffi::c_int
+                                                        .type_0
                                                             as ::core::ffi::c_uint
-                                                        && (***ast_stack
-                                                            .items
-                                                            .offset(
-                                                                ast_stack
-                                                                    .size
-                                                                    .wrapping_sub(0 as size_t)
-                                                                    .wrapping_sub(1 as size_t) as isize,
-                                                            ))
-                                                            .type_0 as ::core::ffi::c_uint
                                                             != kExprNodeComma as ::core::ffi::c_int
                                                                 as ::core::ffi::c_uint
-                                                        && (***ast_stack
-                                                            .items
-                                                            .offset(
-                                                                ast_stack
-                                                                    .size
-                                                                    .wrapping_sub(0 as size_t)
-                                                                    .wrapping_sub(1 as size_t) as isize,
-                                                            ))
-                                                            .type_0 as ::core::ffi::c_uint
+                                                        && (***ast_stack.items.offset(
+                                                            ast_stack
+                                                                .size
+                                                                .wrapping_sub(0 as size_t)
+                                                                .wrapping_sub(1 as size_t)
+                                                                as isize,
+                                                        ))
+                                                        .type_0
+                                                            as ::core::ffi::c_uint
                                                             != kExprNodeColon as ::core::ffi::c_int
                                                                 as ::core::ffi::c_uint
                                                     {
@@ -6746,20 +6778,27 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         .offset(ast_stack.size as isize);
                                                     if !(ast_stack.size != 0
                                                         && (new_top_node_p.is_null()
-                                                            || (**new_top_node_p).type_0 as ::core::ffi::c_uint
-                                                                != kExprNodeListLiteral as ::core::ffi::c_int
+                                                            || (**new_top_node_p).type_0
+                                                                as ::core::ffi::c_uint
+                                                                != kExprNodeListLiteral
+                                                                    as ::core::ffi::c_int
                                                                     as ::core::ffi::c_uint
-                                                                && (**new_top_node_p).type_0 as ::core::ffi::c_uint
-                                                                    != kExprNodeSubscript as ::core::ffi::c_int
+                                                                && (**new_top_node_p).type_0
+                                                                    as ::core::ffi::c_uint
+                                                                    != kExprNodeSubscript
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint))
                                                     {
                                                         break;
                                                     }
                                                 }
                                                 new_top_node = *new_top_node_p;
-                                                match (*new_top_node).type_0 as ::core::ffi::c_uint {
+                                                match (*new_top_node).type_0 as ::core::ffi::c_uint
+                                                {
                                                     6 => {
-                                                        if pt_is_assignment(cur_pt) as ::core::ffi::c_int != 0
+                                                        if pt_is_assignment(cur_pt)
+                                                            as ::core::ffi::c_int
+                                                            != 0
                                                             && (*new_top_node).children.is_null()
                                                         {
                                                             is_invalid = true_0 != 0;
@@ -6777,10 +6816,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0 {
-                                                                b"NvimInvalidList\0".as_ptr() as *const ::core::ffi::c_char
+                                                            if is_invalid as ::core::ffi::c_int != 0
+                                                            {
+                                                                b"NvimInvalidList\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             } else {
-                                                                b"NvimList\0".as_ptr() as *const ::core::ffi::c_char
+                                                                b"NvimList\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             },
                                                         );
                                                         break 's_3146;
@@ -6790,8 +6832,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0 {
-                                                                b"NvimInvalidSubscriptBracket\0".as_ptr()
+                                                            if is_invalid as ::core::ffi::c_int != 0
+                                                            {
+                                                                b"NvimInvalidSubscriptBracket\0"
+                                                                    .as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
                                                                 b"NvimSubscriptBracket\0".as_ptr()
@@ -6804,7 +6848,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             }
                                             '_c2rust_label_21: {
-                                                if ast_stack.size == 0 {} else {
+                                                if ast_stack.size == 0 {
+                                                } else {
                                                     __assert_fail(
                                                         b"!kv_size(ast_stack)\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -6821,7 +6866,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 &raw mut ast.err,
                                                 gettext(
-                                                    b"E15: Unexpected closing figure brace: %.*s\0".as_ptr()
+                                                    b"E15: Unexpected closing figure brace: %.*s\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                                 cur_token.start,
@@ -6831,100 +6877,143 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidList\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimInvalidList\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimList\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimList\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         }
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh11 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_4 = &raw mut *ast_stack
@@ -6934,7 +7023,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         want_node = kENodeOperator;
                                         if ast_stack.size <= asgn_level {
                                             '_c2rust_label_22: {
-                                                if ast_stack.size == asgn_level {} else {
+                                                if ast_stack.size == asgn_level {
+                                                } else {
                                                     __assert_fail(
                                                         b"kv_size(ast_stack) == asgn_level\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -6952,7 +7042,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 '_c2rust_label_23: {
-                                                    if !ast.err.msg.is_null() {} else {
+                                                    if !ast.err.msg.is_null() {
+                                                    } else {
                                                         __assert_fail(
                                                             b"ast.err.msg\0".as_ptr() as *const ::core::ffi::c_char,
                                                             b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -6964,25 +7055,29 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                 };
                                             } else if cur_pt as ::core::ffi::c_uint
-                                                == kEPTExpr as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                == kEPTExpr as ::core::ffi::c_int
+                                                    as ::core::ffi::c_uint
                                                 && pt_stack.size > 1 as size_t
                                                 && pt_is_assignment(
-                                                    *pt_stack
-                                                        .items
-                                                        .offset(
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_sub(1 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
-                                                        ),
-                                                ) as ::core::ffi::c_int != 0
+                                                    *pt_stack.items.offset(
+                                                        pt_stack
+                                                            .size
+                                                            .wrapping_sub(1 as size_t)
+                                                            .wrapping_sub(1 as size_t)
+                                                            as isize,
+                                                    ),
+                                                )
+                                                    as ::core::ffi::c_int
+                                                    != 0
                                             {
-                                                pt_stack.size = pt_stack.size.wrapping_sub(1 as size_t);
+                                                pt_stack.size =
+                                                    pt_stack.size.wrapping_sub(1 as size_t);
                                             }
                                         }
                                         if cur_pt as ::core::ffi::c_uint
                                             == kEPTSingleAssignment as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint && ast_stack.size == 1 as size_t
+                                                as ::core::ffi::c_uint
+                                            && ast_stack.size == 1 as size_t
                                         {
                                             pt_stack.size = pt_stack.size.wrapping_sub(1 as size_t);
                                         }
@@ -6998,99 +7093,139 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         *top_node_p = cur_node;
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh12 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_5 = &raw mut *ast_stack
@@ -7104,75 +7239,131 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if pt_stack.size == pt_stack.capacity {
                                                 pt_stack.capacity = (if pt_stack.capacity
                                                     << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as usize,
+                                                    > ::core::mem::size_of::<[ExprASTParseType; 4]>(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        ExprASTParseType,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
                                                         )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     pt_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
                                                     ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        ))
                                                         .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as size_t,
+                                                            (::core::mem::size_of::<
+                                                                [ExprASTParseType; 4],
+                                                            >(
+                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                ExprASTParseType,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as size_t,
                                                         )
                                                 });
-                                                pt_stack.items = (if pt_stack.capacity
-                                                    == ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                pt_stack.items =
+                                                    (if pt_stack.capacity
+                                                        == ::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
+                                                        )
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        ))
                                                         .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as usize,
+                                                            (::core::mem::size_of::<
+                                                                [ExprASTParseType; 4],
+                                                            >(
+                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                ExprASTParseType,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as usize,
                                                         )
-                                                {
-                                                    (if pt_stack.items
-                                                        == &raw mut pt_stack.init_array as *mut ExprASTParseType
                                                     {
-                                                        pt_stack.items as *mut ::core::ffi::c_void
+                                                        (if pt_stack.items
+                                                            == &raw mut pt_stack.init_array
+                                                                as *mut ExprASTParseType
+                                                        {
+                                                            pt_stack.items
+                                                                as *mut ::core::ffi::c_void
+                                                        } else {
+                                                            _memcpy_free(
+                                                                &raw mut pt_stack.init_array
+                                                                    as *mut ExprASTParseType
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        })
                                                     } else {
-                                                        _memcpy_free(
-                                                            &raw mut pt_stack.init_array as *mut ExprASTParseType
-                                                                as *mut ::core::ffi::c_void,
-                                                            pt_stack.items as *mut ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
+                                                        (if pt_stack.items
+                                                            == &raw mut pt_stack.init_array
+                                                                as *mut ExprASTParseType
+                                                        {
+                                                            memcpy(
+                                                                xmalloc(
+                                                                    pt_stack.capacity.wrapping_mul(
+                                                                        ::core::mem::size_of::<
+                                                                            ExprASTParseType,
+                                                                        >(
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                                pt_stack.items
+                                                                    as *const ::core::ffi::c_void,
+                                                                pt_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        } else {
+                                                            xrealloc(
+                                                                pt_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        })
                                                     })
-                                                } else {
-                                                    (if pt_stack.items
-                                                        == &raw mut pt_stack.init_array as *mut ExprASTParseType
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                pt_stack
-                                                                    .capacity
-                                                                    .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                            ),
-                                                            pt_stack.items as *const ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            pt_stack.items as *mut ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .capacity
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
-                                                    })
-                                                }) as *mut ExprASTParseType;
-                                            } else {};
+                                                        as *mut ExprASTParseType;
+                                            } else {
+                                            };
                                             let c2rust_fresh13 = pt_stack.size;
                                             pt_stack.size = pt_stack.size.wrapping_add(1);
-                                            *pt_stack.items.offset(c2rust_fresh13 as isize) = kEPTSingleAssignment;
+                                            *pt_stack.items.offset(c2rust_fresh13 as isize) =
+                                                kEPTSingleAssignment;
                                         } else if cur_pt as ::core::ffi::c_uint
                                             == kEPTSingleAssignment as ::core::ffi::c_int
                                                 as ::core::ffi::c_uint
@@ -7193,7 +7384,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
-                                                b"NvimInvalidList\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimInvalidList\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             } else {
                                                 b"NvimList\0".as_ptr() as *const ::core::ffi::c_char
                                             },
@@ -7209,7 +7401,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_24: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -7225,10 +7418,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -7239,9 +7430,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -7251,7 +7441,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeSubscript);
                                         (*cur_node).start = cur_token.start;
@@ -7261,9 +7453,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         is_invalid = is_invalid as ::core::ffi::c_int
                                             | !viml_pexpr_handle_bop(
@@ -7272,7 +7463,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
@@ -7288,8 +7481,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         if pt_is_assignment(cur_pt) {
                                             '_c2rust_label_25: {
                                                 if want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                                {} else {
+                                                    == kENodeValue as ::core::ffi::c_int
+                                                        as ::core::ffi::c_uint
+                                                {
+                                                } else {
                                                     __assert_fail(
                                                         b"want_node == kENodeValue\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -7305,91 +7500,146 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if pt_stack.size == pt_stack.capacity {
                                                 pt_stack.capacity = (if pt_stack.capacity
                                                     << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as usize,
+                                                    > ::core::mem::size_of::<[ExprASTParseType; 4]>(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        ExprASTParseType,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
                                                         )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     pt_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
                                                     ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        ))
                                                         .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as size_t,
+                                                            (::core::mem::size_of::<
+                                                                [ExprASTParseType; 4],
+                                                            >(
+                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                ExprASTParseType,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as size_t,
                                                         )
                                                 });
-                                                pt_stack.items = (if pt_stack.capacity
-                                                    == ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                pt_stack.items =
+                                                    (if pt_stack.capacity
+                                                        == ::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
+                                                        )
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        ))
                                                         .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as usize,
+                                                            (::core::mem::size_of::<
+                                                                [ExprASTParseType; 4],
+                                                            >(
+                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                ExprASTParseType,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as usize,
                                                         )
-                                                {
-                                                    (if pt_stack.items
-                                                        == &raw mut pt_stack.init_array as *mut ExprASTParseType
                                                     {
-                                                        pt_stack.items as *mut ::core::ffi::c_void
+                                                        (if pt_stack.items
+                                                            == &raw mut pt_stack.init_array
+                                                                as *mut ExprASTParseType
+                                                        {
+                                                            pt_stack.items
+                                                                as *mut ::core::ffi::c_void
+                                                        } else {
+                                                            _memcpy_free(
+                                                                &raw mut pt_stack.init_array
+                                                                    as *mut ExprASTParseType
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        })
                                                     } else {
-                                                        _memcpy_free(
-                                                            &raw mut pt_stack.init_array as *mut ExprASTParseType
-                                                                as *mut ::core::ffi::c_void,
-                                                            pt_stack.items as *mut ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
+                                                        (if pt_stack.items
+                                                            == &raw mut pt_stack.init_array
+                                                                as *mut ExprASTParseType
+                                                        {
+                                                            memcpy(
+                                                                xmalloc(
+                                                                    pt_stack.capacity.wrapping_mul(
+                                                                        ::core::mem::size_of::<
+                                                                            ExprASTParseType,
+                                                                        >(
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                                pt_stack.items
+                                                                    as *const ::core::ffi::c_void,
+                                                                pt_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        } else {
+                                                            xrealloc(
+                                                                pt_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        })
                                                     })
-                                                } else {
-                                                    (if pt_stack.items
-                                                        == &raw mut pt_stack.init_array as *mut ExprASTParseType
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                pt_stack
-                                                                    .capacity
-                                                                    .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                            ),
-                                                            pt_stack.items as *const ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            pt_stack.items as *mut ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .capacity
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
-                                                    })
-                                                }) as *mut ExprASTParseType;
-                                            } else {};
+                                                        as *mut ExprASTParseType;
+                                            } else {
+                                            };
                                             let c2rust_fresh14 = pt_stack.size;
                                             pt_stack.size = pt_stack.size.wrapping_add(1);
-                                            *pt_stack.items.offset(c2rust_fresh14 as isize) = kEPTExpr;
+                                            *pt_stack.items.offset(c2rust_fresh14 as isize) =
+                                                kEPTExpr;
                                         }
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
                                 22 => {
                                     if cur_token.data.brc.closing {
-                                        let mut new_top_node_0: *mut ExprASTNode = ::core::ptr::null_mut::<
-                                            ExprASTNode,
-                                        >();
-                                        let mut new_top_node_p_0: *mut *mut ExprASTNode = ::core::ptr::null_mut::<
-                                            *mut ExprASTNode,
-                                        >();
+                                        let mut new_top_node_0: *mut ExprASTNode =
+                                            ::core::ptr::null_mut::<ExprASTNode>();
+                                        let mut new_top_node_p_0: *mut *mut ExprASTNode =
+                                            ::core::ptr::null_mut::<*mut ExprASTNode>();
                                         ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
                                         's_3806: {
                                             if ast_stack.size == 0 {
-                                                cur_node = viml_pexpr_new_node(kExprNodeUnknownFigure);
+                                                cur_node =
+                                                    viml_pexpr_new_node(kExprNodeUnknownFigure);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
                                                 if prev_token.type_0 as ::core::ffi::c_uint
@@ -7401,14 +7651,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         .len
                                                         .wrapping_add(prev_token.len);
                                                 }
-                                                (*cur_node).data.fig.type_guesses.allow_lambda = false_0
-                                                    != 0;
-                                                (*cur_node).data.fig.type_guesses.allow_dict = false_0 != 0;
-                                                (*cur_node).data.fig.type_guesses.allow_ident = false_0
-                                                    != 0;
+                                                (*cur_node).data.fig.type_guesses.allow_lambda =
+                                                    false_0 != 0;
+                                                (*cur_node).data.fig.type_guesses.allow_dict =
+                                                    false_0 != 0;
+                                                (*cur_node).data.fig.type_guesses.allow_ident =
+                                                    false_0 != 0;
                                                 (*cur_node).len = 0 as size_t;
                                                 if want_node as ::core::ffi::c_uint
-                                                    != kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                    != kENodeValue as ::core::ffi::c_int
+                                                        as ::core::ffi::c_uint
                                                 {
                                                     (*cur_node).children = *top_node_p;
                                                 }
@@ -7416,28 +7668,30 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 new_top_node_p_0 = top_node_p;
                                             } else {
                                                 if want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                    == kENodeValue as ::core::ffi::c_int
+                                                        as ::core::ffi::c_uint
                                                 {
-                                                    if (***ast_stack
-                                                        .items
-                                                        .offset(
+                                                    if (***ast_stack.items.offset(
+                                                        ast_stack
+                                                            .size
+                                                            .wrapping_sub(0 as size_t)
+                                                            .wrapping_sub(1 as size_t)
+                                                            as isize,
+                                                    ))
+                                                    .type_0
+                                                        as ::core::ffi::c_uint
+                                                        != kExprNodeUnknownFigure
+                                                            as ::core::ffi::c_int
+                                                            as ::core::ffi::c_uint
+                                                        && (***ast_stack.items.offset(
                                                             ast_stack
                                                                 .size
                                                                 .wrapping_sub(0 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
+                                                                .wrapping_sub(1 as size_t)
+                                                                as isize,
                                                         ))
-                                                        .type_0 as ::core::ffi::c_uint
-                                                        != kExprNodeUnknownFigure as ::core::ffi::c_int
+                                                        .type_0
                                                             as ::core::ffi::c_uint
-                                                        && (***ast_stack
-                                                            .items
-                                                            .offset(
-                                                                ast_stack
-                                                                    .size
-                                                                    .wrapping_sub(0 as size_t)
-                                                                    .wrapping_sub(1 as size_t) as isize,
-                                                            ))
-                                                            .type_0 as ::core::ffi::c_uint
                                                             != kExprNodeComma as ::core::ffi::c_int
                                                                 as ::core::ffi::c_uint
                                                     {
@@ -7477,13 +7731,18 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                 }
                                                 new_top_node_0 = *new_top_node_p_0;
-                                                match (*new_top_node_0).type_0 as ::core::ffi::c_uint {
+                                                match (*new_top_node_0).type_0
+                                                    as ::core::ffi::c_uint
+                                                {
                                                     14 => {
                                                         if (*new_top_node_0).children.is_null() {
                                                             '_c2rust_label_26: {
                                                                 if want_node as ::core::ffi::c_uint
-                                                                    == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                                                {} else {
+                                                                    == kENodeValue
+                                                                        as ::core::ffi::c_int
+                                                                        as ::core::ffi::c_uint
+                                                                {
+                                                                } else {
                                                                     __assert_fail(
                                                                         b"want_node == kENodeValue\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
@@ -7496,8 +7755,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 }
                                                             };
                                                             '_c2rust_label_27: {
-                                                                if (*new_top_node_0).data.fig.type_guesses.allow_dict
-                                                                {} else {
+                                                                if (*new_top_node_0)
+                                                                    .data
+                                                                    .fig
+                                                                    .type_guesses
+                                                                    .allow_dict
+                                                                {
+                                                                } else {
                                                                     __assert_fail(
                                                                         b"new_top_node->data.fig.type_guesses.allow_dict\0".as_ptr()
                                                                             as *const ::core::ffi::c_char,
@@ -7509,15 +7773,21 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     );
                                                                 }
                                                             };
-                                                            let node__1: *mut ExprASTNode = new_top_node_0;
+                                                            let node__1: *mut ExprASTNode =
+                                                                new_top_node_0;
                                                             '_c2rust_label_28: {
-                                                                if (*node__1).type_0 as ::core::ffi::c_uint
-                                                                    == kExprNodeUnknownFigure as ::core::ffi::c_int
+                                                                if (*node__1).type_0
+                                                                    as ::core::ffi::c_uint
+                                                                    == kExprNodeUnknownFigure
+                                                                        as ::core::ffi::c_int
                                                                         as ::core::ffi::c_uint
-                                                                    || (*node__1).type_0 as ::core::ffi::c_uint
-                                                                        == kExprNodeDictLiteral as ::core::ffi::c_int
+                                                                    || (*node__1).type_0
+                                                                        as ::core::ffi::c_uint
+                                                                        == kExprNodeDictLiteral
+                                                                            as ::core::ffi::c_int
                                                                             as ::core::ffi::c_uint
-                                                                {} else {
+                                                                {
+                                                                } else {
                                                                     __assert_fail(
                                                                         b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeDictLiteral\0"
                                                                             .as_ptr() as *const ::core::ffi::c_char,
@@ -7529,12 +7799,22 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     );
                                                                 }
                                                             };
-                                                            (*node__1).type_0 = kExprNodeDictLiteral;
+                                                            (*node__1).type_0 =
+                                                                kExprNodeDictLiteral;
                                                             if !(*pstate).colors.is_null() {
                                                                 (*(*(*pstate).colors)
                                                                     .items
-                                                                    .offset((*node__1).data.fig.opening_hl_idx as isize))
-                                                                    .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                                                    .offset(
+                                                                        (*node__1)
+                                                                            .data
+                                                                            .fig
+                                                                            .opening_hl_idx
+                                                                            as isize,
+                                                                    ))
+                                                                .group = if is_invalid
+                                                                    as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -7544,7 +7824,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
-                                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                                if is_invalid as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -7556,7 +7838,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             .type_guesses
                                                             .allow_ident
                                                         {
-                                                            let node__2: *mut ExprASTNode = new_top_node_0;
+                                                            let node__2: *mut ExprASTNode =
+                                                                new_top_node_0;
                                                             '_c2rust_label_29: {
                                                                 if (*node__2).type_0 as ::core::ffi::c_uint
                                                                     == kExprNodeUnknownFigure as ::core::ffi::c_int
@@ -7576,12 +7859,22 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     );
                                                                 }
                                                             };
-                                                            (*node__2).type_0 = kExprNodeCurlyBracesIdentifier;
+                                                            (*node__2).type_0 =
+                                                                kExprNodeCurlyBracesIdentifier;
                                                             if !(*pstate).colors.is_null() {
                                                                 (*(*(*pstate).colors)
                                                                     .items
-                                                                    .offset((*node__2).data.fig.opening_hl_idx as isize))
-                                                                    .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                                                    .offset(
+                                                                        (*node__2)
+                                                                            .data
+                                                                            .fig
+                                                                            .opening_hl_idx
+                                                                            as isize,
+                                                                    ))
+                                                                .group = if is_invalid
+                                                                    as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
@@ -7591,7 +7884,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
-                                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                                if is_invalid as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
@@ -7611,8 +7906,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             if !(*pstate).colors.is_null() {
                                                                 (*(*(*pstate).colors)
                                                                     .items
-                                                                    .offset((*new_top_node_0).data.fig.opening_hl_idx as isize))
-                                                                    .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                                                    .offset(
+                                                                        (*new_top_node_0)
+                                                                            .data
+                                                                            .fig
+                                                                            .opening_hl_idx
+                                                                            as isize,
+                                                                    ))
+                                                                .group = if is_invalid
+                                                                    as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                                         as *const ::core::ffi::c_char
                                                                 } else {
@@ -7623,7 +7927,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
-                                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                                if is_invalid as ::core::ffi::c_int
+                                                                    != 0
+                                                                {
                                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                                         as *const ::core::ffi::c_char
                                                                 } else {
@@ -7638,10 +7944,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0 {
-                                                                b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
+                                                            if is_invalid as ::core::ffi::c_int != 0
+                                                            {
+                                                                b"NvimInvalidDict\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             } else {
-                                                                b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
+                                                                b"NvimDict\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             },
                                                         );
                                                         break 's_3806;
@@ -7651,10 +7960,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0 {
-                                                                b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
+                                                            if is_invalid as ::core::ffi::c_int != 0
+                                                            {
+                                                                b"NvimInvalidCurly\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             } else {
-                                                                b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
+                                                                b"NvimCurly\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             },
                                                         );
                                                         break 's_3806;
@@ -7664,11 +7976,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                                            if is_invalid as ::core::ffi::c_int != 0
+                                                            {
                                                                 b"NvimInvalidLambda\0".as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
-                                                                b"NvimLambda\0".as_ptr() as *const ::core::ffi::c_char
+                                                                b"NvimLambda\0".as_ptr()
+                                                                    as *const ::core::ffi::c_char
                                                             },
                                                         );
                                                         break 's_3806;
@@ -7677,7 +7991,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             }
                                             '_c2rust_label_30: {
-                                                if ast_stack.size == 0 {} else {
+                                                if ast_stack.size == 0 {
+                                                } else {
                                                     __assert_fail(
                                                         b"!kv_size(ast_stack)\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -7694,7 +8009,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 &raw mut ast.err,
                                                 gettext(
-                                                    b"E15: Unexpected closing figure brace: %.*s\0".as_ptr()
+                                                    b"E15: Unexpected closing figure brace: %.*s\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                                 cur_token.start,
@@ -7707,98 +8023,140 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimFigureBrace\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimFigureBrace\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         }
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh15 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_6 = &raw mut *ast_stack
@@ -7808,7 +8166,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         want_node = kENodeOperator;
                                         if ast_stack.size <= asgn_level {
                                             '_c2rust_label_31: {
-                                                if ast_stack.size == asgn_level {} else {
+                                                if ast_stack.size == asgn_level {
+                                                } else {
                                                     __assert_fail(
                                                         b"kv_size(ast_stack) == asgn_level\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -7821,20 +8180,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             };
                                             if cur_pt as ::core::ffi::c_uint
-                                                == kEPTExpr as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                == kEPTExpr as ::core::ffi::c_int
+                                                    as ::core::ffi::c_uint
                                                 && pt_stack.size > 1 as size_t
                                                 && pt_is_assignment(
-                                                    *pt_stack
-                                                        .items
-                                                        .offset(
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_sub(1 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
-                                                        ),
-                                                ) as ::core::ffi::c_int != 0
+                                                    *pt_stack.items.offset(
+                                                        pt_stack
+                                                            .size
+                                                            .wrapping_sub(1 as size_t)
+                                                            .wrapping_sub(1 as size_t)
+                                                            as isize,
+                                                    ),
+                                                )
+                                                    as ::core::ffi::c_int
+                                                    != 0
                                             {
-                                                pt_stack.size = pt_stack.size.wrapping_sub(1 as size_t);
+                                                pt_stack.size =
+                                                    pt_stack.size.wrapping_sub(1 as size_t);
                                                 asgn_level = 0 as size_t;
                                             }
                                         }
@@ -7850,13 +8212,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidFigureBrace\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimFigureBrace\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimFigureBrace\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                         if pt_is_assignment(cur_pt) {
-                                            cur_node = viml_pexpr_new_node(
-                                                kExprNodeCurlyBracesIdentifier,
-                                            );
+                                            cur_node =
+                                                viml_pexpr_new_node(kExprNodeCurlyBracesIdentifier);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
                                             if prev_token.type_0 as ::core::ffi::c_uint
@@ -7864,86 +8226,143 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.fig.type_guesses.allow_lambda = false_0
-                                                != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_dict = false_0 != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_ident = true_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_lambda =
+                                                false_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_dict =
+                                                false_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_ident =
+                                                true_0 != 0;
                                             if pt_stack.size == pt_stack.capacity {
                                                 pt_stack.capacity = (if pt_stack.capacity
                                                     << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as usize,
+                                                    > ::core::mem::size_of::<[ExprASTParseType; 4]>(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        ExprASTParseType,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
                                                         )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     pt_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
                                                     ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        ))
                                                         .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as size_t,
+                                                            (::core::mem::size_of::<
+                                                                [ExprASTParseType; 4],
+                                                            >(
+                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                ExprASTParseType,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as size_t,
                                                         )
                                                 });
-                                                pt_stack.items = (if pt_stack.capacity
-                                                    == ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                        .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                pt_stack.items =
+                                                    (if pt_stack.capacity
+                                                        == ::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
+                                                        )
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        ))
                                                         .wrapping_div(
-                                                            (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                == 0) as ::core::ffi::c_int as usize,
+                                                            (::core::mem::size_of::<
+                                                                [ExprASTParseType; 4],
+                                                            >(
+                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                ExprASTParseType,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as usize,
                                                         )
-                                                {
-                                                    (if pt_stack.items
-                                                        == &raw mut pt_stack.init_array as *mut ExprASTParseType
                                                     {
-                                                        pt_stack.items as *mut ::core::ffi::c_void
+                                                        (if pt_stack.items
+                                                            == &raw mut pt_stack.init_array
+                                                                as *mut ExprASTParseType
+                                                        {
+                                                            pt_stack.items
+                                                                as *mut ::core::ffi::c_void
+                                                        } else {
+                                                            _memcpy_free(
+                                                                &raw mut pt_stack.init_array
+                                                                    as *mut ExprASTParseType
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        })
                                                     } else {
-                                                        _memcpy_free(
-                                                            &raw mut pt_stack.init_array as *mut ExprASTParseType
-                                                                as *mut ::core::ffi::c_void,
-                                                            pt_stack.items as *mut ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
+                                                        (if pt_stack.items
+                                                            == &raw mut pt_stack.init_array
+                                                                as *mut ExprASTParseType
+                                                        {
+                                                            memcpy(
+                                                                xmalloc(
+                                                                    pt_stack.capacity.wrapping_mul(
+                                                                        ::core::mem::size_of::<
+                                                                            ExprASTParseType,
+                                                                        >(
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                                pt_stack.items
+                                                                    as *const ::core::ffi::c_void,
+                                                                pt_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        } else {
+                                                            xrealloc(
+                                                                pt_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                pt_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                ),
+                                                            )
+                                                        })
                                                     })
-                                                } else {
-                                                    (if pt_stack.items
-                                                        == &raw mut pt_stack.init_array as *mut ExprASTParseType
-                                                    {
-                                                        memcpy(
-                                                            xmalloc(
-                                                                pt_stack
-                                                                    .capacity
-                                                                    .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                            ),
-                                                            pt_stack.items as *const ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .size
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
-                                                    } else {
-                                                        xrealloc(
-                                                            pt_stack.items as *mut ::core::ffi::c_void,
-                                                            pt_stack
-                                                                .capacity
-                                                                .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
-                                                        )
-                                                    })
-                                                }) as *mut ExprASTParseType;
-                                            } else {};
+                                                        as *mut ExprASTParseType;
+                                            } else {
+                                            };
                                             let c2rust_fresh16 = pt_stack.size;
                                             pt_stack.size = pt_stack.size.wrapping_add(1);
-                                            *pt_stack.items.offset(c2rust_fresh16 as isize) = kEPTExpr;
+                                            *pt_stack.items.offset(c2rust_fresh16 as isize) =
+                                                kEPTExpr;
                                         } else {
                                             cur_node = viml_pexpr_new_node(kExprNodeUnknownFigure);
                                             (*cur_node).start = cur_token.start;
@@ -7953,109 +8372,150 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.fig.type_guesses.allow_lambda = true_0
-                                                != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_dict = true_0 != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_ident = true_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_lambda =
+                                                true_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_dict =
+                                                true_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_ident =
+                                                true_0 != 0;
                                         }
                                         if !(*pstate).colors.is_null() {
-                                            (*cur_node).data.fig.opening_hl_idx = (*(*pstate).colors)
-                                                .size
-                                                .wrapping_sub(1 as size_t);
+                                            (*cur_node).data.fig.opening_hl_idx =
+                                                (*(*pstate).colors).size.wrapping_sub(1 as size_t);
                                         }
                                         *top_node_p = cur_node;
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh17 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_7 = &raw mut *ast_stack
@@ -8066,34 +8526,63 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pt_stack.capacity = (if pt_stack.capacity
                                                 << 1 as ::core::ffi::c_int
                                                 > ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                    .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        ExprASTParseType,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                            .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                            == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
+                                                        (::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                 pt_stack.capacity << 1 as ::core::ffi::c_int
                                             } else {
                                                 ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                    .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        ExprASTParseType,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                            .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                            == 0) as ::core::ffi::c_int as size_t,
+                                                        (::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
                                                     )
                                             });
                                             pt_stack.items = (if pt_stack.capacity
                                                 == ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                    .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        ExprASTParseType,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                            .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                            == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
+                                                        (::core::mem::size_of::<
+                                                            [ExprASTParseType; 4],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            ExprASTParseType,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                 (if pt_stack.items
-                                                    == &raw mut pt_stack.init_array as *mut ExprASTParseType
+                                                    == &raw mut pt_stack.init_array
+                                                        as *mut ExprASTParseType
                                                 {
                                                     pt_stack.items as *mut ::core::ffi::c_void
                                                 } else {
@@ -8108,7 +8597,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 })
                                             } else {
                                                 (if pt_stack.items
-                                                    == &raw mut pt_stack.init_array as *mut ExprASTParseType
+                                                    == &raw mut pt_stack.init_array
+                                                        as *mut ExprASTParseType
                                                 {
                                                     memcpy(
                                                         xmalloc(
@@ -8129,11 +8619,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
                                                     )
                                                 })
-                                            }) as *mut ExprASTParseType;
-                                        } else {};
+                                            })
+                                                as *mut ExprASTParseType;
+                                        } else {
+                                        };
                                         let c2rust_fresh18 = pt_stack.size;
                                         pt_stack.size = pt_stack.size.wrapping_add(1);
-                                        *pt_stack.items.offset(c2rust_fresh18 as isize) = kEPTLambdaArguments;
+                                        *pt_stack.items.offset(c2rust_fresh18 as isize) =
+                                            kEPTLambdaArguments;
                                         lambda_node = cur_node;
                                         break 's_4376;
                                     } else {
@@ -8141,7 +8634,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if want_node as ::core::ffi::c_uint
                                                 == kENodeOperator as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
-                                            {} else {
+                                            {
+                                            } else {
                                                 __assert_fail(
                                                     b"want_node == kENodeOperator\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -8163,7 +8657,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 break '_viml_pexpr_parse_end;
                                             }
                                             '_c2rust_label_33: {
-                                                if !(*top_node_p).is_null() {} else {
+                                                if !(*top_node_p).is_null() {
+                                                } else {
                                                     __assert_fail(
                                                         b"*top_node_p != NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -8179,10 +8674,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
-                                                gettext(
-                                                    b"E15: Missing operator: %.*s\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
                                                 cur_token.start,
                                             );
                                             cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -8193,9 +8686,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             (*cur_node).len = 0 as size_t;
                                             is_invalid = is_invalid as ::core::ffi::c_int
@@ -8205,11 +8697,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     cur_node,
                                                     &raw mut want_node,
                                                     &raw mut ast.err,
-                                                ) as ::core::ffi::c_int != 0;
+                                                )
+                                                    as ::core::ffi::c_int
+                                                != 0;
                                         } else {
                                             match (**top_node_p).type_0 as ::core::ffi::c_uint {
                                                 13 | 11 | 17 => {
-                                                    cur_node = viml_pexpr_new_node(kExprNodeComplexIdentifier);
+                                                    cur_node = viml_pexpr_new_node(
+                                                        kExprNodeComplexIdentifier,
+                                                    );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
                                                     if prev_token.type_0 as ::core::ffi::c_uint
@@ -8227,47 +8723,83 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     if ast_stack.size == ast_stack.capacity {
                                                         ast_stack.capacity = (if ast_stack.capacity
                                                             << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            > ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                                )
-                                                        {
-                                                            ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as usize,
+                                                            ) {
+                                                            ast_stack.capacity
+                                                                << 1 as ::core::ffi::c_int
                                                         } else {
-                                                            ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as size_t,
-                                                                )
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as size_t,
+                                                            )
                                                         });
                                                         ast_stack.items = (if ast_stack.capacity
-                                                            == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            == ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                                )
-                                                        {
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as usize,
+                                                            ) {
                                                             (if ast_stack.items
                                                                 == &raw mut ast_stack.init_array
                                                                     as *mut *mut *mut ExprASTNode
                                                             {
-                                                                ast_stack.items as *mut ::core::ffi::c_void
+                                                                ast_stack.items
+                                                                    as *mut ::core::ffi::c_void
                                                             } else {
                                                                 _memcpy_free(
                                                                     &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
@@ -8302,33 +8834,40 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 )
                                                             } else {
                                                                 xrealloc(
-                                                                    ast_stack.items as *mut ::core::ffi::c_void,
+                                                                    ast_stack.items
+                                                                        as *mut ::core::ffi::c_void,
                                                                     ast_stack
                                                                         .capacity
                                                                         .wrapping_mul(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                        ::core::mem::size_of::<
+                                                                            *mut *mut ExprASTNode,
+                                                                        >(
                                                                         ),
+                                                                    ),
                                                                 )
                                                             })
-                                                        }) as *mut *mut *mut ExprASTNode;
-                                                    } else {};
+                                                        })
+                                                            as *mut *mut *mut ExprASTNode;
+                                                    } else {
+                                                    };
                                                     let c2rust_fresh19 = ast_stack.size;
                                                     ast_stack.size = ast_stack.size.wrapping_add(1);
                                                     let c2rust_lvalue_ptr_8 = &raw mut *ast_stack
                                                         .items
                                                         .offset(c2rust_fresh19 as isize);
-                                                    *c2rust_lvalue_ptr_8 = &raw mut (*(*cur_node).children)
-                                                        .next;
-                                                    let new_top_node_p_1: *mut *mut ExprASTNode = *ast_stack
-                                                        .items
-                                                        .offset(
+                                                    *c2rust_lvalue_ptr_8 =
+                                                        &raw mut (*(*cur_node).children).next;
+                                                    let new_top_node_p_1: *mut *mut ExprASTNode =
+                                                        *ast_stack.items.offset(
                                                             ast_stack
                                                                 .size
                                                                 .wrapping_sub(0 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
+                                                                .wrapping_sub(1 as size_t)
+                                                                as isize,
                                                         );
                                                     '_c2rust_label_34: {
-                                                        if (*new_top_node_p_1).is_null() {} else {
+                                                        if (*new_top_node_p_1).is_null() {
+                                                        } else {
                                                             __assert_fail(
                                                                 b"*new_top_node_p == NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
@@ -8355,56 +8894,98 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             .wrapping_add(prev_token.len);
                                                     }
                                                     if !(*pstate).colors.is_null() {
-                                                        (*cur_node).data.fig.opening_hl_idx = (*(*pstate).colors)
-                                                            .size;
+                                                        (*cur_node).data.fig.opening_hl_idx =
+                                                            (*(*pstate).colors).size;
                                                     }
-                                                    (*cur_node).data.fig.type_guesses.allow_lambda = false;
-                                                    (*cur_node).data.fig.type_guesses.allow_dict = false;
-                                                    (*cur_node).data.fig.type_guesses.allow_ident = true;
+                                                    (*cur_node)
+                                                        .data
+                                                        .fig
+                                                        .type_guesses
+                                                        .allow_lambda = false;
+                                                    (*cur_node).data.fig.type_guesses.allow_dict =
+                                                        false;
+                                                    (*cur_node).data.fig.type_guesses.allow_ident =
+                                                        true;
                                                     if ast_stack.size == ast_stack.capacity {
                                                         ast_stack.capacity = (if ast_stack.capacity
                                                             << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            > ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                                )
-                                                        {
-                                                            ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as usize,
+                                                            ) {
+                                                            ast_stack.capacity
+                                                                << 1 as ::core::ffi::c_int
                                                         } else {
-                                                            ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as size_t,
-                                                                )
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as size_t,
+                                                            )
                                                         });
                                                         ast_stack.items = (if ast_stack.capacity
-                                                            == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            == ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                                )
-                                                        {
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as usize,
+                                                            ) {
                                                             (if ast_stack.items
                                                                 == &raw mut ast_stack.init_array
                                                                     as *mut *mut *mut ExprASTNode
                                                             {
-                                                                ast_stack.items as *mut ::core::ffi::c_void
+                                                                ast_stack.items
+                                                                    as *mut ::core::ffi::c_void
                                                             } else {
                                                                 _memcpy_free(
                                                                     &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
@@ -8439,57 +9020,117 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 )
                                                             } else {
                                                                 xrealloc(
-                                                                    ast_stack.items as *mut ::core::ffi::c_void,
+                                                                    ast_stack.items
+                                                                        as *mut ::core::ffi::c_void,
                                                                     ast_stack
                                                                         .capacity
                                                                         .wrapping_mul(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                        ::core::mem::size_of::<
+                                                                            *mut *mut ExprASTNode,
+                                                                        >(
                                                                         ),
+                                                                    ),
                                                                 )
                                                             })
-                                                        }) as *mut *mut *mut ExprASTNode;
-                                                    } else {};
+                                                        })
+                                                            as *mut *mut *mut ExprASTNode;
+                                                    } else {
+                                                    };
                                                     let c2rust_fresh20 = ast_stack.size;
                                                     ast_stack.size = ast_stack.size.wrapping_add(1);
                                                     let c2rust_lvalue_ptr_9 = &raw mut *ast_stack
                                                         .items
                                                         .offset(c2rust_fresh20 as isize);
-                                                    *c2rust_lvalue_ptr_9 = &raw mut (*cur_node).children;
+                                                    *c2rust_lvalue_ptr_9 =
+                                                        &raw mut (*cur_node).children;
                                                     if pt_is_assignment(cur_pt) {
                                                         if pt_stack.size == pt_stack.capacity {
-                                                            pt_stack.capacity = (if pt_stack.capacity
+                                                            pt_stack.capacity = (if pt_stack
+                                                                .capacity
                                                                 << 1 as ::core::ffi::c_int
-                                                                > ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                    .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
-                                                                    .wrapping_div(
-                                                                        (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                            .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                            == 0) as ::core::ffi::c_int as usize,
+                                                                > ::core::mem::size_of::<
+                                                                    [ExprASTParseType; 4],
+                                                                >(
+                                                                )
+                                                                .wrapping_div(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                )
+                                                                .wrapping_div(
+                                                                    (::core::mem::size_of::<
+                                                                        [ExprASTParseType; 4],
+                                                                    >(
                                                                     )
-                                                            {
-                                                                pt_stack.capacity << 1 as ::core::ffi::c_int
+                                                                    .wrapping_rem(
+                                                                        ::core::mem::size_of::<
+                                                                            ExprASTParseType,
+                                                                        >(
+                                                                        ),
+                                                                    ) == 0)
+                                                                        as ::core::ffi::c_int
+                                                                        as usize,
+                                                                ) {
+                                                                pt_stack.capacity
+                                                                    << 1 as ::core::ffi::c_int
                                                             } else {
-                                                                ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                    .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
-                                                                    .wrapping_div(
-                                                                        (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                            .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                            == 0) as ::core::ffi::c_int as size_t,
+                                                                ::core::mem::size_of::<
+                                                                    [ExprASTParseType; 4],
+                                                                >(
+                                                                )
+                                                                .wrapping_div(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                )
+                                                                .wrapping_div(
+                                                                    (::core::mem::size_of::<
+                                                                        [ExprASTParseType; 4],
+                                                                    >(
                                                                     )
+                                                                    .wrapping_rem(
+                                                                        ::core::mem::size_of::<
+                                                                            ExprASTParseType,
+                                                                        >(
+                                                                        ),
+                                                                    ) == 0)
+                                                                        as ::core::ffi::c_int
+                                                                        as size_t,
+                                                                )
                                                             });
                                                             pt_stack.items = (if pt_stack.capacity
-                                                                == ::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                    .wrapping_div(::core::mem::size_of::<ExprASTParseType>())
-                                                                    .wrapping_div(
-                                                                        (::core::mem::size_of::<[ExprASTParseType; 4]>()
-                                                                            .wrapping_rem(::core::mem::size_of::<ExprASTParseType>())
-                                                                            == 0) as ::core::ffi::c_int as usize,
+                                                                == ::core::mem::size_of::<
+                                                                    [ExprASTParseType; 4],
+                                                                >(
+                                                                )
+                                                                .wrapping_div(
+                                                                    ::core::mem::size_of::<
+                                                                        ExprASTParseType,
+                                                                    >(
+                                                                    ),
+                                                                )
+                                                                .wrapping_div(
+                                                                    (::core::mem::size_of::<
+                                                                        [ExprASTParseType; 4],
+                                                                    >(
                                                                     )
-                                                            {
+                                                                    .wrapping_rem(
+                                                                        ::core::mem::size_of::<
+                                                                            ExprASTParseType,
+                                                                        >(
+                                                                        ),
+                                                                    ) == 0)
+                                                                        as ::core::ffi::c_int
+                                                                        as usize,
+                                                                ) {
                                                                 (if pt_stack.items
-                                                                    == &raw mut pt_stack.init_array as *mut ExprASTParseType
+                                                                    == &raw mut pt_stack.init_array
+                                                                        as *mut ExprASTParseType
                                                                 {
-                                                                    pt_stack.items as *mut ::core::ffi::c_void
+                                                                    pt_stack.items
+                                                                        as *mut ::core::ffi::c_void
                                                                 } else {
                                                                     _memcpy_free(
                                                                         &raw mut pt_stack.init_array as *mut ExprASTParseType
@@ -8502,7 +9143,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 })
                                                             } else {
                                                                 (if pt_stack.items
-                                                                    == &raw mut pt_stack.init_array as *mut ExprASTParseType
+                                                                    == &raw mut pt_stack.init_array
+                                                                        as *mut ExprASTParseType
                                                                 {
                                                                     memcpy(
                                                                         xmalloc(
@@ -8523,11 +9165,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                             .wrapping_mul(::core::mem::size_of::<ExprASTParseType>()),
                                                                     )
                                                                 })
-                                                            }) as *mut ExprASTParseType;
-                                                        } else {};
+                                                            })
+                                                                as *mut ExprASTParseType;
+                                                        } else {
+                                                        };
                                                         let c2rust_fresh21 = pt_stack.size;
-                                                        pt_stack.size = pt_stack.size.wrapping_add(1);
-                                                        *pt_stack.items.offset(c2rust_fresh21 as isize) = kEPTExpr;
+                                                        pt_stack.size =
+                                                            pt_stack.size.wrapping_add(1);
+                                                        *pt_stack
+                                                            .items
+                                                            .offset(c2rust_fresh21 as isize) =
+                                                            kEPTExpr;
                                                     }
                                                     want_node = kENodeValue;
                                                     *new_top_node_p_1 = cur_node;
@@ -8536,21 +9184,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         cur_token.start,
                                                         cur_token.len,
                                                         if is_invalid as ::core::ffi::c_int != 0 {
-                                                            b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
+                                                            b"NvimInvalidCurly\0".as_ptr()
+                                                                as *const ::core::ffi::c_char
                                                         } else {
-                                                            b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
+                                                            b"NvimCurly\0".as_ptr()
+                                                                as *const ::core::ffi::c_char
                                                         },
                                                     );
                                                     break 's_4376;
                                                 }
                                                 _ => {
-                                                    if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
+                                                    if flags & kExprFlagsMulti as ::core::ffi::c_int
+                                                        != 0
                                                         && ast_stack.size == 1 as size_t
                                                     {
                                                         break '_viml_pexpr_parse_end;
                                                     }
                                                     '_c2rust_label_35: {
-                                                        if !(*top_node_p).is_null() {} else {
+                                                        if !(*top_node_p).is_null() {
+                                                        } else {
                                                             __assert_fail(
                                                                 b"*top_node_p != NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
@@ -8567,12 +9219,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         pstate,
                                                         &raw mut ast.err,
                                                         gettext(
-                                                            b"E15: Missing operator: %.*s\0".as_ptr()
+                                                            b"E15: Missing operator: %.*s\0"
+                                                                .as_ptr()
                                                                 as *const ::core::ffi::c_char,
                                                         ),
                                                         cur_token.start,
                                                     );
-                                                    cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
+                                                    cur_node =
+                                                        viml_pexpr_new_node(kExprNodeOpMissing);
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
                                                     if prev_token.type_0 as ::core::ffi::c_uint
@@ -8592,7 +9246,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             cur_node,
                                                             &raw mut want_node,
                                                             &raw mut ast.err,
-                                                        ) as ::core::ffi::c_int != 0;
+                                                        )
+                                                            as ::core::ffi::c_int
+                                                        != 0;
                                                 }
                                             }
                                         }
@@ -8605,7 +9261,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     {
                                         pt_stack.size = pt_stack.size.wrapping_sub(1 as size_t);
                                         '_c2rust_label_37: {
-                                            if pt_stack.size != 0 {} else {
+                                            if pt_stack.size != 0 {
+                                            } else {
                                                 __assert_fail(
                                                     b"kv_size(pt_stack)\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -8618,12 +9275,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             }
                                         };
                                         if want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == kENodeValue as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         {
-                                            ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
+                                            ast_stack.size =
+                                                ast_stack.size.wrapping_sub(1 as size_t);
                                         }
                                         '_c2rust_label_38: {
-                                            if ast_stack.size >= 1 as size_t {} else {
+                                            if ast_stack.size >= 1 as size_t {
+                                            } else {
                                                 __assert_fail(
                                                     b"kv_size(ast_stack) >= 1\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -8635,41 +9295,42 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 );
                                             }
                                         };
-                                        while (***ast_stack
-                                            .items
-                                            .offset(
+                                        while (***ast_stack.items.offset(
+                                            ast_stack
+                                                .size
+                                                .wrapping_sub(0 as size_t)
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
+                                        ))
+                                        .type_0
+                                            as ::core::ffi::c_uint
+                                            != kExprNodeLambda as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
+                                            && (***ast_stack.items.offset(
                                                 ast_stack
                                                     .size
                                                     .wrapping_sub(0 as size_t)
-                                                    .wrapping_sub(1 as size_t) as isize,
+                                                    .wrapping_sub(1 as size_t)
+                                                    as isize,
                                             ))
-                                            .type_0 as ::core::ffi::c_uint
-                                            != kExprNodeLambda as ::core::ffi::c_int
+                                            .type_0
                                                 as ::core::ffi::c_uint
-                                            && (***ast_stack
-                                                .items
-                                                .offset(
-                                                    ast_stack
-                                                        .size
-                                                        .wrapping_sub(0 as size_t)
-                                                        .wrapping_sub(1 as size_t) as isize,
-                                                ))
-                                                .type_0 as ::core::ffi::c_uint
                                                 != kExprNodeUnknownFigure as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
                                         {
-                                            ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
+                                            ast_stack.size =
+                                                ast_stack.size.wrapping_sub(1 as size_t);
                                         }
                                         '_c2rust_label_39: {
-                                            if **ast_stack
-                                                .items
-                                                .offset(
-                                                    ast_stack
-                                                        .size
-                                                        .wrapping_sub(0 as size_t)
-                                                        .wrapping_sub(1 as size_t) as isize,
-                                                ) == lambda_node
-                                            {} else {
+                                            if **ast_stack.items.offset(
+                                                ast_stack
+                                                    .size
+                                                    .wrapping_sub(0 as size_t)
+                                                    .wrapping_sub(1 as size_t)
+                                                    as isize,
+                                            ) == lambda_node
+                                            {
+                                            } else {
                                                 __assert_fail(
                                                     b"(*kv_last(ast_stack)) == lambda_node\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -8689,7 +9350,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 || (*node__3).type_0 as ::core::ffi::c_uint
                                                     == kExprNodeLambda as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
-                                            {} else {
+                                            {
+                                            } else {
                                                 __assert_fail(
                                                     b"node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeLambda\0"
                                                         .as_ptr() as *const ::core::ffi::c_char,
@@ -8703,14 +9365,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         };
                                         (*node__3).type_0 = kExprNodeLambda;
                                         if !(*pstate).colors.is_null() {
-                                            (*(*(*pstate).colors)
-                                                .items
-                                                .offset((*node__3).data.fig.opening_hl_idx as isize))
-                                                .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                            (*(*(*pstate).colors).items.offset(
+                                                (*node__3).data.fig.opening_hl_idx as isize,
+                                            ))
+                                            .group = if is_invalid as ::core::ffi::c_int != 0 {
                                                 b"NvimInvalidLambda\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimLambda\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimLambda\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             };
                                         }
                                         cur_node = viml_pexpr_new_node(kExprNodeArrow);
@@ -8721,15 +9384,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         if (*lambda_node).children.is_null() {
                                             '_c2rust_label_41: {
                                                 if want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                                {} else {
+                                                    == kENodeValue as ::core::ffi::c_int
+                                                        as ::core::ffi::c_uint
+                                                {
+                                                } else {
                                                     __assert_fail(
                                                         b"want_node == kENodeValue\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -8745,42 +9409,70 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if ast_stack.size == ast_stack.capacity {
                                                 ast_stack.capacity = (if ast_stack.capacity
                                                     << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
                                                         )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                ) == 0) as ::core::ffi::c_int as usize,
-                                                        )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
                                                         )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                ) == 0) as ::core::ffi::c_int as size_t,
-                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
                                                 });
                                                 ast_stack.items = (if ast_stack.capacity
-                                                    == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
                                                         )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                ) == 0) as ::core::ffi::c_int as usize,
-                                                        )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     (if ast_stack.items
                                                         == &raw mut ast_stack.init_array
                                                             as *mut *mut *mut ExprASTNode
@@ -8788,14 +9480,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         ast_stack.items as *mut ::core::ffi::c_void
                                                     } else {
                                                         _memcpy_free(
-                                                            &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
                                                                 as *mut ::core::ffi::c_void,
-                                                            ast_stack.items as *mut ::core::ffi::c_void,
-                                                            ast_stack
-                                                                .size
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
+                                                            ),
                                                         )
                                                     })
                                                 } else {
@@ -8805,40 +9500,49 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     {
                                                         memcpy(
                                                             xmalloc(
-                                                                ast_stack
-                                                                    .capacity
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
                                                                     ),
-                                                            ),
-                                                            ast_stack.items as *const ::core::ffi::c_void,
-                                                            ast_stack
-                                                                .size
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                                 ),
+                                                            ),
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
                                                         )
                                                     } else {
                                                         xrealloc(
-                                                            ast_stack.items as *mut ::core::ffi::c_void,
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
+                                                            ),
                                                         )
                                                     })
-                                                }) as *mut *mut *mut ExprASTNode;
-                                            } else {};
+                                                })
+                                                    as *mut *mut *mut ExprASTNode;
+                                            } else {
+                                            };
                                             let c2rust_fresh22 = ast_stack.size;
                                             ast_stack.size = ast_stack.size.wrapping_add(1);
                                             let c2rust_lvalue_ptr_10 = &raw mut *ast_stack
                                                 .items
                                                 .offset(c2rust_fresh22 as isize);
-                                            *c2rust_lvalue_ptr_10 = &raw mut (*lambda_node).children;
+                                            *c2rust_lvalue_ptr_10 =
+                                                &raw mut (*lambda_node).children;
                                         } else {
                                             '_c2rust_label_42: {
-                                                if (*(*lambda_node).children).next.is_null() {} else {
+                                                if (*(*lambda_node).children).next.is_null() {
+                                                } else {
                                                     __assert_fail(
                                                         b"lambda_node->children->next == NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -8854,42 +9558,70 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if ast_stack.size == ast_stack.capacity {
                                                 ast_stack.capacity = (if ast_stack.capacity
                                                     << 1 as ::core::ffi::c_int
-                                                    > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
                                                         )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                ) == 0) as ::core::ffi::c_int as usize,
-                                                        )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
                                                         )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                ) == 0) as ::core::ffi::c_int as size_t,
-                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
                                                 });
                                                 ast_stack.items = (if ast_stack.capacity
-                                                    == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_div(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
                                                         )
-                                                        .wrapping_div(
-                                                            (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_rem(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                ) == 0) as ::core::ffi::c_int as usize,
-                                                        )
-                                                {
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    ) {
                                                     (if ast_stack.items
                                                         == &raw mut ast_stack.init_array
                                                             as *mut *mut *mut ExprASTNode
@@ -8897,14 +9629,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         ast_stack.items as *mut ::core::ffi::c_void
                                                     } else {
                                                         _memcpy_free(
-                                                            &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
                                                                 as *mut ::core::ffi::c_void,
-                                                            ast_stack.items as *mut ::core::ffi::c_void,
-                                                            ast_stack
-                                                                .size
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
+                                                            ),
                                                         )
                                                     })
                                                 } else {
@@ -8914,127 +9649,175 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     {
                                                         memcpy(
                                                             xmalloc(
-                                                                ast_stack
-                                                                    .capacity
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
                                                                     ),
-                                                            ),
-                                                            ast_stack.items as *const ::core::ffi::c_void,
-                                                            ast_stack
-                                                                .size
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                                 ),
+                                                            ),
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
                                                         )
                                                     } else {
                                                         xrealloc(
-                                                            ast_stack.items as *mut ::core::ffi::c_void,
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
+                                                            ),
                                                         )
                                                     })
-                                                }) as *mut *mut *mut ExprASTNode;
-                                            } else {};
+                                                })
+                                                    as *mut *mut *mut ExprASTNode;
+                                            } else {
+                                            };
                                             let c2rust_fresh23 = ast_stack.size;
                                             ast_stack.size = ast_stack.size.wrapping_add(1);
                                             let c2rust_lvalue_ptr_11 = &raw mut *ast_stack
                                                 .items
                                                 .offset(c2rust_fresh23 as isize);
-                                            *c2rust_lvalue_ptr_11 = &raw mut (*(*lambda_node).children)
-                                                .next;
+                                            *c2rust_lvalue_ptr_11 =
+                                                &raw mut (*(*lambda_node).children).next;
                                         }
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh24 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_12 = &raw mut *ast_stack
@@ -9044,16 +9827,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         lambda_node = ::core::ptr::null_mut::<ExprASTNode>();
                                     } else {
                                         if want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                            == kENodeValue as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
                                         {
                                             is_invalid = true_0 != 0;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
-                                                gettext(
-                                                    b"E15: Unexpected arrow: %.*s\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(b"E15: Unexpected arrow: %.*s\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
                                                 cur_token.start,
                                             );
                                             *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
@@ -9064,9 +9846,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (**top_node_p).start = prev_token.start;
-                                                (**top_node_p).len = (**top_node_p)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (**top_node_p).len =
+                                                    (**top_node_p).len.wrapping_add(prev_token.len);
                                             }
                                             (**top_node_p).len = 0 as size_t;
                                             want_node = kENodeOperator;
@@ -9089,9 +9870,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         is_invalid = is_invalid as ::core::ffi::c_int
                                             | !viml_pexpr_handle_bop(
@@ -9100,7 +9880,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     }
                                     want_node = kENodeValue;
                                     viml_parser_highlight(
@@ -9108,7 +9890,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
-                                            b"NvimInvalidArrow\0".as_ptr() as *const ::core::ffi::c_char
+                                            b"NvimInvalidArrow\0".as_ptr()
+                                                as *const ::core::ffi::c_char
                                         } else {
                                             b"NvimArrow\0".as_ptr() as *const ::core::ffi::c_char
                                         },
@@ -9116,16 +9899,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 20 => {
-                                    let scope: ExprVarScope = (if cur_token.type_0
-                                        as ::core::ffi::c_uint
-                                        == kExprLexInvalid as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
-                                        kExprVarScopeMissing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    } else {
-                                        cur_token.data.var.scope as ::core::ffi::c_uint
-                                    }) as ExprVarScope;
+                                    let scope: ExprVarScope =
+                                        (if cur_token.type_0 as ::core::ffi::c_uint
+                                            == kExprLexInvalid as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
+                                        {
+                                            kExprVarScopeMissing as ::core::ffi::c_int
+                                                as ::core::ffi::c_uint
+                                        } else {
+                                            cur_token.data.var.scope as ::core::ffi::c_uint
+                                        }) as ExprVarScope;
                                     if want_node as ::core::ffi::c_uint
                                         == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
@@ -9135,7 +9918,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 kExprNodePlainKey as ::core::ffi::c_int
                                             } else {
                                                 kExprNodePlainIdentifier as ::core::ffi::c_int
-                                            }) as ExprASTNodeType,
+                                            })
+                                                as ExprASTNodeType,
                                         );
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
@@ -9144,9 +9928,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).data.var.scope = scope;
                                         let scope_shift_0: size_t = (if scope as ::core::ffi::c_uint
@@ -9156,18 +9939,19 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             0 as ::core::ffi::c_int
                                         } else {
                                             2 as ::core::ffi::c_int
-                                        }) as size_t;
+                                        })
+                                            as size_t;
                                         (*cur_node).data.var.ident = pline
                                             .data
                                             .offset(cur_token.start.col as isize)
                                             .offset(scope_shift_0 as isize);
-                                        (*cur_node).data.var.ident_len = cur_token
-                                            .len
-                                            .wrapping_sub(scope_shift_0);
+                                        (*cur_node).data.var.ident_len =
+                                            cur_token.len.wrapping_sub(scope_shift_0);
                                         *top_node_p = cur_node;
                                         if scope_shift_0 != 0 {
                                             '_c2rust_label_43: {
-                                                if !node_is_key {} else {
+                                                if !node_is_key {
+                                                } else {
                                                     __assert_fail(
                                                         b"!node_is_key\0".as_ptr() as *const ::core::ffi::c_char,
                                                         b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -9195,7 +9979,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 shifted_pos(cur_token.start, 1 as size_t),
                                                 1 as size_t,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidIdentifierScopeDelimiter\0".as_ptr()
+                                                    b"NvimInvalidIdentifierScopeDelimiter\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
                                                     b"NvimIdentifierScopeDelimiter\0".as_ptr()
@@ -9232,7 +10017,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if want_node as ::core::ffi::c_uint
                                                 == kENodeOperator as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
-                                            {} else {
+                                            {
+                                            } else {
                                                 __assert_fail(
                                                     b"want_node == kENodeOperator\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -9254,7 +10040,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 break '_viml_pexpr_parse_end;
                                             }
                                             '_c2rust_label_45: {
-                                                if !(*top_node_p).is_null() {} else {
+                                                if !(*top_node_p).is_null() {
+                                                } else {
                                                     __assert_fail(
                                                         b"*top_node_p != NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -9270,10 +10057,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
-                                                gettext(
-                                                    b"E15: Missing operator: %.*s\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                    as *const ::core::ffi::c_char),
                                                 cur_token.start,
                                             );
                                             cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -9284,9 +10069,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             (*cur_node).len = 0 as size_t;
                                             is_invalid = is_invalid as ::core::ffi::c_int
@@ -9296,11 +10080,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     cur_node,
                                                     &raw mut want_node,
                                                     &raw mut ast.err,
-                                                ) as ::core::ffi::c_int != 0;
+                                                )
+                                                    as ::core::ffi::c_int
+                                                != 0;
                                         } else {
                                             match (**top_node_p).type_0 as ::core::ffi::c_uint {
                                                 13 | 11 | 17 => {
-                                                    cur_node = viml_pexpr_new_node(kExprNodeComplexIdentifier);
+                                                    cur_node = viml_pexpr_new_node(
+                                                        kExprNodeComplexIdentifier,
+                                                    );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
                                                     if prev_token.type_0 as ::core::ffi::c_uint
@@ -9318,47 +10106,83 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     if ast_stack.size == ast_stack.capacity {
                                                         ast_stack.capacity = (if ast_stack.capacity
                                                             << 1 as ::core::ffi::c_int
-                                                            > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            > ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                                )
-                                                        {
-                                                            ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as usize,
+                                                            ) {
+                                                            ast_stack.capacity
+                                                                << 1 as ::core::ffi::c_int
                                                         } else {
-                                                            ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as size_t,
-                                                                )
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as size_t,
+                                                            )
                                                         });
                                                         ast_stack.items = (if ast_stack.capacity
-                                                            == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                .wrapping_div(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                            == ::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
+                                                            )
+                                                            .wrapping_div(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            ))
+                                                            .wrapping_div(
+                                                                (::core::mem::size_of::<
+                                                                    [*mut *mut ExprASTNode; 16],
+                                                                >(
                                                                 )
-                                                                .wrapping_div(
-                                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                        .wrapping_rem(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                                )
-                                                        {
+                                                                .wrapping_rem(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ) == 0)
+                                                                    as ::core::ffi::c_int
+                                                                    as usize,
+                                                            ) {
                                                             (if ast_stack.items
                                                                 == &raw mut ast_stack.init_array
                                                                     as *mut *mut *mut ExprASTNode
                                                             {
-                                                                ast_stack.items as *mut ::core::ffi::c_void
+                                                                ast_stack.items
+                                                                    as *mut ::core::ffi::c_void
                                                             } else {
                                                                 _memcpy_free(
                                                                     &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
@@ -9393,33 +10217,40 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 )
                                                             } else {
                                                                 xrealloc(
-                                                                    ast_stack.items as *mut ::core::ffi::c_void,
+                                                                    ast_stack.items
+                                                                        as *mut ::core::ffi::c_void,
                                                                     ast_stack
                                                                         .capacity
                                                                         .wrapping_mul(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                        ::core::mem::size_of::<
+                                                                            *mut *mut ExprASTNode,
+                                                                        >(
                                                                         ),
+                                                                    ),
                                                                 )
                                                             })
-                                                        }) as *mut *mut *mut ExprASTNode;
-                                                    } else {};
+                                                        })
+                                                            as *mut *mut *mut ExprASTNode;
+                                                    } else {
+                                                    };
                                                     let c2rust_fresh25 = ast_stack.size;
                                                     ast_stack.size = ast_stack.size.wrapping_add(1);
                                                     let c2rust_lvalue_ptr_13 = &raw mut *ast_stack
                                                         .items
                                                         .offset(c2rust_fresh25 as isize);
-                                                    *c2rust_lvalue_ptr_13 = &raw mut (*(*cur_node).children)
-                                                        .next;
-                                                    let new_top_node_p_2: *mut *mut ExprASTNode = *ast_stack
-                                                        .items
-                                                        .offset(
+                                                    *c2rust_lvalue_ptr_13 =
+                                                        &raw mut (*(*cur_node).children).next;
+                                                    let new_top_node_p_2: *mut *mut ExprASTNode =
+                                                        *ast_stack.items.offset(
                                                             ast_stack
                                                                 .size
                                                                 .wrapping_sub(0 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
+                                                                .wrapping_sub(1 as size_t)
+                                                                as isize,
                                                         );
                                                     '_c2rust_label_46: {
-                                                        if (*new_top_node_p_2).is_null() {} else {
+                                                        if (*new_top_node_p_2).is_null() {
+                                                        } else {
                                                             __assert_fail(
                                                                 b"*new_top_node_p == NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
@@ -9431,7 +10262,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             );
                                                         }
                                                     };
-                                                    cur_node = viml_pexpr_new_node(kExprNodePlainIdentifier);
+                                                    cur_node = viml_pexpr_new_node(
+                                                        kExprNodePlainIdentifier,
+                                                    );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
                                                     if prev_token.type_0 as ::core::ffi::c_uint
@@ -9465,13 +10298,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     break '_viml_pexpr_parse_cycle_end;
                                                 }
                                                 _ => {
-                                                    if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
+                                                    if flags & kExprFlagsMulti as ::core::ffi::c_int
+                                                        != 0
                                                         && ast_stack.size == 1 as size_t
                                                     {
                                                         break '_viml_pexpr_parse_end;
                                                     }
                                                     '_c2rust_label_47: {
-                                                        if !(*top_node_p).is_null() {} else {
+                                                        if !(*top_node_p).is_null() {
+                                                        } else {
                                                             __assert_fail(
                                                                 b"*top_node_p != NULL\0".as_ptr()
                                                                     as *const ::core::ffi::c_char,
@@ -9488,12 +10323,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         pstate,
                                                         &raw mut ast.err,
                                                         gettext(
-                                                            b"E15: Missing operator: %.*s\0".as_ptr()
+                                                            b"E15: Missing operator: %.*s\0"
+                                                                .as_ptr()
                                                                 as *const ::core::ffi::c_char,
                                                         ),
                                                         cur_token.start,
                                                     );
-                                                    cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
+                                                    cur_node =
+                                                        viml_pexpr_new_node(kExprNodeOpMissing);
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
                                                     if prev_token.type_0 as ::core::ffi::c_uint
@@ -9513,7 +10350,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             cur_node,
                                                             &raw mut want_node,
                                                             &raw mut ast.err,
-                                                        ) as ::core::ffi::c_int != 0;
+                                                        )
+                                                            as ::core::ffi::c_int
+                                                        != 0;
                                                 }
                                             }
                                         }
@@ -9524,7 +10363,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_48: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -9540,10 +10380,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -9554,9 +10392,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -9566,7 +10403,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     }
                                 }
                                 14 => {
@@ -9579,7 +10418,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_49: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -9595,10 +10435,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -9609,9 +10447,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -9621,7 +10458,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         if node_is_key {
                                             cur_node = viml_pexpr_new_node(kExprNodePlainKey);
@@ -9632,13 +10471,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.var.ident = pline
-                                                .data
-                                                .offset(cur_token.start.col as isize);
+                                            (*cur_node).data.var.ident =
+                                                pline.data.offset(cur_token.start.col as isize);
                                             (*cur_node).data.var.ident_len = cur_token.len;
                                             viml_parser_highlight(
                                                 pstate,
@@ -9661,23 +10498,21 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.flt.value = cur_token
-                                                .data
-                                                .num
-                                                .val
-                                                .floating;
+                                            (*cur_node).data.flt.value =
+                                                cur_token.data.num.val.floating;
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidFloat\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimInvalidFloat\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimFloat\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimFloat\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         } else {
@@ -9689,15 +10524,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 (*cur_node).start = prev_token.start;
-                                                (*cur_node).len = (*cur_node)
-                                                    .len
-                                                    .wrapping_add(prev_token.len);
+                                                (*cur_node).len =
+                                                    (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.num.value = cur_token.data.num.val.integer;
-                                            let prefix_length: uint8_t = base_to_prefix_length[cur_token
-                                                .data
-                                                .num
-                                                .base as usize];
+                                            (*cur_node).data.num.value =
+                                                cur_token.data.num.val.integer;
+                                            let prefix_length: uint8_t = base_to_prefix_length
+                                                [cur_token.data.num.base as usize];
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
@@ -9706,18 +10539,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     b"NvimInvalidNumberPrefix\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimNumberPrefix\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimNumberPrefix\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                             viml_parser_highlight(
                                                 pstate,
-                                                shifted_pos(cur_token.start, prefix_length as size_t),
+                                                shifted_pos(
+                                                    cur_token.start,
+                                                    prefix_length as size_t,
+                                                ),
                                                 cur_token.len.wrapping_sub(prefix_length as size_t),
                                                 if is_invalid as ::core::ffi::c_int != 0 {
                                                     b"NvimInvalidNumber\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
-                                                    b"NvimNumber\0".as_ptr() as *const ::core::ffi::c_char
+                                                    b"NvimNumber\0".as_ptr()
+                                                        as *const ::core::ffi::c_char
                                                 },
                                             );
                                         }
@@ -9734,10 +10572,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Unexpected dot: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Unexpected dot: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
@@ -9748,9 +10584,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -9782,9 +10617,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         viml_parser_highlight(
                                             pstate,
@@ -9794,7 +10628,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 b"NvimInvalidConcat\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
-                                                b"NvimConcat\0".as_ptr() as *const ::core::ffi::c_char
+                                                b"NvimConcat\0".as_ptr()
+                                                    as *const ::core::ffi::c_char
                                             },
                                         );
                                     } else {
@@ -9806,9 +10641,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         viml_parser_highlight(
                                             pstate,
@@ -9830,29 +10664,35 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 23 => {
                                     if cur_token.data.brc.closing {
                                         's_5886: {
                                             if want_node as ::core::ffi::c_uint
-                                                == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+                                                == kENodeValue as ::core::ffi::c_int
+                                                    as ::core::ffi::c_uint
                                             {
                                                 if ast_stack.size > 1 as size_t {
-                                                    let prev_top_node: *const ExprASTNode = **ast_stack
-                                                        .items
-                                                        .offset(
+                                                    let prev_top_node: *const ExprASTNode =
+                                                        **ast_stack.items.offset(
                                                             ast_stack
                                                                 .size
                                                                 .wrapping_sub(1 as size_t)
-                                                                .wrapping_sub(1 as size_t) as isize,
+                                                                .wrapping_sub(1 as size_t)
+                                                                as isize,
                                                         );
-                                                    if (*prev_top_node).type_0 as ::core::ffi::c_uint
+                                                    if (*prev_top_node).type_0
+                                                        as ::core::ffi::c_uint
                                                         == kExprNodeCall as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint
                                                     {
-                                                        ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
+                                                        ast_stack.size = ast_stack
+                                                            .size
+                                                            .wrapping_sub(1 as size_t);
                                                         break 's_5886;
                                                     }
                                                 }
@@ -9881,31 +10721,33 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 (*cur_node).len = 0 as size_t;
                                                 *top_node_p = cur_node;
                                             } else {
-                                                ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
+                                                ast_stack.size =
+                                                    ast_stack.size.wrapping_sub(1 as size_t);
                                             }
                                         }
-                                        let mut new_top_node_p_3: *mut *mut ExprASTNode = ::core::ptr::null_mut::<
-                                            *mut ExprASTNode,
-                                        >();
+                                        let mut new_top_node_p_3: *mut *mut ExprASTNode =
+                                            ::core::ptr::null_mut::<*mut ExprASTNode>();
                                         while ast_stack.size != 0
                                             && (new_top_node_p_3.is_null()
-                                                || (**new_top_node_p_3).type_0 as ::core::ffi::c_uint
+                                                || (**new_top_node_p_3).type_0
+                                                    as ::core::ffi::c_uint
                                                     != kExprNodeNested as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
-                                                    && (**new_top_node_p_3).type_0 as ::core::ffi::c_uint
+                                                    && (**new_top_node_p_3).type_0
+                                                        as ::core::ffi::c_uint
                                                         != kExprNodeCall as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint)
                                         {
                                             ast_stack.size = ast_stack.size.wrapping_sub(1);
-                                            new_top_node_p_3 = *ast_stack
-                                                .items
-                                                .offset(ast_stack.size as isize);
+                                            new_top_node_p_3 =
+                                                *ast_stack.items.offset(ast_stack.size as isize);
                                         }
                                         if !new_top_node_p_3.is_null()
                                             && ((**new_top_node_p_3).type_0 as ::core::ffi::c_uint
                                                 == kExprNodeNested as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
-                                                || (**new_top_node_p_3).type_0 as ::core::ffi::c_uint
+                                                || (**new_top_node_p_3).type_0
+                                                    as ::core::ffi::c_uint
                                                     == kExprNodeCall as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint)
                                         {
@@ -9948,7 +10790,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 &raw mut ast.err,
                                                 gettext(
-                                                    b"E15: Unexpected closing parenthesis: %.*s\0".as_ptr()
+                                                    b"E15: Unexpected closing parenthesis: %.*s\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
                                                 cur_token.start,
@@ -9971,7 +10814,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*cur_node).children = *new_top_node_p_3;
                                             *new_top_node_p_3 = cur_node;
                                             '_c2rust_label_50: {
-                                                if (*cur_node).next.is_null() {} else {
+                                                if (*cur_node).next.is_null() {
+                                                } else {
                                                     __assert_fail(
                                                         b"cur_node->next == NULL\0".as_ptr()
                                                             as *const ::core::ffi::c_char,
@@ -9985,93 +10829,134 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             };
                                         }
                                         if ast_stack.size == ast_stack.capacity {
-                                            ast_stack.capacity = (if ast_stack.capacity
-                                                << 1 as ::core::ffi::c_int
-                                                > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                            ast_stack.capacity =
+                                                (if ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                    > ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
                                                     .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
                                                     )
-                                            {
-                                                ast_stack.capacity << 1 as ::core::ffi::c_int
-                                            } else {
-                                                ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as size_t,
-                                                    )
-                                            });
-                                            ast_stack.items = (if ast_stack.capacity
-                                                == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_rem(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ) == 0) as ::core::ffi::c_int as usize,
-                                                    )
-                                            {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
                                                 {
-                                                    ast_stack.items as *mut ::core::ffi::c_void
+                                                    ast_stack.capacity << 1 as ::core::ffi::c_int
                                                 } else {
-                                                    _memcpy_free(
-                                                        &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
-                                                            as *mut ::core::ffi::c_void,
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                            ),
+                                                    ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
                                                     )
-                                                })
-                                            } else {
-                                                (if ast_stack.items
-                                                    == &raw mut ast_stack.init_array
-                                                        as *mut *mut *mut ExprASTNode
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as size_t,
+                                                    )
+                                                });
+                                            ast_stack.items =
+                                                (if ast_stack.capacity
+                                                    == ::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_div(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    ))
+                                                    .wrapping_div(
+                                                        (::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_rem(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        )) == 0)
+                                                            as ::core::ffi::c_int
+                                                            as usize,
+                                                    )
                                                 {
-                                                    memcpy(
-                                                        xmalloc(
-                                                            ast_stack
-                                                                .capacity
-                                                                .wrapping_mul(
-                                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        ast_stack.items as *mut ::core::ffi::c_void
+                                                    } else {
+                                                        _memcpy_free(
+                                                            &raw mut ast_stack.init_array
+                                                                as *mut *mut *mut ExprASTNode
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
                                                                 ),
-                                                        ),
-                                                        ast_stack.items as *const ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .size
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                             ),
-                                                    )
+                                                        )
+                                                    })
                                                 } else {
-                                                    xrealloc(
-                                                        ast_stack.items as *mut ::core::ffi::c_void,
-                                                        ast_stack
-                                                            .capacity
-                                                            .wrapping_mul(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                    (if ast_stack.items
+                                                        == &raw mut ast_stack.init_array
+                                                            as *mut *mut *mut ExprASTNode
+                                                    {
+                                                        memcpy(
+                                                            xmalloc(
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             ),
-                                                    )
+                                                            ast_stack.items
+                                                                as *const ::core::ffi::c_void,
+                                                            ast_stack.size.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        xrealloc(
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void,
+                                                            ast_stack.capacity.wrapping_mul(
+                                                                ::core::mem::size_of::<
+                                                                    *mut *mut ExprASTNode,
+                                                                >(
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
                                                 })
-                                            }) as *mut *mut *mut ExprASTNode;
-                                        } else {};
+                                                    as *mut *mut *mut ExprASTNode;
+                                        } else {
+                                        };
                                         let c2rust_fresh26 = ast_stack.size;
                                         ast_stack.size = ast_stack.size.wrapping_add(1);
                                         let c2rust_lvalue_ptr_14 = &raw mut *ast_stack
@@ -10099,57 +10984,90 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 if ast_stack.size == ast_stack.capacity {
                                                     ast_stack.capacity = (if ast_stack.capacity
                                                         << 1 as ::core::ffi::c_int
-                                                        > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_div(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                        > ::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        ))
+                                                        .wrapping_div(
+                                                            (::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
                                                             )
-                                                            .wrapping_div(
-                                                                (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                    ) == 0) as ::core::ffi::c_int as usize,
-                                                            )
-                                                    {
-                                                        ast_stack.capacity << 1 as ::core::ffi::c_int
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as usize,
+                                                        ) {
+                                                        ast_stack.capacity
+                                                            << 1 as ::core::ffi::c_int
                                                     } else {
-                                                        ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_div(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                        ::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        ))
+                                                        .wrapping_div(
+                                                            (::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
                                                             )
-                                                            .wrapping_div(
-                                                                (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                    ) == 0) as ::core::ffi::c_int as size_t,
-                                                            )
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as size_t,
+                                                        )
                                                     });
                                                     ast_stack.items = (if ast_stack.capacity
-                                                        == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                            .wrapping_div(
-                                                                ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                        == ::core::mem::size_of::<
+                                                            [*mut *mut ExprASTNode; 16],
+                                                        >(
+                                                        )
+                                                        .wrapping_div(::core::mem::size_of::<
+                                                            *mut *mut ExprASTNode,
+                                                        >(
+                                                        ))
+                                                        .wrapping_div(
+                                                            (::core::mem::size_of::<
+                                                                [*mut *mut ExprASTNode; 16],
+                                                            >(
                                                             )
-                                                            .wrapping_div(
-                                                                (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                                    .wrapping_rem(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                                    ) == 0) as ::core::ffi::c_int as usize,
-                                                            )
-                                                    {
+                                                            .wrapping_rem(::core::mem::size_of::<
+                                                                *mut *mut ExprASTNode,
+                                                            >(
+                                                            )) == 0)
+                                                                as ::core::ffi::c_int
+                                                                as usize,
+                                                        ) {
                                                         (if ast_stack.items
                                                             == &raw mut ast_stack.init_array
                                                                 as *mut *mut *mut ExprASTNode
                                                         {
-                                                            ast_stack.items as *mut ::core::ffi::c_void
+                                                            ast_stack.items
+                                                                as *mut ::core::ffi::c_void
                                                         } else {
                                                             _memcpy_free(
-                                                                &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode
+                                                                &raw mut ast_stack.init_array
+                                                                    as *mut *mut *mut ExprASTNode
                                                                     as *mut ::core::ffi::c_void,
-                                                                ast_stack.items as *mut ::core::ffi::c_void,
-                                                                ast_stack
-                                                                    .size
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                ast_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                ast_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
                                                                     ),
+                                                                ),
                                                             )
                                                         })
                                                     } else {
@@ -10162,34 +11080,44 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     ast_stack
                                                                         .capacity
                                                                         .wrapping_mul(
-                                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                        ::core::mem::size_of::<
+                                                                            *mut *mut ExprASTNode,
+                                                                        >(
                                                                         ),
-                                                                ),
-                                                                ast_stack.items as *const ::core::ffi::c_void,
-                                                                ast_stack
-                                                                    .size
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
                                                                     ),
+                                                                ),
+                                                                ast_stack.items
+                                                                    as *const ::core::ffi::c_void,
+                                                                ast_stack.size.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
+                                                                    ),
+                                                                ),
                                                             )
                                                         } else {
                                                             xrealloc(
-                                                                ast_stack.items as *mut ::core::ffi::c_void,
-                                                                ast_stack
-                                                                    .capacity
-                                                                    .wrapping_mul(
-                                                                        ::core::mem::size_of::<*mut *mut ExprASTNode>(),
+                                                                ast_stack.items
+                                                                    as *mut ::core::ffi::c_void,
+                                                                ast_stack.capacity.wrapping_mul(
+                                                                    ::core::mem::size_of::<
+                                                                        *mut *mut ExprASTNode,
+                                                                    >(
                                                                     ),
+                                                                ),
                                                             )
                                                         })
-                                                    }) as *mut *mut *mut ExprASTNode;
-                                                } else {};
+                                                    })
+                                                        as *mut *mut *mut ExprASTNode;
+                                                } else {
+                                                };
                                                 let c2rust_fresh27 = ast_stack.size;
                                                 ast_stack.size = ast_stack.size.wrapping_add(1);
                                                 let c2rust_lvalue_ptr_15 = &raw mut *ast_stack
                                                     .items
                                                     .offset(c2rust_fresh27 as isize);
-                                                *c2rust_lvalue_ptr_15 = &raw mut (*cur_node).children;
+                                                *c2rust_lvalue_ptr_15 =
+                                                    &raw mut (*cur_node).children;
                                                 viml_parser_highlight(
                                                     pstate,
                                                     cur_token.start,
@@ -10212,24 +11140,29 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     break;
                                                 }
                                                 if !((**top_node_p).type_0 as ::core::ffi::c_uint
-                                                    != kExprNodePlainIdentifier as ::core::ffi::c_int
+                                                    != kExprNodePlainIdentifier
+                                                        as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                     && (**top_node_p).type_0 as ::core::ffi::c_uint
-                                                        != kExprNodeComplexIdentifier as ::core::ffi::c_int
+                                                        != kExprNodeComplexIdentifier
+                                                            as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint
                                                     && (**top_node_p).type_0 as ::core::ffi::c_uint
-                                                        != kExprNodeCurlyBracesIdentifier as ::core::ffi::c_int
+                                                        != kExprNodeCurlyBracesIdentifier
+                                                            as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint)
                                                 {
                                                     break;
                                                 }
-                                                if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
+                                                if flags & kExprFlagsMulti as ::core::ffi::c_int
+                                                    != 0
                                                     && ast_stack.size == 1 as size_t
                                                 {
                                                     break '_viml_pexpr_parse_end;
                                                 }
                                                 '_c2rust_label_51: {
-                                                    if !(*top_node_p).is_null() {} else {
+                                                    if !(*top_node_p).is_null() {
+                                                    } else {
                                                         __assert_fail(
                                                             b"*top_node_p != NULL\0".as_ptr()
                                                                 as *const ::core::ffi::c_char,
@@ -10271,7 +11204,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         cur_node,
                                                         &raw mut want_node,
                                                         &raw mut ast.err,
-                                                    ) as ::core::ffi::c_int != 0;
+                                                    )
+                                                        as ::core::ffi::c_int
+                                                    != 0;
                                             }
                                             _ => {
                                                 break 's_6212;
@@ -10288,7 +11223,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             &raw mut ast.err,
                                             gettext(
-                                                b"E15: Expected value, got question mark: %.*s\0".as_ptr()
+                                                b"E15: Expected value, got question mark: %.*s\0"
+                                                    .as_ptr()
                                                     as *const ::core::ffi::c_char,
                                             ),
                                             cur_token.start,
@@ -10301,9 +11237,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -10316,9 +11251,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*cur_node).start = prev_token.start;
-                                        (*cur_node).len = (*cur_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*cur_node).len =
+                                            (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     is_invalid = is_invalid as ::core::ffi::c_int
                                         | !viml_pexpr_handle_bop(
@@ -10327,7 +11261,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
@@ -10339,9 +11275,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             b"NvimTernary\0".as_ptr() as *const ::core::ffi::c_char
                                         },
                                     );
-                                    let mut ter_val_node: *mut ExprASTNode = ::core::ptr::null_mut::<
-                                        ExprASTNode,
-                                    >();
+                                    let mut ter_val_node: *mut ExprASTNode =
+                                        ::core::ptr::null_mut::<ExprASTNode>();
                                     ter_val_node = viml_pexpr_new_node(kExprNodeTernaryValue);
                                     (*ter_val_node).start = cur_token.start;
                                     (*ter_val_node).len = cur_token.len;
@@ -10350,13 +11285,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*ter_val_node).start = prev_token.start;
-                                        (*ter_val_node).len = (*ter_val_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*ter_val_node).len =
+                                            (*ter_val_node).len.wrapping_add(prev_token.len);
                                     }
                                     (*ter_val_node).data.ter.got_colon = false_0 != 0;
                                     '_c2rust_label_52: {
-                                        if !(*cur_node).children.is_null() {} else {
+                                        if !(*cur_node).children.is_null() {
+                                        } else {
                                             __assert_fail(
                                                 b"cur_node->children != NULL\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
@@ -10369,7 +11304,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                     };
                                     '_c2rust_label_53: {
-                                        if (*(*cur_node).children).next.is_null() {} else {
+                                        if (*(*cur_node).children).next.is_null() {
+                                        } else {
                                             __assert_fail(
                                                 b"cur_node->children->next == NULL\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
@@ -10382,15 +11318,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                     };
                                     '_c2rust_label_54: {
-                                        if *ast_stack
-                                            .items
-                                            .offset(
-                                                ast_stack
-                                                    .size
-                                                    .wrapping_sub(0 as size_t)
-                                                    .wrapping_sub(1 as size_t) as isize,
-                                            ) == &raw mut (*(*cur_node).children).next
-                                        {} else {
+                                        if *ast_stack.items.offset(
+                                            ast_stack
+                                                .size
+                                                .wrapping_sub(0 as size_t)
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
+                                        ) == &raw mut (*(*cur_node).children).next
+                                        {
+                                        } else {
                                             __assert_fail(
                                                 b"kv_last(ast_stack) == &cur_node->children->next\0"
                                                     .as_ptr() as *const ::core::ffi::c_char,
@@ -10402,53 +11338,71 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                         }
                                     };
-                                    **ast_stack
-                                        .items
-                                        .offset(
-                                            ast_stack
-                                                .size
-                                                .wrapping_sub(0 as size_t)
-                                                .wrapping_sub(1 as size_t) as isize,
-                                        ) = ter_val_node;
+                                    **ast_stack.items.offset(
+                                        ast_stack
+                                            .size
+                                            .wrapping_sub(0 as size_t)
+                                            .wrapping_sub(1 as size_t)
+                                            as isize,
+                                    ) = ter_val_node;
                                     if ast_stack.size == ast_stack.capacity {
                                         ast_stack.capacity = (if ast_stack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
+                                                .wrapping_div(::core::mem::size_of::<
+                                                    *mut *mut ExprASTNode,
+                                                >(
+                                                ))
                                                 .wrapping_div(
-                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_rem(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                )
-                                        {
+                                                    (::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    )) == 0)
+                                                        as ::core::ffi::c_int
+                                                        as usize,
+                                                ) {
                                             ast_stack.capacity << 1 as ::core::ffi::c_int
                                         } else {
                                             ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
+                                                .wrapping_div(::core::mem::size_of::<
+                                                    *mut *mut ExprASTNode,
+                                                >(
+                                                ))
                                                 .wrapping_div(
-                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_rem(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                        ) == 0) as ::core::ffi::c_int as size_t,
+                                                    (::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    )) == 0)
+                                                        as ::core::ffi::c_int
+                                                        as size_t,
                                                 )
                                         });
                                         ast_stack.items = (if ast_stack.capacity
                                             == ::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
+                                                .wrapping_div(::core::mem::size_of::<
+                                                    *mut *mut ExprASTNode,
+                                                >(
+                                                ))
                                                 .wrapping_div(
-                                                    ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                )
-                                                .wrapping_div(
-                                                    (::core::mem::size_of::<[*mut *mut ExprASTNode; 16]>()
-                                                        .wrapping_rem(
-                                                            ::core::mem::size_of::<*mut *mut ExprASTNode>(),
-                                                        ) == 0) as ::core::ffi::c_int as usize,
-                                                )
-                                        {
+                                                    (::core::mem::size_of::<
+                                                        [*mut *mut ExprASTNode; 16],
+                                                    >(
+                                                    )
+                                                    .wrapping_rem(::core::mem::size_of::<
+                                                        *mut *mut ExprASTNode,
+                                                    >(
+                                                    )) == 0)
+                                                        as ::core::ffi::c_int
+                                                        as usize,
+                                                ) {
                                             (if ast_stack.items
                                                 == &raw mut ast_stack.init_array
                                                     as *mut *mut *mut ExprASTNode
@@ -10496,13 +11450,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         ),
                                                 )
                                             })
-                                        }) as *mut *mut *mut ExprASTNode;
-                                    } else {};
+                                        })
+                                            as *mut *mut *mut ExprASTNode;
+                                    } else {
+                                    };
                                     let c2rust_fresh28 = ast_stack.size;
                                     ast_stack.size = ast_stack.size.wrapping_add(1);
-                                    let c2rust_lvalue_ptr_16 = &raw mut *ast_stack
-                                        .items
-                                        .offset(c2rust_fresh28 as isize);
+                                    let c2rust_lvalue_ptr_16 =
+                                        &raw mut *ast_stack.items.offset(c2rust_fresh28 as isize);
                                     *c2rust_lvalue_ptr_16 = &raw mut (*ter_val_node).children;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
@@ -10539,7 +11494,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             break '_viml_pexpr_parse_end;
                                         }
                                         '_c2rust_label_55: {
-                                            if !(*top_node_p).is_null() {} else {
+                                            if !(*top_node_p).is_null() {
+                                            } else {
                                                 __assert_fail(
                                                     b"*top_node_p != NULL\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -10555,10 +11511,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Missing operator: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Missing operator: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
@@ -10569,9 +11523,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).len = 0 as size_t;
                                         is_invalid = is_invalid as ::core::ffi::c_int
@@ -10581,14 +11534,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            ) as ::core::ffi::c_int != 0;
+                                            )
+                                                as ::core::ffi::c_int
+                                            != 0;
                                     } else {
                                         cur_node = viml_pexpr_new_node(
                                             (if is_double as ::core::ffi::c_int != 0 {
                                                 kExprNodeDoubleQuotedString as ::core::ffi::c_int
                                             } else {
                                                 kExprNodeSingleQuotedString as ::core::ffi::c_int
-                                            }) as ExprASTNodeType,
+                                            })
+                                                as ExprASTNodeType,
                                         );
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
@@ -10597,9 +11553,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (*cur_node).start = prev_token.start;
-                                            (*cur_node).len = (*cur_node)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (*cur_node).len =
+                                                (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         *top_node_p = cur_node;
                                         parse_quoted_string(
@@ -10639,15 +11594,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Misplaced assignment: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Misplaced assignment: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                     }
                                     '_c2rust_label_56: {
-                                        if pt_stack.size != 0 {} else {
+                                        if pt_stack.size != 0 {
+                                        } else {
                                             __assert_fail(
                                                 b"kv_size(pt_stack)\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
@@ -10660,16 +11614,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                     };
                                     '_c2rust_label_57: {
-                                        if *pt_stack
-                                            .items
-                                            .offset(
-                                                pt_stack
-                                                    .size
-                                                    .wrapping_sub(0 as size_t)
-                                                    .wrapping_sub(1 as size_t) as isize,
-                                            ) as ::core::ffi::c_uint
+                                        if *pt_stack.items.offset(
+                                            pt_stack
+                                                .size
+                                                .wrapping_sub(0 as size_t)
+                                                .wrapping_sub(1 as size_t)
+                                                as isize,
+                                        )
+                                            as ::core::ffi::c_uint
                                             == kEPTExpr as ::core::ffi::c_int as ::core::ffi::c_uint
-                                        {} else {
+                                        {
+                                        } else {
                                             __assert_fail(
                                                 b"kv_last(pt_stack) == kEPTExpr\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
@@ -10688,10 +11643,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            gettext(
-                                                b"E15: Unexpected assignment: %.*s\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(b"E15: Unexpected assignment: %.*s\0".as_ptr()
+                                                as *const ::core::ffi::c_char),
                                             cur_token.start,
                                         );
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
@@ -10702,9 +11655,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_uint
                                         {
                                             (**top_node_p).start = prev_token.start;
-                                            (**top_node_p).len = (**top_node_p)
-                                                .len
-                                                .wrapping_add(prev_token.len);
+                                            (**top_node_p).len =
+                                                (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
                                         (**top_node_p).len = 0 as size_t;
                                         want_node = kENodeOperator;
@@ -10717,9 +11669,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         (*cur_node).start = prev_token.start;
-                                        (*cur_node).len = (*cur_node)
-                                            .len
-                                            .wrapping_add(prev_token.len);
+                                        (*cur_node).len =
+                                            (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     (*cur_node).data.ass.type_0 = cur_token.data.ass.type_0;
                                     match cur_token.data.ass.type_0 as ::core::ffi::c_uint {
@@ -10757,7 +11708,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidAssignmentWithSubtraction\0".as_ptr()
+                                                    b"NvimInvalidAssignmentWithSubtraction\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
                                                     b"NvimAssignmentWithSubtraction\0".as_ptr()
@@ -10771,7 +11723,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
-                                                    b"NvimInvalidAssignmentWithConcatenation\0".as_ptr()
+                                                    b"NvimInvalidAssignmentWithConcatenation\0"
+                                                        .as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
                                                     b"NvimAssignmentWithConcatenation\0".as_ptr()
@@ -10788,7 +11741,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        ) as ::core::ffi::c_int != 0;
+                                        )
+                                            as ::core::ffi::c_int
+                                        != 0;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 _ => {
@@ -10813,7 +11768,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             cur_node,
                             &raw mut want_node,
                             &raw mut ast.err,
-                        ) as ::core::ffi::c_int != 0;
+                        ) as ::core::ffi::c_int
+                        != 0;
                     viml_parser_highlight(
                         pstate,
                         cur_token.start,
@@ -10822,28 +11778,26 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             b"NvimInvalidCallingParenthesis\0".as_ptr()
                                 as *const ::core::ffi::c_char
                         } else {
-                            b"NvimCallingParenthesis\0".as_ptr()
-                                as *const ::core::ffi::c_char
+                            b"NvimCallingParenthesis\0".as_ptr() as *const ::core::ffi::c_char
                         },
                     );
                     break 's_6212;
                 }
                 if pt_is_assignment(cur_pt) as ::core::ffi::c_int != 0
                     && !pt_is_assignment(
-                        *pt_stack
-                            .items
-                            .offset(
-                                pt_stack
-                                    .size
-                                    .wrapping_sub(0 as size_t)
-                                    .wrapping_sub(1 as size_t) as isize,
-                            ),
+                        *pt_stack.items.offset(
+                            pt_stack
+                                .size
+                                .wrapping_sub(0 as size_t)
+                                .wrapping_sub(1 as size_t) as isize,
+                        ),
                     )
                 {
                     '_c2rust_label_36: {
                         if want_node as ::core::ffi::c_uint
                             == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {} else {
+                        {
+                        } else {
                             __assert_fail(
                                 b"want_node == kENodeValue\0".as_ptr()
                                     as *const ::core::ffi::c_char,
@@ -10866,7 +11820,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         viml_parser_advance(pstate, cur_token.len);
     }
     '_c2rust_label_58: {
-        if pt_stack.size != 0 {} else {
+        if pt_stack.size != 0 {
+        } else {
             __assert_fail(
                 b"kv_size(pt_stack)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -10878,7 +11833,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         }
     };
     '_c2rust_label_59: {
-        if ast_stack.size != 0 {} else {
+        if ast_stack.size != 0 {
+        } else {
             __assert_fail(
                 b"kv_size(ast_stack)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -10889,28 +11845,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             );
         }
     };
-    if want_node as ::core::ffi::c_uint
-        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-        && *pt_stack
-            .items
-            .offset(
-                pt_stack.size.wrapping_sub(0 as size_t).wrapping_sub(1 as size_t)
-                    as isize,
-            ) as ::core::ffi::c_uint
+    if want_node as ::core::ffi::c_uint == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
+        && *pt_stack.items.offset(
+            pt_stack
+                .size
+                .wrapping_sub(0 as size_t)
+                .wrapping_sub(1 as size_t) as isize,
+        ) as ::core::ffi::c_uint
             != kEPTLambdaArguments as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         east_set_error(
             pstate,
             &raw mut ast.err,
-            gettext(
-                b"E15: Expected value, got EOC: %.*s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"E15: Expected value, got EOC: %.*s\0".as_ptr() as *const ::core::ffi::c_char),
             (*pstate).pos,
         );
     } else if ast_stack.size != 1 as size_t {
         '_c2rust_label_60: {
-            if ast_stack.size != 0 {} else {
+            if ast_stack.size != 0 {
+            } else {
                 __assert_fail(
                     b"kv_size(ast_stack)\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -10924,11 +11877,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         ast_stack.size = ast_stack.size.wrapping_sub(1 as size_t);
         while ast.err.msg.is_null() && ast_stack.size != 0 {
             ast_stack.size = ast_stack.size.wrapping_sub(1);
-            let cur_node_0: *const ExprASTNode = **ast_stack
-                .items
-                .offset(ast_stack.size as isize);
+            let cur_node_0: *const ExprASTNode = **ast_stack.items.offset(ast_stack.size as isize);
             '_c2rust_label_61: {
-                if !cur_node_0.is_null() {} else {
+                if !cur_node_0.is_null() {
+                } else {
                     __assert_fail(
                         b"cur_node != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                         b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/expressions.c\0"
@@ -10945,8 +11897,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         pstate,
                         &raw mut ast.err,
                         gettext(
-                            b"E116: Missing closing parenthesis for function call: %.*s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"E116: Missing closing parenthesis for function call: %.*s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         (*cur_node_0).start,
                     );
@@ -10966,10 +11918,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
-                        gettext(
-                            b"E697: Missing end of List ']': %.*s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E697: Missing end of List ']': %.*s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         (*cur_node_0).start,
                     );
                 }
@@ -10977,10 +11927,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
-                        gettext(
-                            b"E723: Missing end of Dictionary '}': %.*s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E723: Missing end of Dictionary '}': %.*s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         (*cur_node_0).start,
                     );
                 }
@@ -10988,10 +11936,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
-                        gettext(
-                            b"E15: Missing closing figure brace: %.*s\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"E15: Missing closing figure brace: %.*s\0".as_ptr()
+                            as *const ::core::ffi::c_char),
                         (*cur_node_0).start,
                     );
                 }
@@ -11000,8 +11946,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         pstate,
                         &raw mut ast.err,
                         gettext(
-                            b"E15: Missing closing figure brace for lambda: %.*s\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
+                            b"E15: Missing closing figure brace for lambda: %.*s\0".as_ptr()
+                                as *const ::core::ffi::c_char,
                         ),
                         (*cur_node_0).start,
                     );
@@ -11013,17 +11959,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     abort();
                 }
                 18 | 19 | 20 => {}
-                5 | 23 | 13 | 38 | 35 | 34 | 33 | 32 | 29 | 28 | 22 | 21 | 30 | 7 | 31
-                | 2 | 8 => {}
+                5 | 23 | 13 | 38 | 35 | 34 | 33 | 32 | 29 | 28 | 22 | 21 | 30 | 7 | 31 | 2 | 8 => {}
                 3 => {
                     if !(*cur_node_0).data.ter.got_colon {
                         east_set_error(
                             pstate,
                             &raw mut ast.err,
-                            gettext(
-                                b"E109: Missing ':' after '?': %.*s\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ),
+                            gettext(b"E109: Missing ':' after '?': %.*s\0".as_ptr()
+                                as *const ::core::ffi::c_char),
                             (*cur_node_0).start,
                         );
                     }
@@ -11033,8 +11976,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         }
     }
     if ast_stack.items != &raw mut ast_stack.init_array as *mut *mut *mut ExprASTNode {
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut ast_stack.items
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut ast_stack.items as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         *ptr_;
@@ -11044,31 +11987,27 @@ pub unsafe extern "C" fn viml_pexpr_parse(
 #[inline(always)]
 unsafe extern "C" fn viml_parser_advance(pstate: *mut ParserState, len: size_t) {
     '_c2rust_label: {
-        if (*pstate).pos.line == (*pstate).reader.lines.size.wrapping_sub(1 as size_t)
-        {} else {
+        if (*pstate).pos.line == (*pstate).reader.lines.size.wrapping_sub(1 as size_t) {
+        } else {
             __assert_fail(
                 b"pstate->pos.line == kv_size(pstate->reader.lines) - 1\0".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.h\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/viml/parser/parser.h\0".as_ptr()
+                    as *const ::core::ffi::c_char,
                 48 as ::core::ffi::c_uint,
                 b"void viml_parser_advance(ParserState *const, const size_t)\0".as_ptr()
                     as *const ::core::ffi::c_char,
             );
         }
     };
-    let pline: ParserLine = *(*pstate)
-        .reader
-        .lines
-        .items
-        .offset(
-            (*pstate)
-                .reader
-                .lines
-                .size
-                .wrapping_sub(0 as size_t)
-                .wrapping_sub(1 as size_t) as isize,
-        );
+    let pline: ParserLine = *(*pstate).reader.lines.items.offset(
+        (*pstate)
+            .reader
+            .lines
+            .size
+            .wrapping_sub(0 as size_t)
+            .wrapping_sub(1 as size_t) as isize,
+    );
     if (*pstate).pos.col.wrapping_add(len) >= pline.size {
         (*pstate).pos.line = (*pstate).pos.line.wrapping_add(1);
         (*pstate).pos.col = 0 as size_t;
@@ -11088,26 +12027,25 @@ unsafe extern "C" fn viml_parser_highlight(
     }
     '_c2rust_label: {
         if (*(*pstate).colors).size == 0 as size_t
-            || (*(*(*pstate).colors)
-                .items
-                .offset(
-                    (*(*pstate).colors)
-                        .size
-                        .wrapping_sub(0 as size_t)
-                        .wrapping_sub(1 as size_t) as isize,
-                ))
-                .start
-                .line < start.line
-            || (*(*(*pstate).colors)
-                .items
-                .offset(
-                    (*(*pstate).colors)
-                        .size
-                        .wrapping_sub(0 as size_t)
-                        .wrapping_sub(1 as size_t) as isize,
-                ))
-                .end_col <= start.col
-        {} else {
+            || (*(*(*pstate).colors).items.offset(
+                (*(*pstate).colors)
+                    .size
+                    .wrapping_sub(0 as size_t)
+                    .wrapping_sub(1 as size_t) as isize,
+            ))
+            .start
+            .line
+                < start.line
+            || (*(*(*pstate).colors).items.offset(
+                (*(*pstate).colors)
+                    .size
+                    .wrapping_sub(0 as size_t)
+                    .wrapping_sub(1 as size_t) as isize,
+            ))
+            .end_col
+                <= start.col
+        {
+        } else {
             __assert_fail(
                 b"kv_size(*pstate->colors) == 0 || kv_Z(*pstate->colors, 0).start.line < start.line || kv_Z(*pstate->colors, 0).end_col <= start.col\0"
                     .as_ptr() as *const ::core::ffi::c_char,
@@ -11120,16 +12058,14 @@ unsafe extern "C" fn viml_parser_highlight(
         }
     };
     if (*(*pstate).colors).size == (*(*pstate).colors).capacity {
-        (*(*pstate).colors).capacity = (if (*(*pstate).colors).capacity
-            << 1 as ::core::ffi::c_int
+        (*(*pstate).colors).capacity = (if (*(*pstate).colors).capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[ParserHighlightChunk; 16]>()
                 .wrapping_div(::core::mem::size_of::<ParserHighlightChunk>())
                 .wrapping_div(
                     (::core::mem::size_of::<[ParserHighlightChunk; 16]>()
                         .wrapping_rem(::core::mem::size_of::<ParserHighlightChunk>())
                         == 0) as ::core::ffi::c_int as usize,
-                )
-        {
+                ) {
             (*(*pstate).colors).capacity << 1 as ::core::ffi::c_int
         } else {
             ::core::mem::size_of::<[ParserHighlightChunk; 16]>()
@@ -11147,8 +12083,7 @@ unsafe extern "C" fn viml_parser_highlight(
                     (::core::mem::size_of::<[ParserHighlightChunk; 16]>()
                         .wrapping_rem(::core::mem::size_of::<ParserHighlightChunk>())
                         == 0) as ::core::ffi::c_int as usize,
-                )
-        {
+                ) {
             (if (*(*pstate).colors).items
                 == &raw mut (*(*pstate).colors).init_array as *mut ParserHighlightChunk
             {
@@ -11187,7 +12122,8 @@ unsafe extern "C" fn viml_parser_highlight(
                 )
             })
         }) as *mut ParserHighlightChunk;
-    } else {};
+    } else {
+    };
     let c2rust_fresh34 = (*(*pstate).colors).size;
     (*(*pstate).colors).size = (*(*pstate).colors).size.wrapping_add(1);
     *(*(*pstate).colors).items.offset(c2rust_fresh34 as isize) = ParserHighlightChunk {

@@ -12,10 +12,7 @@ extern "C" {
     ) -> !;
     fn __errno_location() -> *mut ::core::ffi::c_int;
     fn fclose(__stream: *mut FILE) -> ::core::ffi::c_int;
-    fn fdopen(
-        __fd: ::core::ffi::c_int,
-        __modes: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn fdopen(__fd: ::core::ffi::c_int, __modes: *const ::core::ffi::c_char) -> *mut FILE;
     fn snprintf(
         __s: *mut ::core::ffi::c_char,
         __maxlen: size_t,
@@ -246,11 +243,7 @@ extern "C" {
         room_in: ::core::ffi::c_int,
         buflen: ::core::ffi::c_int,
     );
-    fn smsg(
-        hl_id: ::core::ffi::c_int,
-        s: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
+    fn smsg(hl_id: ::core::ffi::c_int, s: *const ::core::ffi::c_char, ...) -> ::core::ffi::c_int;
     fn emsg(s: *const ::core::ffi::c_char) -> bool;
     fn semsg(fmt: *const ::core::ffi::c_char, ...) -> bool;
     fn internal_error(where_0: *const ::core::ffi::c_char);
@@ -272,10 +265,7 @@ extern "C" {
     fn callback_free(callback: *mut Callback);
     fn callback_put(cb: *mut Callback, tv: *mut typval_T);
     fn callback_copy(dest: *mut Callback, src: *mut Callback);
-    fn tv_dict_item_alloc_len(
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-    ) -> *mut dictitem_T;
+    fn tv_dict_item_alloc_len(key: *const ::core::ffi::c_char, key_len: size_t) -> *mut dictitem_T;
     fn tv_dict_item_free(item: *mut dictitem_T);
     fn tv_dict_alloc() -> *mut dict_T;
     fn tv_dict_unref(d: *mut dict_T);
@@ -289,10 +279,7 @@ extern "C" {
         key: *const ::core::ffi::c_char,
         rettv: *mut typval_T,
     ) -> ::core::ffi::c_int;
-    fn tv_dict_get_number(
-        d: *const dict_T,
-        key: *const ::core::ffi::c_char,
-    ) -> varnumber_T;
+    fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T;
     fn tv_dict_get_bool(
         d: *const dict_T,
         key: *const ::core::ffi::c_char,
@@ -336,10 +323,7 @@ extern "C" {
     fn tv_copy(from: *const typval_T, to: *mut typval_T);
     fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T;
     fn tv_get_string_chk(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn set_internal_string_var(
-        name: *const ::core::ffi::c_char,
-        value: *mut ::core::ffi::c_char,
-    );
+    fn set_internal_string_var(name: *const ::core::ffi::c_char, value: *mut ::core::ffi::c_char);
     fn win_id2wp(id: ::core::ffi::c_int) -> *mut win_T;
     fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T;
     fn do_shell(cmd: *mut ::core::ffi::c_char, flags: ::core::ffi::c_int);
@@ -407,11 +391,7 @@ extern "C" {
         force: ::core::ffi::c_int,
     );
     fn shorten_fnames(force: ::core::ffi::c_int);
-    fn vim_fgets(
-        buf: *mut ::core::ffi::c_char,
-        size: ::core::ffi::c_int,
-        fp: *mut FILE,
-    ) -> bool;
+    fn vim_fgets(buf: *mut ::core::ffi::c_char, size: ::core::ffi::c_int, fp: *mut FILE) -> bool;
     fn vim_tempname() -> *mut ::core::ffi::c_char;
     fn fuzzy_match(
         str: *mut ::core::ffi::c_char,
@@ -422,11 +402,7 @@ extern "C" {
         maxMatches: ::core::ffi::c_int,
     ) -> bool;
     fn ga_clear(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_concat(gap: *mut garray_T, s: *const ::core::ffi::c_char);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
@@ -494,11 +470,7 @@ extern "C" {
         opt_flags: ::core::ffi::c_int,
         set_sid: scid_T,
     );
-    fn set_option_value_give_err(
-        opt_idx: OptIndex,
-        value: OptVal,
-        opt_flags: ::core::ffi::c_int,
-    );
+    fn set_option_value_give_err(opt_idx: OptIndex, value: OptVal, opt_flags: ::core::ffi::c_int);
     fn buf_copy_options(buf: *mut buf_T, flags: ::core::ffi::c_int);
     fn shortmess(x: ::core::ffi::c_int) -> bool;
     fn option_set_callback_func(
@@ -515,17 +487,11 @@ extern "C" {
     fn free_string_option(p: *mut ::core::ffi::c_char);
     fn os_dirname(buf: *mut ::core::ffi::c_char, len: size_t) -> ::core::ffi::c_int;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn os_fopen(
-        path: *const ::core::ffi::c_char,
-        flags: *const ::core::ffi::c_char,
-    ) -> *mut FILE;
+    fn os_fopen(path: *const ::core::ffi::c_char, flags: *const ::core::ffi::c_char) -> *mut FILE;
     fn os_open_stdin_fd() -> ::core::ffi::c_int;
     fn os_path_exists(path: *const ::core::ffi::c_char) -> bool;
     fn os_remove(path: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn os_fileinfo_link(
-        path: *const ::core::ffi::c_char,
-        file_info: *mut FileInfo,
-    ) -> bool;
+    fn os_fileinfo_link(path: *const ::core::ffi::c_char, file_info: *mut FileInfo) -> bool;
     fn os_breakcheck();
     fn line_breakcheck();
     fn os_get_pid() -> int64_t;
@@ -555,20 +521,14 @@ extern "C" {
     fn FreeWild(count: ::core::ffi::c_int, files: *mut *mut ::core::ffi::c_char);
     fn vim_isAbsName(name: *const ::core::ffi::c_char) -> bool;
     fn fix_fname(fname: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn path_try_shorten_fname(
-        full_path: *mut ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
+    fn path_try_shorten_fname(full_path: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn path_is_absolute(fname: *const ::core::ffi::c_char) -> bool;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
     fn vim_regexec_multi(
         rmp: *mut regmmatch_T,
         win: *mut win_T,
@@ -592,10 +552,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn u_clearallandblockfree(buf: *mut buf_T);
     fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool;
-    fn win_split(
-        size: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
+    fn win_split(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn win_valid(win: *const win_T) -> bool;
     fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
     fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
@@ -732,9 +689,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -4194,12 +4150,8 @@ pub const WSP_ROOM: C2Rust_Unnamed_33 = 1;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
@@ -4224,15 +4176,14 @@ static mut ql_info_actual: qf_info_T = qf_info_T {
 static mut ql_info: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
 static mut last_qf_id: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
 pub const FMT_PATTERNS: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
-static mut e_no_more_items: *const ::core::ffi::c_char = b"E553: No more items\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut e_current_quickfix_list_was_changed: *const ::core::ffi::c_char = b"E925: Current quickfix list was changed\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut e_current_location_list_was_changed: *const ::core::ffi::c_char = b"E926: Current location list was changed\0"
-    .as_ptr() as *const ::core::ffi::c_char;
-static mut qf_last_bufname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut e_no_more_items: *const ::core::ffi::c_char =
+    b"E553: No more items\0".as_ptr() as *const ::core::ffi::c_char;
+static mut e_current_quickfix_list_was_changed: *const ::core::ffi::c_char =
+    b"E925: Current quickfix list was changed\0".as_ptr() as *const ::core::ffi::c_char;
+static mut e_current_location_list_was_changed: *const ::core::ffi::c_char =
+    b"E926: Current location list was changed\0".as_ptr() as *const ::core::ffi::c_char;
+static mut qf_last_bufname: *mut ::core::ffi::c_char =
+    ::core::ptr::null_mut::<::core::ffi::c_char>();
 static mut qf_last_bufref: bufref_T = bufref_T {
     br_buf: ::core::ptr::null_mut::<buf_T>(),
     br_fnum: 0 as ::core::ffi::c_int,
@@ -4249,7 +4200,11 @@ unsafe extern "C" fn qfga_get() -> *mut garray_T {
     static mut initialized: bool = false_0 != 0;
     if !initialized {
         initialized = true_0 != 0;
-        ga_init(&raw mut qfga, 1 as ::core::ffi::c_int, 256 as ::core::ffi::c_int);
+        ga_init(
+            &raw mut qfga,
+            1 as ::core::ffi::c_int,
+            256 as ::core::ffi::c_int,
+        );
     }
     qfga.ga_len = 0 as ::core::ffi::c_int;
     return &raw mut qfga;
@@ -4280,13 +4235,9 @@ unsafe extern "C" fn qf_init_process_nextline(
     return qf_add_entry(
         qfl,
         (*qfl).qf_directory,
-        if *(*fields).namebuf as ::core::ffi::c_int != 0
-            || !(*qfl).qf_directory.is_null()
-        {
+        if *(*fields).namebuf as ::core::ffi::c_int != 0 || !(*qfl).qf_directory.is_null() {
             (*fields).namebuf
-        } else if !(*qfl).qf_currfile.is_null()
-            && (*fields).valid as ::core::ffi::c_int != 0
-        {
+        } else if !(*qfl).qf_currfile.is_null() && (*fields).valid as ::core::ffi::c_int != 0 {
             (*qfl).qf_currfile
         } else {
             ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -4321,7 +4272,8 @@ pub unsafe extern "C" fn qf_init(
         ll_get_or_alloc_list(wp)
     };
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -4350,73 +4302,59 @@ static mut LINE_MAXLEN: size_t = 4096 as size_t;
 static mut fmt_pat: [fmtpattern; 14] = [
     fmtpattern {
         convchar: 'f' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'b' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'n' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'l' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'e' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'c' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'k' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 't' as ::core::ffi::c_char,
-        pattern: b".\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b".\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'm' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'r' as ::core::ffi::c_char,
-        pattern: b".*\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b".*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'p' as ::core::ffi::c_char,
-        pattern: b"[-\t .]*\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"[-\t .]*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'v' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 's' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
     fmtpattern {
         convchar: 'o' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char,
+        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     },
 ];
 pub const FMT_PATTERN_M: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
@@ -4431,30 +4369,29 @@ unsafe extern "C" fn efmpat_to_regpat(
     if (*efminfo).addr[idx as usize] != 0 {
         semsg(
             gettext(
-                b"E372: Too many %%%c in format string\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"E372: Too many %%%c in format string\0".as_ptr() as *const ::core::ffi::c_char
             ),
             *efmpat as ::core::ffi::c_int,
         );
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
-    if idx != 0 && idx < FMT_PATTERN_R
+    if idx != 0
+        && idx < FMT_PATTERN_R
         && !vim_strchr(
-                b"DXOPQ\0".as_ptr() as *const ::core::ffi::c_char,
+            b"DXOPQ\0".as_ptr() as *const ::core::ffi::c_char,
+            (*efminfo).prefix as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
+        || idx == FMT_PATTERN_R
+            && vim_strchr(
+                b"OPQ\0".as_ptr() as *const ::core::ffi::c_char,
                 (*efminfo).prefix as uint8_t as ::core::ffi::c_int,
             )
             .is_null()
-        || idx == FMT_PATTERN_R
-            && vim_strchr(
-                    b"OPQ\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*efminfo).prefix as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
     {
         semsg(
             gettext(
-                b"E373: Unexpected %%%c in format string\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"E373: Unexpected %%%c in format string\0".as_ptr() as *const ::core::ffi::c_char
             ),
             *efmpat as ::core::ffi::c_int,
         );
@@ -4478,15 +4415,13 @@ unsafe extern "C" fn efmpat_to_regpat(
         {
             strcpy(
                 regpat,
-                b".\\{-1,}\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b".\\{-1,}\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             regpat = regpat.offset(7 as ::core::ffi::c_int as isize);
         } else {
             strcpy(
                 regpat,
-                b"\\f\\+\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char,
+                b"\\f\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             );
             regpat = regpat.offset(4 as ::core::ffi::c_int as isize);
         }
@@ -4538,24 +4473,17 @@ unsafe extern "C" fn scanf_fmt_to_regpat(
                 let c2rust_fresh11 = regpat;
                 regpat = regpat.offset(1);
                 *c2rust_fresh11 = *efmp;
-                while efmp < efm.offset(len as isize)
-                    && {
-                        efmp = efmp.offset(1);
-                        let c2rust_fresh12 = regpat;
-                        regpat = regpat.offset(1);
-                        let c2rust_lvalue_ptr_0 = &raw mut *c2rust_fresh12;
-                        *c2rust_lvalue_ptr_0 = *efmp;
-                        *c2rust_lvalue_ptr_0 as ::core::ffi::c_int
-                            != ']' as ::core::ffi::c_int
-                    }
-                {}
+                while efmp < efm.offset(len as isize) && {
+                    efmp = efmp.offset(1);
+                    let c2rust_fresh12 = regpat;
+                    regpat = regpat.offset(1);
+                    let c2rust_lvalue_ptr_0 = &raw mut *c2rust_fresh12;
+                    *c2rust_lvalue_ptr_0 = *efmp;
+                    *c2rust_lvalue_ptr_0 as ::core::ffi::c_int != ']' as ::core::ffi::c_int
+                } {}
                 if efmp == efm.offset(len as isize) {
-                    emsg(
-                        gettext(
-                            b"E374: Missing ] in format string\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(b"E374: Missing ] in format string\0".as_ptr()
+                        as *const ::core::ffi::c_char));
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
             }
@@ -4574,8 +4502,7 @@ unsafe extern "C" fn scanf_fmt_to_regpat(
     } else {
         semsg(
             gettext(
-                b"E375: Unsupported %%%c in format string\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"E375: Unsupported %%%c in format string\0".as_ptr() as *const ::core::ffi::c_char
             ),
             *efmp as ::core::ffi::c_int,
         );
@@ -4589,28 +4516,26 @@ unsafe extern "C" fn efm_analyze_prefix(
     mut efminfo: *mut efm_T,
 ) -> *const ::core::ffi::c_char {
     if !vim_strchr(
-            b"+-\0".as_ptr() as *const ::core::ffi::c_char,
-            *efmp as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"+-\0".as_ptr() as *const ::core::ffi::c_char,
+        *efmp as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         let c2rust_fresh8 = efmp;
         efmp = efmp.offset(1);
         (*efminfo).flags = *c2rust_fresh8;
     }
     if !vim_strchr(
-            b"DXAEWINCZGOPQ\0".as_ptr() as *const ::core::ffi::c_char,
-            *efmp as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"DXAEWINCZGOPQ\0".as_ptr() as *const ::core::ffi::c_char,
+        *efmp as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         (*efminfo).prefix = *efmp;
     } else {
         semsg(
-            gettext(
-                b"E376: Invalid %%%c in format string prefix\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(b"E376: Invalid %%%c in format string prefix\0".as_ptr()
+                as *const ::core::ffi::c_char),
             *efmp as ::core::ffi::c_int,
         );
         return ::core::ptr::null::<::core::ffi::c_char>();
@@ -4655,10 +4580,10 @@ unsafe extern "C" fn efm_to_regpat(
                     return FAIL;
                 }
             } else if !vim_strchr(
-                    b"%\\.^$~[\0".as_ptr() as *const ::core::ffi::c_char,
-                    *efmp as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                b"%\\.^$~[\0".as_ptr() as *const ::core::ffi::c_char,
+                *efmp as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
             {
                 let c2rust_fresh3 = ptr;
                 ptr = ptr.offset(1);
@@ -4676,25 +4601,22 @@ unsafe extern "C" fn efm_to_regpat(
                 }
             } else {
                 semsg(
-                    gettext(
-                        b"E377: Invalid %%%c in format string\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(b"E377: Invalid %%%c in format string\0".as_ptr()
+                        as *const ::core::ffi::c_char),
                     *efmp as ::core::ffi::c_int,
                 );
                 return FAIL;
             }
         } else {
             if *efmp as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                && efmp.offset(1 as ::core::ffi::c_int as isize)
-                    < efm.offset(len as isize)
+                && efmp.offset(1 as ::core::ffi::c_int as isize) < efm.offset(len as isize)
             {
                 efmp = efmp.offset(1);
             } else if !vim_strchr(
-                    b".*^$~[\0".as_ptr() as *const ::core::ffi::c_char,
-                    *efmp as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                b".*^$~[\0".as_ptr() as *const ::core::ffi::c_char,
+                *efmp as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
             {
                 let c2rust_fresh5 = ptr;
                 ptr = ptr.offset(1);
@@ -4752,8 +4674,7 @@ unsafe extern "C" fn efm_option_part_len(
         && *efm.offset(len as isize) as ::core::ffi::c_int != ',' as ::core::ffi::c_int
     {
         if *efm.offset(len as isize) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && *efm.offset((len + 1 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int != NUL
+            && *efm.offset((len + 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int != NUL
         {
             len += 1;
         }
@@ -4768,13 +4689,9 @@ unsafe extern "C" fn parse_efm_option(mut efm: *mut ::core::ffi::c_char) -> *mut
     let mut fmtstr: *mut ::core::ffi::c_char = xmalloc(sz) as *mut ::core::ffi::c_char;
     '_parse_efm_end: {
         '_parse_efm_error: {
-            while *efm.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
-            {
-                let mut fmt_ptr: *mut efm_T = xcalloc(
-                    1 as size_t,
-                    ::core::mem::size_of::<efm_T>(),
-                ) as *mut efm_T;
+            while *efm.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
+                let mut fmt_ptr: *mut efm_T =
+                    xcalloc(1 as size_t, ::core::mem::size_of::<efm_T>()) as *mut efm_T;
                 if fmt_first.is_null() {
                     fmt_first = fmt_ptr;
                 } else {
@@ -4792,12 +4709,10 @@ unsafe extern "C" fn parse_efm_option(mut efm: *mut ::core::ffi::c_char) -> *mut
                 efm = skip_to_option_part(efm.offset(len as isize));
             }
             if fmt_first.is_null() {
-                emsg(
-                    gettext(
-                        b"E378: 'errorformat' contains no pattern\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    b"E378: 'errorformat' contains no pattern\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                ));
             }
             break '_parse_efm_end;
         }
@@ -4816,8 +4731,8 @@ unsafe extern "C" fn qf_grow_linebuf(
         newsz
     };
     if (*state).growbuf.is_null() {
-        (*state).growbuf = xmalloc((*state).linelen.wrapping_add(1 as size_t))
-            as *mut ::core::ffi::c_char;
+        (*state).growbuf =
+            xmalloc((*state).linelen.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
         (*state).growbufsiz = (*state).linelen;
     } else if (*state).linelen > (*state).growbufsiz {
         (*state).growbuf = xrealloc(
@@ -4828,9 +4743,7 @@ unsafe extern "C" fn qf_grow_linebuf(
     }
     return (*state).growbuf;
 }
-unsafe extern "C" fn qf_get_next_str_line(
-    mut state: *mut qfstate_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn qf_get_next_str_line(mut state: *mut qfstate_T) -> ::core::ffi::c_int {
     let mut p_str: *mut ::core::ffi::c_char = (*state).p_str;
     if *p_str as ::core::ffi::c_int == NUL {
         return QF_END_OF_INPUT as ::core::ffi::c_int;
@@ -4857,9 +4770,7 @@ unsafe extern "C" fn qf_get_next_str_line(
     (*state).p_str = p_str;
     return QF_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn qf_get_next_list_line(
-    mut state: *mut qfstate_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn qf_get_next_list_line(mut state: *mut qfstate_T) -> ::core::ffi::c_int {
     let mut p_li: *mut listitem_T = (*state).p_li;
     while !p_li.is_null()
         && ((*p_li).li_tv.v_type as ::core::ffi::c_uint
@@ -4887,32 +4798,36 @@ unsafe extern "C" fn qf_get_next_list_line(
     (*state).p_li = (*p_li).li_next;
     return QF_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn qf_get_next_buf_line(
-    mut state: *mut qfstate_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn qf_get_next_buf_line(mut state: *mut qfstate_T) -> ::core::ffi::c_int {
     if (*state).buflnum > (*state).lnumlast {
         return QF_END_OF_INPUT as ::core::ffi::c_int;
     }
     let mut p_buf: *mut ::core::ffi::c_char = ml_get_buf((*state).buf, (*state).buflnum);
     let mut len: size_t = ml_get_buf_len((*state).buf, (*state).buflnum) as size_t;
-    (*state).buflnum = ((*state).buflnum as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-        as linenr_T;
+    (*state).buflnum =
+        ((*state).buflnum as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as linenr_T;
     if len > (IOSIZE - 2 as ::core::ffi::c_int) as size_t {
         (*state).linebuf = qf_grow_linebuf(state, len);
     } else {
         (*state).linebuf = &raw mut IObuff as *mut ::core::ffi::c_char;
         (*state).linelen = len;
     }
-    xstrlcpy((*state).linebuf, p_buf, (*state).linelen.wrapping_add(1 as size_t));
+    xstrlcpy(
+        (*state).linebuf,
+        p_buf,
+        (*state).linelen.wrapping_add(1 as size_t),
+    );
     return QF_OK as ::core::ffi::c_int;
 }
-unsafe extern "C" fn qf_get_next_file_line(
-    mut state: *mut qfstate_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn qf_get_next_file_line(mut state: *mut qfstate_T) -> ::core::ffi::c_int {
     loop {
         *__errno_location() = 0 as ::core::ffi::c_int;
-        if fgets(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE, (*state).fd)
-            .is_null()
+        if fgets(
+            &raw mut IObuff as *mut ::core::ffi::c_char,
+            IOSIZE,
+            (*state).fd,
+        )
+        .is_null()
         {
             if *__errno_location() == EINTR {
                 continue;
@@ -4923,45 +4838,41 @@ unsafe extern "C" fn qf_get_next_file_line(
             (*state).linelen = strlen(&raw mut IObuff as *mut ::core::ffi::c_char);
             if (*state).linelen == (IOSIZE - 1 as ::core::ffi::c_int) as size_t
                 && !(IObuff[(*state).linelen.wrapping_sub(1 as size_t) as usize]
-                    as ::core::ffi::c_int == '\n' as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    == '\n' as ::core::ffi::c_int)
             {
                 if (*state).growbuf.is_null() {
-                    (*state).growbufsiz = (2 as ::core::ffi::c_int
-                        * (IOSIZE - 1 as ::core::ffi::c_int)) as size_t;
-                    (*state).growbuf = xmalloc((*state).growbufsiz)
-                        as *mut ::core::ffi::c_char;
+                    (*state).growbufsiz =
+                        (2 as ::core::ffi::c_int * (IOSIZE - 1 as ::core::ffi::c_int)) as size_t;
+                    (*state).growbuf = xmalloc((*state).growbufsiz) as *mut ::core::ffi::c_char;
                 }
                 memcpy(
                     (*state).growbuf as *mut ::core::ffi::c_void,
-                    &raw mut IObuff as *mut ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
+                    &raw mut IObuff as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
                     (IOSIZE - 1 as ::core::ffi::c_int) as size_t,
                 );
                 let mut growbuflen: size_t = (*state).linelen;
-                *(*state).growbuf.offset(growbuflen as isize) = NUL
-                    as ::core::ffi::c_char;
+                *(*state).growbuf.offset(growbuflen as isize) = NUL as ::core::ffi::c_char;
                 loop {
                     *__errno_location() = 0 as ::core::ffi::c_int;
                     if fgets(
-                            (*state).growbuf.offset(growbuflen as isize),
-                            (*state).growbufsiz.wrapping_sub(growbuflen)
-                                as ::core::ffi::c_int,
-                            (*state).fd,
-                        )
-                        .is_null()
+                        (*state).growbuf.offset(growbuflen as isize),
+                        (*state).growbufsiz.wrapping_sub(growbuflen) as ::core::ffi::c_int,
+                        (*state).fd,
+                    )
+                    .is_null()
                     {
                         if *__errno_location() != EINTR {
                             break;
                         }
                     } else {
-                        (*state).linelen = strlen(
-                            (*state).growbuf.offset(growbuflen as isize),
-                        );
+                        (*state).linelen = strlen((*state).growbuf.offset(growbuflen as isize));
                         growbuflen = growbuflen.wrapping_add((*state).linelen);
                         if *(*state)
                             .growbuf
                             .offset(growbuflen.wrapping_sub(1 as size_t) as isize)
-                            as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            == '\n' as ::core::ffi::c_int
                         {
                             break;
                         }
@@ -4969,36 +4880,36 @@ unsafe extern "C" fn qf_get_next_file_line(
                             discard = true_0 != 0;
                             break;
                         } else {
-                            (*state).growbufsiz = if (2 as size_t)
-                                .wrapping_mul((*state).growbufsiz) < LINE_MAXLEN
-                            {
-                                (2 as size_t).wrapping_mul((*state).growbufsiz)
-                            } else {
-                                LINE_MAXLEN
-                            };
+                            (*state).growbufsiz =
+                                if (2 as size_t).wrapping_mul((*state).growbufsiz) < LINE_MAXLEN {
+                                    (2 as size_t).wrapping_mul((*state).growbufsiz)
+                                } else {
+                                    LINE_MAXLEN
+                                };
                             (*state).growbuf = xrealloc(
                                 (*state).growbuf as *mut ::core::ffi::c_void,
                                 (*state).growbufsiz,
-                            ) as *mut ::core::ffi::c_char;
+                            )
+                                as *mut ::core::ffi::c_char;
                         }
                     }
                 }
                 while discard {
                     *__errno_location() = 0 as ::core::ffi::c_int;
                     if fgets(
-                            &raw mut IObuff as *mut ::core::ffi::c_char,
-                            IOSIZE,
-                            (*state).fd,
-                        )
-                        .is_null()
+                        &raw mut IObuff as *mut ::core::ffi::c_char,
+                        IOSIZE,
+                        (*state).fd,
+                    )
+                    .is_null()
                     {
                         if *__errno_location() != EINTR {
                             break;
                         }
                     } else if strlen(&raw mut IObuff as *mut ::core::ffi::c_char)
                         < (IOSIZE - 1 as ::core::ffi::c_int) as size_t
-                        || IObuff[(IOSIZE - 2 as ::core::ffi::c_int) as usize]
-                            as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+                        || IObuff[(IOSIZE - 2 as ::core::ffi::c_int) as usize] as ::core::ffi::c_int
+                            == '\n' as ::core::ffi::c_int
                     {
                         break;
                     }
@@ -5038,7 +4949,7 @@ unsafe extern "C" fn qf_get_next_file_line(
             }
             return QF_OK as ::core::ffi::c_int;
         }
-    };
+    }
 }
 unsafe extern "C" fn qf_get_nextline(mut state: *mut qfstate_T) -> ::core::ffi::c_int {
     let mut status: ::core::ffi::c_int = QF_FAIL as ::core::ffi::c_int;
@@ -5063,11 +4974,16 @@ unsafe extern "C" fn qf_get_nextline(mut state: *mut qfstate_T) -> ::core::ffi::
         return status;
     }
     if (*state).linelen > 0 as size_t
-        && *(*state).linebuf.offset((*state).linelen.wrapping_sub(1 as size_t) as isize)
-            as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
+        && *(*state)
+            .linebuf
+            .offset((*state).linelen.wrapping_sub(1 as size_t) as isize)
+            as ::core::ffi::c_int
+            == '\n' as ::core::ffi::c_int
     {
-        *(*state).linebuf.offset((*state).linelen.wrapping_sub(1 as size_t) as isize) = NUL
-            as ::core::ffi::c_char;
+        *(*state)
+            .linebuf
+            .offset((*state).linelen.wrapping_sub(1 as size_t) as isize) =
+            NUL as ::core::ffi::c_char;
     }
     remove_bom((*state).linebuf);
     return QF_OK as ::core::ffi::c_int;
@@ -5096,9 +5012,7 @@ unsafe extern "C" fn qf_parse_line(
 ) -> ::core::ffi::c_int {
     let mut fmt_ptr: *mut efm_T = ::core::ptr::null_mut::<efm_T>();
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut status: ::core::ffi::c_int = 0;
     's_240: {
         loop {
@@ -5129,7 +5043,8 @@ unsafe extern "C" fn qf_parse_line(
                 fmt_ptr = (*fmt_ptr).next;
             }
             (*qfl).qf_multiscan = false_0 != 0;
-            if fmt_ptr.is_null() || idx == 'D' as ::core::ffi::c_int
+            if fmt_ptr.is_null()
+                || idx == 'D' as ::core::ffi::c_int
                 || idx == 'X' as ::core::ffi::c_int
             {
                 if !fmt_ptr.is_null() {
@@ -5151,17 +5066,11 @@ unsafe extern "C" fn qf_parse_line(
                 if (*fmt_ptr).conthere != 0 {
                     fmt_start = fmt_ptr;
                 }
-                if !vim_strchr(b"AEWIN\0".as_ptr() as *const ::core::ffi::c_char, idx)
-                    .is_null()
-                {
+                if !vim_strchr(b"AEWIN\0".as_ptr() as *const ::core::ffi::c_char, idx).is_null() {
                     (*qfl).qf_multiline = true_0 != 0;
                     (*qfl).qf_multiignore = false_0 != 0;
                     break;
-                } else if !vim_strchr(
-                        b"CZ\0".as_ptr() as *const ::core::ffi::c_char,
-                        idx,
-                    )
-                    .is_null()
+                } else if !vim_strchr(b"CZ\0".as_ptr() as *const ::core::ffi::c_char, idx).is_null()
                 {
                     status = qf_parse_multiline_pfx(idx, qfl, fields);
                     if status != QF_OK as ::core::ffi::c_int {
@@ -5169,9 +5078,7 @@ unsafe extern "C" fn qf_parse_line(
                     }
                     break;
                 } else {
-                    if vim_strchr(b"OPQ\0".as_ptr() as *const ::core::ffi::c_char, idx)
-                        .is_null()
-                    {
+                    if vim_strchr(b"OPQ\0".as_ptr() as *const ::core::ffi::c_char, idx).is_null() {
                         break;
                     }
                     status = qf_parse_file_pfx(idx, fields, qfl, tail);
@@ -5198,14 +5105,14 @@ unsafe extern "C" fn qf_parse_line(
     return QF_OK as ::core::ffi::c_int;
 }
 unsafe extern "C" fn qf_alloc_fields(mut pfields: *mut qffields_T) {
-    (*pfields).namebuf = xmalloc((CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t)
-        as *mut ::core::ffi::c_char;
-    (*pfields).module = xmalloc((CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t)
-        as *mut ::core::ffi::c_char;
+    (*pfields).namebuf =
+        xmalloc((CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t) as *mut ::core::ffi::c_char;
+    (*pfields).module =
+        xmalloc((CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t) as *mut ::core::ffi::c_char;
     (*pfields).errmsglen = (CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t;
     (*pfields).errmsg = xmalloc((*pfields).errmsglen) as *mut ::core::ffi::c_char;
-    (*pfields).pattern = xmalloc((CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t)
-        as *mut ::core::ffi::c_char;
+    (*pfields).pattern =
+        xmalloc((CMDBUFFSIZE + 1 as ::core::ffi::c_int) as size_t) as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn qf_free_fields(mut pfields: *mut qffields_T) {
     xfree((*pfields).namebuf as *mut ::core::ffi::c_void);
@@ -5226,21 +5133,24 @@ unsafe extern "C" fn qf_setup_state(
     if !enc.is_null() && *enc as ::core::ffi::c_int != NUL {
         convert_setup(&raw mut (*pstate).vc, enc, p_enc);
     }
-    if !efile.is_null()
-        && {
-            (*pstate).fd = (if strequal(
-                efile,
-                b"-\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as ::core::ffi::c_int != 0
-            {
-                fdopen(os_open_stdin_fd(), b"r\0".as_ptr() as *const ::core::ffi::c_char)
-            } else {
-                os_fopen(efile, b"r\0".as_ptr() as *const ::core::ffi::c_char)
-            });
-            (*pstate).fd.is_null()
-        }
-    {
-        semsg(gettext(&raw const e_openerrf as *const ::core::ffi::c_char), efile);
+    if !efile.is_null() && {
+        (*pstate).fd = (if strequal(efile, b"-\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int
+            != 0
+        {
+            fdopen(
+                os_open_stdin_fd(),
+                b"r\0".as_ptr() as *const ::core::ffi::c_char,
+            )
+        } else {
+            os_fopen(efile, b"r\0".as_ptr() as *const ::core::ffi::c_char)
+        });
+        (*pstate).fd.is_null()
+    } {
+        semsg(
+            gettext(&raw const e_openerrf as *const ::core::ffi::c_char),
+            efile,
+        );
         return FAIL;
     }
     if !tv.is_null() {
@@ -5288,9 +5198,7 @@ unsafe extern "C" fn qf_init_ext(
 ) -> ::core::ffi::c_int {
     let mut qfl: *mut qf_list_T = ::core::ptr::null_mut::<qf_list_T>();
     let mut adding: bool = false;
-    let mut efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut state: qfstate_T = qfstate_T {
         linebuf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         linelen: 0,
@@ -5330,20 +5238,16 @@ unsafe extern "C" fn qf_init_ext(
     };
     let mut old_last: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
     static mut fmt_first: *mut efm_T = ::core::ptr::null_mut::<efm_T>();
-    static mut last_efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    static mut last_efm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut qf_last_bufname
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut qf_last_bufname as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
     qf_alloc_fields(&raw mut fields);
     '_qf_init_end: {
-        if qf_setup_state(&raw mut state, enc, efile, tv, buf, lnumfirst, lnumlast)
-            != FAIL
-        {
+        if qf_setup_state(&raw mut state, enc, efile, tv, buf, lnumfirst, lnumlast) != FAIL {
             qfl = ::core::ptr::null_mut::<qf_list_T>();
             adding = false_0 != 0;
             if newlist as ::core::ffi::c_int != 0 || qf_idx == (*qi).qf_listcount {
@@ -5357,7 +5261,9 @@ unsafe extern "C" fn qf_init_ext(
                     old_last = (*qfl).qf_last;
                 }
             }
-            efm = if errorformat == p_efm && tv.is_null() && !buf.is_null()
+            efm = if errorformat == p_efm
+                && tv.is_null()
+                && !buf.is_null()
                 && *(*buf).b_p_efm as ::core::ffi::c_int != NUL
             {
                 (*buf).b_p_efm
@@ -5365,8 +5271,8 @@ unsafe extern "C" fn qf_init_ext(
                 errorformat
             };
             if last_efm.is_null() || strcmp(last_efm, efm) != 0 as ::core::ffi::c_int {
-                let mut ptr__0: *mut *mut ::core::ffi::c_void = &raw mut last_efm
-                    as *mut *mut ::core::ffi::c_void;
+                let mut ptr__0: *mut *mut ::core::ffi::c_void =
+                    &raw mut last_efm as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr__0);
                 *ptr__0 = NULL_0;
                 *ptr__0;
@@ -5408,9 +5314,7 @@ unsafe extern "C" fn qf_init_ext(
                         retval = (*qfl).qf_count;
                         break '_qf_init_end;
                     } else {
-                        emsg(
-                            gettext(&raw const e_readerrf as *const ::core::ffi::c_char),
-                        );
+                        emsg(gettext(&raw const e_readerrf as *const ::core::ffi::c_char));
                     }
                 }
             }
@@ -5434,8 +5338,8 @@ unsafe extern "C" fn qf_store_title(
     mut qfl: *mut qf_list_T,
     mut title: *const ::core::ffi::c_char,
 ) {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*qfl).qf_title
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*qfl).qf_title as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -5447,9 +5351,7 @@ unsafe extern "C" fn qf_store_title(
     (*qfl).qf_title = p;
     xstrlcpy(p, title, len.wrapping_add(1 as size_t));
 }
-unsafe extern "C" fn qf_cmdtitle(
-    mut cmd: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+unsafe extern "C" fn qf_cmdtitle(mut cmd: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     static mut qftitle_str: [::core::ffi::c_char; 1025] = [0; 1025];
     snprintf(
         &raw mut qftitle_str as *mut ::core::ffi::c_char,
@@ -5466,9 +5368,9 @@ unsafe extern "C" fn qf_pop_stack(mut qi: *mut qf_info_T, mut adjust: bool) {
     qf_free((*qi).qf_lists.offset(0 as ::core::ffi::c_int as isize));
     let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     while i < (*qi).qf_listcount {
-        *(*qi).qf_lists.offset((i - 1 as ::core::ffi::c_int) as isize) = *(*qi)
+        *(*qi)
             .qf_lists
-            .offset(i as isize);
+            .offset((i - 1 as ::core::ffi::c_int) as isize) = *(*qi).qf_lists.offset(i as isize);
         i += 1;
     }
     memset(
@@ -5488,10 +5390,7 @@ unsafe extern "C" fn qf_pop_stack(mut qi: *mut qf_info_T, mut adjust: bool) {
         }
     }
 }
-unsafe extern "C" fn qf_new_list(
-    mut qi: *mut qf_info_T,
-    mut qf_title: *const ::core::ffi::c_char,
-) {
+unsafe extern "C" fn qf_new_list(mut qi: *mut qf_info_T, mut qf_title: *const ::core::ffi::c_char) {
     while (*qi).qf_listcount > (*qi).qf_curlist + 1 as ::core::ffi::c_int {
         (*qi).qf_listcount -= 1;
         qf_free((*qi).qf_lists.offset((*qi).qf_listcount as isize));
@@ -5544,8 +5443,7 @@ unsafe extern "C" fn qf_parse_fmt_b(
     if (*rmp).startp[midx as usize].is_null() {
         return QF_FAIL as ::core::ffi::c_int;
     }
-    let mut bnr: ::core::ffi::c_int = atol((*rmp).startp[midx as usize])
-        as ::core::ffi::c_int;
+    let mut bnr: ::core::ffi::c_int = atol((*rmp).startp[midx as usize]) as ::core::ffi::c_int;
     if buflist_findnr(bnr).is_null() {
         return QF_FAIL as ::core::ffi::c_int;
     }
@@ -5641,9 +5539,8 @@ unsafe extern "C" fn qf_parse_fmt_m(
     if (*rmp).startp[midx as usize].is_null() || (*rmp).endp[midx as usize].is_null() {
         return QF_FAIL as ::core::ffi::c_int;
     }
-    let mut len: size_t = (*rmp)
-        .endp[midx as usize]
-        .offset_from((*rmp).startp[midx as usize]) as size_t;
+    let mut len: size_t =
+        (*rmp).endp[midx as usize].offset_from((*rmp).startp[midx as usize]) as size_t;
     if len >= (*fields).errmsglen {
         (*fields).errmsg = xrealloc(
             (*fields).errmsg as *mut ::core::ffi::c_void,
@@ -5711,9 +5608,8 @@ unsafe extern "C" fn qf_parse_fmt_s(
     if (*rmp).startp[midx as usize].is_null() || (*rmp).endp[midx as usize].is_null() {
         return QF_FAIL as ::core::ffi::c_int;
     }
-    let mut len: size_t = (*rmp)
-        .endp[midx as usize]
-        .offset_from((*rmp).startp[midx as usize]) as size_t;
+    let mut len: size_t =
+        (*rmp).endp[midx as usize].offset_from((*rmp).startp[midx as usize]) as size_t;
     len = if len < (1024 as ::core::ffi::c_int - 5 as ::core::ffi::c_int) as size_t {
         len
     } else {
@@ -5728,12 +5624,15 @@ unsafe extern "C" fn qf_parse_fmt_s(
         (*rmp).startp[midx as usize],
         len.wrapping_add(4 as size_t),
     );
-    *(*fields).pattern.offset(len.wrapping_add(3 as size_t) as isize) = '\\'
-        as ::core::ffi::c_char;
-    *(*fields).pattern.offset(len.wrapping_add(4 as size_t) as isize) = '$'
-        as ::core::ffi::c_char;
-    *(*fields).pattern.offset(len.wrapping_add(5 as size_t) as isize) = NUL
-        as ::core::ffi::c_char;
+    *(*fields)
+        .pattern
+        .offset(len.wrapping_add(3 as size_t) as isize) = '\\' as ::core::ffi::c_char;
+    *(*fields)
+        .pattern
+        .offset(len.wrapping_add(4 as size_t) as isize) = '$' as ::core::ffi::c_char;
+    *(*fields)
+        .pattern
+        .offset(len.wrapping_add(5 as size_t) as isize) = NUL as ::core::ffi::c_char;
     return QF_OK as ::core::ffi::c_int;
 }
 unsafe extern "C" fn qf_parse_fmt_o(
@@ -5744,13 +5643,16 @@ unsafe extern "C" fn qf_parse_fmt_o(
     if (*rmp).startp[midx as usize].is_null() || (*rmp).endp[midx as usize].is_null() {
         return QF_FAIL as ::core::ffi::c_int;
     }
-    let mut len: size_t = (*rmp)
-        .endp[midx as usize]
-        .offset_from((*rmp).startp[midx as usize]) as size_t;
+    let mut len: size_t =
+        (*rmp).endp[midx as usize].offset_from((*rmp).startp[midx as usize]) as size_t;
     let mut dsize: size_t = strlen((*fields).module)
         .wrapping_add(len)
         .wrapping_add(1 as size_t);
-    dsize = if dsize < 1024 as size_t { dsize } else { 1024 as size_t };
+    dsize = if dsize < 1024 as size_t {
+        dsize
+    } else {
+        1024 as size_t
+    };
     xstrlcat((*fields).module, (*rmp).startp[midx as usize], dsize);
     return QF_OK as ::core::ffi::c_int;
 }
@@ -5872,15 +5774,16 @@ unsafe extern "C" fn qf_parse_match(
 ) -> ::core::ffi::c_int {
     let mut idx: ::core::ffi::c_char = (*fmt_ptr).prefix;
     if (idx as ::core::ffi::c_int == 'C' as ::core::ffi::c_int
-        || idx as ::core::ffi::c_int == 'Z' as ::core::ffi::c_int) && qf_multiline == 0
+        || idx as ::core::ffi::c_int == 'Z' as ::core::ffi::c_int)
+        && qf_multiline == 0
     {
         return QF_FAIL as ::core::ffi::c_int;
     }
     if !vim_strchr(
-            b"EWIN\0".as_ptr() as *const ::core::ffi::c_char,
-            idx as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b"EWIN\0".as_ptr() as *const ::core::ffi::c_char,
+        idx as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         (*fields).type_0 = idx;
     } else {
@@ -5889,8 +5792,7 @@ unsafe extern "C" fn qf_parse_match(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < FMT_PATTERNS {
         let mut status: ::core::ffi::c_int = QF_OK as ::core::ffi::c_int;
-        let mut midx: ::core::ffi::c_int = (*fmt_ptr).addr[i as usize]
-            as ::core::ffi::c_int;
+        let mut midx: ::core::ffi::c_int = (*fmt_ptr).addr[i as usize] as ::core::ffi::c_int;
         if i == 0 as ::core::ffi::c_int && midx > 0 as ::core::ffi::c_int {
             status = qf_parse_fmt_f(regmatch, midx, fields, idx as ::core::ffi::c_int);
         } else if i == FMT_PATTERN_M {
@@ -5904,8 +5806,9 @@ unsafe extern "C" fn qf_parse_match(
         } else if i == FMT_PATTERN_R && midx > 0 as ::core::ffi::c_int {
             status = qf_parse_fmt_r(regmatch, midx, tail);
         } else if midx > 0 as ::core::ffi::c_int {
-            status = qf_parse_fmt[i as usize]
-                .expect("non-null function pointer")(regmatch, midx, fields);
+            status = qf_parse_fmt[i as usize].expect("non-null function pointer")(
+                regmatch, midx, fields,
+            );
         }
         if status != QF_OK as ::core::ffi::c_int {
             return status;
@@ -5925,23 +5828,19 @@ unsafe extern "C" fn qf_parse_get_fields(
 ) -> ::core::ffi::c_int {
     if qf_multiscan != 0
         && vim_strchr(
-                b"OPQ\0".as_ptr() as *const ::core::ffi::c_char,
-                (*fmt_ptr).prefix as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"OPQ\0".as_ptr() as *const ::core::ffi::c_char,
+            (*fmt_ptr).prefix as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
     {
         return QF_FAIL as ::core::ffi::c_int;
     }
-    *(*fields).namebuf.offset(0 as ::core::ffi::c_int as isize) = NUL
-        as ::core::ffi::c_char;
+    *(*fields).namebuf.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     (*fields).bnr = 0 as ::core::ffi::c_int;
-    *(*fields).module.offset(0 as ::core::ffi::c_int as isize) = NUL
-        as ::core::ffi::c_char;
-    *(*fields).pattern.offset(0 as ::core::ffi::c_int as isize) = NUL
-        as ::core::ffi::c_char;
+    *(*fields).module.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+    *(*fields).pattern.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     if qf_multiscan == 0 {
-        *(*fields).errmsg.offset(0 as ::core::ffi::c_int as isize) = NUL
-            as ::core::ffi::c_char;
+        *(*fields).errmsg.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     }
     (*fields).lnum = 0 as ::core::ffi::c_int as linenr_T;
     (*fields).end_lnum = 0 as ::core::ffi::c_int as linenr_T;
@@ -5984,12 +5883,9 @@ unsafe extern "C" fn qf_parse_dir_pfx(
 ) -> ::core::ffi::c_int {
     if idx == 'D' as ::core::ffi::c_int {
         if *(*fields).namebuf as ::core::ffi::c_int == NUL {
-            emsg(
-                gettext(
-                    b"E379: Missing or empty directory name\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E379: Missing or empty directory name\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             return QF_FAIL as ::core::ffi::c_int;
         }
         (*qfl).qf_directory = qf_push_dir(
@@ -6015,9 +5911,7 @@ unsafe extern "C" fn qf_parse_file_pfx(
     if *(*fields).namebuf as ::core::ffi::c_int == NUL
         || os_path_exists((*fields).namebuf) as ::core::ffi::c_int != 0
     {
-        if *(*fields).namebuf as ::core::ffi::c_int != 0
-            && idx == 'P' as ::core::ffi::c_int
-        {
+        if *(*fields).namebuf as ::core::ffi::c_int != 0 && idx == 'P' as ::core::ffi::c_int {
             (*qfl).qf_currfile = qf_push_dir(
                 (*fields).namebuf,
                 &raw mut (*qfl).qf_file_stack,
@@ -6039,8 +5933,7 @@ unsafe extern "C" fn qf_parse_line_nomatch(
     mut linelen: size_t,
     mut fields: *mut qffields_T,
 ) -> ::core::ffi::c_int {
-    *(*fields).namebuf.offset(0 as ::core::ffi::c_int as isize) = NUL
-        as ::core::ffi::c_char;
+    *(*fields).namebuf.offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
     (*fields).lnum = 0 as ::core::ffi::c_int as linenr_T;
     (*fields).valid = false_0 != 0;
     return copy_nonerror_line(linebuf, linelen, fields);
@@ -6074,8 +5967,8 @@ unsafe extern "C" fn qf_parse_multiline_pfx(
         if (*qfprev).qf_nr == -1 as ::core::ffi::c_int {
             (*qfprev).qf_nr = (*fields).enr;
         }
-        if vim_isprintc((*fields).type_0 as ::core::ffi::c_int) as ::core::ffi::c_int
-            != 0 && (*qfprev).qf_type == 0
+        if vim_isprintc((*fields).type_0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
+            && (*qfprev).qf_type == 0
         {
             (*qfprev).qf_type = (*fields).type_0;
         }
@@ -6096,9 +5989,7 @@ unsafe extern "C" fn qf_parse_multiline_pfx(
             (*qfprev).qf_fnum = qf_get_fnum(
                 qfl,
                 (*qfl).qf_directory,
-                if *(*fields).namebuf as ::core::ffi::c_int != 0
-                    || !(*qfl).qf_directory.is_null()
-                {
+                if *(*fields).namebuf as ::core::ffi::c_int != 0 || !(*qfl).qf_directory.is_null() {
                     (*fields).namebuf
                 } else if !(*qfl).qf_currfile.is_null()
                     && (*fields).valid as ::core::ffi::c_int != 0
@@ -6118,8 +6009,7 @@ unsafe extern "C" fn qf_parse_multiline_pfx(
     return QF_IGNORE_LINE as ::core::ffi::c_int;
 }
 unsafe extern "C" fn locstack_queue_delreq(mut qi: *mut qf_info_T) {
-    let mut q: *mut qf_delq_T = xmalloc(::core::mem::size_of::<qf_delq_T>())
-        as *mut qf_delq_T;
+    let mut q: *mut qf_delq_T = xmalloc(::core::mem::size_of::<qf_delq_T>()) as *mut qf_delq_T;
     (*q).qi = qi;
     (*q).next = qf_delq_head as *mut qf_delq_S;
     qf_delq_head = q;
@@ -6127,7 +6017,8 @@ unsafe extern "C" fn locstack_queue_delreq(mut qi: *mut qf_info_T) {
 #[no_mangle]
 pub unsafe extern "C" fn qf_stack_get_bufnr() -> ::core::ffi::c_int {
     '_c2rust_label: {
-        if !ql_info.is_null() {} else {
+        if !ql_info.is_null() {
+        } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -6234,24 +6125,20 @@ unsafe extern "C" fn qf_add_entry(
     mut valid: ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    let mut qfp: *mut qfline_T = xmalloc(::core::mem::size_of::<qfline_T>())
-        as *mut qfline_T;
-    let mut fullname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut qfp: *mut qfline_T = xmalloc(::core::mem::size_of::<qfline_T>()) as *mut qfline_T;
+    let mut fullname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if bufnum != 0 as ::core::ffi::c_int {
         buf = buflist_findnr(bufnum);
         (*qfp).qf_fnum = bufnum;
         if !buf.is_null() {
-            (*buf).b_has_qf_entry
-                |= if (*qfl).qfl_type as ::core::ffi::c_uint
-                    == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    BUF_HAS_QF_ENTRY
-                } else {
-                    BUF_HAS_LL_ENTRY
-                };
+            (*buf).b_has_qf_entry |= if (*qfl).qfl_type as ::core::ffi::c_uint
+                == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+                BUF_HAS_QF_ENTRY
+            } else {
+                BUF_HAS_LL_ENTRY
+            };
         }
     } else {
         (*qfp).qf_fnum = qf_get_fnum(qfl, dir, fname);
@@ -6311,7 +6198,8 @@ unsafe extern "C" fn qf_add_entry(
         (*qfp).qf_prev = ::core::ptr::null_mut::<qfline_T>();
     } else {
         '_c2rust_label: {
-            if !(*lastp).is_null() {} else {
+            if !(*lastp).is_null() {
+            } else {
                 __assert_fail(
                     b"*lastp\0".as_ptr() as *const ::core::ffi::c_char,
                     b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0"
@@ -6329,9 +6217,7 @@ unsafe extern "C" fn qf_add_entry(
     (*qfp).qf_cleared = false_0 as ::core::ffi::c_char;
     *lastp = qfp;
     (*qfl).qf_count += 1;
-    if (*qfl).qf_index == 0 as ::core::ffi::c_int
-        && (*qfp).qf_valid as ::core::ffi::c_int != 0
-    {
+    if (*qfl).qf_index == 0 as ::core::ffi::c_int && (*qfp).qf_valid as ::core::ffi::c_int != 0 {
         (*qfl).qf_index = (*qfl).qf_count;
         (*qfl).qf_ptr = qfp;
     }
@@ -6340,7 +6226,8 @@ unsafe extern "C" fn qf_add_entry(
 #[no_mangle]
 pub unsafe extern "C" fn qf_resize_stack(mut n: ::core::ffi::c_int) {
     '_c2rust_label: {
-        if !ql_info.is_null() {} else {
+        if !ql_info.is_null() {
+        } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -6354,9 +6241,7 @@ pub unsafe extern "C" fn qf_resize_stack(mut n: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ll_resize_stack(mut wp: *mut win_T, mut n: ::core::ffi::c_int) {
-    if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-        && !(*wp).w_llist_ref.is_null()
-    {
+    if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_llist_ref.is_null() {
         qf_sync_llw_to_win(wp);
     } else {
         qf_sync_win_to_llw(wp);
@@ -6364,14 +6249,11 @@ pub unsafe extern "C" fn ll_resize_stack(mut wp: *mut win_T, mut n: ::core::ffi:
     let mut qi: *mut qf_info_T = ll_get_or_alloc_list(wp);
     qf_resize_stack_base(qi, n);
 }
-unsafe extern "C" fn qf_resize_stack_base(
-    mut qi: *mut qf_info_T,
-    mut n: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn qf_resize_stack_base(mut qi: *mut qf_info_T, mut n: ::core::ffi::c_int) {
     let mut amount_to_rm: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut lsz: size_t = ::core::mem::size_of::<qf_list_T>();
     if n == (*qi).qf_maxcount {
-        return
+        return;
     } else if n < (*qi).qf_maxcount && n < (*qi).qf_listcount {
         amount_to_rm = (*qi).qf_listcount - n;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -6414,9 +6296,7 @@ unsafe extern "C" fn qf_sync_win_to_llw(mut pwp: *mut win_T) {
             (*curtab).tp_firstwin
         };
         while !wp.is_null() {
-            if (*wp).w_llist_ref == llw
-                && bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-            {
+            if (*wp).w_llist_ref == llw && bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 {
                 (*wp).w_onebuf_opt.wo_lhi = (*pwp).w_onebuf_opt.wo_lhi;
                 return;
             }
@@ -6429,8 +6309,7 @@ unsafe extern "C" fn qf_alloc_stack(
     mut n: ::core::ffi::c_int,
 ) -> *mut qf_info_T {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
-    if qfltype as ::core::ffi::c_uint
-        == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
+    if qfltype as ::core::ffi::c_uint == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         qi = &raw mut ql_info_actual;
     } else {
@@ -6447,9 +6326,7 @@ unsafe extern "C" fn qf_alloc_list_stack(mut n: ::core::ffi::c_int) -> *mut qf_l
     return xcalloc(n as size_t, ::core::mem::size_of::<qf_list_T>()) as *mut qf_list_T;
 }
 unsafe extern "C" fn ll_get_or_alloc_list(mut wp: *mut win_T) -> *mut qf_info_T {
-    if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-        && !(*wp).w_llist_ref.is_null()
-    {
+    if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_llist_ref.is_null() {
         return (*wp).w_llist_ref;
     }
     ll_free_all(&raw mut (*wp).w_llist_ref);
@@ -6467,7 +6344,8 @@ unsafe extern "C" fn qf_cmd_get_stack(
 ) -> *mut qf_info_T {
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -6565,13 +6443,16 @@ unsafe extern "C" fn copy_loclist(
         (*to_qfl).qf_title = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if !(*from_qfl).qf_ctx.is_null() {
-        (*to_qfl).qf_ctx = xcalloc(1 as size_t, ::core::mem::size_of::<typval_T>())
-            as *mut typval_T;
+        (*to_qfl).qf_ctx =
+            xcalloc(1 as size_t, ::core::mem::size_of::<typval_T>()) as *mut typval_T;
         tv_copy((*from_qfl).qf_ctx, (*to_qfl).qf_ctx);
     } else {
         (*to_qfl).qf_ctx = ::core::ptr::null_mut::<typval_T>();
     }
-    callback_copy(&raw mut (*to_qfl).qf_qftf_cb, &raw mut (*from_qfl).qf_qftf_cb);
+    callback_copy(
+        &raw mut (*to_qfl).qf_qftf_cb,
+        &raw mut (*from_qfl).qf_qftf_cb,
+    );
     if (*from_qfl).qf_count != 0 {
         if copy_loclist_entries(from_qfl, to_qfl) == FAIL {
             return FAIL;
@@ -6589,8 +6470,8 @@ unsafe extern "C" fn copy_loclist(
 }
 #[no_mangle]
 pub unsafe extern "C" fn copy_loclist_stack(mut from: *mut win_T, mut to: *mut win_T) {
-    let mut qi: *mut qf_info_T = if bt_quickfix((*from).w_buffer) as ::core::ffi::c_int
-        != 0 && !(*from).w_llist_ref.is_null()
+    let mut qi: *mut qf_info_T = if bt_quickfix((*from).w_buffer) as ::core::ffi::c_int != 0
+        && !(*from).w_llist_ref.is_null()
     {
         (*from).w_llist_ref
     } else {
@@ -6621,12 +6502,8 @@ unsafe extern "C" fn qf_get_fnum(
     mut directory: *mut ::core::ffi::c_char,
     mut fname: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut bufname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut bufname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     if fname.is_null() || *fname as ::core::ffi::c_int == NUL {
         return 0 as ::core::ffi::c_int;
@@ -6660,7 +6537,11 @@ unsafe extern "C" fn qf_get_fnum(
             0 as linenr_T,
             BLN_NOOPT as ::core::ffi::c_int,
         );
-        qf_last_bufname = if bufname == ptr { bufname } else { xstrdup(bufname) };
+        qf_last_bufname = if bufname == ptr {
+            bufname
+        } else {
+            xstrdup(bufname)
+        };
         set_bufref(&raw mut qf_last_bufref, buf);
     }
     if buf.is_null() {
@@ -6681,11 +6562,12 @@ unsafe extern "C" fn qf_push_dir(
     mut is_file_stack: bool,
 ) -> *mut ::core::ffi::c_char {
     let mut ds_ptr: *mut dir_stack_T = ::core::ptr::null_mut::<dir_stack_T>();
-    let mut ds_new: *mut dir_stack_T = xmalloc(::core::mem::size_of::<dir_stack_T>())
-        as *mut dir_stack_T;
+    let mut ds_new: *mut dir_stack_T =
+        xmalloc(::core::mem::size_of::<dir_stack_T>()) as *mut dir_stack_T;
     (*ds_new).next = *stackptr;
     *stackptr = ds_new;
-    if vim_isAbsName(dirbuf) as ::core::ffi::c_int != 0 || (**stackptr).next.is_null()
+    if vim_isAbsName(dirbuf) as ::core::ffi::c_int != 0
+        || (**stackptr).next.is_null()
         || is_file_stack as ::core::ffi::c_int != 0
     {
         (**stackptr).dirname = xstrdup(dirbuf);
@@ -6693,11 +6575,8 @@ unsafe extern "C" fn qf_push_dir(
         ds_new = (**stackptr).next;
         (**stackptr).dirname = ::core::ptr::null_mut::<::core::ffi::c_char>();
         while !ds_new.is_null() {
-            let mut dirname: *mut ::core::ffi::c_char = concat_fnames(
-                (*ds_new).dirname,
-                dirbuf,
-                true_0 != 0,
-            );
+            let mut dirname: *mut ::core::ffi::c_char =
+                concat_fnames((*ds_new).dirname, dirbuf, true_0 != 0);
             if os_isdir(dirname) {
                 xfree((**stackptr).dirname as *mut ::core::ffi::c_void);
                 (**stackptr).dirname = dirname;
@@ -6726,9 +6605,7 @@ unsafe extern "C" fn qf_push_dir(
     xfree(ds_ptr as *mut ::core::ffi::c_void);
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn qf_pop_dir(
-    mut stackptr: *mut *mut dir_stack_T,
-) -> *mut ::core::ffi::c_char {
+unsafe extern "C" fn qf_pop_dir(mut stackptr: *mut *mut dir_stack_T) -> *mut ::core::ffi::c_char {
     if !(*stackptr).is_null() {
         let mut ds_ptr: *mut dir_stack_T = *stackptr;
         *stackptr = (**stackptr).next;
@@ -6751,7 +6628,7 @@ unsafe extern "C" fn qf_clean_dir_stack(mut stackptr: *mut *mut dir_stack_T) {
         *stackptr = (**stackptr).next;
         xfree((*ds_ptr).dirname as *mut ::core::ffi::c_void);
         xfree(ds_ptr as *mut ::core::ffi::c_void);
-    };
+    }
 }
 unsafe extern "C" fn qf_guess_filepath(
     mut qfl: *mut qf_list_T,
@@ -6761,9 +6638,7 @@ unsafe extern "C" fn qf_guess_filepath(
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut ds_ptr: *mut dir_stack_T = (*(*qfl).qf_dir_stack).next;
-    let mut fullname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fullname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     while !ds_ptr.is_null() {
         xfree(fullname as *mut ::core::ffi::c_void);
         fullname = concat_fnames((*ds_ptr).dirname, filename, true_0 != 0);
@@ -6785,10 +6660,7 @@ unsafe extern "C" fn qf_guess_filepath(
         (*ds_ptr).dirname
     };
 }
-unsafe extern "C" fn qflist_valid(
-    mut wp: *mut win_T,
-    mut qf_id: ::core::ffi::c_uint,
-) -> bool {
+unsafe extern "C" fn qflist_valid(mut wp: *mut win_T, mut qf_id: ::core::ffi::c_uint) -> bool {
     let mut qi: *mut qf_info_T = ql_info;
     if !wp.is_null() {
         if !win_valid(wp) {
@@ -6849,8 +6721,7 @@ unsafe extern "C" fn get_next_valid_entry(
         idx += 1;
         qf_ptr = (*qf_ptr).qf_next;
         if !(!(*qfl).qf_nonevalid && (*qf_ptr).qf_valid == 0
-            || dir == FORWARD_FILE as ::core::ffi::c_int
-                && (*qf_ptr).qf_fnum == old_qf_fnum)
+            || dir == FORWARD_FILE as ::core::ffi::c_int && (*qf_ptr).qf_fnum == old_qf_fnum)
         {
             break;
         }
@@ -6873,8 +6744,7 @@ unsafe extern "C" fn get_prev_valid_entry(
         idx -= 1;
         qf_ptr = (*qf_ptr).qf_prev;
         if !(!(*qfl).qf_nonevalid && (*qf_ptr).qf_valid == 0
-            || dir == BACKWARD_FILE as ::core::ffi::c_int
-                && (*qf_ptr).qf_fnum == old_qf_fnum)
+            || dir == BACKWARD_FILE as ::core::ffi::c_int && (*qf_ptr).qf_fnum == old_qf_fnum)
         {
             break;
         }
@@ -6899,9 +6769,7 @@ unsafe extern "C" fn get_nth_valid_entry(
         }
         let mut prev_qf_ptr: *mut qfline_T = qf_ptr;
         let mut prev_index: ::core::ffi::c_int = qf_idx;
-        if dir == FORWARD as ::core::ffi::c_int
-            || dir == FORWARD_FILE as ::core::ffi::c_int
-        {
+        if dir == FORWARD as ::core::ffi::c_int || dir == FORWARD_FILE as ::core::ffi::c_int {
             qf_ptr = get_next_valid_entry(qfl, qf_ptr, &raw mut qf_idx, dir);
         } else {
             qf_ptr = get_prev_valid_entry(qfl, qf_ptr, &raw mut qf_idx, dir);
@@ -6928,9 +6796,7 @@ unsafe extern "C" fn get_nth_entry(
 ) -> *mut qfline_T {
     let mut qf_ptr: *mut qfline_T = (*qfl).qf_ptr;
     let mut qf_idx: ::core::ffi::c_int = (*qfl).qf_index;
-    while errornr < qf_idx && qf_idx > 1 as ::core::ffi::c_int
-        && !(*qf_ptr).qf_prev.is_null()
-    {
+    while errornr < qf_idx && qf_idx > 1 as ::core::ffi::c_int && !(*qf_ptr).qf_prev.is_null() {
         qf_idx -= 1;
         qf_ptr = (*qf_ptr).qf_prev;
     }
@@ -6964,7 +6830,8 @@ unsafe extern "C" fn qf_find_help_win() -> *mut win_T {
         (*curtab).tp_firstwin
     };
     while !wp.is_null() {
-        if bt_help((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_config.hide
+        if bt_help((*wp).w_buffer) as ::core::ffi::c_int != 0
+            && !(*wp).w_config.hide
             && (*wp).w_config.focusable as ::core::ffi::c_int != 0
         {
             return wp;
@@ -6982,24 +6849,25 @@ unsafe extern "C" fn jump_to_help_window(
     mut newwin: bool,
     mut opened_window: *mut bool,
 ) -> ::core::ffi::c_int {
-    let mut wp: *mut win_T = if cmdmod.cmod_tab != 0 as ::core::ffi::c_int
-        || newwin as ::core::ffi::c_int != 0
-    {
-        ::core::ptr::null_mut::<win_T>()
-    } else {
-        qf_find_help_win()
-    };
+    let mut wp: *mut win_T =
+        if cmdmod.cmod_tab != 0 as ::core::ffi::c_int || newwin as ::core::ffi::c_int != 0 {
+            ::core::ptr::null_mut::<win_T>()
+        } else {
+            qf_find_help_win()
+        };
     if !wp.is_null() && (*(*wp).w_buffer).b_nwindows > 0 as ::core::ffi::c_int {
         win_enter(wp, true_0 != 0);
     } else {
         let mut flags: ::core::ffi::c_int = WSP_HELP as ::core::ffi::c_int;
-        if cmdmod.cmod_split == 0 as ::core::ffi::c_int && (*curwin).w_width != Columns
+        if cmdmod.cmod_split == 0 as ::core::ffi::c_int
+            && (*curwin).w_width != Columns
             && (*curwin).w_width < 80 as ::core::ffi::c_int
         {
             flags |= WSP_TOP as ::core::ffi::c_int;
         }
         if (*qi).qfl_type as ::core::ffi::c_uint
-            == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint && !newwin
+            == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
+            && !newwin
         {
             flags |= WSP_NEWLOC as ::core::ffi::c_int;
         }
@@ -7011,7 +6879,8 @@ unsafe extern "C" fn jump_to_help_window(
             win_setheight(p_hh as ::core::ffi::c_int);
         }
         if (*qi).qfl_type as ::core::ffi::c_uint
-            == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint && !newwin
+            == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
+            && !newwin
         {
             win_set_loclist(curwin, qi);
         }
@@ -7050,7 +6919,11 @@ unsafe extern "C" fn qf_find_win_with_normal_buf() -> *mut win_T {
 unsafe extern "C" fn qf_goto_tabwin_with_file(mut fnum: ::core::ffi::c_int) -> bool {
     let mut tp: *mut tabpage_T = first_tabpage as *mut tabpage_T;
     while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab { firstwin } else { (*tp).tp_firstwin };
+        let mut wp: *mut win_T = if tp == curtab {
+            firstwin
+        } else {
+            (*tp).tp_firstwin
+        };
         while !wp.is_null() {
             if (*(*wp).w_buffer).handle == fnum {
                 goto_tabpage_win(tp as *mut tabpage_T, wp);
@@ -7062,9 +6935,7 @@ unsafe extern "C" fn qf_goto_tabwin_with_file(mut fnum: ::core::ffi::c_int) -> b
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn qf_open_new_file_win(
-    mut ll_ref: *mut qf_info_T,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn qf_open_new_file_win(mut ll_ref: *mut qf_info_T) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = WSP_ABOVE as ::core::ffi::c_int;
     if !ll_ref.is_null() {
         flags |= WSP_NEWLOC as ::core::ffi::c_int;
@@ -7129,11 +7000,8 @@ unsafe extern "C" fn qf_goto_win_with_qfl_file(mut qf_fnum: ::core::ffi::c_int) 
         } else {
             win = (*win).w_prev;
         }
-        if bt_quickfix((*win).w_buffer) as ::core::ffi::c_int != 0
-            && (*win).w_llist_ref.is_null()
-        {
-            if swb_flags
-                & kOptSwbFlagUselast as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+        if bt_quickfix((*win).w_buffer) as ::core::ffi::c_int != 0 && (*win).w_llist_ref.is_null() {
+            if swb_flags & kOptSwbFlagUselast as ::core::ffi::c_int as ::core::ffi::c_uint != 0
                 && win_valid(prevwin) as ::core::ffi::c_int != 0
                 && (*prevwin).w_onebuf_opt.wo_wfb == 0
             {
@@ -7146,7 +7014,8 @@ unsafe extern "C" fn qf_goto_win_with_qfl_file(mut qf_fnum: ::core::ffi::c_int) 
                 win = (*curwin).w_next;
             }
             break;
-        } else if altwin.is_null() && (*win).w_onebuf_opt.wo_pvw == 0
+        } else if altwin.is_null()
+            && (*win).w_onebuf_opt.wo_pvw == 0
             && (*win).w_onebuf_opt.wo_wfb == 0
             && bt_normal((*win).w_buffer) as ::core::ffi::c_int != 0
         {
@@ -7180,13 +7049,13 @@ unsafe extern "C" fn qf_jump_to_usable_window(
         }
     }
     if !usable_win
-        && swb_flags & kOptSwbFlagUsetab as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
+        && swb_flags & kOptSwbFlagUsetab as ::core::ffi::c_int as ::core::ffi::c_uint != 0
     {
         usable_win = qf_goto_tabwin_with_file(qf_fnum);
     }
     if firstwin == lastwin && bt_quickfix(curbuf) as ::core::ffi::c_int != 0
-        || !usable_win || newwin as ::core::ffi::c_int != 0
+        || !usable_win
+        || newwin as ::core::ffi::c_int != 0
     {
         if qf_open_new_file_win(ll_ref) != OK {
             return FAIL;
@@ -7232,17 +7101,13 @@ unsafe extern "C" fn qf_jump_edit_buffer(
         );
     } else {
         let mut fnum: ::core::ffi::c_int = (*qf_ptr).qf_fnum;
-        if forceit == 0 && (*curwin).w_onebuf_opt.wo_wfb != 0 && (*curbuf).handle != fnum
-        {
+        if forceit == 0 && (*curwin).w_onebuf_opt.wo_wfb != 0 && (*curbuf).handle != fnum {
             if (*qi).qfl_type as ::core::ffi::c_uint
                 == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                emsg(
-                    gettext(
-                        &raw const e_winfixbuf_cannot_go_to_buffer
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
+                ));
                 return FAIL;
             }
             if win_valid(prevwin) as ::core::ffi::c_int != 0
@@ -7256,12 +7121,9 @@ unsafe extern "C" fn qf_jump_edit_buffer(
                     *opened_window = true_0 != 0;
                 }
                 if (*curwin).w_onebuf_opt.wo_wfb != 0 {
-                    emsg(
-                        gettext(
-                            &raw const e_winfixbuf_cannot_go_to_buffer
-                                as *const ::core::ffi::c_char,
-                        ),
-                    );
+                    emsg(gettext(
+                        &raw const e_winfixbuf_cannot_go_to_buffer as *const ::core::ffi::c_char,
+                    ));
                     retval = FAIL;
                 }
             }
@@ -7275,29 +7137,25 @@ unsafe extern "C" fn qf_jump_edit_buffer(
             );
         }
     }
-    if qfl_type as ::core::ffi::c_uint
-        == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
+    if qfl_type as ::core::ffi::c_uint == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         let mut wp: *mut win_T = win_id2wp(prev_winid);
         if wp.is_null() && (*curwin).w_llist != qi {
-            emsg(
-                gettext(
-                    b"E924: Current window was closed\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E924: Current window was closed\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             *opened_window = false_0 != 0;
             return QF_ABORT as ::core::ffi::c_int;
         }
     }
-    if qfl_type as ::core::ffi::c_uint
-        == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
+    if qfl_type as ::core::ffi::c_uint == QFLT_QUICKFIX as ::core::ffi::c_int as ::core::ffi::c_uint
         && !qflist_valid(::core::ptr::null_mut::<win_T>(), save_qfid)
     {
         emsg(gettext(e_current_quickfix_list_was_changed));
         return QF_ABORT as ::core::ffi::c_int;
     }
-    if old_qf_curlist != (*qi).qf_curlist || old_changetick != (*qfl).qf_changedtick
+    if old_qf_curlist != (*qi).qf_curlist
+        || old_changetick != (*qfl).qf_changedtick
         || !is_qf_entry_present(qfl, qf_ptr)
     {
         if qfl_type as ::core::ffi::c_uint
@@ -7424,7 +7282,8 @@ unsafe extern "C" fn qf_jump_open_window(
             return FAIL;
         }
     }
-    if old_qf_curlist != (*qi).qf_curlist || old_changetick != (*qfl).qf_changedtick
+    if old_qf_curlist != (*qi).qf_curlist
+        || old_changetick != (*qfl).qf_changedtick
         || !is_qf_entry_present(qfl, qf_ptr)
     {
         if qfl_type as ::core::ffi::c_uint
@@ -7444,7 +7303,8 @@ unsafe extern "C" fn qf_jump_open_window(
             return FAIL;
         }
     }
-    if old_qf_curlist != (*qi).qf_curlist || old_changetick != (*qfl).qf_changedtick
+    if old_qf_curlist != (*qi).qf_curlist
+        || old_changetick != (*qfl).qf_changedtick
         || !is_qf_entry_present(qfl, qf_ptr)
     {
         if qfl_type as ::core::ffi::c_uint
@@ -7521,11 +7381,12 @@ unsafe extern "C" fn qf_jump_newwin(
     let old_KeyTyped: bool = KeyTyped;
     if qi.is_null() {
         '_c2rust_label: {
-            if !ql_info.is_null() {} else {
+            if !ql_info.is_null() {
+            } else {
                 __assert_fail(
                     b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     3240 as ::core::ffi::c_uint,
                     b"void qf_jump_newwin(qf_info_T *, int, int, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -7537,7 +7398,9 @@ unsafe extern "C" fn qf_jump_newwin(
     if qf_stack_empty(qi) as ::core::ffi::c_int != 0
         || qf_list_empty(qf_get_curlist(qi)) as ::core::ffi::c_int != 0
     {
-        emsg(gettext(&raw const e_no_errors as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_no_errors as *const ::core::ffi::c_char,
+        ));
         return;
     }
     incr_quickfix_busy();
@@ -7584,9 +7447,7 @@ unsafe extern "C" fn qf_jump_newwin(
                         if opened_window {
                             win_close(curwin, true_0 != 0, false_0 != 0);
                         }
-                        if !(!qf_ptr.is_null()
-                            && (*qf_ptr).qf_fnum != 0 as ::core::ffi::c_int)
-                        {
+                        if !(!qf_ptr.is_null() && (*qf_ptr).qf_fnum != 0 as ::core::ffi::c_int) {
                             break '_theend;
                         }
                     } else {
@@ -7602,9 +7463,7 @@ unsafe extern "C" fn qf_jump_newwin(
         (*qfl).qf_ptr = qf_ptr;
         (*qfl).qf_index = qf_index;
     }
-    if p_swb != old_swb
-        && p_swb == &raw mut empty_string_option as *mut ::core::ffi::c_char
-    {
+    if p_swb != old_swb && p_swb == &raw mut empty_string_option as *mut ::core::ffi::c_char {
         p_swb = old_swb;
         swb_flags = old_swb_flags;
     }
@@ -7618,9 +7477,7 @@ unsafe extern "C" fn qf_list_entry(
     mut qf_idx: ::core::ffi::c_int,
     mut cursel: bool,
 ) {
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !(*qfp).qf_module.is_null() && *(*qfp).qf_module as ::core::ffi::c_int != NUL {
         vim_snprintf(
             &raw mut IObuff as *mut ::core::ffi::c_char,
@@ -7631,12 +7488,10 @@ unsafe extern "C" fn qf_list_entry(
         );
     } else {
         let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        if (*qfp).qf_fnum != 0 as ::core::ffi::c_int
-            && {
-                buf = buflist_findnr((*qfp).qf_fnum);
-                !buf.is_null()
-            }
-        {
+        if (*qfp).qf_fnum != 0 as ::core::ffi::c_int && {
+            buf = buflist_findnr((*qfp).qf_fnum);
+            !buf.is_null()
+        } {
             fname = if (*qfp).qf_fname.is_null() {
                 (*buf).b_fname
             } else {
@@ -7666,19 +7521,22 @@ unsafe extern "C" fn qf_list_entry(
     let mut filter_entry: bool = true_0 != 0;
     if !(*qfp).qf_module.is_null() && *(*qfp).qf_module as ::core::ffi::c_int != NUL {
         filter_entry = filter_entry as ::core::ffi::c_int
-            & message_filtered((*qfp).qf_module) as ::core::ffi::c_int != 0;
+            & message_filtered((*qfp).qf_module) as ::core::ffi::c_int
+            != 0;
     }
     if filter_entry as ::core::ffi::c_int != 0 && !fname.is_null() {
-        filter_entry = filter_entry as ::core::ffi::c_int
-            & message_filtered(fname) as ::core::ffi::c_int != 0;
+        filter_entry =
+            filter_entry as ::core::ffi::c_int & message_filtered(fname) as ::core::ffi::c_int != 0;
     }
     if filter_entry as ::core::ffi::c_int != 0 && !(*qfp).qf_pattern.is_null() {
         filter_entry = filter_entry as ::core::ffi::c_int
-            & message_filtered((*qfp).qf_pattern) as ::core::ffi::c_int != 0;
+            & message_filtered((*qfp).qf_pattern) as ::core::ffi::c_int
+            != 0;
     }
     if filter_entry {
         filter_entry = filter_entry as ::core::ffi::c_int
-            & message_filtered((*qfp).qf_text) as ::core::ffi::c_int != 0;
+            & message_filtered((*qfp).qf_text) as ::core::ffi::c_int
+            != 0;
     }
     if filter_entry {
         return;
@@ -7706,7 +7564,10 @@ unsafe extern "C" fn qf_list_entry(
     if (*qfp).qf_lnum != 0 as linenr_T {
         qf_range_text(gap, qfp);
     }
-    ga_concat(gap, qf_types((*qfp).qf_type as ::core::ffi::c_int, (*qfp).qf_nr));
+    ga_concat(
+        gap,
+        qf_types((*qfp).qf_type as ::core::ffi::c_int, (*qfp).qf_nr),
+    );
     ga_append(gap, NUL as uint8_t);
     if *((*gap).ga_data as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL {
         msg_puts_hl(
@@ -7755,7 +7616,9 @@ pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
     if qf_stack_empty(qi) as ::core::ffi::c_int != 0
         || qf_list_empty(qf_get_curlist(qi)) as ::core::ffi::c_int != 0
     {
-        emsg(gettext(&raw const e_no_errors as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_no_errors as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut plus: bool = false_0 != 0;
@@ -7768,7 +7631,10 @@ pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
     if get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) == 0
         || *arg as ::core::ffi::c_int != NUL
     {
-        semsg(gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char), arg);
+        semsg(
+            gettext(&raw const e_trailing_arg as *const ::core::ffi::c_char),
+            arg,
+        );
         return;
     }
     let mut qfl: *mut qf_list_T = qf_get_curlist(qi);
@@ -7815,9 +7681,7 @@ pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
     i = 1 as ::core::ffi::c_int;
     qfp = (*qfl).qf_start;
     while !got_int && i <= (*qfl).qf_count && !qfp.is_null() {
-        if ((*qfp).qf_valid as ::core::ffi::c_int != 0 || all != 0) && idx1 <= i
-            && i <= idx2
-        {
+        if ((*qfp).qf_valid as ::core::ffi::c_int != 0 || all != 0) && idx1 <= i && i <= idx2 {
             qf_list_entry(qfp, i, i == (*qfl).qf_index);
         }
         os_breakcheck();
@@ -7826,10 +7690,7 @@ pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
     }
     qfga_clear();
 }
-unsafe extern "C" fn qf_fmt_text(
-    mut gap: *mut garray_T,
-    mut text: *const ::core::ffi::c_char,
-) {
+unsafe extern "C" fn qf_fmt_text(mut gap: *mut garray_T, mut text: *const ::core::ffi::c_char) {
     let mut p: *const ::core::ffi::c_char = text;
     while *p as ::core::ffi::c_int != NUL {
         if *p as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
@@ -7864,41 +7725,27 @@ unsafe extern "C" fn qf_range_text(mut gap: *mut garray_T, mut qfp: *const qflin
         (*qfp).qf_lnum,
     );
     if (*qfp).qf_end_lnum > 0 as linenr_T && (*qfp).qf_lnum != (*qfp).qf_end_lnum {
-        buf.size = buf
-            .size
-            .wrapping_add(
-                vim_snprintf_safelen(
-                    buf.data.offset(buf.size as isize),
-                    (IOSIZE as size_t).wrapping_sub(buf.size),
-                    b"-%d\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*qfp).qf_end_lnum,
-                ),
-            );
+        buf.size = buf.size.wrapping_add(vim_snprintf_safelen(
+            buf.data.offset(buf.size as isize),
+            (IOSIZE as size_t).wrapping_sub(buf.size),
+            b"-%d\0".as_ptr() as *const ::core::ffi::c_char,
+            (*qfp).qf_end_lnum,
+        ));
     }
     if (*qfp).qf_col > 0 as ::core::ffi::c_int {
-        buf.size = buf
-            .size
-            .wrapping_add(
-                vim_snprintf_safelen(
-                    buf.data.offset(buf.size as isize),
-                    (IOSIZE as size_t).wrapping_sub(buf.size),
-                    b" col %d\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*qfp).qf_col,
-                ),
-            );
-        if (*qfp).qf_end_col > 0 as ::core::ffi::c_int
-            && (*qfp).qf_col != (*qfp).qf_end_col
-        {
-            buf.size = buf
-                .size
-                .wrapping_add(
-                    vim_snprintf_safelen(
-                        buf.data.offset(buf.size as isize),
-                        (IOSIZE as size_t).wrapping_sub(buf.size),
-                        b"-%d\0".as_ptr() as *const ::core::ffi::c_char,
-                        (*qfp).qf_end_col,
-                    ),
-                );
+        buf.size = buf.size.wrapping_add(vim_snprintf_safelen(
+            buf.data.offset(buf.size as isize),
+            (IOSIZE as size_t).wrapping_sub(buf.size),
+            b" col %d\0".as_ptr() as *const ::core::ffi::c_char,
+            (*qfp).qf_col,
+        ));
+        if (*qfp).qf_end_col > 0 as ::core::ffi::c_int && (*qfp).qf_col != (*qfp).qf_end_col {
+            buf.size = buf.size.wrapping_add(vim_snprintf_safelen(
+                buf.data.offset(buf.size as isize),
+                (IOSIZE as size_t).wrapping_sub(buf.size),
+                b"-%d\0".as_ptr() as *const ::core::ffi::c_char,
+                (*qfp).qf_end_col,
+            ));
         }
     }
     ga_concat_len(gap, buf.data, buf.size);
@@ -7908,17 +7755,13 @@ unsafe extern "C" fn qf_msg(
     mut which: ::core::ffi::c_int,
     mut lead: *mut ::core::ffi::c_char,
 ) {
-    let mut title: *mut ::core::ffi::c_char = (*(*qi).qf_lists.offset(which as isize))
-        .qf_title;
-    let mut count: ::core::ffi::c_int = (*(*qi).qf_lists.offset(which as isize))
-        .qf_count;
+    let mut title: *mut ::core::ffi::c_char = (*(*qi).qf_lists.offset(which as isize)).qf_title;
+    let mut count: ::core::ffi::c_int = (*(*qi).qf_lists.offset(which as isize)).qf_count;
     let mut buf: [::core::ffi::c_char; 1025] = [0; 1025];
     vim_snprintf(
         &raw mut buf as *mut ::core::ffi::c_char,
         IOSIZE as size_t,
-        gettext(
-            b"%serror list %d of %d; %d errors \0".as_ptr() as *const ::core::ffi::c_char,
-        ),
+        gettext(b"%serror list %d of %d; %d errors \0".as_ptr() as *const ::core::ffi::c_char),
         lead,
         which + 1 as ::core::ffi::c_int,
         (*qi).qf_listcount,
@@ -7935,7 +7778,11 @@ unsafe extern "C" fn qf_msg(
             );
             buf[34 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         }
-        xstrlcat(&raw mut buf as *mut ::core::ffi::c_char, title, IOSIZE as size_t);
+        xstrlcat(
+            &raw mut buf as *mut ::core::ffi::c_char,
+            title,
+            IOSIZE as size_t,
+        );
     }
     trunc_string(
         &raw mut buf as *mut ::core::ffi::c_char,
@@ -7943,7 +7790,10 @@ unsafe extern "C" fn qf_msg(
         Columns - 1 as ::core::ffi::c_int,
         IOSIZE,
     );
-    msg(&raw mut buf as *mut ::core::ffi::c_char, 0 as ::core::ffi::c_int);
+    msg(
+        &raw mut buf as *mut ::core::ffi::c_char,
+        0 as ::core::ffi::c_int,
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn qf_age(mut eap: *mut exarg_T) {
@@ -7967,23 +7817,17 @@ pub unsafe extern "C" fn qf_age(mut eap: *mut exarg_T) {
             || (*eap).cmdidx as ::core::ffi::c_int == CMD_lolder as ::core::ffi::c_int
         {
             if (*qi).qf_curlist == 0 as ::core::ffi::c_int {
-                emsg(
-                    gettext(
-                        b"E380: At bottom of quickfix stack\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ),
-                );
+                emsg(gettext(
+                    b"E380: At bottom of quickfix stack\0".as_ptr() as *const ::core::ffi::c_char
+                ));
                 break;
             } else {
                 (*qi).qf_curlist -= 1;
             }
         } else if (*qi).qf_curlist >= (*qi).qf_listcount - 1 as ::core::ffi::c_int {
-            emsg(
-                gettext(
-                    b"E381: At top of quickfix stack\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-            );
+            emsg(gettext(
+                b"E381: At top of quickfix stack\0".as_ptr() as *const ::core::ffi::c_char
+            ));
             break;
         } else {
             (*qi).qf_curlist += 1;
@@ -8004,8 +7848,7 @@ pub unsafe extern "C" fn qf_history(mut eap: *mut exarg_T) {
             emsg(gettext(&raw const e_loclist as *const ::core::ffi::c_char));
             return;
         }
-        if (*eap).line2 > 0 as linenr_T && (*eap).line2 <= (*qi).qf_listcount as linenr_T
-        {
+        if (*eap).line2 > 0 as linenr_T && (*eap).line2 <= (*qi).qf_listcount as linenr_T {
             (*qi).qf_curlist = ((*eap).line2 - 1 as linenr_T) as ::core::ffi::c_int;
             qf_msg(
                 qi,
@@ -8077,8 +7920,8 @@ unsafe extern "C" fn qf_free_items(mut qfl: *mut qf_list_T) {
 }
 unsafe extern "C" fn qf_free(mut qfl: *mut qf_list_T) {
     qf_free_items(qfl);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*qfl).qf_title
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*qfl).qf_title as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL_0;
     *ptr_;
@@ -8099,7 +7942,8 @@ pub unsafe extern "C" fn qf_mark_adjust(
 ) -> bool {
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -8161,19 +8005,16 @@ unsafe extern "C" fn qf_types(
     static mut cc: [::core::ffi::c_char; 3] = [0; 3];
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if c == 'W' as ::core::ffi::c_int || c == 'w' as ::core::ffi::c_int {
-        p = b" warning\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        p = b" warning\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else if c == 'I' as ::core::ffi::c_int || c == 'i' as ::core::ffi::c_int {
-        p = b" info\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        p = b" info\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else if c == 'N' as ::core::ffi::c_int || c == 'n' as ::core::ffi::c_int {
-        p = b" note\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
-    } else if c == 'E' as ::core::ffi::c_int || c == 'e' as ::core::ffi::c_int
+        p = b" note\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+    } else if c == 'E' as ::core::ffi::c_int
+        || c == 'e' as ::core::ffi::c_int
         || c == 0 as ::core::ffi::c_int && nr > 0 as ::core::ffi::c_int
     {
-        p = b" error\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        p = b" error\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else if c == 0 as ::core::ffi::c_int || c == 1 as ::core::ffi::c_int {
         p = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else {
@@ -8199,7 +8040,8 @@ unsafe extern "C" fn qf_types(
 pub unsafe extern "C" fn qf_view_result(mut split: bool) {
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -8221,7 +8063,9 @@ pub unsafe extern "C" fn qf_view_result(mut split: bool) {
         };
     }
     if qf_list_empty(qf_get_curlist(qi)) {
-        emsg(gettext(&raw const e_no_errors as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_no_errors as *const ::core::ffi::c_char,
+        ));
         return;
     }
     if split {
@@ -8294,8 +8138,8 @@ unsafe extern "C" fn qf_goto_cwindow(
                 win_setwidth(sz);
             }
         } else if sz != (*win).w_height
-            && (*win).w_height + (*win).w_hsep_height + (*win).w_status_height
-                + tabline_height() < cmdline_row
+            && (*win).w_height + (*win).w_hsep_height + (*win).w_status_height + tabline_height()
+                < cmdline_row
         {
             win_setheight(sz);
         }
@@ -8405,7 +8249,8 @@ unsafe extern "C" fn qf_open_new_cwindow(
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<exarg_T>(),
             ECMD_ONE as ::core::ffi::c_int as linenr_T,
-            ECMD_HIDE as ::core::ffi::c_int + ECMD_OLDBUF as ::core::ffi::c_int
+            ECMD_HIDE as ::core::ffi::c_int
+                + ECMD_OLDBUF as ::core::ffi::c_int
                 + ECMD_NOWINENTER as ::core::ffi::c_int,
             oldwin,
         ) == FAIL
@@ -8522,20 +8367,18 @@ pub unsafe extern "C" fn ex_cbottom(mut eap: *mut exarg_T) {
 pub unsafe extern "C" fn qf_current_entry(mut wp: *mut win_T) -> linenr_T {
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4056 as ::core::ffi::c_uint,
-                b"linenr_T qf_current_entry(win_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"linenr_T qf_current_entry(win_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
-    if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-        && !(*wp).w_llist_ref.is_null()
-    {
+    if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_llist_ref.is_null() {
         qi = (*wp).w_llist_ref;
     }
     return (*qf_get_curlist(qi)).qf_index as linenr_T;
@@ -8546,7 +8389,8 @@ unsafe extern "C" fn qf_win_pos_update(
 ) -> bool {
     let mut qf_index: ::core::ffi::c_int = (*qf_get_curlist(qi)).qf_index;
     let mut win: *mut win_T = qf_find_win(qi);
-    if !win.is_null() && qf_index as linenr_T <= (*(*win).w_buffer).b_ml.ml_line_count
+    if !win.is_null()
+        && qf_index as linenr_T <= (*(*win).w_buffer).b_ml.ml_line_count
         && old_qf_index != qf_index
     {
         (*win).w_redraw_top = (if old_qf_index < qf_index {
@@ -8651,23 +8495,15 @@ unsafe extern "C" fn qf_update_win_titlevar(mut qi: *mut qf_info_T) {
     }
     curwin = save_curwin;
 }
-unsafe extern "C" fn qf_update_buffer(
-    mut qi: *mut qf_info_T,
-    mut old_last: *mut qfline_T,
-) {
+unsafe extern "C" fn qf_update_buffer(mut qi: *mut qf_info_T, mut old_last: *mut qfline_T) {
     let mut buf: *mut buf_T = qf_find_buf(qi);
     if buf.is_null() {
         return;
     }
     let mut old_line_count: linenr_T = (*buf).b_ml.ml_line_count;
     let mut old_endcol: colnr_T = ml_get_buf_len(buf, old_line_count);
-    let mut old_bytecount: bcount_t = get_region_bytecount(
-        buf,
-        1 as linenr_T,
-        old_line_count,
-        0 as colnr_T,
-        old_endcol,
-    );
+    let mut old_bytecount: bcount_t =
+        get_region_bytecount(buf, 1 as linenr_T, old_line_count, 0 as colnr_T, old_endcol);
     let mut qf_winid_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     if (*qi).qfl_type as ::core::ffi::c_uint
@@ -8712,13 +8548,8 @@ unsafe extern "C" fn qf_update_buffer(
     let mut new_byte_count: bcount_t = 0 as bcount_t;
     let mut delta: linenr_T = new_line_count - old_line_count;
     if old_last.is_null() {
-        new_byte_count = get_region_bytecount(
-            buf,
-            1 as linenr_T,
-            new_line_count,
-            0 as colnr_T,
-            new_endcol,
-        );
+        new_byte_count =
+            get_region_bytecount(buf, 1 as linenr_T, new_line_count, 0 as colnr_T, new_endcol);
         extmark_splice(
             buf,
             0 as ::core::ffi::c_int,
@@ -8745,13 +8576,8 @@ unsafe extern "C" fn qf_update_buffer(
         );
     } else if delta > 0 as linenr_T {
         let mut start_lnum: linenr_T = old_line_count + 1 as linenr_T;
-        new_byte_count = get_region_bytecount(
-            buf,
-            start_lnum,
-            new_line_count,
-            0 as colnr_T,
-            new_endcol,
-        );
+        new_byte_count =
+            get_region_bytecount(buf, start_lnum, new_line_count, 0 as colnr_T, new_endcol);
         extmark_splice(
             buf,
             old_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
@@ -8764,7 +8590,14 @@ unsafe extern "C" fn qf_update_buffer(
             new_byte_count,
             kExtmarkNoUndo,
         );
-        changed_lines(buf, start_lnum, 0 as colnr_T, start_lnum, delta, true_0 != 0);
+        changed_lines(
+            buf,
+            start_lnum,
+            0 as colnr_T,
+            start_lnum,
+            delta,
+            true_0 != 0,
+        );
     }
     (*buf).b_changed = false_0;
     if old_last.is_null() {
@@ -8797,15 +8630,15 @@ unsafe extern "C" fn qf_buf_add_line(
             && {
                 errbuf = buflist_findnr((*qfp).qf_fnum);
                 !errbuf.is_null()
-            } && !(*errbuf).b_fname.is_null()
+            }
+            && !(*errbuf).b_fname.is_null()
         {
             if (*qfp).qf_type as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
                 ga_concat(gap, path_tail((*errbuf).b_fname));
             } else {
                 if first_bufline as ::core::ffi::c_int != 0
                     && ((*errbuf).b_sfname.is_null()
-                        || path_is_absolute((*errbuf).b_sfname) as ::core::ffi::c_int
-                            != 0)
+                        || path_is_absolute((*errbuf).b_sfname) as ::core::ffi::c_int != 0)
                 {
                     if *dirname as ::core::ffi::c_int == NUL {
                         os_dirname(dirname, MAXPATHL as size_t);
@@ -8825,7 +8658,10 @@ unsafe extern "C" fn qf_buf_add_line(
         ga_append(gap, '|' as uint8_t);
         if (*qfp).qf_lnum > 0 as linenr_T {
             qf_range_text(gap, qfp);
-            ga_concat(gap, qf_types((*qfp).qf_type as ::core::ffi::c_int, (*qfp).qf_nr));
+            ga_concat(
+                gap,
+                qf_types((*qfp).qf_type as ::core::ffi::c_int, (*qfp).qf_nr),
+            );
         } else if !(*qfp).qf_pattern.is_null() {
             qf_fmt_text(gap, (*qfp).qf_pattern);
         }
@@ -8908,8 +8744,7 @@ unsafe extern "C" fn call_qftf_func(
         tv_dict_add_nr(
             dict,
             b"start_idx\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             start_idx as varnumber_T,
         );
         tv_dict_add_nr(
@@ -8956,9 +8791,7 @@ unsafe extern "C" fn qf_fill_buffer(
         }
         while (*curbuf).b_ml.ml_flags & ML_EMPTY == 0 as ::core::ffi::c_int {
             if ml_delete(1 as linenr_T) == FAIL {
-                internal_error(
-                    b"qf_fill_buffer()\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                internal_error(b"qf_fill_buffer()\0".as_ptr() as *const ::core::ffi::c_char);
                 return;
             }
         }
@@ -9005,12 +8838,10 @@ unsafe extern "C" fn qf_fill_buffer(
         let mut prev_bufnr: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let mut invalid_val: bool = false_0 != 0;
         while lnum < (*qfl).qf_count as linenr_T {
-            let mut qftf_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                ::core::ffi::c_char,
-            >();
+            let mut qftf_str: *mut ::core::ffi::c_char =
+                ::core::ptr::null_mut::<::core::ffi::c_char>();
             if !qftf_li.is_null() && !invalid_val {
-                qftf_str = tv_get_string_chk(&raw mut (*qftf_li).li_tv)
-                    as *mut ::core::ffi::c_char;
+                qftf_str = tv_get_string_chk(&raw mut (*qftf_li).li_tv) as *mut ::core::ffi::c_char;
                 if qftf_str.is_null() {
                     invalid_val = true_0 != 0;
                 }
@@ -9064,16 +8895,14 @@ unsafe extern "C" fn qf_fill_buffer(
         (*curbuf).b_keep_filetype = true_0 != 0;
         apply_autocmds(
             EVENT_BUFREADPOST,
-            b"quickfix\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"quickfix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
             curbuf,
         );
         apply_autocmds(
             EVENT_BUFWINENTER,
-            b"quickfix\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"quickfix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
             curbuf,
@@ -9126,7 +8955,12 @@ unsafe extern "C" fn qf_jump_first(
         return;
     }
     if !qf_list_empty(qf_get_curlist(qi)) {
-        qf_jump(qi, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int, forceit);
+        qf_jump(
+            qi,
+            0 as ::core::ffi::c_int,
+            0 as ::core::ffi::c_int,
+            forceit,
+        );
     }
 }
 #[no_mangle]
@@ -9147,24 +8981,19 @@ pub unsafe extern "C" fn grep_internal(mut cmdidx: cmdidx_T) -> ::core::ffi::c_i
 unsafe extern "C" fn make_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
     match cmdidx as ::core::ffi::c_int {
         274 => {
-            return b"make\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"make\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         248 => {
-            return b"lmake\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"lmake\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         172 => {
-            return b"grep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"grep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         239 => {
-            return b"lgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"lgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         173 => {
-            return b"grepadd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"grepadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         240 => {
             return b"lgrepadd\0".as_ptr() as *const ::core::ffi::c_char
@@ -9182,10 +9011,11 @@ unsafe extern "C" fn make_get_fullcmd(
         .wrapping_add(strlen(makecmd))
         .wrapping_add(1 as size_t);
     if *p_sp as ::core::ffi::c_int != NUL {
-        len = len
-            .wrapping_add(
-                strlen(p_sp).wrapping_add(strlen(fname)).wrapping_add(3 as size_t),
-            );
+        len = len.wrapping_add(
+            strlen(p_sp)
+                .wrapping_add(strlen(fname))
+                .wrapping_add(3 as size_t),
+        );
     }
     let cmd: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
     snprintf(
@@ -9210,9 +9040,7 @@ unsafe extern "C" fn make_get_fullcmd(
 #[no_mangle]
 pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
     let mut save_qfid: ::core::ffi::c_uint = 0;
-    let mut enc: *mut ::core::ffi::c_char = if *(*curbuf).b_p_menc as ::core::ffi::c_int
-        != NUL
-    {
+    let mut enc: *mut ::core::ffi::c_char = if *(*curbuf).b_p_menc as ::core::ffi::c_int != NUL {
         (*curbuf).b_p_menc
     } else {
         p_menc
@@ -9229,7 +9057,8 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
             (*curbuf).b_fname,
             true_0 != 0,
             curbuf,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if aborting() {
             return;
@@ -9248,8 +9077,8 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
     let cmd: *mut ::core::ffi::c_char = make_get_fullcmd((*eap).arg, fname);
     do_shell(cmd, 0 as ::core::ffi::c_int);
     incr_quickfix_busy();
-    let mut errorformat: *mut ::core::ffi::c_char = if (*eap).cmdidx
-        as ::core::ffi::c_int != CMD_make as ::core::ffi::c_int
+    let mut errorformat: *mut ::core::ffi::c_char = if (*eap).cmdidx as ::core::ffi::c_int
+        != CMD_make as ::core::ffi::c_int
         && (*eap).cmdidx as ::core::ffi::c_int != CMD_lmake as ::core::ffi::c_int
     {
         if *(*curbuf).b_p_gefm as ::core::ffi::c_int != NUL {
@@ -9273,7 +9102,8 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
     );
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -9309,7 +9139,8 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
                 curbuf,
             );
         }
-        if res > 0 as ::core::ffi::c_int && (*eap).forceit == 0
+        if res > 0 as ::core::ffi::c_int
+            && (*eap).forceit == 0
             && qflist_valid(wp, save_qfid) as ::core::ffi::c_int != 0
         {
             qf_jump_first(qi, save_qfid, false_0);
@@ -9321,9 +9152,7 @@ pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
     xfree(cmd as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static mut start: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     static mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if *p_mef as ::core::ffi::c_int == NUL {
@@ -9354,8 +9183,7 @@ unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
         } else {
             off += 19 as ::core::ffi::c_int;
         }
-        name = xmalloc(strlen(p_mef).wrapping_add(30 as size_t))
-            as *mut ::core::ffi::c_char;
+        name = xmalloc(strlen(p_mef).wrapping_add(30 as size_t)) as *mut ::core::ffi::c_char;
         strcpy(name, p_mef);
         snprintf(
             name.offset(p.offset_from(p_mef) as isize),
@@ -9426,15 +9254,14 @@ pub unsafe extern "C" fn qf_get_valid_size(mut eap: *mut exarg_T) -> size_t {
     let mut qfp: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
     let mut i: ::core::ffi::c_int = 0;
     '_c2rust_label: {
-        if (*qf_get_curlist(qi)).qf_count >= 0 as ::core::ffi::c_int {} else {
+        if (*qf_get_curlist(qi)).qf_count >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
-                b"qf_get_curlist(qi)->qf_count >= 0\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"qf_get_curlist(qi)->qf_count >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4760 as ::core::ffi::c_uint,
-                b"size_t qf_get_valid_size(exarg_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"size_t qf_get_valid_size(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9447,9 +9274,7 @@ pub unsafe extern "C" fn qf_get_valid_size(mut eap: *mut exarg_T) -> size_t {
                 || (*eap).cmdidx as ::core::ffi::c_int == CMD_ldo as ::core::ffi::c_int
             {
                 sz = sz.wrapping_add(1);
-            } else if (*qfp).qf_fnum > 0 as ::core::ffi::c_int
-                && (*qfp).qf_fnum != prev_fnum
-            {
+            } else if (*qfp).qf_fnum > 0 as ::core::ffi::c_int && (*qfp).qf_fnum != prev_fnum {
                 sz = sz.wrapping_add(1);
                 prev_fnum = (*qfp).qf_fnum;
             }
@@ -9467,24 +9292,21 @@ pub unsafe extern "C" fn qf_get_cur_idx(mut eap: *mut exarg_T) -> size_t {
         return 0 as size_t;
     }
     '_c2rust_label: {
-        if (*qf_get_curlist(qi)).qf_index >= 0 as ::core::ffi::c_int {} else {
+        if (*qf_get_curlist(qi)).qf_index >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
-                b"qf_get_curlist(qi)->qf_index >= 0\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"qf_get_curlist(qi)->qf_index >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4791 as ::core::ffi::c_uint,
-                b"size_t qf_get_cur_idx(exarg_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"size_t qf_get_cur_idx(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
     return (*qf_get_curlist(qi)).qf_index as size_t;
 }
 #[no_mangle]
-pub unsafe extern "C" fn qf_get_cur_valid_idx(
-    mut eap: *mut exarg_T,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn qf_get_cur_valid_idx(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
     if qi.is_null() {
@@ -9499,14 +9321,14 @@ pub unsafe extern "C" fn qf_get_cur_valid_idx(
     let mut qfp: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
     let mut i: size_t = 0;
     '_c2rust_label: {
-        if (*qfl).qf_index >= 0 as ::core::ffi::c_int {} else {
+        if (*qfl).qf_index >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"qfl->qf_index >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 4818 as ::core::ffi::c_uint,
-                b"int qf_get_cur_valid_idx(exarg_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"int qf_get_cur_valid_idx(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -9517,9 +9339,7 @@ pub unsafe extern "C" fn qf_get_cur_valid_idx(
             if (*eap).cmdidx as ::core::ffi::c_int == CMD_cfdo as ::core::ffi::c_int
                 || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int
             {
-                if (*qfp).qf_fnum > 0 as ::core::ffi::c_int
-                    && (*qfp).qf_fnum != prev_fnum
-                {
+                if (*qfp).qf_fnum > 0 as ::core::ffi::c_int && (*qfp).qf_fnum != prev_fnum {
                     eidx += 1;
                     prev_fnum = (*qfp).qf_fnum;
                 }
@@ -9530,7 +9350,11 @@ pub unsafe extern "C" fn qf_get_cur_valid_idx(
         i = i.wrapping_add(1);
         qfp = (*qfp).qf_next;
     }
-    return if eidx != 0 as ::core::ffi::c_int { eidx } else { 1 as ::core::ffi::c_int };
+    return if eidx != 0 as ::core::ffi::c_int {
+        eidx
+    } else {
+        1 as ::core::ffi::c_int
+    };
 }
 unsafe extern "C" fn qf_get_nth_valid_entry(
     mut qfl: *mut qf_list_T,
@@ -9545,7 +9369,8 @@ unsafe extern "C" fn qf_get_nth_valid_entry(
     let mut i: ::core::ffi::c_int = 0;
     let mut qfp: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
     '_c2rust_label: {
-        if (*qfl).qf_count >= 0 as ::core::ffi::c_int {} else {
+        if (*qfl).qf_count >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"qfl->qf_count >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -9561,9 +9386,7 @@ unsafe extern "C" fn qf_get_nth_valid_entry(
     while !got_int && i <= (*qfl).qf_count && !qfp.is_null() {
         if (*qfp).qf_valid != 0 {
             if fdo {
-                if (*qfp).qf_fnum > 0 as ::core::ffi::c_int
-                    && (*qfp).qf_fnum != prev_fnum
-                {
+                if (*qfp).qf_fnum > 0 as ::core::ffi::c_int && (*qfp).qf_fnum != prev_fnum {
                     eidx = eidx.wrapping_add(1);
                     prev_fnum = (*qfp).qf_fnum;
                 }
@@ -9577,7 +9400,11 @@ unsafe extern "C" fn qf_get_nth_valid_entry(
         i += 1;
         qfp = (*qfp).qf_next;
     }
-    return if i <= (*qfl).qf_count { i as size_t } else { 1 as size_t };
+    return if i <= (*qfl).qf_count {
+        i as size_t
+    } else {
+        1 as size_t
+    };
 }
 #[no_mangle]
 pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
@@ -9610,11 +9437,12 @@ pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
         let mut n: size_t = 0;
         if (*eap).addr_count > 0 as ::core::ffi::c_int {
             '_c2rust_label: {
-                if (*eap).line1 >= 0 as linenr_T {} else {
+                if (*eap).line1 >= 0 as linenr_T {
+                } else {
                     __assert_fail(
                         b"eap->line1 >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         4917 as ::core::ffi::c_uint,
                         b"void ex_cc(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                     );
@@ -9631,11 +9459,12 @@ pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
                 || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfdo as ::core::ffi::c_int,
         );
         '_c2rust_label_0: {
-            if valid_entry <= 2147483647 as ::core::ffi::c_int as size_t {} else {
+            if valid_entry <= 2147483647 as ::core::ffi::c_int as size_t {
+            } else {
                 __assert_fail(
                     b"valid_entry <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     4924 as ::core::ffi::c_uint,
                     b"void ex_cc(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
                 );
@@ -9703,7 +9532,8 @@ unsafe extern "C" fn qf_find_first_entry_on_line(
     mut entry: *mut qfline_T,
     mut errornr: *mut ::core::ffi::c_int,
 ) -> *mut qfline_T {
-    while !got_int && !(*entry).qf_prev.is_null()
+    while !got_int
+        && !(*entry).qf_prev.is_null()
         && (*entry).qf_fnum == (*(*entry).qf_prev).qf_fnum
         && (*entry).qf_lnum == (*(*entry).qf_prev).qf_lnum
     {
@@ -9716,7 +9546,8 @@ unsafe extern "C" fn qf_find_last_entry_on_line(
     mut entry: *mut qfline_T,
     mut errornr: *mut ::core::ffi::c_int,
 ) -> *mut qfline_T {
-    while !got_int && !(*entry).qf_next.is_null()
+    while !got_int
+        && !(*entry).qf_next.is_null()
         && (*entry).qf_fnum == (*(*entry).qf_next).qf_fnum
         && (*entry).qf_lnum == (*(*entry).qf_next).qf_lnum
     {
@@ -9779,9 +9610,9 @@ unsafe extern "C" fn qf_find_entry_after_pos(
     if qf_entry_after_pos(qfp, pos, linewise) {
         return qfp;
     }
-    while !(*qfp).qf_next.is_null() && (*(*qfp).qf_next).qf_fnum == bnr
-        && qf_entry_on_or_before_pos((*qfp).qf_next, pos, linewise) as ::core::ffi::c_int
-            != 0
+    while !(*qfp).qf_next.is_null()
+        && (*(*qfp).qf_next).qf_fnum == bnr
+        && qf_entry_on_or_before_pos((*qfp).qf_next, pos, linewise) as ::core::ffi::c_int != 0
     {
         qfp = (*qfp).qf_next;
         *errornr += 1;
@@ -9800,7 +9631,8 @@ unsafe extern "C" fn qf_find_entry_before_pos(
     mut qfp: *mut qfline_T,
     mut errornr: *mut ::core::ffi::c_int,
 ) -> *mut qfline_T {
-    while !(*qfp).qf_next.is_null() && (*(*qfp).qf_next).qf_fnum == bnr
+    while !(*qfp).qf_next.is_null()
+        && (*(*qfp).qf_next).qf_fnum == bnr
         && qf_entry_before_pos((*qfp).qf_next, pos, linewise) as ::core::ffi::c_int != 0
     {
         qfp = (*qfp).qf_next;
@@ -9851,8 +9683,7 @@ unsafe extern "C" fn qf_get_nth_below_entry(
         if linewise {
             entry = qf_find_last_entry_on_line(entry, errornr);
         }
-        if (*entry).qf_next.is_null() || (*(*entry).qf_next).qf_fnum != (*entry).qf_fnum
-        {
+        if (*entry).qf_next.is_null() || (*(*entry).qf_next).qf_fnum != (*entry).qf_fnum {
             if linewise {
                 *errornr = first_errornr;
             }
@@ -9861,7 +9692,7 @@ unsafe extern "C" fn qf_get_nth_below_entry(
             entry = (*entry).qf_next;
             *errornr += 1;
         }
-    };
+    }
 }
 unsafe extern "C" fn qf_get_nth_above_entry(
     mut entry: *mut qfline_T,
@@ -9875,8 +9706,7 @@ unsafe extern "C" fn qf_get_nth_above_entry(
         if !(c2rust_fresh24 > 0 as linenr_T && !got_int) {
             break;
         }
-        if (*entry).qf_prev.is_null() || (*(*entry).qf_prev).qf_fnum != (*entry).qf_fnum
-        {
+        if (*entry).qf_prev.is_null() || (*(*entry).qf_prev).qf_fnum != (*entry).qf_fnum {
             break;
         }
         entry = (*entry).qf_prev;
@@ -9884,7 +9714,7 @@ unsafe extern "C" fn qf_get_nth_above_entry(
         if linewise {
             entry = qf_find_first_entry_on_line(entry, errornr);
         }
-    };
+    }
 }
 unsafe extern "C" fn qf_find_nth_adj_entry(
     mut qfl: *mut qf_list_T,
@@ -9895,14 +9725,8 @@ unsafe extern "C" fn qf_find_nth_adj_entry(
     mut linewise: bool,
 ) -> ::core::ffi::c_int {
     let mut errornr: ::core::ffi::c_int = 0;
-    let adj_entry: *mut qfline_T = qf_find_closest_entry(
-        qfl,
-        bnr,
-        pos,
-        dir,
-        linewise,
-        &raw mut errornr,
-    );
+    let adj_entry: *mut qfline_T =
+        qf_find_closest_entry(qfl, bnr, pos, dir, linewise, &raw mut errornr);
     if adj_entry.is_null() {
         return 0 as ::core::ffi::c_int;
     }
@@ -9933,7 +9757,9 @@ pub unsafe extern "C" fn ex_cbelow(mut eap: *mut exarg_T) {
         BUF_HAS_LL_ENTRY
     };
     if (*curbuf).b_has_qf_entry & buf_has_flag == 0 {
-        emsg(gettext(&raw const e_no_errors as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_no_errors as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
@@ -9943,7 +9769,9 @@ pub unsafe extern "C" fn ex_cbelow(mut eap: *mut exarg_T) {
     }
     let mut qfl: *mut qf_list_T = qf_get_curlist(qi);
     if !qf_list_has_valid_entries(qfl) {
-        emsg(gettext(&raw const e_no_errors as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_no_errors as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut dir: ::core::ffi::c_int = if (*eap).cmdidx as ::core::ffi::c_int
@@ -9982,8 +9810,7 @@ pub unsafe extern "C" fn ex_cbelow(mut eap: *mut exarg_T) {
 unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
     match cmdidx as ::core::ffi::c_int {
         65 => {
-            return b"cfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"cfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         68 => {
             return b"cgetfile\0".as_ptr() as *const ::core::ffi::c_char
@@ -9994,8 +9821,7 @@ unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi:
                 as *mut ::core::ffi::c_char;
         }
         233 => {
-            return b"lfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"lfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         236 => {
             return b"lgetfile\0".as_ptr() as *const ::core::ffi::c_char
@@ -10013,7 +9839,8 @@ pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -10023,9 +9850,7 @@ pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
             );
         }
     };
-    let mut au_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut au_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     au_name = cfile_get_auname((*eap).cmdidx);
     if !au_name.is_null()
         && apply_autocmds(
@@ -10034,7 +9859,8 @@ pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             false_0 != 0,
             curbuf,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if aborting() {
             return;
@@ -10053,9 +9879,7 @@ pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
             0 as scid_T,
         );
     }
-    let mut enc: *mut ::core::ffi::c_char = if *(*curbuf).b_p_menc as ::core::ffi::c_int
-        != NUL
-    {
+    let mut enc: *mut ::core::ffi::c_char = if *(*curbuf).b_p_menc as ::core::ffi::c_int != NUL {
         (*curbuf).b_p_menc
     } else {
         p_menc
@@ -10112,8 +9936,7 @@ pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
 unsafe extern "C" fn vgr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
     match cmdidx as ::core::ffi::c_int {
         510 => {
-            return b"vimgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"vimgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         267 => {
             return b"lvimgrep\0".as_ptr() as *const ::core::ffi::c_char
@@ -10128,16 +9951,13 @@ unsafe extern "C" fn vgr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c
                 as *mut ::core::ffi::c_char;
         }
         172 => {
-            return b"grep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"grep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         239 => {
-            return b"lgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"lgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         173 => {
-            return b"grepadd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"grepadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         240 => {
             return b"lgrepadd\0".as_ptr() as *const ::core::ffi::c_char
@@ -10183,9 +10003,9 @@ unsafe extern "C" fn vgr_load_dummy_buf(
     mut dirname_start: *mut ::core::ffi::c_char,
     mut dirname_now: *mut ::core::ffi::c_char,
 ) -> *mut buf_T {
-    let mut save_ei: *mut ::core::ffi::c_char = au_event_disable(
-        b",Filetype\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    );
+    let mut save_ei: *mut ::core::ffi::c_char = au_event_disable(b",Filetype\0".as_ptr()
+        as *const ::core::ffi::c_char
+        as *mut ::core::ffi::c_char);
     let mut save_mls: OptInt = p_mls;
     p_mls = 0 as OptInt;
     let mut buf: *mut buf_T = load_dummy_buffer(fname, dirname_start, dirname_now);
@@ -10255,15 +10075,15 @@ unsafe extern "C" fn vgr_match_buflines(
                     }),
                     ml_get_buf(
                         buf,
-                        (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum
-                            + lnum,
+                        (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
                     ),
                     (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
                     (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
                     (*regmatch).startpos[0 as ::core::ffi::c_int as usize].col
-                        as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-                    (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col
-                        as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
+                        as ::core::ffi::c_int
+                        + 1 as ::core::ffi::c_int,
+                    (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col as ::core::ffi::c_int
+                        + 1 as ::core::ffi::c_int,
                     false_0 as ::core::ffi::c_char,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     0 as ::core::ffi::c_int,
@@ -10280,17 +10100,14 @@ unsafe extern "C" fn vgr_match_buflines(
                     if *tomatch == 0 as ::core::ffi::c_int {
                         break;
                     }
-                    if flags & VGR_GLOBAL as ::core::ffi::c_int
-                        == 0 as ::core::ffi::c_int
-                        || (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum
-                            > 0 as linenr_T
+                    if flags & VGR_GLOBAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                        || (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum > 0 as linenr_T
                     {
                         break;
                     }
                     col = ((*regmatch).endpos[0 as ::core::ffi::c_int as usize].col
                         as ::core::ffi::c_int
-                        + (col
-                            == (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col)
+                        + (col == (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col)
                             as ::core::ffi::c_int) as colnr_T;
                     if col > ml_get_buf_len(buf, lnum) {
                         break;
@@ -10316,7 +10133,8 @@ unsafe extern "C" fn vgr_match_buflines(
                 &raw mut score,
                 &raw mut matches as *mut uint32_t,
                 sz as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int > 0 as ::core::ffi::c_int
+            ) as ::core::ffi::c_int
+                > 0 as ::core::ffi::c_int
             {
                 if qf_add_entry(
                     qfl,
@@ -10332,7 +10150,8 @@ unsafe extern "C" fn vgr_match_buflines(
                     lnum,
                     0 as linenr_T,
                     matches[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                        + col as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
+                        + col as ::core::ffi::c_int
+                        + 1 as ::core::ffi::c_int,
                     0 as ::core::ffi::c_int,
                     false_0 as ::core::ffi::c_char,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -10350,13 +10169,12 @@ unsafe extern "C" fn vgr_match_buflines(
                     if *tomatch == 0 as ::core::ffi::c_int {
                         break;
                     }
-                    if flags & VGR_GLOBAL as ::core::ffi::c_int
-                        == 0 as ::core::ffi::c_int
-                    {
+                    if flags & VGR_GLOBAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                         break;
                     }
                     col = (matches[pat_len.wrapping_sub(1 as size_t) as usize]
-                        as ::core::ffi::c_int + col as ::core::ffi::c_int
+                        as ::core::ffi::c_int
+                        + col as ::core::ffi::c_int
                         + 1 as ::core::ffi::c_int) as colnr_T;
                     if col > linelen {
                         break;
@@ -10380,7 +10198,12 @@ unsafe extern "C" fn vgr_jump_to_match(
     mut target_dir: *mut ::core::ffi::c_char,
 ) {
     let mut buf: *mut buf_T = curbuf;
-    qf_jump(qi, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int, forceit);
+    qf_jump(
+        qi,
+        0 as ::core::ffi::c_int,
+        0 as ::core::ffi::c_int,
+        forceit,
+    );
     if buf != curbuf {
         *redraw_for_dummy = false_0 != 0;
     }
@@ -10428,10 +10251,10 @@ unsafe extern "C" fn existing_swapfile(mut buf: *const buf_T) -> bool {
     if !(*buf).b_ml.ml_mfp.is_null() && !(*(*buf).b_ml.ml_mfp).mf_fname.is_null() {
         let fname: *const ::core::ffi::c_char = (*(*buf).b_ml.ml_mfp).mf_fname;
         let len: size_t = strlen(fname);
-        return *fname.offset(len.wrapping_sub(1 as size_t) as isize)
-            as ::core::ffi::c_int != 'p' as ::core::ffi::c_int
-            || *fname.offset(len.wrapping_sub(2 as size_t) as isize)
-                as ::core::ffi::c_int != 'w' as ::core::ffi::c_int;
+        return *fname.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+            != 'p' as ::core::ffi::c_int
+            || *fname.offset(len.wrapping_sub(2 as size_t) as isize) as ::core::ffi::c_int
+                != 'w' as ::core::ffi::c_int;
     }
     return false_0 != 0;
 }
@@ -10451,11 +10274,8 @@ unsafe extern "C" fn vgr_process_args(
     } else {
         MAXLNUM as ::core::ffi::c_int as linenr_T
     }) as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = skip_vimgrep_pat(
-        (*eap).arg,
-        &raw mut (*args).spat,
-        &raw mut (*args).flags,
-    );
+    let mut p: *mut ::core::ffi::c_char =
+        skip_vimgrep_pat((*eap).arg, &raw mut (*args).spat, &raw mut (*args).flags);
     if p.is_null() {
         emsg(gettext(&raw const e_invalpat as *const ::core::ffi::c_char));
         return FAIL;
@@ -10466,16 +10286,18 @@ unsafe extern "C" fn vgr_process_args(
     }
     p = skipwhite(p);
     if *p as ::core::ffi::c_int == NUL {
-        emsg(
-            gettext(
-                b"E683: File name missing or invalid pattern\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E683: File name missing or invalid pattern\0".as_ptr() as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
-    if get_arglist_exp(p, &raw mut (*args).fcount, &raw mut (*args).fnames, true_0 != 0)
-        == FAIL || (*args).fcount == 0 as ::core::ffi::c_int
+    if get_arglist_exp(
+        p,
+        &raw mut (*args).fcount,
+        &raw mut (*args).fnames,
+        true_0 != 0,
+    ) == FAIL
+        || (*args).fcount == 0 as ::core::ffi::c_int
     {
         emsg(gettext(&raw const e_nomatch as *const ::core::ffi::c_char));
         return FAIL;
@@ -10493,27 +10315,22 @@ unsafe extern "C" fn vgr_process_files(
     let mut status: ::core::ffi::c_int = FAIL;
     let mut save_qfid: ::core::ffi::c_uint = (*qf_get_curlist(qi)).qf_id;
     let mut duplicate_name: bool = false_0 != 0;
-    let mut dirname_start: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
-    let mut dirname_now: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut dirname_start: *mut ::core::ffi::c_char =
+        xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
+    let mut dirname_now: *mut ::core::ffi::c_char =
+        xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     os_dirname(dirname_start, MAXPATHL as size_t);
     let mut seconds: time_t = 0 as time_t;
     let mut fi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     '_theend: {
-        while fi < (*cmd_args).fcount && !got_int
-            && (*cmd_args).tomatch > 0 as ::core::ffi::c_int
-        {
-            let mut fname: *mut ::core::ffi::c_char = path_try_shorten_fname(
-                *(*cmd_args).fnames.offset(fi as isize),
-            );
+        while fi < (*cmd_args).fcount && !got_int && (*cmd_args).tomatch > 0 as ::core::ffi::c_int {
+            let mut fname: *mut ::core::ffi::c_char =
+                path_try_shorten_fname(*(*cmd_args).fnames.offset(fi as isize));
             if time(::core::ptr::null_mut::<time_t>()) > seconds {
                 seconds = time(::core::ptr::null_mut::<time_t>());
                 vgr_display_fname(fname);
             }
-            let mut buf: *mut buf_T = buflist_findname_exp(
-                *(*cmd_args).fnames.offset(fi as isize),
-            );
+            let mut buf: *mut buf_T = buflist_findname_exp(*(*cmd_args).fnames.offset(fi as isize));
             let mut using_dummy: bool = false;
             if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
                 duplicate_name = !buf.is_null();
@@ -10531,10 +10348,7 @@ unsafe extern "C" fn vgr_process_files(
                 if !got_int {
                     smsg(
                         0 as ::core::ffi::c_int,
-                        gettext(
-                            b"Cannot open file \"%s\"\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                        ),
+                        gettext(b"Cannot open file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char),
                         fname,
                     );
                 }
@@ -10550,9 +10364,7 @@ unsafe extern "C" fn vgr_process_files(
                     (*cmd_args).flags,
                 );
                 if using_dummy {
-                    if found_match as ::core::ffi::c_int != 0
-                        && (*first_match_buf).is_null()
-                    {
+                    if found_match as ::core::ffi::c_int != 0 && (*first_match_buf).is_null() {
                         *first_match_buf = buf;
                     }
                     if duplicate_name {
@@ -10561,11 +10373,14 @@ unsafe extern "C" fn vgr_process_files(
                     } else if cmdmod.cmod_flags & CMOD_HIDE as ::core::ffi::c_int
                         == 0 as ::core::ffi::c_int
                         || *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 'u' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            == 'u' as ::core::ffi::c_int
                         || *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 'w' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            == 'w' as ::core::ffi::c_int
                         || *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == 'd' as ::core::ffi::c_int
+                            as ::core::ffi::c_int
+                            == 'd' as ::core::ffi::c_int
                     {
                         if !found_match {
                             wipe_dummy_buffer(buf, dirname_start);
@@ -10581,9 +10396,9 @@ unsafe extern "C" fn vgr_process_files(
                     }
                     if !buf.is_null() {
                         (*buf).b_flags &= !BF_DUMMY;
-                        if buf == *first_match_buf && (*target_dir).is_null()
-                            && strcmp(dirname_start, dirname_now)
-                                != 0 as ::core::ffi::c_int
+                        if buf == *first_match_buf
+                            && (*target_dir).is_null()
+                            && strcmp(dirname_start, dirname_now) != 0 as ::core::ffi::c_int
                         {
                             *target_dir = xstrdup(dirname_now);
                         }
@@ -10641,7 +10456,8 @@ pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
             (*curbuf).b_fname,
             true_0 != 0,
             curbuf,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if aborting() {
             return;
@@ -10649,9 +10465,7 @@ pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
     }
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut qi: *mut qf_info_T = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
-    let mut target_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut target_dir: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut args: vgr_args_T = vgr_args_T {
         tomatch: 0,
         spat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -10671,10 +10485,8 @@ pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
     if vgr_process_args(eap, &raw mut args) != FAIL {
         if (*eap).cmdidx as ::core::ffi::c_int != CMD_grepadd as ::core::ffi::c_int
             && (*eap).cmdidx as ::core::ffi::c_int != CMD_lgrepadd as ::core::ffi::c_int
-            && (*eap).cmdidx as ::core::ffi::c_int
-                != CMD_vimgrepadd as ::core::ffi::c_int
-            && (*eap).cmdidx as ::core::ffi::c_int
-                != CMD_lvimgrepadd as ::core::ffi::c_int
+            && (*eap).cmdidx as ::core::ffi::c_int != CMD_vimgrepadd as ::core::ffi::c_int
+            && (*eap).cmdidx as ::core::ffi::c_int != CMD_lvimgrepadd as ::core::ffi::c_int
             || qf_stack_empty(qi) as ::core::ffi::c_int != 0
         {
             qf_new_list(qi, args.qf_title);
@@ -10715,9 +10527,7 @@ pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
                 decr_quickfix_busy();
             } else {
                 if !qf_list_empty(qf_get_curlist(qi)) {
-                    if args.flags & VGR_NOJUMP as ::core::ffi::c_int
-                        == 0 as ::core::ffi::c_int
-                    {
+                    if args.flags & VGR_NOJUMP as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
                         vgr_jump_to_match(
                             qi,
                             (*eap).forceit,
@@ -10744,8 +10554,8 @@ pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
     vim_regfree(args.regmatch.regprog);
 }
 unsafe extern "C" fn restore_start_dir(mut dirname_start: *mut ::core::ffi::c_char) {
-    let mut dirname_now: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut dirname_now: *mut ::core::ffi::c_char =
+        xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     os_dirname(dirname_now, MAXPATHL as size_t);
     if strcmp(dirname_start, dirname_now) != 0 as ::core::ffi::c_int {
         let mut ea: exarg_T = exarg {
@@ -11043,8 +10853,7 @@ unsafe extern "C" fn get_qfline_items(
             && tv_dict_add_tv(
                 dict,
                 b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
                 &raw mut (*qfp).qf_user_data,
             ) == FAIL
         || tv_dict_add_nr(
@@ -11104,7 +10913,7 @@ unsafe extern "C" fn get_errorlist(
                 return get_qfline_items(qfp, list);
             }
         } else if get_qfline_items(qfp, list) == FAIL {
-            return FAIL
+            return FAIL;
         }
         i += 1;
         qfp = (*qfp).qf_next;
@@ -11128,8 +10937,7 @@ unsafe extern "C" fn qf_get_list_from_lines(
     efm_di = tv_dict_find(
         what,
         b"efm\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !efm_di.is_null() {
         if (*efm_di).di_tv.v_type as ::core::ffi::c_uint
@@ -11140,9 +10948,7 @@ unsafe extern "C" fn qf_get_list_from_lines(
         }
         errorformat = (*efm_di).di_tv.vval.v_string;
     }
-    let mut l: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
+    let mut l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let qi: *mut qf_info_T = qf_alloc_stack(QFLT_INTERNAL, 1 as ::core::ffi::c_int);
     if qf_init_ext(
         qi,
@@ -11208,12 +11014,11 @@ unsafe extern "C" fn qf_getprop_keys2flags(
 ) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = QF_GETLIST_NONE as ::core::ffi::c_int;
     if !tv_dict_find(
-            what,
-            b"all\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"all\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_ALL as ::core::ffi::c_int;
         if !loclist {
@@ -11221,123 +11026,112 @@ unsafe extern "C" fn qf_getprop_keys2flags(
         }
     }
     if !tv_dict_find(
-            what,
-            b"title\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"title\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_TITLE as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"nr\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"nr\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_NR as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"winid\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"winid\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_WINID as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"context\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"context\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_CONTEXT as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"id\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"id\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_ID as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"items\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"items\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_ITEMS as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"idx\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"idx\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_IDX as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"size\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"size\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_SIZE as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_TICK as ::core::ffi::c_int;
     }
     if loclist as ::core::ffi::c_int != 0
         && !tv_dict_find(
-                what,
-                b"filewinid\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                    .wrapping_sub(1 as usize) as ptrdiff_t,
-            )
-            .is_null()
+            what,
+            b"filewinid\0".as_ptr() as *const ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as usize)
+                as ptrdiff_t,
+        )
+        .is_null()
     {
         flags |= QF_GETLIST_FILEWINID as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"qfbufnr\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"qfbufnr\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_QFBUFNR as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            what,
-            b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        )
-        .is_null()
+        what,
+        b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as usize) as ptrdiff_t,
+    )
+    .is_null()
     {
         flags |= QF_GETLIST_QFTF as ::core::ffi::c_int;
     }
@@ -11352,16 +11146,14 @@ unsafe extern "C" fn qf_getprop_qfidx(
     di = tv_dict_find(
         what,
         b"nr\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         if (*di).di_tv.v_type as ::core::ffi::c_uint
             == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             if (*di).di_tv.vval.v_number != 0 as varnumber_T {
-                qf_idx = (*di).di_tv.vval.v_number as ::core::ffi::c_int
-                    - 1 as ::core::ffi::c_int;
+                qf_idx = (*di).di_tv.vval.v_number as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
                 if qf_idx < 0 as ::core::ffi::c_int || qf_idx >= (*qi).qf_listcount {
                     qf_idx = INVALID_QFIDX;
                 }
@@ -11371,7 +11163,8 @@ unsafe extern "C" fn qf_getprop_qfidx(
             && strequal(
                 (*di).di_tv.vval.v_string,
                 b"$\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
         {
             qf_idx = (*qi).qf_listcount - 1 as ::core::ffi::c_int;
         } else {
@@ -11381,8 +11174,7 @@ unsafe extern "C" fn qf_getprop_qfidx(
     di = tv_dict_find(
         what,
         b"id\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         if (*di).di_tv.v_type as ::core::ffi::c_uint
@@ -11413,9 +11205,7 @@ unsafe extern "C" fn qf_getprop_defaults(
         );
     }
     if status == OK && flags & QF_GETLIST_ITEMS as ::core::ffi::c_int != 0 {
-        let mut l: *mut list_T = tv_list_alloc(
-            kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-        );
+        let mut l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
         status = tv_dict_add_list(
             retdict,
             b"items\0".as_ptr() as *const ::core::ffi::c_char,
@@ -11475,19 +11265,15 @@ unsafe extern "C" fn qf_getprop_defaults(
         status = tv_dict_add_nr(
             retdict,
             b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
             0 as varnumber_T,
         );
     }
-    if status == OK && locstack != 0
-        && flags & QF_GETLIST_FILEWINID as ::core::ffi::c_int != 0
-    {
+    if status == OK && locstack != 0 && flags & QF_GETLIST_FILEWINID as ::core::ffi::c_int != 0 {
         status = tv_dict_add_nr(
             retdict,
             b"filewinid\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
             0 as varnumber_T,
         );
     }
@@ -11498,8 +11284,7 @@ unsafe extern "C" fn qf_getprop_defaults(
         status = tv_dict_add_str(
             retdict,
             b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 17]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
             b"\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
@@ -11523,8 +11308,7 @@ unsafe extern "C" fn qf_getprop_filewinid(
 ) -> ::core::ffi::c_int {
     let mut winid: handle_T = 0 as handle_T;
     if !wp.is_null()
-        && (bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-            && !(*wp).w_llist_ref.is_null())
+        && (bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_llist_ref.is_null())
     {
         let mut ll_wp: *mut win_T = qf_find_win_with_loclist(qi);
         if !ll_wp.is_null() {
@@ -11544,9 +11328,7 @@ unsafe extern "C" fn qf_getprop_items(
     mut eidx: ::core::ffi::c_int,
     mut retdict: *mut dict_T,
 ) -> ::core::ffi::c_int {
-    let mut l: *mut list_T = tv_list_alloc(
-        kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t,
-    );
+    let mut l: *mut list_T = tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     get_errorlist(qi, ::core::ptr::null_mut::<win_T>(), qf_idx, eidx, l);
     tv_dict_add_list(
         retdict,
@@ -11616,8 +11398,7 @@ unsafe extern "C" fn qf_getprop_qftf(
         status = tv_dict_add_tv(
             retdict,
             b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 17]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
             &raw mut tv,
         );
         tv_clear(&raw mut tv);
@@ -11625,8 +11406,7 @@ unsafe extern "C" fn qf_getprop_qftf(
         status = tv_dict_add_str(
             retdict,
             b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 17]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as size_t),
             b"\0".as_ptr() as *const ::core::ffi::c_char,
         );
     }
@@ -11639,7 +11419,8 @@ unsafe extern "C" fn qf_get_properties(
 ) -> ::core::ffi::c_int {
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -11656,8 +11437,7 @@ unsafe extern "C" fn qf_get_properties(
     di = tv_dict_find(
         what,
         b"lines\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         return qf_get_list_from_lines(what, di, retdict);
@@ -11676,20 +11456,14 @@ unsafe extern "C" fn qf_get_properties(
         qf_idx = qf_getprop_qfidx(qi, what);
     }
     if qf_stack_empty(qi) as ::core::ffi::c_int != 0 || qf_idx == INVALID_QFIDX {
-        return qf_getprop_defaults(
-            qi,
-            flags,
-            !wp.is_null() as ::core::ffi::c_int,
-            retdict,
-        );
+        return qf_getprop_defaults(qi, flags, !wp.is_null() as ::core::ffi::c_int, retdict);
     }
     let mut qfl: *mut qf_list_T = qf_get_list(qi, qf_idx);
     let mut eidx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     di = tv_dict_find(
         what,
         b"idx\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         if (*di).di_tv.v_type as ::core::ffi::c_uint
@@ -11747,14 +11521,11 @@ unsafe extern "C" fn qf_get_properties(
         status = tv_dict_add_nr(
             retdict,
             b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
             (*qfl).qf_changedtick as varnumber_T,
         );
     }
-    if status == OK && !wp.is_null()
-        && flags & QF_GETLIST_FILEWINID as ::core::ffi::c_int != 0
-    {
+    if status == OK && !wp.is_null() && flags & QF_GETLIST_FILEWINID as ::core::ffi::c_int != 0 {
         status = qf_getprop_filewinid(wp, qi, retdict);
     }
     if status == OK && flags & QF_GETLIST_QFBUFNR as ::core::ffi::c_int != 0 {
@@ -11804,34 +11575,24 @@ unsafe extern "C" fn qf_add_entry_from_dict(
         b"module\0".as_ptr() as *const ::core::ffi::c_char,
         true_0 != 0,
     );
-    let mut bufnum: ::core::ffi::c_int = tv_dict_get_number(
-        d,
-        b"bufnr\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int;
-    let lnum: linenr_T = tv_dict_get_number(
-        d,
-        b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as linenr_T;
-    let end_lnum: linenr_T = tv_dict_get_number(
-        d,
-        b"end_lnum\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as linenr_T;
-    let col: ::core::ffi::c_int = tv_dict_get_number(
-        d,
-        b"col\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int;
-    let end_col: ::core::ffi::c_int = tv_dict_get_number(
-        d,
-        b"end_col\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int;
-    let vcol: ::core::ffi::c_char = tv_dict_get_number(
-        d,
-        b"vcol\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_char;
-    let nr: ::core::ffi::c_int = tv_dict_get_number(
-        d,
-        b"nr\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int;
+    let mut bufnum: ::core::ffi::c_int =
+        tv_dict_get_number(d, b"bufnr\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int;
+    let lnum: linenr_T =
+        tv_dict_get_number(d, b"lnum\0".as_ptr() as *const ::core::ffi::c_char) as linenr_T;
+    let end_lnum: linenr_T =
+        tv_dict_get_number(d, b"end_lnum\0".as_ptr() as *const ::core::ffi::c_char) as linenr_T;
+    let col: ::core::ffi::c_int =
+        tv_dict_get_number(d, b"col\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int;
+    let end_col: ::core::ffi::c_int =
+        tv_dict_get_number(d, b"end_col\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_int;
+    let vcol: ::core::ffi::c_char =
+        tv_dict_get_number(d, b"vcol\0".as_ptr() as *const ::core::ffi::c_char)
+            as ::core::ffi::c_char;
+    let nr: ::core::ffi::c_int =
+        tv_dict_get_number(d, b"nr\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int;
     let type_0: *const ::core::ffi::c_char = tv_dict_get_string(
         d,
         b"type\0".as_ptr() as *const ::core::ffi::c_char,
@@ -11870,9 +11631,7 @@ unsafe extern "C" fn qf_add_entry_from_dict(
         if !did_bufnr_emsg {
             did_bufnr_emsg = true_0 != 0;
             semsg(
-                gettext(
-                    b"E92: Buffer %d not found\0".as_ptr() as *const ::core::ffi::c_char,
-                ),
+                gettext(b"E92: Buffer %d not found\0".as_ptr() as *const ::core::ffi::c_char),
                 bufnum,
             );
         }
@@ -11880,11 +11639,11 @@ unsafe extern "C" fn qf_add_entry_from_dict(
         bufnum = 0 as ::core::ffi::c_int;
     }
     if !tv_dict_find(
-            d,
-            b"valid\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-        )
-        .is_null()
+        d,
+        b"valid\0".as_ptr() as *const ::core::ffi::c_char,
+        -1 as ptrdiff_t,
+    )
+    .is_null()
     {
         valid = tv_dict_get_bool(
             d,
@@ -11906,8 +11665,11 @@ unsafe extern "C" fn qf_add_entry_from_dict(
         vcol,
         pattern,
         nr,
-        (if type_0.is_null() { NUL } else { *type_0 as ::core::ffi::c_int })
-            as ::core::ffi::c_char,
+        (if type_0.is_null() {
+            NUL
+        } else {
+            *type_0 as ::core::ffi::c_int
+        }) as ::core::ffi::c_char,
         &raw mut user_data,
         valid as ::core::ffi::c_char,
     );
@@ -11931,14 +11693,13 @@ unsafe extern "C" fn entry_is_closer_to_target(
     if target_fnum == 0 {
         return false_0 != 0;
     }
-    let mut is_target_file: bool = (*entry).qf_fnum != 0
-        && (*entry).qf_fnum == target_fnum;
-    let mut other_is_target_file: bool = (*other_entry).qf_fnum != 0
-        && (*other_entry).qf_fnum == target_fnum;
+    let mut is_target_file: bool = (*entry).qf_fnum != 0 && (*entry).qf_fnum == target_fnum;
+    let mut other_is_target_file: bool =
+        (*other_entry).qf_fnum != 0 && (*other_entry).qf_fnum == target_fnum;
     if !is_target_file && other_is_target_file as ::core::ffi::c_int != 0 {
-        return false_0 != 0
+        return false_0 != 0;
     } else if is_target_file as ::core::ffi::c_int != 0 && !other_is_target_file {
-        return true_0 != 0
+        return true_0 != 0;
     }
     if target_lnum == 0 {
         return false_0 != 0;
@@ -11954,9 +11715,9 @@ unsafe extern "C" fn entry_is_closer_to_target(
         INT_MAX
     };
     if line_distance > other_line_distance {
-        return false_0 != 0
+        return false_0 != 0;
     } else if line_distance < other_line_distance {
-        return true_0 != 0
+        return true_0 != 0;
     }
     if target_col == 0 {
         return false_0 != 0;
@@ -11972,9 +11733,9 @@ unsafe extern "C" fn entry_is_closer_to_target(
         INT_MAX
     };
     if column_distance > other_column_distance {
-        return false_0 != 0
+        return false_0 != 0;
     } else if column_distance < other_column_distance {
-        return true_0 != 0
+        return true_0 != 0;
     }
     return false_0 != 0;
 }
@@ -12040,8 +11801,7 @@ unsafe extern "C" fn qf_add_entries(
                         break;
                     }
                     let mut entry: *mut qfline_T = (*qfl).qf_last;
-                    if select_first_entry as ::core::ffi::c_int != 0
-                        && entry_to_select.is_null()
+                    if select_first_entry as ::core::ffi::c_int != 0 && entry_to_select.is_null()
                         || select_nearest_entry as ::core::ffi::c_int != 0
                             && (entry_to_select.is_null()
                                 || entry_is_closer_to_target(
@@ -12050,7 +11810,8 @@ unsafe extern "C" fn qf_add_entries(
                                     prev_fnum,
                                     prev_lnum,
                                     prev_col,
-                                ) as ::core::ffi::c_int != 0)
+                                ) as ::core::ffi::c_int
+                                    != 0)
                     {
                         entry_to_select = entry;
                         entry_to_select_index = (*qfl).qf_count;
@@ -12083,19 +11844,17 @@ unsafe extern "C" fn qf_setprop_get_qfidx(
     di = tv_dict_find(
         what,
         b"nr\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         if (*di).di_tv.v_type as ::core::ffi::c_uint
             == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
         {
             if (*di).di_tv.vval.v_number != 0 as varnumber_T {
-                qf_idx = (*di).di_tv.vval.v_number as ::core::ffi::c_int
-                    - 1 as ::core::ffi::c_int;
+                qf_idx = (*di).di_tv.vval.v_number as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
             }
-            if (action == ' ' as ::core::ffi::c_int
-                || action == 'a' as ::core::ffi::c_int) && qf_idx == (*qi).qf_listcount
+            if (action == ' ' as ::core::ffi::c_int || action == 'a' as ::core::ffi::c_int)
+                && qf_idx == (*qi).qf_listcount
             {
                 *newlist = true_0 != 0;
                 qf_idx = if qf_stack_empty(qi) as ::core::ffi::c_int != 0 {
@@ -12104,7 +11863,7 @@ unsafe extern "C" fn qf_setprop_get_qfidx(
                     (*qi).qf_listcount - 1 as ::core::ffi::c_int
                 };
             } else if qf_idx < 0 as ::core::ffi::c_int || qf_idx >= (*qi).qf_listcount {
-                return INVALID_QFIDX
+                return INVALID_QFIDX;
             } else if action != ' ' as ::core::ffi::c_int {
                 *newlist = false_0 != 0;
             }
@@ -12113,30 +11872,29 @@ unsafe extern "C" fn qf_setprop_get_qfidx(
             && strequal(
                 (*di).di_tv.vval.v_string,
                 b"$\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as ::core::ffi::c_int != 0
+            ) as ::core::ffi::c_int
+                != 0
         {
             if !qf_stack_empty(qi) {
                 qf_idx = (*qi).qf_listcount - 1 as ::core::ffi::c_int;
             } else if *newlist {
                 qf_idx = 0 as ::core::ffi::c_int;
             } else {
-                return INVALID_QFIDX
+                return INVALID_QFIDX;
             }
         } else {
-            return INVALID_QFIDX
+            return INVALID_QFIDX;
         }
     }
-    if !*newlist
-        && {
-            di = tv_dict_find(
-                what,
-                b"id\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                    .wrapping_sub(1 as usize) as ptrdiff_t,
-            );
-            !di.is_null()
-        }
-    {
+    if !*newlist && {
+        di = tv_dict_find(
+            what,
+            b"id\0".as_ptr() as *const ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
+                as ptrdiff_t,
+        );
+        !di.is_null()
+    } {
         if (*di).di_tv.v_type as ::core::ffi::c_uint
             != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -12180,9 +11938,8 @@ unsafe extern "C" fn qf_setprop_items(
     {
         return FAIL;
     }
-    let mut title_save: *mut ::core::ffi::c_char = xstrdup(
-        (*(*qi).qf_lists.offset(qf_idx as isize)).qf_title,
-    );
+    let mut title_save: *mut ::core::ffi::c_char =
+        xstrdup((*(*qi).qf_lists.offset(qf_idx as isize)).qf_title);
     let retval: ::core::ffi::c_int = qf_add_entries(
         qi,
         qf_idx,
@@ -12210,8 +11967,7 @@ unsafe extern "C" fn qf_setprop_items_from_lines(
     efm_di = tv_dict_find(
         what,
         b"efm\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !efm_di.is_null() {
         if (*efm_di).di_tv.v_type as ::core::ffi::c_uint
@@ -12254,8 +12010,8 @@ unsafe extern "C" fn qf_setprop_context(
     mut di: *mut dictitem_T,
 ) -> ::core::ffi::c_int {
     tv_free((*qfl).qf_ctx);
-    let mut ctx: *mut typval_T = xcalloc(1 as size_t, ::core::mem::size_of::<typval_T>())
-        as *mut typval_T;
+    let mut ctx: *mut typval_T =
+        xcalloc(1 as size_t, ::core::mem::size_of::<typval_T>()) as *mut typval_T;
     tv_copy(&raw mut (*di).di_tv, ctx);
     (*qfl).qf_ctx = ctx;
     return OK;
@@ -12277,8 +12033,7 @@ unsafe extern "C" fn qf_setprop_curidx(
         newidx = (*qfl).qf_count;
     } else {
         let mut denote: bool = false_0 != 0;
-        newidx = tv_get_number_chk(&raw const (*di).di_tv, &raw mut denote)
-            as ::core::ffi::c_int;
+        newidx = tv_get_number_chk(&raw const (*di).di_tv, &raw mut denote) as ::core::ffi::c_int;
         if denote {
             return FAIL;
         }
@@ -12286,7 +12041,11 @@ unsafe extern "C" fn qf_setprop_curidx(
     if newidx < 1 as ::core::ffi::c_int {
         return FAIL;
     }
-    newidx = if newidx < (*qfl).qf_count { newidx } else { (*qfl).qf_count };
+    newidx = if newidx < (*qfl).qf_count {
+        newidx
+    } else {
+        (*qfl).qf_count
+    };
     let old_qfidx: ::core::ffi::c_int = (*qfl).qf_index;
     let qf_ptr: *mut qfline_T = get_nth_entry(qfl, newidx, &raw mut newidx);
     if qf_ptr.is_null() {
@@ -12305,14 +12064,9 @@ unsafe extern "C" fn qf_set_properties(
     mut action: ::core::ffi::c_int,
     mut title: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut newlist: bool = action == ' ' as ::core::ffi::c_int
-        || qf_stack_empty(qi) as ::core::ffi::c_int != 0;
-    let mut qf_idx: ::core::ffi::c_int = qf_setprop_get_qfidx(
-        qi,
-        what,
-        action,
-        &raw mut newlist,
-    );
+    let mut newlist: bool =
+        action == ' ' as ::core::ffi::c_int || qf_stack_empty(qi) as ::core::ffi::c_int != 0;
+    let mut qf_idx: ::core::ffi::c_int = qf_setprop_get_qfidx(qi, what, action, &raw mut newlist);
     if qf_idx == INVALID_QFIDX {
         return FAIL;
     }
@@ -12327,8 +12081,7 @@ unsafe extern "C" fn qf_set_properties(
     di = tv_dict_find(
         what,
         b"title\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         retval = qf_setprop_title(qi, qf_idx, what, di);
@@ -12336,8 +12089,7 @@ unsafe extern "C" fn qf_set_properties(
     di = tv_dict_find(
         what,
         b"items\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         retval = qf_setprop_items(qi, qf_idx, di, action);
@@ -12345,8 +12097,7 @@ unsafe extern "C" fn qf_set_properties(
     di = tv_dict_find(
         what,
         b"lines\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         retval = qf_setprop_items_from_lines(qi, qf_idx, what, di, action);
@@ -12354,8 +12105,7 @@ unsafe extern "C" fn qf_set_properties(
     di = tv_dict_find(
         what,
         b"context\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         retval = qf_setprop_context(qfl, di);
@@ -12363,8 +12113,7 @@ unsafe extern "C" fn qf_set_properties(
     di = tv_dict_find(
         what,
         b"idx\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         retval = qf_setprop_curidx(qi, qfl, di);
@@ -12372,8 +12121,7 @@ unsafe extern "C" fn qf_set_properties(
     di = tv_dict_find(
         what,
         b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as usize)
-            as ptrdiff_t,
+        ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
     if !di.is_null() {
         retval = qf_setprop_qftf(qfl, di);
@@ -12395,8 +12143,7 @@ unsafe extern "C" fn qf_free_stack(mut wp: *mut win_T, mut qi: *mut qf_info_T) {
         qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
     }
     if !wp.is_null()
-        && (bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-            && !(*wp).w_llist_ref.is_null())
+        && (bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && !(*wp).w_llist_ref.is_null())
     {
         let llwin: *mut win_T = qf_find_win_with_loclist(qi);
         if !llwin.is_null() {
@@ -12435,7 +12182,8 @@ pub unsafe extern "C" fn set_errorlist(
         qi = ql_info;
     }
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -12450,8 +12198,7 @@ pub unsafe extern "C" fn set_errorlist(
         qf_free_stack(wp, qi);
         return OK;
     }
-    if !list.is_null() && tv_list_len(list) != 0 as ::core::ffi::c_int && !what.is_null()
-    {
+    if !list.is_null() && tv_list_len(list) != 0 as ::core::ffi::c_int && !what.is_null() {
         semsg(
             gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
             gettext(
@@ -12503,7 +12250,8 @@ unsafe extern "C" fn mark_quickfix_user_data(
                             copyID,
                             ::core::ptr::null_mut::<*mut ht_stack_T>(),
                             ::core::ptr::null_mut::<*mut list_stack_T>(),
-                        ) as ::core::ffi::c_int != 0;
+                        ) as ::core::ffi::c_int
+                            != 0;
                 }
                 j += 1;
                 qfp = (*qfp).qf_next;
@@ -12536,15 +12284,15 @@ unsafe extern "C" fn mark_quickfix_ctx(
                 ::core::ptr::null_mut::<*mut list_stack_T>(),
             );
         }
-        let mut cb: *mut Callback = &raw mut (*(*qi).qf_lists.offset(i as isize))
-            .qf_qftf_cb;
+        let mut cb: *mut Callback = &raw mut (*(*qi).qf_lists.offset(i as isize)).qf_qftf_cb;
         abort_0 = abort_0 as ::core::ffi::c_int != 0
             || set_ref_in_callback(
                 cb,
                 copyID,
                 ::core::ptr::null_mut::<*mut ht_stack_T>(),
                 ::core::ptr::null_mut::<*mut list_stack_T>(),
-            ) as ::core::ffi::c_int != 0;
+            ) as ::core::ffi::c_int
+                != 0;
         i += 1;
     }
     return abort_0;
@@ -12552,14 +12300,14 @@ unsafe extern "C" fn mark_quickfix_ctx(
 #[no_mangle]
 pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> bool {
     '_c2rust_label: {
-        if !ql_info.is_null() {} else {
+        if !ql_info.is_null() {
+        } else {
             __assert_fail(
                 b"ql_info != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 7196 as ::core::ffi::c_uint,
-                b"_Bool set_ref_in_quickfix(int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"_Bool set_ref_in_quickfix(int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -12570,7 +12318,8 @@ pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> 
             copyID,
             ::core::ptr::null_mut::<*mut ht_stack_T>(),
             ::core::ptr::null_mut::<*mut list_stack_T>(),
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         return true_0 != 0;
     }
@@ -12584,8 +12333,7 @@ pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> 
         while !win.is_null() {
             if !(*win).w_llist.is_null() {
                 if mark_quickfix_ctx((*win).w_llist, copyID) as ::core::ffi::c_int != 0
-                    || mark_quickfix_user_data((*win).w_llist, copyID)
-                        as ::core::ffi::c_int != 0
+                    || mark_quickfix_user_data((*win).w_llist, copyID) as ::core::ffi::c_int != 0
                 {
                     return true_0 != 0;
                 }
@@ -12594,10 +12342,9 @@ pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> 
                 && !(*win).w_llist_ref.is_null()
                 && (*(*win).w_llist_ref).qf_refcount == 1 as ::core::ffi::c_int
             {
-                if mark_quickfix_ctx((*win).w_llist_ref, copyID) as ::core::ffi::c_int
-                    != 0
-                    || mark_quickfix_user_data((*win).w_llist_ref, copyID)
-                        as ::core::ffi::c_int != 0
+                if mark_quickfix_ctx((*win).w_llist_ref, copyID) as ::core::ffi::c_int != 0
+                    || mark_quickfix_user_data((*win).w_llist_ref, copyID) as ::core::ffi::c_int
+                        != 0
                 {
                     return true_0 != 0;
                 }
@@ -12608,13 +12355,10 @@ pub unsafe extern "C" fn set_ref_in_quickfix(mut copyID: ::core::ffi::c_int) -> 
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn cbuffer_get_auname(
-    mut cmdidx: cmdidx_T,
-) -> *mut ::core::ffi::c_char {
+unsafe extern "C" fn cbuffer_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
     match cmdidx as ::core::ffi::c_int {
         55 => {
-            return b"cbuffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"cbuffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         69 => {
             return b"cgetbuffer\0".as_ptr() as *const ::core::ffi::c_char
@@ -12625,8 +12369,7 @@ unsafe extern "C" fn cbuffer_get_auname(
                 as *mut ::core::ffi::c_char;
         }
         221 => {
-            return b"lbuffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"lbuffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         237 => {
             return b"lgetbuffer\0".as_ptr() as *const ::core::ffi::c_char
@@ -12656,15 +12399,19 @@ unsafe extern "C" fn cbuffer_process_args(
         return FAIL;
     }
     if (*buf).b_ml.ml_mfp.is_null() {
-        emsg(gettext(&raw const e_buffer_is_not_loaded as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_buffer_is_not_loaded as *const ::core::ffi::c_char,
+        ));
         return FAIL;
     }
     if (*eap).addr_count == 0 as ::core::ffi::c_int {
         (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
         (*eap).line2 = (*buf).b_ml.ml_line_count;
     }
-    if (*eap).line1 < 1 as linenr_T || (*eap).line1 > (*buf).b_ml.ml_line_count
-        || (*eap).line2 < 1 as linenr_T || (*eap).line2 > (*buf).b_ml.ml_line_count
+    if (*eap).line1 < 1 as linenr_T
+        || (*eap).line1 > (*buf).b_ml.ml_line_count
+        || (*eap).line2 < 1 as linenr_T
+        || (*eap).line2 > (*buf).b_ml.ml_line_count
     {
         emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
         return FAIL;
@@ -12684,7 +12431,8 @@ pub unsafe extern "C" fn ex_cbuffer(mut eap: *mut exarg_T) {
             (*curbuf).b_fname,
             true_0 != 0,
             curbuf,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if aborting() {
             return;
@@ -12718,8 +12466,7 @@ pub unsafe extern "C" fn ex_cbuffer(mut eap: *mut exarg_T) {
         ::core::ptr::null_mut::<typval_T>(),
         p_efm,
         (*eap).cmdidx as ::core::ffi::c_int != CMD_caddbuffer as ::core::ffi::c_int
-            && (*eap).cmdidx as ::core::ffi::c_int
-                != CMD_laddbuffer as ::core::ffi::c_int,
+            && (*eap).cmdidx as ::core::ffi::c_int != CMD_laddbuffer as ::core::ffi::c_int,
         (*eap).line1,
         (*eap).line2,
         qf_title,
@@ -12758,8 +12505,7 @@ pub unsafe extern "C" fn ex_cbuffer(mut eap: *mut exarg_T) {
 unsafe extern "C" fn cexpr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
     match cmdidx as ::core::ffi::c_int {
         64 => {
-            return b"cexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"cexpr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         70 => {
             return b"cgetexpr\0".as_ptr() as *const ::core::ffi::c_char
@@ -12770,8 +12516,7 @@ unsafe extern "C" fn cexpr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi:
                 as *mut ::core::ffi::c_char;
         }
         232 => {
-            return b"lexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            return b"lexpr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         238 => {
             return b"lgetexpr\0".as_ptr() as *const ::core::ffi::c_char
@@ -12784,9 +12529,7 @@ unsafe extern "C" fn cexpr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi:
         _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
 }
-unsafe extern "C" fn trigger_cexpr_autocmd(
-    mut cmdidx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn trigger_cexpr_autocmd(mut cmdidx: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let mut au_name: *mut ::core::ffi::c_char = cexpr_get_auname(cmdidx as cmdidx_T);
     if !au_name.is_null()
         && apply_autocmds(
@@ -12795,7 +12538,8 @@ unsafe extern "C" fn trigger_cexpr_autocmd(
             (*curbuf).b_fname,
             true_0 != 0,
             curbuf,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if aborting() {
             return FAIL;
@@ -12826,8 +12570,7 @@ pub unsafe extern "C" fn cexpr_core(
             tv,
             p_efm,
             (*eap).cmdidx as ::core::ffi::c_int != CMD_caddexpr as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int
-                    != CMD_laddexpr as ::core::ffi::c_int,
+                && (*eap).cmdidx as ::core::ffi::c_int != CMD_laddexpr as ::core::ffi::c_int,
             0 as linenr_T,
             0 as linenr_T,
             qf_cmdtitle(*(*eap).cmdlinep),
@@ -12852,8 +12595,7 @@ pub unsafe extern "C" fn cexpr_core(
         }
         if res > 0 as ::core::ffi::c_int
             && ((*eap).cmdidx as ::core::ffi::c_int == CMD_cexpr as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_lexpr as ::core::ffi::c_int)
+                || (*eap).cmdidx as ::core::ffi::c_int == CMD_lexpr as ::core::ffi::c_int)
             && qflist_valid(wp, save_qfid) as ::core::ffi::c_int != 0
         {
             qf_jump_first(qi, save_qfid, (*eap).forceit);
@@ -12861,11 +12603,9 @@ pub unsafe extern "C" fn cexpr_core(
         decr_quickfix_busy();
         return OK;
     } else {
-        emsg(
-            gettext(
-                b"E777: String or List expected\0".as_ptr() as *const ::core::ffi::c_char,
-            ),
-        );
+        emsg(gettext(
+            b"E777: String or List expected\0".as_ptr() as *const ::core::ffi::c_char
+        ));
     }
     return FAIL;
 }
@@ -12908,15 +12648,13 @@ unsafe extern "C" fn hgr_search_file(
         return;
     }
     let mut lnum: linenr_T = 1 as linenr_T;
-    while !vim_fgets(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE, fd) && !got_int
-    {
-        let mut line: *mut ::core::ffi::c_char = &raw mut IObuff
-            as *mut ::core::ffi::c_char;
+    while !vim_fgets(&raw mut IObuff as *mut ::core::ffi::c_char, IOSIZE, fd) && !got_int {
+        let mut line: *mut ::core::ffi::c_char = &raw mut IObuff as *mut ::core::ffi::c_char;
         if vim_regexec(p_regmatch, line, 0 as colnr_T) {
             let mut l: ::core::ffi::c_int = strlen(line) as ::core::ffi::c_int;
             while l > 0 as ::core::ffi::c_int
-                && *line.offset((l - 1 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int <= ' ' as ::core::ffi::c_int
+                && *line.offset((l - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+                    <= ' ' as ::core::ffi::c_int
             {
                 l -= 1;
                 *line.offset(l as isize) = NUL as ::core::ffi::c_char;
@@ -12931,9 +12669,11 @@ unsafe extern "C" fn hgr_search_file(
                 lnum,
                 0 as linenr_T,
                 (*p_regmatch).startp[0 as ::core::ffi::c_int as usize].offset_from(line)
-                    as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
+                    as ::core::ffi::c_int
+                    + 1 as ::core::ffi::c_int,
                 (*p_regmatch).endp[0 as ::core::ffi::c_int as usize].offset_from(line)
-                    as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
+                    as ::core::ffi::c_int
+                    + 1 as ::core::ffi::c_int,
                 false_0 as ::core::ffi::c_char,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),
                 0 as ::core::ffi::c_int,
@@ -12964,18 +12704,21 @@ unsafe extern "C" fn hgr_search_files_in_dir(
     mut lang: *const ::core::ffi::c_char,
 ) {
     let mut fcount: ::core::ffi::c_int = 0;
-    let mut fnames: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut fnames: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     add_pathsep(dirname);
-    strcat(dirname, b"doc/*.\\(txt\\|??x\\)\0".as_ptr() as *const ::core::ffi::c_char);
+    strcat(
+        dirname,
+        b"doc/*.\\(txt\\|??x\\)\0".as_ptr() as *const ::core::ffi::c_char,
+    );
     if gen_expand_wildcards(
         1 as ::core::ffi::c_int,
         &raw mut dirname,
         &raw mut fcount,
         &raw mut fnames,
         EW_FILE as ::core::ffi::c_int | EW_SILENT as ::core::ffi::c_int,
-    ) == OK && fcount > 0 as ::core::ffi::c_int
+    ) == OK
+        && fcount > 0 as ::core::ffi::c_int
     {
         let mut fi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while fi < fcount && !got_int {
@@ -12989,13 +12732,11 @@ unsafe extern "C" fn hgr_search_files_in_dir(
                 ) != 0 as ::core::ffi::c_int
                 && !(strncasecmp(
                     lang as *mut ::core::ffi::c_char,
-                    b"en\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
+                    b"en\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                     2 as ::core::ffi::c_int as size_t,
                 ) == 0 as ::core::ffi::c_int
                     && strncasecmp(
-                        b"txt\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
+                        b"txt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                         (*fnames.offset(fi as isize))
                             .offset(strlen(*fnames.offset(fi as isize)) as isize)
                             .offset(-(3 as ::core::ffi::c_int as isize)),
@@ -13034,7 +12775,8 @@ unsafe extern "C" fn hgr_search_in_rtp(
 pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ql_info;
     '_c2rust_label: {
-        if !qi.is_null() {} else {
+        if !qi.is_null() {
+        } else {
             __assert_fail(
                 b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/quickfix.c\0".as_ptr()
@@ -13044,17 +12786,15 @@ pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
             );
         }
     };
-    let mut au_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut au_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match (*eap).cmdidx as ::core::ffi::c_int {
         178 => {
-            au_name = b"helpgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            au_name =
+                b"helpgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         241 => {
-            au_name = b"lhelpgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            au_name =
+                b"lhelpgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         }
         _ => {}
     }
@@ -13065,7 +12805,8 @@ pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
             (*curbuf).b_fname,
             true_0 != 0,
             curbuf,
-        ) as ::core::ffi::c_int != 0
+        ) as ::core::ffi::c_int
+            != 0
     {
         if aborting() {
             return;
@@ -13136,9 +12877,17 @@ pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
         }
     }
     if !qf_list_empty(qf_get_curlist(qi)) {
-        qf_jump(qi, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int, false_0);
+        qf_jump(
+            qi,
+            0 as ::core::ffi::c_int,
+            0 as ::core::ffi::c_int,
+            false_0,
+        );
     } else {
-        semsg(gettext(&raw const e_nomatch2 as *const ::core::ffi::c_char), (*eap).arg);
+        semsg(
+            gettext(&raw const e_nomatch2 as *const ::core::ffi::c_char),
+            (*eap).arg,
+        );
     }
     decr_quickfix_busy();
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_lhelpgrep as ::core::ffi::c_int {
@@ -13192,9 +12941,7 @@ pub unsafe extern "C" fn f_getloclist(
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
 ) {
-    let mut wp: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     get_qf_loc_list(
         false_0 != 0,
         wp,
@@ -13222,11 +12969,9 @@ unsafe extern "C" fn set_qf_ll_list(
 ) {
     let mut act: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut what_arg: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-    static mut e_invact: *const ::core::ffi::c_char = b"E927: Invalid action: '%s'\0"
-        .as_ptr() as *const ::core::ffi::c_char;
-    let mut title: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    static mut e_invact: *const ::core::ffi::c_char =
+        b"E927: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char;
+    let mut title: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut action: ::core::ffi::c_char = ' ' as ::core::ffi::c_char;
     static mut recursive: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     (*rettv).vval.v_number = -1 as varnumber_T;
@@ -13238,7 +12983,9 @@ unsafe extern "C" fn set_qf_ll_list(
         emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
         return;
     } else if recursive != 0 as ::core::ffi::c_int {
-        emsg(gettext(&raw const e_au_recursive as *const ::core::ffi::c_char));
+        emsg(gettext(
+            &raw const e_au_recursive as *const ::core::ffi::c_char,
+        ));
         return;
     }
     let mut action_arg: *mut typval_T = args.offset(1 as ::core::ffi::c_int as isize);
@@ -13248,7 +12995,9 @@ unsafe extern "C" fn set_qf_ll_list(
         if (*action_arg).v_type as ::core::ffi::c_uint
             != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            emsg(gettext(&raw const e_string_required as *const ::core::ffi::c_char));
+            emsg(gettext(
+                &raw const e_string_required as *const ::core::ffi::c_char,
+            ));
             return;
         }
         act = tv_get_string_chk(action_arg);
@@ -13314,9 +13063,8 @@ pub unsafe extern "C" fn f_setloclist(
     mut fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
-    let mut win: *mut win_T = find_win_by_nr_or_id(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut win: *mut win_T =
+        find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if !win.is_null() {
         set_qf_ll_list(win, argvars.offset(1 as ::core::ffi::c_int as isize), rettv);
     }
@@ -13357,8 +13105,7 @@ pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const BUF_HAS_QF_ENTRY: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const BUF_HAS_LL_ENTRY: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int
-    + 1 as ::core::ffi::c_int;
+pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

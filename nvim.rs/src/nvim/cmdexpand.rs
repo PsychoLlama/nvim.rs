@@ -49,17 +49,12 @@ extern "C" {
         __s2: *const ::core::ffi::c_char,
         __n: size_t,
     ) -> ::core::ffi::c_int;
-    fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn strchr(__s: *const ::core::ffi::c_char, __c: ::core::ffi::c_int)
+        -> *mut ::core::ffi::c_char;
     fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
     fn xmalloc(size: size_t) -> *mut ::core::ffi::c_void;
     fn xfree(ptr: *mut ::core::ffi::c_void);
-    fn xmemdupz(
-        data: *const ::core::ffi::c_void,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    fn xmemdupz(data: *const ::core::ffi::c_void, len: size_t) -> *mut ::core::ffi::c_void;
     fn xmemcpyz(
         dst: *mut ::core::ffi::c_void,
         src: *const ::core::ffi::c_void,
@@ -70,10 +65,7 @@ extern "C" {
         src: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
     fn xstrdup(str: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_arglist_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_arglist_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn expand_get_augroup_name(
         xp: *mut expand_T,
         idx: ::core::ffi::c_int,
@@ -103,18 +95,12 @@ extern "C" {
     static mut p_wic: ::core::ffi::c_int;
     static mut p_wmnu: ::core::ffi::c_int;
     static mut p_wmh: OptInt;
-    fn xstrnsave(
-        string: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut ::core::ffi::c_char;
+    fn xstrnsave(string: *const ::core::ffi::c_char, len: size_t) -> *mut ::core::ffi::c_char;
     fn vim_strsave_escaped(
         string: *const ::core::ffi::c_char,
         esc_chars: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
-    fn strcase_save(
-        orig: *const ::core::ffi::c_char,
-        upper: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn strcase_save(orig: *const ::core::ffi::c_char, upper: bool) -> *mut ::core::ffi::c_char;
     fn vim_strchr(
         string: *const ::core::ffi::c_char,
         c: ::core::ffi::c_int,
@@ -134,10 +120,7 @@ extern "C" {
     fn cstr_as_string(str: *const ::core::ffi::c_char) -> String_0;
     fn api_free_object(value: Object);
     fn api_clear_error(value: *mut Error);
-    fn get_history_arg(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_history_arg(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn update_screen() -> ::core::ffi::c_int;
     fn redraw_statuslines();
     fn win_redraw_last_status(frp: *const frame_T);
@@ -160,14 +143,8 @@ extern "C" {
         arg: *mut ::core::ffi::c_char,
         cmdidx: cmdidx_T,
     );
-    fn get_function_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_expr_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_function_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn get_expr_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     static mut hash_removed: ::core::ffi::c_char;
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
@@ -203,11 +180,7 @@ extern "C" {
     fn msg_advance(col: ::core::ffi::c_int);
     fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T;
     fn tv_list_unref(l: *mut list_T);
-    fn tv_list_append_string(
-        l: *mut list_T,
-        str: *const ::core::ffi::c_char,
-        len: ssize_t,
-    );
+    fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t);
     fn tv_dict_add_list(
         d: *mut dict_T,
         key: *const ::core::ffi::c_char,
@@ -235,14 +208,8 @@ extern "C" {
         idx: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
     fn tv_get_string(tv: *const typval_T) -> *const ::core::ffi::c_char;
-    fn get_user_func_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_user_var_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_user_func_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn get_user_var_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn skip_vimgrep_pat(
         p: *mut ::core::ffi::c_char,
         s: *mut *mut ::core::ffi::c_char,
@@ -254,10 +221,7 @@ extern "C" {
         cmd: *const ::core::ffi::c_char,
         ctx: *mut ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
-    fn skip_cmd_arg(
-        p: *mut ::core::ffi::c_char,
-        rembs: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn skip_cmd_arg(p: *mut ::core::ffi::c_char, rembs: bool) -> *mut ::core::ffi::c_char;
     fn expand_argopt(
         pat: *mut ::core::ffi::c_char,
         xp: *mut expand_T,
@@ -267,10 +231,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
     fn ends_excmd(c: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn find_nextcmd(p: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
-    fn get_command_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_command_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn expand_findfunc(
         pat: *mut ::core::ffi::c_char,
         files: *mut *mut *mut ::core::ffi::c_char,
@@ -285,11 +246,7 @@ extern "C" {
     ) -> bool;
     fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int;
     fn realloc_cmdbuff(len: ::core::ffi::c_int);
-    fn put_on_cmdline(
-        str: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-        redraw: bool,
-    );
+    fn put_on_cmdline(str: *const ::core::ffi::c_char, len: ::core::ffi::c_int, redraw: bool);
     fn redrawcmd();
     fn cursorcmd();
     fn vim_strsave_fnameescape(
@@ -315,11 +272,7 @@ extern "C" {
         funcsort: bool,
     );
     fn ga_clear_strings(gap: *mut garray_T);
-    fn ga_init(
-        gap: *mut garray_T,
-        itemsize: ::core::ffi::c_int,
-        growsize: ::core::ffi::c_int,
-    );
+    fn ga_init(gap: *mut garray_T, itemsize: ::core::ffi::c_int, growsize: ::core::ffi::c_int);
     fn ga_grow(gap: *mut garray_T, n: ::core::ffi::c_int);
     fn ga_concat_len(gap: *mut garray_T, s: *const ::core::ffi::c_char, len: size_t);
     fn ga_append(gap: *mut garray_T, c: uint8_t);
@@ -358,10 +311,7 @@ extern "C" {
         matches: *mut *mut *mut ::core::ffi::c_char,
         keep_lang: bool,
     ) -> ::core::ffi::c_int;
-    fn cleanup_help_tags(
-        num_file: ::core::ffi::c_int,
-        file: *mut *mut ::core::ffi::c_char,
-    );
+    fn cleanup_help_tags(num_file: ::core::ffi::c_int, file: *mut *mut ::core::ffi::c_char);
     fn grid_line_start(view: *mut GridView, row: ::core::ffi::c_int);
     fn grid_line_puts(
         col: ::core::ffi::c_int,
@@ -379,10 +329,7 @@ extern "C" {
     static mut ns_hl_fast: NS;
     static mut hl_attr_active: *mut ::core::ffi::c_int;
     fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const ::core::ffi::c_char);
-    fn get_highlight_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_highlight_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn find_word_end(ptr: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn find_ucmd(
         eap: *mut exarg_T,
@@ -403,22 +350,13 @@ extern "C" {
         xp: *mut expand_T,
         forceit: bool,
     ) -> *const ::core::ffi::c_char;
-    fn get_user_commands(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_user_commands(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn get_user_cmd_addr_type(
         xp: *mut expand_T,
         idx: ::core::ffi::c_int,
     ) -> *mut ::core::ffi::c_char;
-    fn get_user_cmd_flags(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_user_cmd_nargs(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_user_cmd_flags(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn get_user_cmd_nargs(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn get_user_cmd_complete(
         xp: *mut expand_T,
         idx: ::core::ffi::c_int,
@@ -427,9 +365,7 @@ extern "C" {
         expand: ::core::ffi::c_int,
         compl_arg: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_char;
-    fn cmdcomplete_str_to_type(
-        complete_str: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    fn cmdcomplete_str_to_type(complete_str: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
     fn nlua_call_user_expand_func(xp: *mut expand_T, ret_tv: *mut typval_T);
     fn nlua_exec(
         str: String_0,
@@ -474,14 +410,8 @@ extern "C" {
         arg: *mut ::core::ffi::c_char,
         forceit: bool,
     ) -> *mut ::core::ffi::c_char;
-    fn get_menu_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_menu_names(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_menu_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn get_menu_names(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn menu_is_separator(name: *mut ::core::ffi::c_char) -> bool;
     fn get_findfunc() -> *mut ::core::ffi::c_char;
     fn set_context_in_set_cmd(
@@ -522,18 +452,9 @@ extern "C" {
     ) -> size_t;
     fn csh_like_shell() -> ::core::ffi::c_int;
     fn os_isdir(name: *const ::core::ffi::c_char) -> bool;
-    fn get_lang_arg(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_locales(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn expand_env_save_opt(
-        src: *mut ::core::ffi::c_char,
-        one: bool,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_lang_arg(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn get_locales(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn expand_env_save_opt(src: *mut ::core::ffi::c_char, one: bool) -> *mut ::core::ffi::c_char;
     fn vim_getenv(name: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     fn home_replace(
         buf: *const buf_T,
@@ -542,10 +463,7 @@ extern "C" {
         dstlen: size_t,
         one: bool,
     ) -> size_t;
-    fn get_env_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_env_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn get_users(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn match_user(name: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
     static mut pum_want: C2Rust_Unnamed_22;
@@ -582,10 +500,7 @@ extern "C" {
     fn pum_clear();
     fn pum_visible() -> bool;
     fn pum_get_height() -> ::core::ffi::c_int;
-    fn get_profile_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_profile_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn set_context_in_profile_cmd(xp: *mut expand_T, arg: *const ::core::ffi::c_char);
     fn skip_regexp(
         startp: *mut ::core::ffi::c_char,
@@ -597,16 +512,9 @@ extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
-    fn vim_regexec_nl(
-        rmp: *mut regmatch_T,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
+    fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
+        -> bool;
     fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const ::core::ffi::c_char);
     fn ExpandRTDir(
         pat: *mut ::core::ffi::c_char,
@@ -641,10 +549,7 @@ extern "C" {
         pat_use: ::core::ffi::c_int,
         extra_arg: *mut searchit_arg_T,
     ) -> ::core::ffi::c_int;
-    fn get_sign_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_sign_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut ::core::ffi::c_char);
     fn fillchar_status(group: *mut hlf_T, wp: *mut win_T) -> schar_T;
     fn expand_tags(
@@ -659,14 +564,8 @@ extern "C" {
     fn reset_expand_highlight();
     fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const ::core::ffi::c_char);
     fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const ::core::ffi::c_char);
-    fn get_syntax_name(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn get_syntime_arg(
-        xp: *mut expand_T,
-        idx: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
+    fn get_syntax_name(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
+    fn get_syntime_arg(xp: *mut expand_T, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_char;
     fn last_status(morewin: bool);
     fn global_stl_height() -> ::core::ffi::c_int;
 }
@@ -708,9 +607,8 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type ApiDispatchWrapper = Option<
-    unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
->;
+pub type ApiDispatchWrapper =
+    Option<unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Error {
@@ -2501,9 +2399,8 @@ pub const EXPAND_COMMANDS: C2Rust_Unnamed_14 = 1;
 pub const EXPAND_NOTHING: C2Rust_Unnamed_14 = 0;
 pub const EXPAND_OK: C2Rust_Unnamed_14 = -1;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_14 = -2;
-pub type CompleteListItemGetter = Option<
-    unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char,
->;
+pub type CompleteListItemGetter =
+    Option<unsafe extern "C" fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct regmatch_T {
@@ -3463,9 +3360,7 @@ pub const TAG_NAMES: C2Rust_Unnamed_32 = 2;
 pub const TAG_HELP: C2Rust_Unnamed_32 = 1;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub const EXPAND_FILETYPECMD_ONOFF: C2Rust_Unnamed_33 = 4;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
-    ::core::ffi::c_void,
->();
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: Array = Array {
@@ -3477,11 +3372,11 @@ pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 #[inline(always)]
 unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
     if a.lnum != b.lnum {
-        return a.lnum < b.lnum
+        return a.lnum < b.lnum;
     } else if a.col != b.col {
-        return a.col < b.col
+        return a.col < b.col;
     } else {
-        return a.coladd < b.coladd
+        return a.coladd < b.coladd;
     };
 }
 #[inline(always)]
@@ -3490,8 +3385,7 @@ unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
 }
 #[inline(always)]
 unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0
-        || equalpos(a, b) as ::core::ffi::c_int != 0;
+    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
 }
 pub const EX_EXTRA: ::core::ffi::c_uint = 0x4 as ::core::ffi::c_uint;
 pub const EX_XFILE: ::core::ffi::c_uint = 0x8 as ::core::ffi::c_uint;
@@ -3531,22 +3425,17 @@ static mut compl_match_array: *mut pumitem_T = ::core::ptr::null_mut::<pumitem_T
 static mut compl_match_arraysize: ::core::ffi::c_int = 0;
 static mut compl_startcol: ::core::ffi::c_int = 0;
 static mut compl_selected: ::core::ffi::c_int = 0;
-static mut cmdline_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-    ::core::ffi::c_char,
->();
+static mut cmdline_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
 unsafe extern "C" fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
     match (*xp).xp_context {
-        5 | 28 | 29 | 3 | 56 | 2 | 37 | 36 | 59 | 58 | 8 | 55 | 63 | 7 | 52 | 53 | 38
-        | 44 | 51 | 33 | 57 | 6 | 17 | 31 | 32 => return false_0 != 0,
+        5 | 28 | 29 | 3 | 56 | 2 | 37 | 36 | 59 | 58 | 8 | 55 | 63 | 7 | 52 | 53 | 38 | 44 | 51
+        | 33 | 57 | 6 | 17 | 31 | 32 => return false_0 != 0,
         _ => {}
     }
-    return wop_flags & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0;
+    return wop_flags & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
 }
 #[no_mangle]
-pub unsafe extern "C" fn cmdline_fuzzy_complete(
-    fuzzystr: *const ::core::ffi::c_char,
-) -> bool {
+pub unsafe extern "C" fn cmdline_fuzzy_complete(fuzzystr: *const ::core::ffi::c_char) -> bool {
     return wop_flags & kOptWopFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint != 0
         && *fuzzystr as ::core::ffi::c_int != NUL;
 }
@@ -3575,9 +3464,7 @@ unsafe extern "C" fn wildescape(
     mut files: *mut *mut ::core::ffi::c_char,
 ) {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let vse_what: ::core::ffi::c_int = if (*xp).xp_context
-        == EXPAND_BUFFERS as ::core::ffi::c_int
-    {
+    let vse_what: ::core::ffi::c_int = if (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int {
         VSE_BUFFER as ::core::ffi::c_int
     } else {
         VSE_NONE as ::core::ffi::c_int
@@ -3592,20 +3479,17 @@ unsafe extern "C" fn wildescape(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < numfiles {
             if (*xp).xp_backslash & XP_BS_THREE as ::core::ffi::c_int != 0 {
-                let mut pat: *mut ::core::ffi::c_char = (if (*xp).xp_backslash
-                    & XP_BS_COMMA as ::core::ffi::c_int != 0
-                {
-                    b" ,\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b" \0".as_ptr() as *const ::core::ffi::c_char
-                }) as *mut ::core::ffi::c_char;
+                let mut pat: *mut ::core::ffi::c_char =
+                    (if (*xp).xp_backslash & XP_BS_COMMA as ::core::ffi::c_int != 0 {
+                        b" ,\0".as_ptr() as *const ::core::ffi::c_char
+                    } else {
+                        b" \0".as_ptr() as *const ::core::ffi::c_char
+                    }) as *mut ::core::ffi::c_char;
                 p = vim_strsave_escaped(*files.offset(i as isize), pat);
                 xfree(*files.offset(i as isize) as *mut ::core::ffi::c_void);
                 *files.offset(i as isize) = p;
             } else if (*xp).xp_backslash & XP_BS_COMMA as ::core::ffi::c_int != 0 {
-                if !vim_strchr(*files.offset(i as isize), ',' as ::core::ffi::c_int)
-                    .is_null()
-                {
+                if !vim_strchr(*files.offset(i as isize), ',' as ::core::ffi::c_int).is_null() {
                     p = vim_strsave_escaped(
                         *files.offset(i as isize),
                         b",\0".as_ptr() as *const ::core::ffi::c_char,
@@ -3629,7 +3513,8 @@ unsafe extern "C" fn wildescape(
                 && *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '~' as ::core::ffi::c_int
                 && *(*files.offset(i as isize)).offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int == '~' as ::core::ffi::c_int
+                    as ::core::ffi::c_int
+                    == '~' as ::core::ffi::c_int
             {
                 escape_fname(files.offset(i as isize));
             }
@@ -3677,8 +3562,7 @@ pub unsafe extern "C" fn nextwild(
 ) -> ::core::ffi::c_int {
     let ccline: *mut CmdlineInfo = get_cmdline_info();
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut from_wildtrigger_func: bool = options
-        & WILD_FUNC_TRIGGER as ::core::ffi::c_int != 0;
+    let mut from_wildtrigger_func: bool = options & WILD_FUNC_TRIGGER as ::core::ffi::c_int != 0;
     let mut wild_navigate: bool = type_0 == WILD_NEXT as ::core::ffi::c_int
         || type_0 == WILD_PREV as ::core::ffi::c_int
         || type_0 == WILD_PAGEUP as ::core::ffi::c_int
@@ -3686,8 +3570,7 @@ pub unsafe extern "C" fn nextwild(
         || type_0 == WILD_PUM_WANT as ::core::ffi::c_int;
     if (*xp).xp_numfiles == -1 as ::core::ffi::c_int {
         pre_incsearch_pos = (*xp).xp_pre_incsearch_pos;
-        if (*ccline).input_fn != 0
-            && (*ccline).xp_context == EXPAND_COMMANDS as ::core::ffi::c_int
+        if (*ccline).input_fn != 0 && (*ccline).xp_context == EXPAND_COMMANDS as ::core::ffi::c_int
         {
             set_cmd_context(
                 xp,
@@ -3697,8 +3580,7 @@ pub unsafe extern "C" fn nextwild(
                 false_0,
             );
         } else {
-            may_expand_pattern = options & WILD_MAY_EXPAND_PATTERN as ::core::ffi::c_int
-                != 0;
+            may_expand_pattern = options & WILD_MAY_EXPAND_PATTERN as ::core::ffi::c_int != 0;
             set_expand_context(xp);
             may_expand_pattern = false_0 != 0;
         }
@@ -3714,10 +3596,11 @@ pub unsafe extern "C" fn nextwild(
     if (*xp).xp_context == EXPAND_NOTHING as ::core::ffi::c_int {
         return FAIL;
     }
-    let mut i: ::core::ffi::c_int = (*xp).xp_pattern.offset_from((*ccline).cmdbuff)
-        as ::core::ffi::c_int;
+    let mut i: ::core::ffi::c_int =
+        (*xp).xp_pattern.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int;
     '_c2rust_label: {
-        if (*ccline).cmdpos >= i {} else {
+        if (*ccline).cmdpos >= i {
+        } else {
             __assert_fail(
                 b"ccline->cmdpos >= i\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
@@ -3735,7 +3618,9 @@ pub unsafe extern "C" fn nextwild(
     {
         return FAIL;
     }
-    if !cmd_silent && !from_wildtrigger_func && !wild_navigate
+    if !cmd_silent
+        && !from_wildtrigger_func
+        && !wild_navigate
         && !(ui_has(kUICmdline) as ::core::ffi::c_int != 0
             || ui_has(kUIWildmenu) as ::core::ffi::c_int != 0)
     {
@@ -3751,9 +3636,7 @@ pub unsafe extern "C" fn nextwild(
             type_0,
         );
     } else {
-        let mut tmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-            ::core::ffi::c_char,
-        >();
+        let mut tmp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if cmdline_fuzzy_completion_supported(xp) as ::core::ffi::c_int != 0
             || (*xp).xp_context == EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int
         {
@@ -3763,7 +3646,8 @@ pub unsafe extern "C" fn nextwild(
         }
         let use_options: ::core::ffi::c_int = options
             | WILD_HOME_REPLACE as ::core::ffi::c_int
-            | WILD_ADD_SLASH as ::core::ffi::c_int | WILD_SILENT as ::core::ffi::c_int
+            | WILD_ADD_SLASH as ::core::ffi::c_int
+            | WILD_SILENT as ::core::ffi::c_int
             | (if escape as ::core::ffi::c_int != 0 {
                 WILD_ESCAPE as ::core::ffi::c_int
             } else {
@@ -3786,9 +3670,7 @@ pub unsafe extern "C" fn nextwild(
             let mut j: ::core::ffi::c_int = 0;
             j = 0 as ::core::ffi::c_int;
             while (j as size_t) < (*xp).xp_pattern_len {
-                let mut c: ::core::ffi::c_char = *(*ccline)
-                    .cmdbuff
-                    .offset((i + j) as isize);
+                let mut c: ::core::ffi::c_char = *(*ccline).cmdbuff.offset((i + j) as isize);
                 if c as ::core::ffi::c_int == '*' as ::core::ffi::c_int
                     || c as ::core::ffi::c_int == '?' as ::core::ffi::c_int
                 {
@@ -3797,8 +3679,8 @@ pub unsafe extern "C" fn nextwild(
                 j += 1;
             }
             if (strlen(p) as ::core::ffi::c_int) < j {
-                let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut p
-                    as *mut *mut ::core::ffi::c_void;
+                let mut ptr_: *mut *mut ::core::ffi::c_void =
+                    &raw mut p as *mut *mut ::core::ffi::c_void;
                 xfree(*ptr_);
                 *ptr_ = NULL;
                 *ptr_;
@@ -3811,19 +3693,19 @@ pub unsafe extern "C" fn nextwild(
     }
     if !p.is_null() && !got_int && options & WILD_NOSELECT as ::core::ffi::c_int == 0 {
         let mut plen: size_t = strlen(p);
-        let mut difflen: ::core::ffi::c_int = plen as ::core::ffi::c_int
-            - (*xp).xp_pattern_len as ::core::ffi::c_int;
+        let mut difflen: ::core::ffi::c_int =
+            plen as ::core::ffi::c_int - (*xp).xp_pattern_len as ::core::ffi::c_int;
         if (*ccline).cmdlen + difflen + 4 as ::core::ffi::c_int > (*ccline).cmdbufflen {
             realloc_cmdbuff((*ccline).cmdlen + difflen + 4 as ::core::ffi::c_int);
             (*xp).xp_pattern = (*ccline).cmdbuff.offset(i as isize);
         }
         '_c2rust_label_0: {
-            if (*ccline).cmdpos <= (*ccline).cmdlen {} else {
+            if (*ccline).cmdpos <= (*ccline).cmdlen {
+            } else {
                 __assert_fail(
-                    b"ccline->cmdpos <= ccline->cmdlen\0".as_ptr()
+                    b"ccline->cmdpos <= ccline->cmdlen\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
                         as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
                     355 as ::core::ffi::c_uint,
                     b"int nextwild(expand_T *, int, int, _Bool)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -3831,10 +3713,11 @@ pub unsafe extern "C" fn nextwild(
             }
         };
         memmove(
-            (*ccline).cmdbuff.offset(((*ccline).cmdpos + difflen) as isize)
+            (*ccline)
+                .cmdbuff
+                .offset(((*ccline).cmdpos + difflen) as isize)
                 as *mut ::core::ffi::c_void,
-            (*ccline).cmdbuff.offset((*ccline).cmdpos as isize)
-                as *const ::core::ffi::c_void,
+            (*ccline).cmdbuff.offset((*ccline).cmdpos as isize) as *const ::core::ffi::c_void,
             ((*ccline).cmdlen as size_t)
                 .wrapping_sub((*ccline).cmdpos as size_t)
                 .wrapping_add(1 as size_t),
@@ -3855,7 +3738,8 @@ pub unsafe extern "C" fn nextwild(
     if (*xp).xp_numfiles <= 0 as ::core::ffi::c_int && p.is_null() {
         beep_flush();
     } else if (*xp).xp_numfiles == 1 as ::core::ffi::c_int
-        && options & WILD_NOSELECT as ::core::ffi::c_int == 0 && !wild_navigate
+        && options & WILD_NOSELECT as ::core::ffi::c_int == 0
+        && !wild_navigate
     {
         ExpandOne(
             xp,
@@ -3877,7 +3761,8 @@ unsafe extern "C" fn cmdline_pum_create(
     mut noselect: bool,
 ) {
     '_c2rust_label: {
-        if numMatches >= 0 as ::core::ffi::c_int {} else {
+        if numMatches >= 0 as ::core::ffi::c_int {
+        } else {
             __assert_fail(
                 b"numMatches >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
@@ -3888,9 +3773,9 @@ unsafe extern "C" fn cmdline_pum_create(
             );
         }
     };
-    compl_match_array = xmalloc(
-        ::core::mem::size_of::<pumitem_T>().wrapping_mul(numMatches as size_t),
-    ) as *mut pumitem_T;
+    compl_match_array =
+        xmalloc(::core::mem::size_of::<pumitem_T>().wrapping_mul(numMatches as size_t))
+            as *mut pumitem_T;
     compl_match_arraysize = numMatches;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < numMatches {
@@ -3917,9 +3802,7 @@ unsafe extern "C" fn cmdline_pum_create(
     if ui_has(kUICmdline) as ::core::ffi::c_int != 0 && cmdline_win.is_null() {
         compl_startcol = endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int;
     } else {
-        compl_startcol = cmd_screencol(
-            endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int,
-        );
+        compl_startcol = cmd_screencol(endpos.offset_from((*ccline).cmdbuff) as ::core::ffi::c_int);
     };
 }
 #[no_mangle]
@@ -3939,8 +3822,8 @@ pub unsafe extern "C" fn cmdline_pum_active() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn cmdline_pum_remove(mut defer_redraw: bool) {
     pum_undisplay(!defer_redraw);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut compl_match_array
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut compl_match_array as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -3963,8 +3846,7 @@ pub unsafe extern "C" fn cmdline_compl_pattern() -> *mut ::core::ffi::c_char {
 #[no_mangle]
 pub unsafe extern "C" fn cmdline_compl_is_fuzzy() -> bool {
     let mut xp: *mut expand_T = (*get_cmdline_info()).xpc;
-    return !xp.is_null()
-        && cmdline_fuzzy_completion_supported(xp) as ::core::ffi::c_int != 0;
+    return !xp.is_null() && cmdline_fuzzy_completion_supported(xp) as ::core::ffi::c_int != 0;
 }
 unsafe extern "C" fn cmdline_compl_use_pum(mut need_wildmenu: bool) -> bool {
     return need_wildmenu as ::core::ffi::c_int != 0
@@ -3987,10 +3869,10 @@ unsafe extern "C" fn skip_wildmenu_char(
                 == '\t' as ::core::ffi::c_int
                 || *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
-                    && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != NUL)
+                    && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL)
     {
-        if (*xp).xp_shell as ::core::ffi::c_int != 0 && csh_like_shell() != 0
+        if (*xp).xp_shell as ::core::ffi::c_int != 0
+            && csh_like_shell() != 0
             && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '\\' as ::core::ffi::c_int
             && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
@@ -4007,8 +3889,7 @@ unsafe extern "C" fn wildmenu_match_len(
     mut s: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut emenu: ::core::ffi::c_int = ((*xp).xp_context
-        == EXPAND_MENUS as ::core::ffi::c_int
+    let mut emenu: ::core::ffi::c_int = ((*xp).xp_context == EXPAND_MENUS as ::core::ffi::c_int
         || (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int)
         as ::core::ffi::c_int;
     if emenu != 0 && menu_is_separator(s) as ::core::ffi::c_int != 0 {
@@ -4029,13 +3910,9 @@ unsafe extern "C" fn redraw_wildmenu(
     mut showtail: bool,
 ) {
     let mut highlight: bool = true_0 != 0;
-    let mut selstart: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut selstart: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut selstart_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut selend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut selend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     static mut first_match: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut add_left: bool = false_0 != 0;
     let mut i: ::core::ffi::c_int = 0;
@@ -4068,15 +3945,14 @@ unsafe extern "C" fn redraw_wildmenu(
     } else {
         i = first_match;
         while i < match_0 {
-            clen
-                += wildmenu_match_len(
-                    xp,
-                    (if showtail as ::core::ffi::c_int != 0 {
-                        showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
-                    } else {
-                        *matches.offset(i as isize)
-                    }),
-                ) + 2 as ::core::ffi::c_int;
+            clen += wildmenu_match_len(
+                xp,
+                (if showtail as ::core::ffi::c_int != 0 {
+                    showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
+                } else {
+                    *matches.offset(i as isize)
+                }),
+            ) + 2 as ::core::ffi::c_int;
             i += 1;
         }
         if first_match > 0 as ::core::ffi::c_int {
@@ -4087,18 +3963,14 @@ unsafe extern "C" fn redraw_wildmenu(
             clen = 2 as ::core::ffi::c_int;
             i = match_0;
             while i < num_matches {
-                clen
-                    += wildmenu_match_len(
-                        xp,
-                        (if showtail as ::core::ffi::c_int != 0 {
-                            showmatches_gettail(
-                                *matches.offset(i as isize),
-                                false_0 != 0,
-                            )
-                        } else {
-                            *matches.offset(i as isize)
-                        }),
-                    ) + 2 as ::core::ffi::c_int;
+                clen += wildmenu_match_len(
+                    xp,
+                    (if showtail as ::core::ffi::c_int != 0 {
+                        showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
+                    } else {
+                        *matches.offset(i as isize)
+                    }),
+                ) + 2 as ::core::ffi::c_int;
                 if clen >= Columns {
                     break;
                 }
@@ -4111,19 +3983,17 @@ unsafe extern "C" fn redraw_wildmenu(
     }
     if add_left {
         while first_match > 0 as ::core::ffi::c_int {
-            clen
-                += wildmenu_match_len(
-                    xp,
-                    (if showtail as ::core::ffi::c_int != 0 {
-                        showmatches_gettail(
-                            *matches
-                                .offset((first_match - 1 as ::core::ffi::c_int) as isize),
-                            false_0 != 0,
-                        )
-                    } else {
-                        *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize)
-                    }),
-                ) + 2 as ::core::ffi::c_int;
+            clen += wildmenu_match_len(
+                xp,
+                (if showtail as ::core::ffi::c_int != 0 {
+                    showmatches_gettail(
+                        *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize),
+                        false_0 != 0,
+                    )
+                } else {
+                    *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize)
+                }),
+            ) + 2 as ::core::ffi::c_int;
             if clen >= Columns {
                 break;
             }
@@ -4154,7 +4024,9 @@ unsafe extern "C" fn redraw_wildmenu(
             } else {
                 *matches.offset(i as isize)
             }),
-        ) + 2 as ::core::ffi::c_int) < Columns
+        )
+        + 2 as ::core::ffi::c_int)
+        < Columns
     {
         if i == match_0 {
             selstart = buf.offset(len as isize);
@@ -4165,12 +4037,14 @@ unsafe extern "C" fn redraw_wildmenu(
         } else {
             *matches.offset(i as isize)
         };
-        let mut emenu: ::core::ffi::c_int = ((*xp).xp_context
-            == EXPAND_MENUS as ::core::ffi::c_int
+        let mut emenu: ::core::ffi::c_int = ((*xp).xp_context == EXPAND_MENUS as ::core::ffi::c_int
             || (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int)
             as ::core::ffi::c_int;
         if emenu != 0 && menu_is_separator(s) as ::core::ffi::c_int != 0 {
-            strcpy(buf.offset(len as isize), transchar('|' as ::core::ffi::c_int));
+            strcpy(
+                buf.offset(len as isize),
+                transchar('|' as ::core::ffi::c_int),
+            );
             l = strlen(buf.offset(len as isize)) as ::core::ffi::c_int;
             len += l;
             clen += l;
@@ -4311,11 +4185,12 @@ unsafe extern "C" fn get_next_or_prev_match(
         }
     } else {
         '_c2rust_label: {
-            if pum_want.active {} else {
+            if pum_want.active {
+            } else {
                 __assert_fail(
                     b"pum_want.active\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
+                        as *const ::core::ffi::c_char,
                     739 as ::core::ffi::c_uint,
                     b"char *get_next_or_prev_match(int, expand_T *)\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -4356,13 +4231,11 @@ unsafe extern "C" fn get_next_or_prev_match(
         }
     }
     (*xp).xp_selected = findex;
-    return xstrdup(
-        if findex == -1 as ::core::ffi::c_int {
-            (*xp).xp_orig
-        } else {
-            *(*xp).xp_files.offset(findex as isize)
-        },
-    );
+    return xstrdup(if findex == -1 as ::core::ffi::c_int {
+        (*xp).xp_orig
+    } else {
+        *(*xp).xp_files.offset(findex as isize)
+    });
 }
 unsafe extern "C" fn ExpandOne_start(
     mut mode: ::core::ffi::c_int,
@@ -4371,9 +4244,7 @@ unsafe extern "C" fn ExpandOne_start(
     mut options: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let mut non_suf_match: ::core::ffi::c_int = 0;
-    let mut ss: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ss: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if ExpandFromContext(
         xp,
         str,
@@ -4384,7 +4255,10 @@ unsafe extern "C" fn ExpandOne_start(
     {
         if (*xp).xp_numfiles == 0 as ::core::ffi::c_int {
             if options & WILD_SILENT as ::core::ffi::c_int == 0 {
-                semsg(gettext(&raw const e_nomatch2 as *const ::core::ffi::c_char), str);
+                semsg(
+                    gettext(&raw const e_nomatch2 as *const ::core::ffi::c_char),
+                    str,
+                );
             }
         } else {
             ExpandEscape(xp, str, (*xp).xp_numfiles, (*xp).xp_files, options);
@@ -4412,9 +4286,7 @@ unsafe extern "C" fn ExpandOne_start(
                 }
                 if non_suf_match != 1 as ::core::ffi::c_int {
                     if options & WILD_SILENT as ::core::ffi::c_int == 0 {
-                        emsg(
-                            gettext(&raw const e_toomany as *const ::core::ffi::c_char),
-                        );
+                        emsg(gettext(&raw const e_toomany as *const ::core::ffi::c_char));
                     } else if options & WILD_NO_BEEP as ::core::ffi::c_int == 0 {
                         beep_flush();
                     }
@@ -4422,9 +4294,7 @@ unsafe extern "C" fn ExpandOne_start(
                 if !(non_suf_match != 1 as ::core::ffi::c_int
                     && mode == WILD_EXPAND_FREE as ::core::ffi::c_int)
                 {
-                    ss = xstrdup(
-                        *(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize),
-                    );
+                    ss = xstrdup(*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize));
                 }
             }
         }
@@ -4437,23 +4307,18 @@ unsafe extern "C" fn find_longest_match(
 ) -> *mut ::core::ffi::c_char {
     let mut len: size_t = 0 as size_t;
     let mut mb_len: size_t = 0;
-    while *(*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize))
-        .offset(len as isize) != 0
-    {
+    while *(*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize)).offset(len as isize) != 0 {
         mb_len = utfc_ptr2len(
-            (*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize))
-                .offset(len as isize),
+            (*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize)).offset(len as isize),
         ) as size_t;
         let mut c0: ::core::ffi::c_int = utf_ptr2char(
-            (*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize))
-                .offset(len as isize),
+            (*(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize)).offset(len as isize),
         );
         let mut i: ::core::ffi::c_int = 0;
         i = 1 as ::core::ffi::c_int;
         while i < (*xp).xp_numfiles {
-            let mut ci: ::core::ffi::c_int = utf_ptr2char(
-                (*(*xp).xp_files.offset(i as isize)).offset(len as isize),
-            );
+            let mut ci: ::core::ffi::c_int =
+                utf_ptr2char((*(*xp).xp_files.offset(i as isize)).offset(len as isize));
             if p_fic != 0
                 && ((*xp).xp_context == EXPAND_DIRECTORIES as ::core::ffi::c_int
                     || (*xp).xp_context == EXPAND_FILES as ::core::ffi::c_int
@@ -4470,9 +4335,7 @@ unsafe extern "C" fn find_longest_match(
         }
         if i < (*xp).xp_numfiles {
             if options & WILD_NO_BEEP as ::core::ffi::c_int == 0 {
-                vim_beep(
-                    kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint,
-                );
+                vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
             }
             break;
         } else {
@@ -4480,8 +4343,7 @@ unsafe extern "C" fn find_longest_match(
         }
     }
     return xmemdupz(
-        *(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize)
-            as *const ::core::ffi::c_void,
+        *(*xp).xp_files.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
         len,
     ) as *mut ::core::ffi::c_char;
 }
@@ -4493,11 +4355,10 @@ pub unsafe extern "C" fn ExpandOne(
     mut options: ::core::ffi::c_int,
     mut mode: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut ss: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut ss: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut orig_saved: bool = false_0 != 0;
-    if mode == WILD_NEXT as ::core::ffi::c_int || mode == WILD_PREV as ::core::ffi::c_int
+    if mode == WILD_NEXT as ::core::ffi::c_int
+        || mode == WILD_PREV as ::core::ffi::c_int
         || mode == WILD_PAGEUP as ::core::ffi::c_int
         || mode == WILD_PAGEDOWN as ::core::ffi::c_int
         || mode == WILD_PUM_WANT as ::core::ffi::c_int
@@ -4505,26 +4366,21 @@ pub unsafe extern "C" fn ExpandOne(
         return get_next_or_prev_match(mode, xp);
     }
     if mode == WILD_CANCEL as ::core::ffi::c_int {
-        ss = xstrdup(
+        ss = xstrdup(if !(*xp).xp_orig.is_null() {
+            (*xp).xp_orig as *const ::core::ffi::c_char
+        } else {
+            b"\0".as_ptr() as *const ::core::ffi::c_char
+        });
+    } else if mode == WILD_APPLY as ::core::ffi::c_int {
+        ss = xstrdup(if (*xp).xp_selected == -1 as ::core::ffi::c_int {
             if !(*xp).xp_orig.is_null() {
                 (*xp).xp_orig as *const ::core::ffi::c_char
             } else {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-        );
-    } else if mode == WILD_APPLY as ::core::ffi::c_int {
-        ss = xstrdup(
-            if (*xp).xp_selected == -1 as ::core::ffi::c_int {
-                if !(*xp).xp_orig.is_null() {
-                    (*xp).xp_orig as *const ::core::ffi::c_char
-                } else {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                }
-            } else {
-                *(*xp).xp_files.offset((*xp).xp_selected as isize)
-                    as *const ::core::ffi::c_char
-            },
-        );
+            }
+        } else {
+            *(*xp).xp_files.offset((*xp).xp_selected as isize) as *const ::core::ffi::c_char
+        });
     }
     if (*xp).xp_numfiles != -1 as ::core::ffi::c_int
         && mode != WILD_ALL as ::core::ffi::c_int
@@ -4532,8 +4388,8 @@ pub unsafe extern "C" fn ExpandOne(
     {
         FreeWild((*xp).xp_numfiles, (*xp).xp_files);
         (*xp).xp_numfiles = -1 as ::core::ffi::c_int;
-        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*xp).xp_orig
-            as *mut *mut ::core::ffi::c_void;
+        let mut ptr_: *mut *mut ::core::ffi::c_void =
+            &raw mut (*xp).xp_orig as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL;
         *ptr_;
@@ -4558,39 +4414,35 @@ pub unsafe extern "C" fn ExpandOne(
         orig_saved = true_0 != 0;
         ss = ExpandOne_start(mode, xp, str, options);
     }
-    if mode == WILD_LONGEST as ::core::ffi::c_int
-        && (*xp).xp_numfiles > 0 as ::core::ffi::c_int
-    {
+    if mode == WILD_LONGEST as ::core::ffi::c_int && (*xp).xp_numfiles > 0 as ::core::ffi::c_int {
         ss = find_longest_match(xp, options);
         (*xp).xp_selected = -1 as ::core::ffi::c_int;
     }
     if mode == WILD_ALL as ::core::ffi::c_int
-        && (*xp).xp_numfiles > 0 as ::core::ffi::c_int && !got_int
+        && (*xp).xp_numfiles > 0 as ::core::ffi::c_int
+        && !got_int
     {
         let mut ss_size: size_t = 0 as size_t;
-        let mut prefix: *mut ::core::ffi::c_char = b"\0".as_ptr()
-            as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        let mut suffix: *mut ::core::ffi::c_char = (if options
-            & WILD_USE_NL as ::core::ffi::c_int != 0
-        {
-            b"\n\0".as_ptr() as *const ::core::ffi::c_char
-        } else {
-            b" \0".as_ptr() as *const ::core::ffi::c_char
-        }) as *mut ::core::ffi::c_char;
+        let mut prefix: *mut ::core::ffi::c_char =
+            b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        let mut suffix: *mut ::core::ffi::c_char =
+            (if options & WILD_USE_NL as ::core::ffi::c_int != 0 {
+                b"\n\0".as_ptr() as *const ::core::ffi::c_char
+            } else {
+                b" \0".as_ptr() as *const ::core::ffi::c_char
+            }) as *mut ::core::ffi::c_char;
         let n: ::core::ffi::c_int = (*xp).xp_numfiles - 1 as ::core::ffi::c_int;
         if (*xp).xp_prefix as ::core::ffi::c_uint
             == XP_PREFIX_NO as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            prefix = b"no\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            prefix = b"no\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             ss_size = ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                 .wrapping_sub(1 as usize)
                 .wrapping_mul(n as usize) as size_t;
         } else if (*xp).xp_prefix as ::core::ffi::c_uint
             == XP_PREFIX_INV as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            prefix = b"inv\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            prefix = b"inv\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
             ss_size = ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
                 .wrapping_sub(1 as usize)
                 .wrapping_mul(n as usize) as size_t;
@@ -4598,9 +4450,7 @@ pub unsafe extern "C" fn ExpandOne(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*xp).xp_numfiles {
             ss_size = ss_size
-                .wrapping_add(
-                    strlen(*(*xp).xp_files.offset(i as isize)).wrapping_add(1 as size_t),
-                );
+                .wrapping_add(strlen(*(*xp).xp_files.offset(i as isize)).wrapping_add(1 as size_t));
             i += 1;
         }
         ss_size = ss_size.wrapping_add(1);
@@ -4617,23 +4467,22 @@ pub unsafe extern "C" fn ExpandOne(
                 ssp = xstpcpy(ssp, suffix);
             }
             '_c2rust_label: {
-                if ssp < ss.offset(ss_size as isize) {} else {
+                if ssp < ss.offset(ss_size as isize) {
+                } else {
                     __assert_fail(
                         b"ssp < ss + ss_size\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                         995 as ::core::ffi::c_uint,
-                        b"char *ExpandOne(expand_T *, char *, char *, int, int)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                        b"char *ExpandOne(expand_T *, char *, char *, int, int)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
                     );
                 }
             };
             i_0 += 1;
         }
     }
-    if mode == WILD_EXPAND_FREE as ::core::ffi::c_int
-        || mode == WILD_ALL as ::core::ffi::c_int
-    {
+    if mode == WILD_EXPAND_FREE as ::core::ffi::c_int || mode == WILD_ALL as ::core::ffi::c_int {
         ExpandCleanup(xp);
     }
     if !orig_saved {
@@ -4658,16 +4507,16 @@ pub unsafe extern "C" fn ExpandCleanup(mut xp: *mut expand_T) {
         FreeWild((*xp).xp_numfiles, (*xp).xp_files);
         (*xp).xp_numfiles = -1 as ::core::ffi::c_int;
     }
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut (*xp).xp_orig
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut (*xp).xp_orig as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
 }
 #[no_mangle]
 pub unsafe extern "C" fn clear_cmdline_orig() {
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut cmdline_orig
-        as *mut *mut ::core::ffi::c_void;
+    let mut ptr_: *mut *mut ::core::ffi::c_void =
+        &raw mut cmdline_orig as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
     *ptr_ = NULL;
     *ptr_;
@@ -4717,18 +4566,14 @@ unsafe extern "C" fn showmatches_oneline(
                 || (*xp).xp_context == EXPAND_BUFFERS as ::core::ffi::c_int
             {
                 if (*xp).xp_numfiles != -1 as ::core::ffi::c_int {
-                    let mut exp_path: *mut ::core::ffi::c_char = expand_env_save_opt(
-                        *matches.offset(j as isize),
-                        true_0 != 0,
-                    );
+                    let mut exp_path: *mut ::core::ffi::c_char =
+                        expand_env_save_opt(*matches.offset(j as isize), true_0 != 0);
                     let mut path: *mut ::core::ffi::c_char = if !exp_path.is_null() {
                         exp_path
                     } else {
                         *matches.offset(j as isize)
                     };
-                    let mut halved_slash: *mut ::core::ffi::c_char = backslash_halve_save(
-                        path,
-                    );
+                    let mut halved_slash: *mut ::core::ffi::c_char = backslash_halve_save(path);
                     isdir = os_isdir(halved_slash);
                     xfree(exp_path as *mut ::core::ffi::c_void);
                     if halved_slash != path {
@@ -4787,9 +4632,8 @@ pub unsafe extern "C" fn showmatches(
 ) -> ::core::ffi::c_int {
     let ccline: *mut CmdlineInfo = get_cmdline_info();
     let mut numMatches: ::core::ffi::c_int = 0;
-    let mut matches: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        *mut ::core::ffi::c_char,
-    >();
+    let mut matches: *mut *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let mut maxlen: ::core::ffi::c_int = 0;
     let mut lines: ::core::ffi::c_int = 0;
     let mut columns: ::core::ffi::c_int = 0;
@@ -4815,9 +4659,7 @@ pub unsafe extern "C" fn showmatches(
         matches = (*xp).xp_files;
         showtail = cmd_showtail;
     }
-    if cmdline_compl_use_pum(
-        display_wildmenu as ::core::ffi::c_int != 0 && !display_list,
-    ) {
+    if cmdline_compl_use_pum(display_wildmenu as ::core::ffi::c_int != 0 && !display_list) {
         cmdline_pum_create(ccline, xp, matches, numMatches, showtail, noselect);
         compl_selected = if noselect as ::core::ffi::c_int != 0 {
             -1 as ::core::ffi::c_int
@@ -4873,13 +4715,11 @@ pub unsafe extern "C" fn showmatches(
                 );
                 len = vim_strsize(&raw mut NameBuff as *mut ::core::ffi::c_char);
             } else {
-                len = vim_strsize(
-                    if showtail as ::core::ffi::c_int != 0 {
-                        showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
-                    } else {
-                        *matches.offset(i as isize)
-                    },
-                );
+                len = vim_strsize(if showtail as ::core::ffi::c_int != 0 {
+                    showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
+                } else {
+                    *matches.offset(i as isize)
+                });
             }
             maxlen = if maxlen > len { maxlen } else { len };
             i += 1;
@@ -4963,12 +4803,12 @@ unsafe extern "C" fn expand_showtail(mut xp: *mut expand_T) -> bool {
         if rem_backslash(s) {
             s = s.offset(1);
         } else if !vim_strchr(
-                b"*?[\0".as_ptr() as *const ::core::ffi::c_char,
-                *s as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"*?[\0".as_ptr() as *const ::core::ffi::c_char,
+            *s as uint8_t as ::core::ffi::c_int,
+        )
+        .is_null()
         {
-            return false_0 != 0
+            return false_0 != 0;
         }
         s = s.offset(1);
     }
@@ -4980,9 +4820,7 @@ pub unsafe extern "C" fn addstar(
     mut len: size_t,
     mut context: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if context != EXPAND_FILES as ::core::ffi::c_int
         && context != EXPAND_FILES_IN_PATH as ::core::ffi::c_int
         && context != EXPAND_SHELLCMD as ::core::ffi::c_int
@@ -5011,31 +4849,26 @@ pub unsafe extern "C" fn addstar(
             let mut new_len: size_t = len.wrapping_add(2 as size_t);
             let mut i: size_t = 0 as size_t;
             while i < len {
-                if *fname.offset(i as isize) as ::core::ffi::c_int
-                    == '*' as ::core::ffi::c_int
-                    || *fname.offset(i as isize) as ::core::ffi::c_int
-                        == '~' as ::core::ffi::c_int
+                if *fname.offset(i as isize) as ::core::ffi::c_int == '*' as ::core::ffi::c_int
+                    || *fname.offset(i as isize) as ::core::ffi::c_int == '~' as ::core::ffi::c_int
                 {
                     new_len = new_len.wrapping_add(1);
                 }
                 if context == EXPAND_BUFFERS as ::core::ffi::c_int
-                    && *fname.offset(i as isize) as ::core::ffi::c_int
-                        == '.' as ::core::ffi::c_int
+                    && *fname.offset(i as isize) as ::core::ffi::c_int == '.' as ::core::ffi::c_int
                 {
                     new_len = new_len.wrapping_add(1);
                 }
                 if (context == EXPAND_USER_DEFINED as ::core::ffi::c_int
                     || context == EXPAND_USER_LIST as ::core::ffi::c_int)
-                    && *fname.offset(i as isize) as ::core::ffi::c_int
-                        == '\\' as ::core::ffi::c_int
+                    && *fname.offset(i as isize) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
                 {
                     new_len = new_len.wrapping_add(1);
                 }
                 i = i.wrapping_add(1);
             }
             retval = xmalloc(new_len) as *mut ::core::ffi::c_char;
-            *retval.offset(0 as ::core::ffi::c_int as isize) = '^'
-                as ::core::ffi::c_char;
+            *retval.offset(0 as ::core::ffi::c_int as isize) = '^' as ::core::ffi::c_char;
             let mut j: size_t = 1 as size_t;
             let mut i_0: size_t = 0 as size_t;
             while i_0 < len {
@@ -5055,14 +4888,12 @@ pub unsafe extern "C" fn addstar(
                         42 => {
                             let c2rust_fresh6 = j;
                             j = j.wrapping_add(1);
-                            *retval.offset(c2rust_fresh6 as isize) = '.'
-                                as ::core::ffi::c_char;
+                            *retval.offset(c2rust_fresh6 as isize) = '.' as ::core::ffi::c_char;
                         }
                         126 => {
                             let c2rust_fresh7 = j;
                             j = j.wrapping_add(1);
-                            *retval.offset(c2rust_fresh7 as isize) = '\\'
-                                as ::core::ffi::c_char;
+                            *retval.offset(c2rust_fresh7 as isize) = '\\' as ::core::ffi::c_char;
                         }
                         63 => {
                             *retval.offset(j as isize) = '.' as ::core::ffi::c_char;
@@ -5072,8 +4903,8 @@ pub unsafe extern "C" fn addstar(
                             if context == EXPAND_BUFFERS as ::core::ffi::c_int {
                                 let c2rust_fresh8 = j;
                                 j = j.wrapping_add(1);
-                                *retval.offset(c2rust_fresh8 as isize) = '\\'
-                                    as ::core::ffi::c_char;
+                                *retval.offset(c2rust_fresh8 as isize) =
+                                    '\\' as ::core::ffi::c_char;
                             }
                         }
                         92 => {
@@ -5082,8 +4913,8 @@ pub unsafe extern "C" fn addstar(
                             {
                                 let c2rust_fresh9 = j;
                                 j = j.wrapping_add(1);
-                                *retval.offset(c2rust_fresh9 as isize) = '\\'
-                                    as ::core::ffi::c_char;
+                                *retval.offset(c2rust_fresh9 as isize) =
+                                    '\\' as ::core::ffi::c_char;
                             }
                         }
                         _ => {}
@@ -5104,29 +4935,28 @@ pub unsafe extern "C" fn addstar(
         );
         let mut tail: *mut ::core::ffi::c_char = path_tail(retval);
         let mut ends_in_star: ::core::ffi::c_int = (len > 0 as size_t
-            && *retval.offset(len.wrapping_sub(1 as size_t) as isize)
-                as ::core::ffi::c_int == '*' as ::core::ffi::c_int)
+            && *retval.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                == '*' as ::core::ffi::c_int)
             as ::core::ffi::c_int;
         let mut k: ssize_t = len as ssize_t - 2 as ssize_t;
         while k >= 0 as ssize_t {
-            if *retval.offset(k as isize) as ::core::ffi::c_int
-                != '\\' as ::core::ffi::c_int
-            {
+            if *retval.offset(k as isize) as ::core::ffi::c_int != '\\' as ::core::ffi::c_int {
                 break;
             }
             ends_in_star = (ends_in_star == 0) as ::core::ffi::c_int;
             k -= 1;
         }
         if (*retval as ::core::ffi::c_int != '~' as ::core::ffi::c_int || tail != retval)
-            && ends_in_star == 0 && vim_strchr(tail, '$' as ::core::ffi::c_int).is_null()
+            && ends_in_star == 0
+            && vim_strchr(tail, '$' as ::core::ffi::c_int).is_null()
             && vim_strchr(retval, '`' as ::core::ffi::c_int).is_null()
         {
             let c2rust_fresh10 = len;
             len = len.wrapping_add(1);
             *retval.offset(c2rust_fresh10 as isize) = '*' as ::core::ffi::c_char;
         } else if len > 0 as size_t
-            && *retval.offset(len.wrapping_sub(1 as size_t) as isize)
-                as ::core::ffi::c_int == '$' as ::core::ffi::c_int
+            && *retval.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
+                == '$' as ::core::ffi::c_int
         {
             len = len.wrapping_sub(1);
         }
@@ -5154,12 +4984,19 @@ pub unsafe extern "C" fn set_expand_context(mut xp: *mut expand_T) {
     }
     if (*ccline).cmdfirstc != ':' as ::core::ffi::c_int
         && (*ccline).cmdfirstc != '>' as ::core::ffi::c_int
-        && (*ccline).cmdfirstc != '=' as ::core::ffi::c_int && (*ccline).input_fn == 0
+        && (*ccline).cmdfirstc != '=' as ::core::ffi::c_int
+        && (*ccline).input_fn == 0
     {
         (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
         return;
     }
-    set_cmd_context(xp, (*ccline).cmdbuff, (*ccline).cmdlen, (*ccline).cmdpos, true_0);
+    set_cmd_context(
+        xp,
+        (*ccline).cmdbuff,
+        (*ccline).cmdlen,
+        (*ccline).cmdpos,
+        true_0,
+    );
 }
 unsafe extern "C" fn set_cmd_index(
     mut cmd: *const ::core::ffi::c_char,
@@ -5169,7 +5006,8 @@ unsafe extern "C" fn set_cmd_index(
 ) -> *const ::core::ffi::c_char {
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let fuzzy: bool = cmdline_fuzzy_complete(cmd);
-    if !fuzzy && p_ic == 0
+    if !fuzzy
+        && p_ic == 0
         && (*cmd as ::core::ffi::c_int == 'k' as ::core::ffi::c_int
             && *cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 != 'e' as ::core::ffi::c_int)
@@ -5220,10 +5058,10 @@ unsafe extern "C" fn set_cmd_index(
         }
         if p == cmd
             && !vim_strchr(
-                    b"@*!=><&~#\0".as_ptr() as *const ::core::ffi::c_char,
-                    *p as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+                b"@*!=><&~#\0".as_ptr() as *const ::core::ffi::c_char,
+                *p as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             p = p.offset(1);
         }
@@ -5261,20 +5099,19 @@ unsafe extern "C" fn set_cmd_index(
                 >= 'a' as ::core::ffi::c_uint
                 && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
                     <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(
-                *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0)
+            || ascii_isdigit(*p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                as ::core::ffi::c_int
+                != 0)
     {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_SIZE as ::core::ffi::c_int {
         if *cmd as ::core::ffi::c_int == 's' as ::core::ffi::c_int
             && !vim_strchr(
-                    b"cgriI\0".as_ptr() as *const ::core::ffi::c_char,
-                    *cmd.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                        as ::core::ffi::c_int,
-                )
-                .is_null()
+                b"cgriI\0".as_ptr() as *const ::core::ffi::c_char,
+                *cmd.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             (*eap).cmdidx = CMD_substitute;
             p = cmd.offset(1 as ::core::ffi::c_int as isize);
@@ -5326,15 +5163,15 @@ unsafe extern "C" fn set_context_for_wildcard_arg(
                 bow = p.offset(1 as ::core::ffi::c_int as isize);
             }
             in_quote = !in_quote;
-        } else if c == '|' as ::core::ffi::c_int || c == '\n' as ::core::ffi::c_int
+        } else if c == '|' as ::core::ffi::c_int
+            || c == '\n' as ::core::ffi::c_int
             || c == '"' as ::core::ffi::c_int
             || ascii_iswhite(c) as ::core::ffi::c_int != 0
         {
             len = 0 as size_t;
             while *p as ::core::ffi::c_int != NUL {
                 c = utf_ptr2char(p);
-                if c == '`' as ::core::ffi::c_int
-                    || vim_isfilec_or_wc(c) as ::core::ffi::c_int != 0
+                if c == '`' as ::core::ffi::c_int || vim_isfilec_or_wc(c) as ::core::ffi::c_int != 0
                 {
                     break;
                 }
@@ -5357,8 +5194,7 @@ unsafe extern "C" fn set_context_for_wildcard_arg(
     if usefilter as ::core::ffi::c_int != 0
         || !eap.is_null()
             && ((*eap).cmdidx as ::core::ffi::c_int == CMD_bang as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int
-                    == CMD_terminal as ::core::ffi::c_int)
+                || (*eap).cmdidx as ::core::ffi::c_int == CMD_terminal as ::core::ffi::c_int)
         || *complp == EXPAND_SHELLCMDLINE as ::core::ffi::c_int
     {
         (*xp).xp_shell = true_0 != 0;
@@ -5392,9 +5228,8 @@ unsafe extern "C" fn set_context_for_wildcard_arg(
             p = p.offset(1);
         }
         if *p as ::core::ffi::c_int == NUL
-            && p
-                > (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize)
-                    as *const ::core::ffi::c_char
+            && p > (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize)
+                as *const ::core::ffi::c_char
             && match_user((*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize))
                 >= 1 as ::core::ffi::c_int
         {
@@ -5443,8 +5278,7 @@ unsafe extern "C" fn set_context_in_match_cmd(
         if *arg as ::core::ffi::c_int != NUL {
             (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
             arg = skip_regexp(
-                (arg as *mut ::core::ffi::c_char)
-                    .offset(1 as ::core::ffi::c_int as isize),
+                (arg as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
                 *arg as uint8_t as ::core::ffi::c_int,
                 magic_isset() as ::core::ffi::c_int,
             );
@@ -5460,8 +5294,7 @@ unsafe extern "C" fn find_cmd_after_global_cmd(
         arg = arg.offset(1);
     }
     while *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        && *arg.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-            != delim
+        && *arg.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int != delim
     {
         if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == '\\' as ::core::ffi::c_int
@@ -5488,36 +5321,32 @@ unsafe extern "C" fn find_cmd_after_substitute_cmd(
             magic_isset() as ::core::ffi::c_int,
         );
         if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            && *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == delim
+            && *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == delim
         {
             arg = arg.offset(1);
-            while *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != NUL
-                && *arg.offset(0 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int != delim
+            while *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
+                && *arg.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+                    != delim
             {
                 if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                     == '\\' as ::core::ffi::c_int
-                    && *arg.offset(1 as ::core::ffi::c_int as isize)
-                        as ::core::ffi::c_int != NUL
+                    && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
                 {
                     arg = arg.offset(1);
                 }
                 arg = arg.offset(1);
             }
-            if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            {
+            if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
                 arg = arg.offset(1);
             }
         }
     }
     while *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
         && strchr(
-                b"|\"#\0".as_ptr() as *const ::core::ffi::c_char,
-                *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"|\"#\0".as_ptr() as *const ::core::ffi::c_char,
+            *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
+        )
+        .is_null()
     {
         arg = arg.offset(1);
     }
@@ -5535,8 +5364,7 @@ unsafe extern "C" fn find_cmd_after_isearch_cmd(
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     arg = arg.offset(1);
-    while *arg as ::core::ffi::c_int != 0
-        && *arg as ::core::ffi::c_int != '/' as ::core::ffi::c_int
+    while *arg as ::core::ffi::c_int != 0 && *arg as ::core::ffi::c_int != '/' as ::core::ffi::c_int
     {
         if *arg as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
             && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
@@ -5549,14 +5377,14 @@ unsafe extern "C" fn find_cmd_after_isearch_cmd(
         arg = skipwhite(arg.offset(1 as ::core::ffi::c_int as isize));
         if *arg as ::core::ffi::c_int == NUL
             || strchr(
-                    b"|\"\n\0".as_ptr() as *const ::core::ffi::c_char,
-                    *arg as ::core::ffi::c_int,
-                )
-                .is_null()
+                b"|\"\n\0".as_ptr() as *const ::core::ffi::c_char,
+                *arg as ::core::ffi::c_int,
+            )
+            .is_null()
         {
             (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
         } else {
-            return arg
+            return arg;
         }
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5637,10 +5465,16 @@ unsafe extern "C" fn set_context_in_breakadd_cmd(
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
     let mut subcmd_start: *const ::core::ffi::c_char = p;
-    if strncmp(b"file \0".as_ptr() as *const ::core::ffi::c_char, p, 5 as size_t)
-        == 0 as ::core::ffi::c_int
-        || strncmp(b"func \0".as_ptr() as *const ::core::ffi::c_char, p, 5 as size_t)
-            == 0 as ::core::ffi::c_int
+    if strncmp(
+        b"file \0".as_ptr() as *const ::core::ffi::c_char,
+        p,
+        5 as size_t,
+    ) == 0 as ::core::ffi::c_int
+        || strncmp(
+            b"func \0".as_ptr() as *const ::core::ffi::c_char,
+            p,
+            5 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         p = p.offset(4 as ::core::ffi::c_int as isize);
         p = skipwhite(p);
@@ -5663,8 +5497,11 @@ unsafe extern "C" fn set_context_in_breakadd_cmd(
             (*xp).xp_context = EXPAND_USER_FUNC as ::core::ffi::c_int;
         }
         (*xp).xp_pattern = p as *mut ::core::ffi::c_char;
-    } else if strncmp(b"expr \0".as_ptr() as *const ::core::ffi::c_char, p, 5 as size_t)
-        == 0 as ::core::ffi::c_int
+    } else if strncmp(
+        b"expr \0".as_ptr() as *const ::core::ffi::c_char,
+        p,
+        5 as size_t,
+    ) == 0 as ::core::ffi::c_int
     {
         (*xp).xp_context = EXPAND_EXPRESSION as ::core::ffi::c_int;
         (*xp).xp_pattern = skipwhite(p.offset(5 as ::core::ffi::c_int as isize));
@@ -5698,8 +5535,11 @@ unsafe extern "C" fn set_context_in_filetype_cmd(
     }
     let mut val: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     loop {
-        if strncmp(p, b"plugin\0".as_ptr() as *const ::core::ffi::c_char, 6 as size_t)
-            == 0 as ::core::ffi::c_int
+        if strncmp(
+            p,
+            b"plugin\0".as_ptr() as *const ::core::ffi::c_char,
+            6 as size_t,
+        ) == 0 as ::core::ffi::c_int
         {
             val |= EXPAND_FILETYPECMD_PLUGIN as ::core::ffi::c_int;
             p = skipwhite(p.offset(6 as ::core::ffi::c_int as isize));
@@ -5741,8 +5581,7 @@ unsafe extern "C" fn set_context_with_pattern(mut xp: *mut expand_T) {
         &raw mut patlen,
     ) as ::core::ffi::c_int;
     emsg_off -= 1;
-    if retval == 0 || (*ccline).cmdpos <= skiplen || (*ccline).cmdpos > skiplen + patlen
-    {
+    if retval == 0 || (*ccline).cmdpos <= skiplen || (*ccline).cmdpos > skiplen + patlen {
         return;
     }
     (*xp).xp_pattern = (*ccline).cmdbuff.offset(skiplen as isize);
@@ -5759,9 +5598,7 @@ unsafe extern "C" fn set_context_by_cmdname(
     mut context: ::core::ffi::c_int,
     mut forceit: bool,
 ) -> *const ::core::ffi::c_char {
-    let mut nextcmd: *const ::core::ffi::c_char = ::core::ptr::null::<
-        ::core::ffi::c_char,
-    >();
+    let mut nextcmd: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     's_685: {
         match cmdidx as ::core::ffi::c_int {
             158 | 403 | 457 => {
@@ -5785,9 +5622,9 @@ unsafe extern "C" fn set_context_by_cmdname(
                 (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
                 break 's_685;
             }
-            3 | 10 | 26 | 31 | 38 | 40 | 62 | 66 | 97 | 111 | 165 | 164 | 181 | 183 | 209
-            | 207 | 206 | 208 | 228 | 230 | 234 | 255 | 298 | 302 | 369 | 374 | 386 | 407
-            | 453 | 455 | 484 | 502 | 506 | 507 | 528 => return arg,
+            3 | 10 | 26 | 31 | 38 | 40 | 62 | 66 | 97 | 111 | 165 | 164 | 181 | 183 | 209 | 207
+            | 206 | 208 | 228 | 230 | 234 | 255 | 298 | 302 | 369 | 374 | 386 | 407 | 453 | 455
+            | 484 | 502 | 506 | 507 | 528 => return arg,
             157 => return set_context_in_filter_cmd(xp, arg),
             278 => return set_context_in_match_cmd(xp, arg),
             93 => return set_context_in_user_cmd(xp, arg),
@@ -5814,18 +5651,10 @@ unsafe extern "C" fn set_context_by_cmdname(
                 return find_cmd_after_isearch_cmd(xp, arg);
             }
             17 => {
-                return set_context_in_autocmd(
-                    xp,
-                    arg as *mut ::core::ffi::c_char,
-                    false_0 != 0,
-                );
+                return set_context_in_autocmd(xp, arg as *mut ::core::ffi::c_char, false_0 != 0);
             }
             128 | 129 => {
-                return set_context_in_autocmd(
-                    xp,
-                    arg as *mut ::core::ffi::c_char,
-                    true_0 != 0,
-                );
+                return set_context_in_autocmd(xp, arg as *mut ::core::ffi::c_char, true_0 != 0);
             }
             399 => {
                 set_context_in_set_cmd(
@@ -5852,9 +5681,7 @@ unsafe extern "C" fn set_context_by_cmdname(
                 break 's_685;
             }
             451 | 431 | 335 | 262 | 489 | 437 | 343 | 474 | 436 | 338 => {
-                if wop_flags
-                    & kOptWopFlagTagfile as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != 0
+                if wop_flags & kOptWopFlagTagfile as ::core::ffi::c_int as ::core::ffi::c_uint != 0
                 {
                     (*xp).xp_context = EXPAND_TAGS_LISTFILES as ::core::ffi::c_int;
                 } else {
@@ -5872,8 +5699,8 @@ unsafe extern "C" fn set_context_by_cmdname(
                 set_context_in_syntax_cmd(xp, arg);
                 break 's_685;
             }
-            99 | 231 | 187 | 141 | 525 | 167 | 135 | 139 | 151 | 138 | 136 | 53 | 371
-            | 64 | 50 | 70 | 232 | 216 | 238 => {
+            99 | 231 | 187 | 141 | 525 | 167 | 135 | 139 | 151 | 138 | 136 | 53 | 371 | 64 | 50
+            | 70 | 232 | 216 | 238 => {
                 set_context_for_expression(xp, arg as *mut ::core::ffi::c_char, cmdidx);
                 break 's_685;
             }
@@ -5895,15 +5722,13 @@ unsafe extern "C" fn set_context_by_cmdname(
                 set_context_in_sign_cmd(xp, arg as *mut ::core::ffi::c_char);
                 break 's_685;
             }
-            25 | 42 | 41 => {
-                loop {
-                    (*xp).xp_pattern = strchr(arg, ' ' as ::core::ffi::c_int);
-                    if (*xp).xp_pattern.is_null() {
-                        break;
-                    }
-                    arg = (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize);
+            25 | 42 | 41 => loop {
+                (*xp).xp_pattern = strchr(arg, ' ' as ::core::ffi::c_int);
+                if (*xp).xp_pattern.is_null() {
+                    break;
                 }
-            }
+                arg = (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize);
+            },
             20 | 388 | 321 | 75 => {}
             119 | 122 => {
                 (*xp).xp_context = EXPAND_DIFF_BUFFERS as ::core::ffi::c_int;
@@ -5913,8 +5738,8 @@ unsafe extern "C" fn set_context_by_cmdname(
             -1 | -2 => {
                 return set_context_in_user_cmdarg(cmd, arg, argt, context, xp, forceit);
             }
-            275 | 297 | 292 | 295 | 513 | 516 | 308 | 312 | 190 | 193 | 81 | 87 | 246
-            | 249 | 411 | 416 | 539 | 542 => {
+            275 | 297 | 292 | 295 | 513 | 516 | 308 | 312 | 190 | 193 | 81 | 87 | 246 | 249
+            | 411 | 416 | 539 | 542 => {
                 return set_context_in_map_cmd(
                     xp,
                     cmd as *mut ::core::ffi::c_char,
@@ -5963,15 +5788,9 @@ unsafe extern "C" fn set_context_by_cmdname(
                     cmdidx,
                 );
             }
-            279 | 301 | 501 | 5 | 6 | 19 | 294 | 296 | 306 | 515 | 518 | 521 | 310 | 313
-            | 316 | 192 | 195 | 202 | 83 | 89 | 107 | 476 | 477 | 478 | 479 | 490 | 328
-            | 142 => {
-                return set_context_in_menu_cmd(
-                    xp,
-                    cmd,
-                    arg as *mut ::core::ffi::c_char,
-                    forceit,
-                );
+            279 | 301 | 501 | 5 | 6 | 19 | 294 | 296 | 306 | 515 | 518 | 521 | 310 | 313 | 316
+            | 192 | 195 | 202 | 83 | 89 | 107 | 476 | 477 | 478 | 479 | 490 | 328 | 142 => {
+                return set_context_in_menu_cmd(xp, cmd, arg as *mut ::core::ffi::c_char, forceit);
             }
             92 => {
                 (*xp).xp_context = EXPAND_COLORS as ::core::ffi::c_int;
@@ -6115,10 +5934,10 @@ unsafe extern "C" fn set_one_cmd_context(
     let mut cmd: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     cmd = buff;
     while !vim_strchr(
-            b" \t:|\0".as_ptr() as *const ::core::ffi::c_char,
-            *cmd as uint8_t as ::core::ffi::c_int,
-        )
-        .is_null()
+        b" \t:|\0".as_ptr() as *const ::core::ffi::c_char,
+        *cmd as uint8_t as ::core::ffi::c_int,
+    )
+    .is_null()
     {
         cmd = cmd.offset(1);
     }
@@ -6144,12 +5963,7 @@ unsafe extern "C" fn set_one_cmd_context(
     {
         return cmd.offset(1 as ::core::ffi::c_int as isize);
     }
-    let mut p: *const ::core::ffi::c_char = set_cmd_index(
-        cmd,
-        &raw mut ea,
-        xp,
-        &raw mut context,
-    );
+    let mut p: *const ::core::ffi::c_char = set_cmd_index(cmd, &raw mut ea, xp, &raw mut context);
     if p.is_null() {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
@@ -6164,21 +5978,19 @@ unsafe extern "C" fn set_one_cmd_context(
     let mut arg: *const ::core::ffi::c_char = skipwhite(p);
     if ea.argt & EX_ARGOPT as uint32_t != 0 {
         while *arg as ::core::ffi::c_int != NUL
-            && strncmp(arg, b"++\0".as_ptr() as *const ::core::ffi::c_char, 2 as size_t)
-                == 0 as ::core::ffi::c_int
+            && strncmp(
+                arg,
+                b"++\0".as_ptr() as *const ::core::ffi::c_char,
+                2 as size_t,
+            ) == 0 as ::core::ffi::c_int
         {
             p = arg.offset(2 as ::core::ffi::c_int as isize);
-            while *p as ::core::ffi::c_int != 0
-                && !ascii_isspace(*p as ::core::ffi::c_int)
-            {
+            while *p as ::core::ffi::c_int != 0 && !ascii_isspace(*p as ::core::ffi::c_int) {
                 p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
             }
             if *p as ::core::ffi::c_int == NUL {
                 if ea.argt & EX_ARGOPT as uint32_t != 0 {
-                    return set_context_in_argopt(
-                        xp,
-                        arg.offset(2 as ::core::ffi::c_int as isize),
-                    );
+                    return set_context_in_argopt(xp, arg.offset(2 as ::core::ffi::c_int as isize));
                 }
             }
             arg = skipwhite(p);
@@ -6215,7 +6027,8 @@ unsafe extern "C" fn set_one_cmd_context(
         }
         arg = skipwhite(arg);
     }
-    if ea.argt & EX_CMDARG as uint32_t != 0 && !usefilter
+    if ea.argt & EX_CMDARG as uint32_t != 0
+        && !usefilter
         && *arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int
     {
         p = arg.offset(1 as ::core::ffi::c_int as isize);
@@ -6237,9 +6050,7 @@ unsafe extern "C" fn set_one_cmd_context(
         }
         while *p != 0 {
             if *p as ::core::ffi::c_int == Ctrl_V {
-                if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
-                {
+                if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
                     p = p.offset(1);
                 }
             } else if *p as ::core::ffi::c_int == '"' as ::core::ffi::c_int
@@ -6261,12 +6072,13 @@ unsafe extern "C" fn set_one_cmd_context(
             p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
         }
     }
-    if ea.argt & EX_EXTRA as uint32_t == 0 && *arg as ::core::ffi::c_int != NUL
+    if ea.argt & EX_EXTRA as uint32_t == 0
+        && *arg as ::core::ffi::c_int != NUL
         && strchr(
-                b"|\"\0".as_ptr() as *const ::core::ffi::c_char,
-                *arg as ::core::ffi::c_int,
-            )
-            .is_null()
+            b"|\"\0".as_ptr() as *const ::core::ffi::c_char,
+            *arg as ::core::ffi::c_int,
+        )
+        .is_null()
     {
         return ::core::ptr::null::<::core::ffi::c_char>();
     }
@@ -6274,15 +6086,13 @@ unsafe extern "C" fn set_one_cmd_context(
     (*xp).xp_pattern = p as *mut ::core::ffi::c_char;
     len = strlen(buff);
     while *p as ::core::ffi::c_int != 0 && p < buff.offset(len as isize) {
-        if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-            || *p as ::core::ffi::c_int == TAB
+        if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int || *p as ::core::ffi::c_int == TAB
         {
             p = p.offset(1);
             (*xp).xp_pattern = p as *mut ::core::ffi::c_char;
         } else {
             if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != NUL
+                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
             {
                 p = p.offset(1);
             }
@@ -6342,11 +6152,9 @@ pub unsafe extern "C" fn expand_cmdline(
     mut matchcount: *mut ::core::ffi::c_int,
     mut matches: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut file_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut options: ::core::ffi::c_int = WILD_ADD_SLASH as ::core::ffi::c_int
-        | WILD_SILENT as ::core::ffi::c_int;
+    let mut file_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut options: ::core::ffi::c_int =
+        WILD_ADD_SLASH as ::core::ffi::c_int | WILD_SILENT as ::core::ffi::c_int;
     if (*xp).xp_context == EXPAND_UNSUCCESSFUL as ::core::ffi::c_int {
         beep_flush();
         return EXPAND_UNSUCCESSFUL as ::core::ffi::c_int;
@@ -6355,20 +6163,19 @@ pub unsafe extern "C" fn expand_cmdline(
         return EXPAND_NOTHING as ::core::ffi::c_int;
     }
     '_c2rust_label: {
-        if str.offset(col as isize).offset_from((*xp).xp_pattern) >= 0 as isize {} else {
+        if str.offset(col as isize).offset_from((*xp).xp_pattern) >= 0 as isize {
+        } else {
             __assert_fail(
-                b"(str + col) - xp->xp_pattern >= 0\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"(str + col) - xp->xp_pattern >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 2632 as ::core::ffi::c_uint,
-                b"int expand_cmdline(expand_T *, const char *, int, int *, char ***)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                b"int expand_cmdline(expand_T *, const char *, int, int *, char ***)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
             );
         }
     };
-    (*xp).xp_pattern_len = str.offset(col as isize).offset_from((*xp).xp_pattern)
-        as size_t;
+    (*xp).xp_pattern_len = str.offset(col as isize).offset_from((*xp).xp_pattern) as size_t;
     if cmdline_fuzzy_completion_supported(xp) {
         file_str = xstrdup((*xp).xp_pattern);
     } else {
@@ -6409,8 +6216,8 @@ unsafe extern "C" fn expand_files_and_dirs(
                     && *p.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == ' ' as ::core::ffi::c_int
                 {
-                    let mut from: *mut ::core::ffi::c_char = p
-                        .offset(3 as ::core::ffi::c_int as isize);
+                    let mut from: *mut ::core::ffi::c_char =
+                        p.offset(3 as ::core::ffi::c_int as isize);
                     memmove(
                         p as *mut ::core::ffi::c_void,
                         from as *const ::core::ffi::c_void,
@@ -6421,8 +6228,8 @@ unsafe extern "C" fn expand_files_and_dirs(
                     && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == ' ' as ::core::ffi::c_int
                 {
-                    let mut from_0: *mut ::core::ffi::c_char = p
-                        .offset(1 as ::core::ffi::c_int as isize);
+                    let mut from_0: *mut ::core::ffi::c_char =
+                        p.offset(1 as ::core::ffi::c_int as isize);
                     memmove(
                         p as *mut ::core::ffi::c_void,
                         from_0 as *const ::core::ffi::c_void,
@@ -6432,16 +6239,15 @@ unsafe extern "C" fn expand_files_and_dirs(
                 } else if (*xp).xp_backslash & XP_BS_COMMA as ::core::ffi::c_int != 0 {
                     if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '\\' as ::core::ffi::c_int
-                        && *p.offset(2 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int == ',' as ::core::ffi::c_int
+                        && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                            == ',' as ::core::ffi::c_int
                     {
-                        let mut from_1: *mut ::core::ffi::c_char = p
-                            .offset(2 as ::core::ffi::c_int as isize);
+                        let mut from_1: *mut ::core::ffi::c_char =
+                            p.offset(2 as ::core::ffi::c_int as isize);
                         memmove(
                             p as *mut ::core::ffi::c_void,
                             from_1 as *const ::core::ffi::c_void,
-                            (pat_end.offset_from(from_1) as size_t)
-                                .wrapping_add(1 as size_t),
+                            (pat_end.offset_from(from_1) as size_t).wrapping_add(1 as size_t),
                         );
                         pat_end = pat_end.offset(-(2 as ::core::ffi::c_int as isize));
                     }
@@ -6459,11 +6265,10 @@ unsafe extern "C" fn expand_files_and_dirs(
         } else if (*xp).xp_context == EXPAND_FILES_IN_PATH as ::core::ffi::c_int {
             flags |= EW_FILE as ::core::ffi::c_int | EW_PATH as ::core::ffi::c_int;
         } else if (*xp).xp_context == EXPAND_DIRS_IN_CDPATH as ::core::ffi::c_int {
-            flags = (flags | EW_DIR as ::core::ffi::c_int
-                | EW_CDPATH as ::core::ffi::c_int) & !(EW_FILE as ::core::ffi::c_int);
-        } else {
-            flags = (flags | EW_DIR as ::core::ffi::c_int)
+            flags = (flags | EW_DIR as ::core::ffi::c_int | EW_CDPATH as ::core::ffi::c_int)
                 & !(EW_FILE as ::core::ffi::c_int);
+        } else {
+            flags = (flags | EW_DIR as ::core::ffi::c_int) & !(EW_FILE as ::core::ffi::c_int);
         }
         if options & WILD_ICASE as ::core::ffi::c_int != 0 {
             flags |= EW_ICASE as ::core::ffi::c_int;
@@ -6487,10 +6292,8 @@ unsafe extern "C" fn get_filetypecmd_arg(
         && idx < 4 as ::core::ffi::c_int
     {
         let mut opts_all: [*mut ::core::ffi::c_char; 4] = [
-            b"indent\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            b"plugin\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"plugin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"on\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"off\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ];
@@ -6501,8 +6304,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
         && idx < 3 as ::core::ffi::c_int
     {
         let mut opts_plugin: [*mut ::core::ffi::c_char; 3] = [
-            b"plugin\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"plugin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"on\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"off\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ];
@@ -6513,8 +6315,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
         && idx < 3 as ::core::ffi::c_int
     {
         let mut opts_indent: [*mut ::core::ffi::c_char; 3] = [
-            b"indent\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"on\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             b"off\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         ];
@@ -6546,7 +6347,7 @@ unsafe extern "C" fn get_breakadd_arg(
         if breakpt_expand_what as ::core::ffi::c_uint
             == EXP_BREAKPT_ADD as ::core::ffi::c_int as ::core::ffi::c_uint
         {
-            return opts[idx as usize]
+            return opts[idx as usize];
         } else if breakpt_expand_what as ::core::ffi::c_uint
             == EXP_BREAKPT_DEL as ::core::ffi::c_int as ::core::ffi::c_uint
         {
@@ -6554,7 +6355,7 @@ unsafe extern "C" fn get_breakadd_arg(
                 return opts[(idx + 1 as ::core::ffi::c_int) as usize];
             }
         } else if idx <= 1 as ::core::ffi::c_int {
-            return opts[(idx + 1 as ::core::ffi::c_int) as usize]
+            return opts[(idx + 1 as ::core::ffi::c_int) as usize];
         }
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6584,8 +6385,7 @@ unsafe extern "C" fn get_retab_arg(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
-        return b"-indentonly\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"-indentonly\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -6594,8 +6394,7 @@ unsafe extern "C" fn get_messages_arg(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
-        return b"clear\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -6604,8 +6403,7 @@ unsafe extern "C" fn get_mapclear_arg(
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
-        return b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char;
+        return b"<buffer>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -6626,10 +6424,9 @@ unsafe extern "C" fn get_healthcheck_names(
         };
         let mut res: Object = nlua_exec(
             String_0 {
-                data: b"return vim.health._complete()\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 30]>()
-                    .wrapping_sub(1 as size_t),
+                data: b"return vim.health._complete()\0".as_ptr() as *const ::core::ffi::c_char
+                    as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 30]>().wrapping_sub(1 as size_t),
             },
             ::core::ptr::null::<::core::ffi::c_char>(),
             a,
@@ -6648,7 +6445,10 @@ unsafe extern "C" fn get_healthcheck_names(
         && (*names.data.array.items.offset(idx as isize)).type_0 as ::core::ffi::c_uint
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return (*names.data.array.items.offset(idx as isize)).data.string.data;
+        return (*names.data.array.items.offset(idx as isize))
+            .data
+            .string
+            .data;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -6660,9 +6460,8 @@ unsafe extern "C" fn get_lsp_arg(
         type_0: kObjectTypeNil,
         data: C2Rust_Unnamed { boolean: false },
     };
-    static mut last_xp_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    static mut last_xp_line: *mut ::core::ffi::c_char =
+        ::core::ptr::null_mut::<::core::ffi::c_char>();
     static mut last_gen: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
     if last_xp_line.is_null()
         || strcmp(last_xp_line, (*xp).xp_line) != 0 as ::core::ffi::c_int
@@ -6693,8 +6492,7 @@ unsafe extern "C" fn get_lsp_arg(
             String_0 {
                 data: b"return require'vim._core.ex_cmd'.lsp_complete(...)\0".as_ptr()
                     as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                size: ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
-                    .wrapping_sub(1 as size_t),
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 51]>().wrapping_sub(1 as size_t),
             },
             ::core::ptr::null::<::core::ffi::c_char>(),
             args,
@@ -6713,7 +6511,10 @@ unsafe extern "C" fn get_lsp_arg(
         && (*names.data.array.items.offset(idx as isize)).type_0 as ::core::ffi::c_uint
             == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        return (*names.data.array.items.offset(idx as isize)).data.string.data;
+        return (*names.data.array.items.offset(idx as isize))
+            .data
+            .string
+            .data;
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
@@ -7124,14 +6925,12 @@ unsafe extern "C" fn ExpandOther(
     ];
     let mut ret: ::core::ffi::c_int = FAIL;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i
-        < ::core::mem::size_of::<[expgen; 33]>()
-            .wrapping_div(::core::mem::size_of::<expgen>())
-            .wrapping_div(
-                (::core::mem::size_of::<[expgen; 33]>()
-                    .wrapping_rem(::core::mem::size_of::<expgen>()) == 0)
-                    as ::core::ffi::c_int as usize,
-            ) as ::core::ffi::c_int
+    while i < ::core::mem::size_of::<[expgen; 33]>()
+        .wrapping_div(::core::mem::size_of::<expgen>())
+        .wrapping_div(
+            (::core::mem::size_of::<[expgen; 33]>().wrapping_rem(::core::mem::size_of::<expgen>())
+                == 0) as ::core::ffi::c_int as usize,
+        ) as ::core::ffi::c_int
     {
         if (*xp).xp_context == tab[i as usize].context {
             if tab[i as usize].ic != 0 {
@@ -7253,8 +7052,7 @@ unsafe extern "C" fn ExpandFromContext(
     }
     if (*xp).xp_context == EXPAND_COLORS as ::core::ffi::c_int {
         let mut directories: [*mut ::core::ffi::c_char; 2] = [
-            b"colors\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"colors\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ];
         return ExpandRTDir(
@@ -7267,8 +7065,7 @@ unsafe extern "C" fn ExpandFromContext(
     }
     if (*xp).xp_context == EXPAND_COMPILER as ::core::ffi::c_int {
         let mut directories_0: [*mut ::core::ffi::c_char; 2] = [
-            b"compiler\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"compiler\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ];
         return ExpandRTDir(
@@ -7281,8 +7078,7 @@ unsafe extern "C" fn ExpandFromContext(
     }
     if (*xp).xp_context == EXPAND_OWNSYNTAX as ::core::ffi::c_int {
         let mut directories_1: [*mut ::core::ffi::c_char; 2] = [
-            b"syntax\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ];
         return ExpandRTDir(
@@ -7295,12 +7091,9 @@ unsafe extern "C" fn ExpandFromContext(
     }
     if (*xp).xp_context == EXPAND_FILETYPE as ::core::ffi::c_int {
         let mut directories_2: [*mut ::core::ffi::c_char; 4] = [
-            b"syntax\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            b"indent\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            b"ftplugin\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"ftplugin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ];
         return ExpandRTDir(
@@ -7313,8 +7106,7 @@ unsafe extern "C" fn ExpandFromContext(
     }
     if (*xp).xp_context == EXPAND_KEYMAP as ::core::ffi::c_int {
         let mut directories_3: [*mut ::core::ffi::c_char; 2] = [
-            b"keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
+            b"keymap\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
         ];
         return ExpandRTDir(
@@ -7340,12 +7132,13 @@ unsafe extern "C" fn ExpandFromContext(
     if (*xp).xp_context == EXPAND_PATTERN_IN_BUF as ::core::ffi::c_int {
         return expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, numMatches);
     }
-    let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if (*xp).xp_context == EXPAND_USER_FUNC as ::core::ffi::c_int
-        && strncmp(pat, b"^s:\0".as_ptr() as *const ::core::ffi::c_char, 3 as size_t)
-            == 0 as ::core::ffi::c_int
+        && strncmp(
+            pat,
+            b"^s:\0".as_ptr() as *const ::core::ffi::c_char,
+            3 as size_t,
+        ) == 0 as ::core::ffi::c_int
     {
         let len: size_t = strlen(pat).wrapping_add(20 as size_t);
         tofree = xmalloc(len) as *mut ::core::ffi::c_char;
@@ -7433,18 +7226,18 @@ pub unsafe extern "C" fn ExpandGeneric(
     }
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     loop {
-        let mut str: *mut ::core::ffi::c_char = Some(
-                func.expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(xp, i);
+        let mut str: *mut ::core::ffi::c_char = Some(func.expect("non-null function pointer"))
+            .expect("non-null function pointer")(
+            xp, i
+        );
         if str.is_null() {
             break;
         }
         if *str as ::core::ffi::c_int != NUL {
             let mut match_0: bool = false;
             let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            if *(*xp).xp_pattern.offset(0 as ::core::ffi::c_int as isize)
-                as ::core::ffi::c_int != NUL
+            if *(*xp).xp_pattern.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                != NUL
             {
                 if !fuzzy {
                     match_0 = vim_regexec(regmatch, str, 0 as colnr_T);
@@ -7466,16 +7259,16 @@ pub unsafe extern "C" fn ExpandGeneric(
                 }
                 if fuzzy {
                     ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) = fuzmatch_str_T {
-                        idx: ga.ga_len,
-                        str: str,
-                        score: score,
-                    };
+                    *(ga.ga_data as *mut fuzmatch_str_T).offset(ga.ga_len as isize) =
+                        fuzmatch_str_T {
+                            idx: ga.ga_len,
+                            str: str,
+                            score: score,
+                        };
                     ga.ga_len += 1;
                 } else {
                     ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                        .offset(ga.ga_len as isize) = str;
+                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = str;
                     ga.ga_len += 1;
                 }
                 if func
@@ -7484,7 +7277,8 @@ pub unsafe extern "C" fn ExpandGeneric(
                             as unsafe extern "C" fn(
                                 *mut expand_T,
                                 ::core::ffi::c_int,
-                            ) -> *mut ::core::ffi::c_char,
+                            )
+                                -> *mut ::core::ffi::c_char,
                     )
                 {
                     str = str.offset(strlen(str).wrapping_sub(1 as size_t) as isize);
@@ -7580,8 +7374,7 @@ unsafe extern "C" fn expand_shellcmd_onedir(
                 );
                 let c2rust_fresh2 = (*gap).ga_len;
                 (*gap).ga_len = (*gap).ga_len + 1;
-                let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data
-                    as *mut *mut ::core::ffi::c_char)
+                let c2rust_lvalue_ptr = &raw mut *((*gap).ga_data as *mut *mut ::core::ffi::c_char)
                     .offset(c2rust_fresh2 as isize);
                 *c2rust_lvalue_ptr = name;
                 hash_add_item(ht, hi, name, hash);
@@ -7599,9 +7392,7 @@ unsafe extern "C" fn expand_shellcmd(
     mut numMatches: *mut ::core::ffi::c_int,
     mut flagsarg: ::core::ffi::c_int,
 ) {
-    let mut path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut path: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut ga: garray_T = garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -7609,21 +7400,17 @@ unsafe extern "C" fn expand_shellcmd(
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    let mut buf: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut buf: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     let mut flags: ::core::ffi::c_int = flagsarg;
     let mut did_curdir: bool = false_0 != 0;
     let mut patlen: size_t = strlen(filepat);
-    let mut pat: *mut ::core::ffi::c_char = xmemdupz(
-        filepat as *const ::core::ffi::c_void,
-        patlen,
-    ) as *mut ::core::ffi::c_char;
+    let mut pat: *mut ::core::ffi::c_char =
+        xmemdupz(filepat as *const ::core::ffi::c_void, patlen) as *mut ::core::ffi::c_char;
     let mut e: *mut ::core::ffi::c_char = pat.offset(patlen as isize);
     let mut s: *mut ::core::ffi::c_char = pat;
     while *s as ::core::ffi::c_int != NUL {
         if *s as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-            let mut p: *mut ::core::ffi::c_char = s
-                .offset(1 as ::core::ffi::c_int as isize);
+            let mut p: *mut ::core::ffi::c_char = s.offset(1 as ::core::ffi::c_int as isize);
             if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
                 memmove(
                     s as *mut ::core::ffi::c_void,
@@ -7636,20 +7423,20 @@ unsafe extern "C" fn expand_shellcmd(
         s = s.offset(1);
     }
     patlen = e.offset_from(pat) as size_t;
-    flags
-        |= EW_FILE as ::core::ffi::c_int | EW_EXEC as ::core::ffi::c_int
-            | EW_SHELLCMD as ::core::ffi::c_int;
+    flags |= EW_FILE as ::core::ffi::c_int
+        | EW_EXEC as ::core::ffi::c_int
+        | EW_SHELLCMD as ::core::ffi::c_int;
     let mut mustfree: bool = false_0 != 0;
     if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '.' as ::core::ffi::c_int
-        && (vim_ispathsep(
-            *pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int != 0
+        && (vim_ispathsep(*pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+            as ::core::ffi::c_int
+            != 0
             || *pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '.' as ::core::ffi::c_int
-                && vim_ispathsep(
-                    *pat.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int != 0)
+                && vim_ispathsep(*pat.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+                    as ::core::ffi::c_int
+                    != 0)
     {
         path = b".\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
     } else {
@@ -7657,8 +7444,7 @@ unsafe extern "C" fn expand_shellcmd(
             path = vim_getenv(b"PATH\0".as_ptr() as *const ::core::ffi::c_char);
         }
         if path.is_null() {
-            path = b"\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
+            path = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         } else {
             mustfree = true_0 != 0;
         }
@@ -7709,13 +7495,15 @@ unsafe extern "C" fn expand_shellcmd(
                 flags &= !(EW_DIR as ::core::ffi::c_int);
             }
             seplen = (if after_pathsep(s_0, e) == 0 {
-                ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                    .wrapping_sub(1 as usize)
+                ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as usize)
             } else {
                 0 as usize
             }) as size_t;
         }
-        if pathlen.wrapping_add(seplen).wrapping_add(patlen).wrapping_add(1 as size_t)
+        if pathlen
+            .wrapping_add(seplen)
+            .wrapping_add(patlen)
+            .wrapping_add(1 as size_t)
             <= MAXPATHL as size_t
         {
             if pathlen > 0 as size_t {
@@ -7727,8 +7515,7 @@ unsafe extern "C" fn expand_shellcmd(
                 if seplen > 0 as size_t {
                     xmemcpyz(
                         buf.offset(pathlen as isize) as *mut ::core::ffi::c_void,
-                        b"/\0".as_ptr() as *const ::core::ffi::c_char
-                            as *const ::core::ffi::c_void,
+                        b"/\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
                         ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                             .wrapping_sub(1 as size_t),
                     );
@@ -7777,8 +7564,8 @@ unsafe extern "C" fn call_user_expand_func(
     }; 4];
     let save_current_sctx: sctx_T = current_sctx;
     if (*xp).xp_arg.is_null()
-        || *(*xp).xp_arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == NUL || (*xp).xp_line.is_null()
+        || *(*xp).xp_arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
+        || (*xp).xp_line.is_null()
     {
         return NULL;
     }
@@ -7786,10 +7573,7 @@ unsafe extern "C" fn call_user_expand_func(
         keep = *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize);
         *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = 0 as ::core::ffi::c_char;
     }
-    let mut pat: *mut ::core::ffi::c_char = xstrnsave(
-        (*xp).xp_pattern,
-        (*xp).xp_pattern_len,
-    );
+    let mut pat: *mut ::core::ffi::c_char = xstrnsave((*xp).xp_pattern, (*xp).xp_pattern_len);
     args[0 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
     args[1 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
     args[2 as ::core::ffi::c_int as usize].v_type = VAR_NUMBER;
@@ -7798,10 +7582,11 @@ unsafe extern "C" fn call_user_expand_func(
     args[1 as ::core::ffi::c_int as usize].vval.v_string = (*xp).xp_line;
     args[2 as ::core::ffi::c_int as usize].vval.v_number = (*xp).xp_col as varnumber_T;
     current_sctx = (*xp).xp_script_ctx;
-    let ret: *mut ::core::ffi::c_void = user_expand_func
-        .expect(
-            "non-null function pointer",
-        )((*xp).xp_arg, 3 as ::core::ffi::c_int, &raw mut args as *mut typval_T);
+    let ret: *mut ::core::ffi::c_void = user_expand_func.expect("non-null function pointer")(
+        (*xp).xp_arg,
+        3 as ::core::ffi::c_int,
+        &raw mut args as *mut typval_T,
+    );
     current_sctx = save_current_sctx;
     if !(*ccline).cmdbuff.is_null() {
         *(*ccline).cmdbuff.offset((*ccline).cmdlen as isize) = keep;
@@ -7864,9 +7649,7 @@ unsafe extern "C" fn ExpandUserDefined(
         *e = NUL as ::core::ffi::c_char;
         let mut match_0: bool = false;
         let mut score: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if *(*xp).xp_pattern.offset(0 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int != NUL
-        {
+        if *(*xp).xp_pattern.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
             if !fuzzy {
                 match_0 = vim_regexec(regmatch, s, 0 as colnr_T);
             } else {
@@ -7878,14 +7661,12 @@ unsafe extern "C" fn ExpandUserDefined(
         }
         *e = keep;
         if match_0 {
-            let mut p: *mut ::core::ffi::c_char = xmemdupz(
-                s as *const ::core::ffi::c_void,
-                e.offset_from(s) as size_t,
-            ) as *mut ::core::ffi::c_char;
+            let mut p: *mut ::core::ffi::c_char =
+                xmemdupz(s as *const ::core::ffi::c_void, e.offset_from(s) as size_t)
+                    as *mut ::core::ffi::c_char;
             if !fuzzy {
                 ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                    .offset(ga.ga_len as isize) = p;
+                *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = p;
                 ga.ga_len += 1;
             } else {
                 ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
@@ -7947,8 +7728,7 @@ unsafe extern "C" fn process_user_list(
             {
                 let mut p: *mut ::core::ffi::c_char = xstrdup((*li).li_tv.vval.v_string);
                 ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                *(ga.ga_data as *mut *mut ::core::ffi::c_char)
-                    .offset(ga.ga_len as isize) = p;
+                *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = p;
                 ga.ga_len += 1;
             }
             li = (*li).li_next;
@@ -7993,8 +7773,7 @@ unsafe extern "C" fn ExpandUserLua(
         vval: typval_vval_union { v_number: 0 },
     };
     nlua_call_user_expand_func(xp, &raw mut rettv);
-    if rettv.v_type as ::core::ffi::c_uint
-        != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
+    if rettv.v_type as ::core::ffi::c_uint != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         tv_clear(&raw mut rettv);
         return FAIL;
@@ -8011,8 +7790,7 @@ pub unsafe extern "C" fn globpath(
     mut expand_options: ::core::ffi::c_int,
     mut dirs: bool,
 ) {
-    let mut buf: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t)
-        as *mut ::core::ffi::c_char;
+    let mut buf: *mut ::core::ffi::c_char = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
     let mut xpc: expand_T = expand_T {
         xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         xp_context: 0,
@@ -8063,16 +7841,17 @@ pub unsafe extern "C" fn globpath(
         } else {
             0 as size_t
         };
-        if pathlen.wrapping_add(seplen).wrapping_add(filelen).wrapping_add(1 as size_t)
+        if pathlen
+            .wrapping_add(seplen)
+            .wrapping_add(filelen)
+            .wrapping_add(1 as size_t)
             <= MAXPATHL as size_t
         {
             if seplen > 0 as size_t {
                 xmemcpyz(
                     buf.offset(pathlen as isize) as *mut ::core::ffi::c_void,
-                    b"/\0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                        .wrapping_sub(1 as size_t),
+                    b"/\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
                 );
                 pathlen = pathlen.wrapping_add(seplen);
             }
@@ -8081,9 +7860,8 @@ pub unsafe extern "C" fn globpath(
                 file as *const ::core::ffi::c_void,
                 filelen,
             );
-            let mut p: *mut *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-                *mut ::core::ffi::c_char,
-            >();
+            let mut p: *mut *mut ::core::ffi::c_char =
+                ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
             let mut num_p: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             ExpandFromContext(
                 &raw mut xpc,
@@ -8123,7 +7901,8 @@ pub unsafe extern "C" fn wildmenu_translate_key(
 ) -> ::core::ffi::c_int {
     let mut c: ::core::ffi::c_int = key;
     if cmdline_pum_active() as ::core::ffi::c_int != 0
-        || did_wild_list as ::core::ffi::c_int != 0 || wild_menu_showing != 0
+        || did_wild_list as ::core::ffi::c_int != 0
+        || wild_menu_showing != 0
     {
         if c == K_LEFT {
             c = Ctrl_P;
@@ -8133,30 +7912,32 @@ pub unsafe extern "C" fn wildmenu_translate_key(
     }
     if (*xp).xp_context == EXPAND_MENUNAMES as ::core::ffi::c_int
         && (*cclp).cmdpos > 1 as ::core::ffi::c_int
-        && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 1 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-        && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 2 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
-        && (c == '\n' as ::core::ffi::c_int || c == '\r' as ::core::ffi::c_int
-            || c == K_KENTER)
+        && *(*cclp)
+            .cmdbuff
+            .offset(((*cclp).cmdpos - 1 as ::core::ffi::c_int) as isize)
+            as ::core::ffi::c_int
+            == '.' as ::core::ffi::c_int
+        && *(*cclp)
+            .cmdbuff
+            .offset(((*cclp).cmdpos - 2 as ::core::ffi::c_int) as isize)
+            as ::core::ffi::c_int
+            != '\\' as ::core::ffi::c_int
+        && (c == '\n' as ::core::ffi::c_int || c == '\r' as ::core::ffi::c_int || c == K_KENTER)
     {
         c = K_DOWN;
     }
     return c;
 }
-unsafe extern "C" fn cmdline_del(
-    mut cclp: *mut CmdlineInfo,
-    mut from: ::core::ffi::c_int,
-) {
+unsafe extern "C" fn cmdline_del(mut cclp: *mut CmdlineInfo, mut from: ::core::ffi::c_int) {
     '_c2rust_label: {
-        if (*cclp).cmdpos <= (*cclp).cmdlen {} else {
+        if (*cclp).cmdpos <= (*cclp).cmdlen {
+        } else {
             __assert_fail(
                 b"cclp->cmdpos <= cclp->cmdlen\0".as_ptr() as *const ::core::ffi::c_char,
                 b"/home/overlord/projects/neovim/neovim/src/nvim/cmdexpand.c\0".as_ptr()
                     as *const ::core::ffi::c_char,
                 3650 as ::core::ffi::c_uint,
-                b"void cmdline_del(CmdlineInfo *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"void cmdline_del(CmdlineInfo *, int)\0".as_ptr() as *const ::core::ffi::c_char,
             );
         }
     };
@@ -8175,16 +7956,20 @@ unsafe extern "C" fn wildmenu_process_key_menunames(
     mut key: ::core::ffi::c_int,
     mut xp: *mut expand_T,
 ) -> ::core::ffi::c_int {
-    if key == K_DOWN && (*cclp).cmdpos > 0 as ::core::ffi::c_int
-        && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 1 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int == '.' as ::core::ffi::c_int
+    if key == K_DOWN
+        && (*cclp).cmdpos > 0 as ::core::ffi::c_int
+        && *(*cclp)
+            .cmdbuff
+            .offset(((*cclp).cmdpos - 1 as ::core::ffi::c_int) as isize)
+            as ::core::ffi::c_int
+            == '.' as ::core::ffi::c_int
     {
         key = p_wc as ::core::ffi::c_int;
         KeyTyped = true_0 != 0;
     } else if key == K_UP {
         let mut found: bool = false_0 != 0;
-        let mut j: ::core::ffi::c_int = (*xp).xp_pattern.offset_from((*cclp).cmdbuff)
-            as ::core::ffi::c_int;
+        let mut j: ::core::ffi::c_int =
+            (*xp).xp_pattern.offset_from((*cclp).cmdbuff) as ::core::ffi::c_int;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         loop {
             j -= 1;
@@ -8193,16 +7978,22 @@ unsafe extern "C" fn wildmenu_process_key_menunames(
             }
             if *(*cclp).cmdbuff.offset(j as isize) as ::core::ffi::c_int
                 == ' ' as ::core::ffi::c_int
-                && *(*cclp).cmdbuff.offset((j - 1 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+                && *(*cclp)
+                    .cmdbuff
+                    .offset((j - 1 as ::core::ffi::c_int) as isize)
+                    as ::core::ffi::c_int
+                    != '\\' as ::core::ffi::c_int
             {
                 i = j + 1 as ::core::ffi::c_int;
                 break;
             } else {
                 if !(*(*cclp).cmdbuff.offset(j as isize) as ::core::ffi::c_int
                     == '.' as ::core::ffi::c_int
-                    && *(*cclp).cmdbuff.offset((j - 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_int != '\\' as ::core::ffi::c_int)
+                    && *(*cclp)
+                        .cmdbuff
+                        .offset((j - 1 as ::core::ffi::c_int) as isize)
+                        as ::core::ffi::c_int
+                        != '\\' as ::core::ffi::c_int)
                 {
                     continue;
                 }
@@ -8234,55 +8025,67 @@ unsafe extern "C" fn wildmenu_process_key_filenames(
     upseg[2 as ::core::ffi::c_int as usize] = '.' as ::core::ffi::c_char;
     upseg[3 as ::core::ffi::c_int as usize] = PATHSEP as ::core::ffi::c_char;
     upseg[4 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-    if key == K_DOWN && (*cclp).cmdpos > 0 as ::core::ffi::c_int
-        && *(*cclp).cmdbuff.offset(((*cclp).cmdpos - 1 as ::core::ffi::c_int) as isize)
-            as ::core::ffi::c_int == PATHSEP
+    if key == K_DOWN
+        && (*cclp).cmdpos > 0 as ::core::ffi::c_int
+        && *(*cclp)
+            .cmdbuff
+            .offset(((*cclp).cmdpos - 1 as ::core::ffi::c_int) as isize)
+            as ::core::ffi::c_int
+            == PATHSEP
         && ((*cclp).cmdpos < 3 as ::core::ffi::c_int
             || *(*cclp)
                 .cmdbuff
                 .offset(((*cclp).cmdpos - 2 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int != '.' as ::core::ffi::c_int
+                as ::core::ffi::c_int
+                != '.' as ::core::ffi::c_int
             || *(*cclp)
                 .cmdbuff
                 .offset(((*cclp).cmdpos - 3 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int != '.' as ::core::ffi::c_int)
+                as ::core::ffi::c_int
+                != '.' as ::core::ffi::c_int)
     {
         key = p_wc as ::core::ffi::c_int;
         KeyTyped = true_0 != 0;
     } else if strncmp(
         (*xp).xp_pattern,
-        (&raw mut upseg as *mut ::core::ffi::c_char)
-            .offset(1 as ::core::ffi::c_int as isize),
+        (&raw mut upseg as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
         3 as size_t,
-    ) == 0 as ::core::ffi::c_int && key == K_DOWN
+    ) == 0 as ::core::ffi::c_int
+        && key == K_DOWN
     {
         let mut found: bool = false_0 != 0;
         let mut j: ::core::ffi::c_int = (*cclp).cmdpos;
-        let mut i: ::core::ffi::c_int = (*xp).xp_pattern.offset_from((*cclp).cmdbuff)
-            as ::core::ffi::c_int;
+        let mut i: ::core::ffi::c_int =
+            (*xp).xp_pattern.offset_from((*cclp).cmdbuff) as ::core::ffi::c_int;
         loop {
             j -= 1;
             if j <= i {
                 break;
             }
             j -= utf_head_off((*cclp).cmdbuff, (*cclp).cmdbuff.offset(j as isize));
-            if !vim_ispathsep(
-                *(*cclp).cmdbuff.offset(j as isize) as ::core::ffi::c_int,
-            ) {
+            if !vim_ispathsep(*(*cclp).cmdbuff.offset(j as isize) as ::core::ffi::c_int) {
                 continue;
             }
             found = true_0 != 0;
             break;
         }
         if found as ::core::ffi::c_int != 0
-            && *(*cclp).cmdbuff.offset((j - 1 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-            && *(*cclp).cmdbuff.offset((j - 2 as ::core::ffi::c_int) as isize)
-                as ::core::ffi::c_int == '.' as ::core::ffi::c_int
+            && *(*cclp)
+                .cmdbuff
+                .offset((j - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+                == '.' as ::core::ffi::c_int
+            && *(*cclp)
+                .cmdbuff
+                .offset((j - 2 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
+                == '.' as ::core::ffi::c_int
             && (vim_ispathsep(
-                *(*cclp).cmdbuff.offset((j - 3 as ::core::ffi::c_int) as isize)
+                *(*cclp)
+                    .cmdbuff
+                    .offset((j - 3 as ::core::ffi::c_int) as isize)
                     as ::core::ffi::c_int,
-            ) as ::core::ffi::c_int != 0 || j == i + 2 as ::core::ffi::c_int)
+            ) as ::core::ffi::c_int
+                != 0
+                || j == i + 2 as ::core::ffi::c_int)
         {
             cmdline_del(cclp, j - 2 as ::core::ffi::c_int);
             key = p_wc as ::core::ffi::c_int;
@@ -8291,17 +8094,15 @@ unsafe extern "C" fn wildmenu_process_key_filenames(
     } else if key == K_UP {
         let mut found_0: bool = false_0 != 0;
         let mut j_0: ::core::ffi::c_int = (*cclp).cmdpos - 1 as ::core::ffi::c_int;
-        let mut i_0: ::core::ffi::c_int = (*xp).xp_pattern.offset_from((*cclp).cmdbuff)
-            as ::core::ffi::c_int;
+        let mut i_0: ::core::ffi::c_int =
+            (*xp).xp_pattern.offset_from((*cclp).cmdbuff) as ::core::ffi::c_int;
         loop {
             j_0 -= 1;
             if j_0 <= i_0 {
                 break;
             }
             j_0 -= utf_head_off((*cclp).cmdbuff, (*cclp).cmdbuff.offset(j_0 as isize));
-            if !vim_ispathsep(
-                *(*cclp).cmdbuff.offset(j_0 as isize) as ::core::ffi::c_int,
-            ) {
+            if !vim_ispathsep(*(*cclp).cmdbuff.offset(j_0 as isize) as ::core::ffi::c_int) {
                 continue;
             }
             if found_0 {
@@ -8322,10 +8123,10 @@ unsafe extern "C" fn wildmenu_process_key_filenames(
             j_0 += 4 as ::core::ffi::c_int;
         } else if strncmp(
             (*cclp).cmdbuff.offset(j_0 as isize),
-            (&raw mut upseg as *mut ::core::ffi::c_char)
-                .offset(1 as ::core::ffi::c_int as isize),
+            (&raw mut upseg as *mut ::core::ffi::c_char).offset(1 as ::core::ffi::c_int as isize),
             3 as size_t,
-        ) == 0 as ::core::ffi::c_int && j_0 == i_0
+        ) == 0 as ::core::ffi::c_int
+            && j_0 == i_0
         {
             j_0 += 3 as ::core::ffi::c_int;
         } else {
@@ -8434,14 +8235,15 @@ pub unsafe extern "C" fn f_getcompletion(
     };
     let mut filtered: bool = false_0 != 0;
     let mut options: ::core::ffi::c_int = WILD_SILENT as ::core::ffi::c_int
-        | WILD_USE_NL as ::core::ffi::c_int | WILD_ADD_SLASH as ::core::ffi::c_int
-        | WILD_NO_BEEP as ::core::ffi::c_int | WILD_HOME_REPLACE as ::core::ffi::c_int;
+        | WILD_USE_NL as ::core::ffi::c_int
+        | WILD_ADD_SLASH as ::core::ffi::c_int
+        | WILD_NO_BEEP as ::core::ffi::c_int
+        | WILD_HOME_REPLACE as ::core::ffi::c_int;
     if tv_check_for_string_arg(argvars, 1 as ::core::ffi::c_int) == FAIL {
         return;
     }
-    let type_0: *const ::core::ffi::c_char = tv_get_string(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-    );
+    let type_0: *const ::core::ffi::c_char =
+        tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize));
     if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
     {
@@ -8462,9 +8264,8 @@ pub unsafe extern "C" fn f_getcompletion(
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         return;
     }
-    let pattern: *const ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let pattern: *const ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut pattern_start: *const ::core::ffi::c_char = pattern;
     if strcmp(type_0, b"cmdline\0".as_ptr() as *const ::core::ffi::c_char)
         == 0 as ::core::ffi::c_int
@@ -8507,8 +8308,8 @@ pub unsafe extern "C" fn f_getcompletion(
                     );
                     return;
                 }
-                xpc.xp_arg = type_0.offset(7 as ::core::ffi::c_int as isize)
-                    as *mut ::core::ffi::c_char;
+                xpc.xp_arg =
+                    type_0.offset(7 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
             }
             31 => {
                 if strncmp(
@@ -8523,8 +8324,8 @@ pub unsafe extern "C" fn f_getcompletion(
                     );
                     return;
                 }
-                xpc.xp_arg = type_0.offset(11 as ::core::ffi::c_int as isize)
-                    as *mut ::core::ffi::c_char;
+                xpc.xp_arg =
+                    type_0.offset(11 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
             }
             11 => {
                 set_context_in_menu_cmd(
@@ -8550,8 +8351,7 @@ pub unsafe extern "C" fn f_getcompletion(
                     .wrapping_sub(xpc.xp_pattern.offset_from(pattern_start) as size_t);
             }
             57 => {
-                let mut context: ::core::ffi::c_int = EXPAND_SHELLCMDLINE
-                    as ::core::ffi::c_int;
+                let mut context: ::core::ffi::c_int = EXPAND_SHELLCMDLINE as ::core::ffi::c_int;
                 set_context_for_wildcard_arg(
                     ::core::ptr::null_mut::<exarg_T>(),
                     xpc.xp_pattern,
@@ -8576,12 +8376,12 @@ pub unsafe extern "C" fn f_getcompletion(
             .xp_pattern_len
             .wrapping_sub(xpc.xp_pattern.offset_from(pattern_start) as size_t);
     }
-    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut pat: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if cmdline_fuzzy_completion_supported(&raw mut xpc) {
-        pat = xmemdupz(xpc.xp_pattern as *const ::core::ffi::c_void, xpc.xp_pattern_len)
-            as *mut ::core::ffi::c_char;
+        pat = xmemdupz(
+            xpc.xp_pattern as *const ::core::ffi::c_void,
+            xpc.xp_pattern_len,
+        ) as *mut ::core::ffi::c_char;
     } else {
         pat = addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context);
     }
@@ -8616,9 +8416,8 @@ pub unsafe extern "C" fn f_getcompletiontype(
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
     }
-    let mut pat: *const ::core::ffi::c_char = tv_get_string(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-    );
+    let mut pat: *const ::core::ffi::c_char =
+        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut xpc: expand_T = expand_T {
         xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         xp_context: 0,
@@ -8668,8 +8467,7 @@ pub unsafe extern "C" fn f_cmdcomplete_info(
 ) {
     let mut ccline: *mut CmdlineInfo = get_cmdline_info();
     tv_dict_alloc_ret(rettv);
-    if ccline.is_null() || (*ccline).xpc.is_null() || (*(*ccline).xpc).xp_files.is_null()
-    {
+    if ccline.is_null() || (*ccline).xpc.is_null() || (*(*ccline).xpc).xp_files.is_null() {
         return;
     }
     let mut retdict: *mut dict_T = (*rettv).vval.v_dict;
@@ -8683,8 +8481,7 @@ pub unsafe extern "C" fn f_cmdcomplete_info(
         ret = tv_dict_add_nr(
             retdict,
             b"pum_visible\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                .wrapping_sub(1 as size_t),
+            ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
             pum_visible() as varnumber_T,
         );
     }
@@ -8697,9 +8494,7 @@ pub unsafe extern "C" fn f_cmdcomplete_info(
         );
     }
     if ret == OK {
-        let mut li: *mut list_T = tv_list_alloc(
-            (*(*ccline).xpc).xp_numfiles as ptrdiff_t,
-        );
+        let mut li: *mut list_T = tv_list_alloc((*(*ccline).xpc).xp_numfiles as ptrdiff_t);
         ret = tv_dict_add_list(
             retdict,
             b"matches\0".as_ptr() as *const ::core::ffi::c_char,
@@ -8723,11 +8518,9 @@ unsafe extern "C" fn copy_substring_from_pos(
     mut match_0: *mut *mut ::core::ffi::c_char,
     mut match_end: *mut pos_T,
 ) -> ::core::ffi::c_int {
-    let mut exacttext: bool = wop_flags
-        & kOptWopFlagExacttext as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
-    if (*start).lnum > (*end).lnum
-        || (*start).lnum == (*end).lnum && (*start).col >= (*end).col
-    {
+    let mut exacttext: bool =
+        wop_flags & kOptWopFlagExacttext as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
+    if (*start).lnum > (*end).lnum || (*start).lnum == (*end).lnum && (*start).col >= (*end).col {
         return FAIL;
     }
     let mut ga: garray_T = garray_T {
@@ -8737,14 +8530,15 @@ unsafe extern "C" fn copy_substring_from_pos(
         ga_growsize: 0,
         ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
     };
-    ga_init(&raw mut ga, 1 as ::core::ffi::c_int, 128 as ::core::ffi::c_int);
+    ga_init(
+        &raw mut ga,
+        1 as ::core::ffi::c_int,
+        128 as ::core::ffi::c_int,
+    );
     let mut start_line: *mut ::core::ffi::c_char = ml_get((*start).lnum);
-    let mut start_ptr: *mut ::core::ffi::c_char = start_line
-        .offset((*start).col as isize);
+    let mut start_ptr: *mut ::core::ffi::c_char = start_line.offset((*start).col as isize);
     let mut is_single_line: bool = (*start).lnum == (*end).lnum;
-    let mut segment_len: ::core::ffi::c_int = if is_single_line as ::core::ffi::c_int
-        != 0
-    {
+    let mut segment_len: ::core::ffi::c_int = if is_single_line as ::core::ffi::c_int != 0 {
         (*end).col - (*start).col
     } else {
         ml_get_len((*start).lnum) - (*start).col
@@ -8756,8 +8550,7 @@ unsafe extern "C" fn copy_substring_from_pos(
             ga_concat_len(
                 &raw mut ga,
                 b"\\n\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                    .wrapping_sub(1 as size_t),
+                ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
             );
         } else {
             ga_append(&raw mut ga, '\n' as uint8_t);
@@ -8774,8 +8567,7 @@ unsafe extern "C" fn copy_substring_from_pos(
                 ga_concat_len(
                     &raw mut ga,
                     b"\\n\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                        .wrapping_sub(1 as size_t),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
                 );
             } else {
                 ga_append(&raw mut ga, '\n' as uint8_t);
@@ -8784,21 +8576,19 @@ unsafe extern "C" fn copy_substring_from_pos(
         }
     }
     let mut end_line: *mut ::core::ffi::c_char = ml_get((*end).lnum);
-    let mut word_end: *mut ::core::ffi::c_char = find_word_end(
-        end_line.offset((*end).col as isize),
-    );
+    let mut word_end: *mut ::core::ffi::c_char =
+        find_word_end(end_line.offset((*end).col as isize));
     segment_len = word_end.offset_from(end_line) as ::core::ffi::c_int;
     ga_grow(&raw mut ga, segment_len);
     ga_concat_len(
         &raw mut ga,
-        end_line
-            .offset(
-                (if is_single_line as ::core::ffi::c_int != 0 {
-                    (*end).col as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }) as isize,
-            ),
+        end_line.offset(
+            (if is_single_line as ::core::ffi::c_int != 0 {
+                (*end).col as ::core::ffi::c_int
+            } else {
+                0 as ::core::ffi::c_int
+            }) as isize,
+        ),
         (segment_len
             - (if is_single_line as ::core::ffi::c_int != 0 {
                 (*end).col as ::core::ffi::c_int
@@ -8841,11 +8631,7 @@ unsafe extern "C" fn is_regex_match(
     }
     emsg_off += 1;
     msg_silent += 1;
-    let mut result: bool = vim_regexec_nl(
-        &raw mut regmatch,
-        str,
-        0 as ::core::ffi::c_int,
-    );
+    let mut result: bool = vim_regexec_nl(&raw mut regmatch, str, 0 as ::core::ffi::c_int);
     emsg_off -= 1;
     msg_silent -= 1;
     vim_regfree(regmatch.regprog);
@@ -8858,13 +8644,14 @@ unsafe extern "C" fn concat_pattern_with_buffer_match(
     mut lowercase: bool,
 ) -> *mut ::core::ffi::c_char {
     let mut line: *mut ::core::ffi::c_char = ml_get((*end_match_pos).lnum);
-    let mut word_end: *mut ::core::ffi::c_char = find_word_end(
-        line.offset((*end_match_pos).col as isize),
-    );
-    let mut match_len: ::core::ffi::c_int = word_end
-        .offset_from(line.offset((*end_match_pos).col as isize)) as ::core::ffi::c_int;
+    let mut word_end: *mut ::core::ffi::c_char =
+        find_word_end(line.offset((*end_match_pos).col as isize));
+    let mut match_len: ::core::ffi::c_int =
+        word_end.offset_from(line.offset((*end_match_pos).col as isize)) as ::core::ffi::c_int;
     let mut match_0: *mut ::core::ffi::c_char = xmalloc(
-        (match_len as size_t).wrapping_add(pat_len as size_t).wrapping_add(1 as size_t),
+        (match_len as size_t)
+            .wrapping_add(pat_len as size_t)
+            .wrapping_add(1 as size_t),
     ) as *mut ::core::ffi::c_char;
     memmove(
         match_0 as *mut ::core::ffi::c_void,
@@ -8902,8 +8689,8 @@ unsafe extern "C" fn expand_pattern_in_buf(
     mut matches: *mut *mut *mut ::core::ffi::c_char,
     mut numMatches: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut exacttext: bool = wop_flags
-        & kOptWopFlagExacttext as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
+    let mut exacttext: bool =
+        wop_flags & kOptWopFlagExacttext as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
     let mut has_range: bool = search_first_line != 0 as linenr_T;
     *matches = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     *numMatches = 0 as ::core::ffi::c_int;
@@ -8927,7 +8714,8 @@ unsafe extern "C" fn expand_pattern_in_buf(
         cur_match_pos = pre_incsearch_pos;
     }
     let mut search_flags: ::core::ffi::c_int = SEARCH_OPT as ::core::ffi::c_int
-        | SEARCH_NOOF as ::core::ffi::c_int | SEARCH_PEEK as ::core::ffi::c_int
+        | SEARCH_NOOF as ::core::ffi::c_int
+        | SEARCH_PEEK as ::core::ffi::c_int
         | SEARCH_NFMSG as ::core::ffi::c_int
         | (if has_range as ::core::ffi::c_int != 0 {
             SEARCH_START as ::core::ffi::c_int
@@ -8958,12 +8746,8 @@ unsafe extern "C" fn expand_pattern_in_buf(
     };
     let mut looped_around: bool = false_0 != 0;
     let mut compl_started: bool = false_0 != 0;
-    let mut match_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
-    let mut full_match: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<
-        ::core::ffi::c_char,
-    >();
+    let mut match_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut full_match: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     '_cleanup: {
         loop {
             emsg_off += 1;
@@ -8987,8 +8771,7 @@ unsafe extern "C" fn expand_pattern_in_buf(
                 break;
             }
             if has_range as ::core::ffi::c_int != 0
-                && (cur_match_pos.lnum < search_first_line
-                    || cur_match_pos.lnum > search_last_line)
+                && (cur_match_pos.lnum < search_first_line || cur_match_pos.lnum > search_last_line)
             {
                 break;
             }
@@ -8996,8 +8779,7 @@ unsafe extern "C" fn expand_pattern_in_buf(
                 if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
                     && ltoreq(cur_match_pos, prev_match_pos) as ::core::ffi::c_int != 0
                     || dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int
-                        && ltoreq(prev_match_pos, cur_match_pos) as ::core::ffi::c_int
-                            != 0
+                        && ltoreq(prev_match_pos, cur_match_pos) as ::core::ffi::c_int != 0
                 {
                     if looped_around {
                         break;
@@ -9007,9 +8789,7 @@ unsafe extern "C" fn expand_pattern_in_buf(
             }
             compl_started = true_0 != 0;
             prev_match_pos = cur_match_pos;
-            if char_avail() as ::core::ffi::c_int != 0
-                || got_int as ::core::ffi::c_int != 0
-            {
+            if char_avail() as ::core::ffi::c_int != 0 || got_int as ::core::ffi::c_int != 0 {
                 if got_int {
                     vpeekc();
                     got_int = false_0 != 0;
@@ -9061,8 +8841,8 @@ unsafe extern "C" fn expand_pattern_in_buf(
                         *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(i as isize),
                     ) == 0 as ::core::ffi::c_int
                     {
-                        let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut match_0
-                            as *mut *mut ::core::ffi::c_void;
+                        let mut ptr_: *mut *mut ::core::ffi::c_void =
+                            &raw mut match_0 as *mut *mut ::core::ffi::c_void;
                         xfree(*ptr_);
                         *ptr_ = NULL;
                         *ptr_;
@@ -9075,8 +8855,7 @@ unsafe extern "C" fn expand_pattern_in_buf(
                     ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
                     let c2rust_fresh1 = ga.ga_len;
                     ga.ga_len = ga.ga_len + 1;
-                    let c2rust_lvalue_ptr = &raw mut *(ga.ga_data
-                        as *mut *mut ::core::ffi::c_char)
+                    let c2rust_lvalue_ptr = &raw mut *(ga.ga_data as *mut *mut ::core::ffi::c_char)
                         .offset(c2rust_fresh1 as isize);
                     *c2rust_lvalue_ptr = match_0;
                     if ga.ga_len > TAG_MANY as ::core::ffi::c_int {
@@ -9105,18 +8884,18 @@ unsafe extern "C" fn win_hl_attr(
     } else {
         hl_attr_active
     }
-        .offset(hlf as isize);
+    .offset(hlf as isize);
 }
-pub const K_UP: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_LEFT: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_RIGHT: ::core::ffi::c_int = -('k' as ::core::ffi::c_int
-    + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int = -('K' as ::core::ffi::c_int
-    + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_UP: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_DOWN: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_LEFT: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_RIGHT: ::core::ffi::c_int =
+    -('k' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_KENTER: ::core::ffi::c_int =
+    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
