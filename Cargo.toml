@@ -11,7 +11,7 @@ autobins = false
 # Enumerate package files explicitly so cargo lists them by walking the
 # directory instead of reading neovim's git index — cargo's bundled libgit2
 # rejects that index's checksum ("invalid data in index").
-include = ["**/*.rs", "Cargo.toml", "Cargo.lock", "build.rs", "rust-toolchain.toml"]
+include = ["**/*.rs", "Cargo.toml", "Cargo.lock", "build.rs"]
 
 [lib]
 name = "c2rust_neovim"

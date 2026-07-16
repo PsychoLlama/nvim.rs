@@ -14,12 +14,12 @@ use std::path::PathBuf;
 fn main() {
     // Locate neovim's dependency prefix (`.deps/usr`). The nix `port`
     // devShell exports NVIM_DEPS_PREFIX; otherwise fall back to the
-    // sibling `.deps` of the crate inside the neovim source tree.
+    // `.deps` at the crate root (the neovim source tree root).
     let prefix = std::env::var("NVIM_DEPS_PREFIX")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-            manifest.parent().unwrap().join(".deps/usr")
+            manifest.join(".deps/usr")
         });
 
     for libdir in ["lib", "lib64"] {

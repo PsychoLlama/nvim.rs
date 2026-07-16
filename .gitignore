@@ -12,6 +12,10 @@ compile_commands.json
 .exrc
 .nvim.lua
 
+# Rust build output
+/target
+*.log
+
 # Build/deps dir
 /.zig-cache/
 /zig-out/
