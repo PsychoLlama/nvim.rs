@@ -1,26 +1,47 @@
-//! Link the transpiled neovim objects against the same native libraries
-//! neovim's own `ninja` build links `bin/nvim` against.
+//! Build neovim's bundled C dependencies and link the transpiled objects
+//! against them.
 //!
 //! The transpiled Rust supplies every symbol that used to come from
 //! neovim's `.c` sources; everything else (LuaJIT, libuv, tree-sitter,
-//! unibilium, utf8proc, lpeg, luv) still lives in the prebuilt static
-//! archives under `<neovim>/.deps/usr/lib{,64}`. We reproduce neovim's
-//! link line here: the same libraries, in the same order, with the same
-//! `--export-dynamic` so dlopened Lua C modules can resolve back into the
-//! binary.
+//! unibilium, utf8proc, lpeg, luv) lives in the static archives neovim's
+//! `cmake.deps` build produces under `.deps/usr/lib{,64}`. We build those
+//! archives (if needed) and reproduce neovim's link line: the same
+//! libraries, in the same order, with the same `--export-dynamic` so
+//! dlopened Lua C modules can resolve back into the binary.
+//!
+//! cmake and ninja come from the flake devShell; nothing else is assumed.
 
+use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
-    // Locate neovim's dependency prefix (`.deps/usr`). The nix `port`
-    // devShell exports NVIM_DEPS_PREFIX; otherwise fall back to the
-    // `.deps` at the crate root (the neovim source tree root).
-    let prefix = std::env::var("NVIM_DEPS_PREFIX")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-            manifest.join(".deps/usr")
-        });
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let prefix = manifest.join(".deps/usr");
+
+    // Build the bundled C deps if they aren't there yet — the same two-step
+    // cmake build as BUILD.md's "Third-party dependencies". It runs only when
+    // `.deps` is absent, so ordinary rebuilds just relink; `rm -rf .deps` to
+    // force a fresh build (e.g. after bumping a version in `cmake.deps/deps.txt`).
+    if !prefix.join("lib/libluajit-5.1.a").exists() {
+        println!(
+            "cargo:warning=building bundled C deps under .deps (downloads sources, takes a few minutes)"
+        );
+        cmake(
+            &manifest,
+            &[
+                "-S",
+                "cmake.deps",
+                "-B",
+                ".deps",
+                "-G",
+                "Ninja",
+                "-D",
+                "CMAKE_BUILD_TYPE=RelWithDebInfo",
+            ],
+        );
+        cmake(&manifest, &["--build", ".deps"]);
+    }
 
     for libdir in ["lib", "lib64"] {
         println!(
@@ -52,6 +73,15 @@ fn main() {
     // dlopened C modules (e.g. libnlua0) resolve symbols back into nvim.
     println!("cargo:rustc-link-arg=-Wl,--export-dynamic");
 
-    println!("cargo:rerun-if-env-changed=NVIM_DEPS_PREFIX");
     println!("cargo:rerun-if-changed=build.rs");
+}
+
+/// Run `cmake` from the crate root, asserting it succeeds.
+fn cmake(dir: &Path, args: &[&str]) {
+    let status = Command::new("cmake")
+        .args(args)
+        .current_dir(dir)
+        .status()
+        .expect("failed to spawn cmake (provided by the flake devShell)");
+    assert!(status.success(), "cmake {args:?} failed: {status}");
 }
