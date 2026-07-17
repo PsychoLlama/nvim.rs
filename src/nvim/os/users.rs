@@ -236,7 +236,7 @@ unsafe extern "C" fn init_users() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_users(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     init_users();

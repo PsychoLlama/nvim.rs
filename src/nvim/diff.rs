@@ -5043,11 +5043,11 @@ pub unsafe extern "C" fn ex_diffpatch(mut eap: *mut exarg_T) {
                 cmdmod.cmod_tab = 0 as ::core::ffi::c_int;
                 if win_split(
                     0 as ::core::ffi::c_int,
-                    (if diff_flags & DIFF_VERTICAL != 0 {
+                    if diff_flags & DIFF_VERTICAL != 0 {
                         WSP_VERT as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
-                    }),
+                    },
                 ) != FAIL
                 {
                     (*eap).cmdidx = CMD_split;
@@ -5098,11 +5098,11 @@ pub unsafe extern "C" fn ex_diffsplit(mut eap: *mut exarg_T) {
     cmdmod.cmod_tab = 0 as ::core::ffi::c_int;
     if win_split(
         0 as ::core::ffi::c_int,
-        (if diff_flags & DIFF_VERTICAL != 0 {
+        if diff_flags & DIFF_VERTICAL != 0 {
             WSP_VERT as ::core::ffi::c_int
         } else {
             0 as ::core::ffi::c_int
-        }),
+        },
     ) == FAIL
     {
         return;
@@ -5124,7 +5124,7 @@ pub unsafe extern "C" fn ex_diffsplit(mut eap: *mut exarg_T) {
     scroll_to_fraction(curwin, (*curwin).w_height);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_diffthis(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_diffthis(mut _eap: *mut exarg_T) {
     diff_win_options(curwin, true_0 != 0);
 }
 unsafe extern "C" fn set_diff_option(mut wp: *mut win_T, mut value: bool) {
@@ -8315,7 +8315,7 @@ unsafe extern "C" fn xdiff_out(
 pub unsafe extern "C" fn f_diff_filler(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number =
         (if 0 as ::core::ffi::c_int > diff_check_fill(curwin, tv_get_lnum(argvars)) {
@@ -8328,7 +8328,7 @@ pub unsafe extern "C" fn f_diff_filler(
 pub unsafe extern "C" fn f_diff_hlID(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     static mut prev_lnum: linenr_T = 0 as linenr_T;
     static mut changedtick: varnumber_T = 0 as varnumber_T;

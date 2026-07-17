@@ -3368,8 +3368,8 @@ unsafe extern "C" fn matchadd_dict_arg(
 #[no_mangle]
 pub unsafe extern "C" fn f_clearmatches(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut win: *mut win_T = get_optional_window(argvars, 0 as ::core::ffi::c_int);
     if !win.is_null() {
@@ -3380,7 +3380,7 @@ pub unsafe extern "C" fn f_clearmatches(
 pub unsafe extern "C" fn f_getmatches(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut win: *mut win_T = get_optional_window(argvars, 0 as ::core::ffi::c_int);
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
@@ -3485,7 +3485,7 @@ pub unsafe extern "C" fn f_getmatches(
 pub unsafe extern "C" fn f_setmatches(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut d: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     let mut s: *mut list_T = ::core::ptr::null_mut::<list_T>();
@@ -3682,7 +3682,7 @@ pub unsafe extern "C" fn f_setmatches(
 pub unsafe extern "C" fn f_matchadd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut grpbuf: [::core::ffi::c_char; 65] = [0; 65];
     let mut patbuf: [::core::ffi::c_char; 65] = [0; 65];
@@ -3755,7 +3755,7 @@ pub unsafe extern "C" fn f_matchadd(
 pub unsafe extern "C" fn f_matchaddpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
@@ -3839,7 +3839,7 @@ pub unsafe extern "C" fn f_matchaddpos(
 pub unsafe extern "C" fn f_matcharg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let id: ::core::ffi::c_int =
         tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
@@ -3878,7 +3878,7 @@ pub unsafe extern "C" fn f_matcharg(
 pub unsafe extern "C" fn f_matchdelete(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut win: *mut win_T = get_optional_window(argvars, 1 as ::core::ffi::c_int);
     if win.is_null() {

@@ -4224,7 +4224,7 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                                 <= 'z' as ::core::ffi::c_uint)
                             as ::core::ffi::c_int
                     } else {
-                        (if digit as ::core::ffi::c_int != 0 {
+                        if digit as ::core::ffi::c_int != 0 {
                             ascii_isdigit(
                                 *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             ) as ::core::ffi::c_int
@@ -4235,7 +4235,7 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
                                     as ::core::ffi::c_uint
                                     <= 'Z' as ::core::ffi::c_uint)
                                 as ::core::ffi::c_int
-                        })
+                        }
                     }) == 0
                         || to < from
                     {
@@ -4352,7 +4352,7 @@ pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_jumps(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
     cleanup_jumplist(curwin, true_0 != 0);
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_puts_title(gettext(
@@ -4420,13 +4420,13 @@ pub unsafe extern "C" fn ex_jumps(mut eap: *mut exarg_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_clearjumps(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_clearjumps(mut _eap: *mut exarg_T) {
     free_jumplist(curwin);
     (*curwin).w_jumplistlen = 0 as ::core::ffi::c_int;
     (*curwin).w_jumplistidx = 0 as ::core::ffi::c_int;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_changes(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_puts_title(gettext(
         b"\nchange line  col text\0".as_ptr() as *const ::core::ffi::c_char

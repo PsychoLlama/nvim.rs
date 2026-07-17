@@ -1073,7 +1073,7 @@ pub unsafe extern "C" fn socket_watcher_init(
     (*watcher).data = NULL;
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn connect_close_cb(mut stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
+unsafe extern "C" fn connect_close_cb(mut _stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
     let mut closed: *mut bool = data as *mut bool;
     *closed = true_0 != 0;
 }

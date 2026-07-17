@@ -2482,7 +2482,7 @@ pub unsafe extern "C" fn nvim_buf_set_virtual_text(
     mut src_id: Integer,
     mut line: Integer,
     mut chunks: Array,
-    mut opts: *mut KeyDict_empty,
+    mut _opts: *mut KeyDict_empty,
     mut err: *mut Error,
 ) -> Integer {
     let mut buf: *mut buf_T = find_buffer_by_handle(buffer, err);
@@ -3342,9 +3342,9 @@ pub unsafe extern "C" fn nvim_call_atomic(
     return rv;
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_subscribe(mut channel_id: uint64_t, mut event: String_0) {}
+pub unsafe extern "C" fn nvim_subscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
 #[no_mangle]
-pub unsafe extern "C" fn nvim_unsubscribe(mut channel_id: uint64_t, mut event: String_0) {}
+pub unsafe extern "C" fn nvim_unsubscribe(mut _channel_id: uint64_t, mut _event: String_0) {}
 unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writeln: bool) {
     static mut out_line_buf: StringBuilder = StringBuilder {
         size: 0 as size_t,
@@ -3376,11 +3376,11 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
         }
         if *message.data.offset(i as isize) as ::core::ffi::c_int == NL {
             if (*line_buf).size == (*line_buf).capacity {
-                (*line_buf).capacity = (if (*line_buf).capacity != 0 {
+                (*line_buf).capacity = if (*line_buf).capacity != 0 {
                     (*line_buf).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*line_buf).items = xrealloc(
                     (*line_buf).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3407,11 +3407,11 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             ) as *mut ::core::ffi::c_char;
         } else if *message.data.offset(i as isize) as ::core::ffi::c_int == NUL {
             if (*line_buf).size == (*line_buf).capacity {
-                (*line_buf).capacity = (if (*line_buf).capacity != 0 {
+                (*line_buf).capacity = if (*line_buf).capacity != 0 {
                     (*line_buf).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*line_buf).items = xrealloc(
                     (*line_buf).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3424,11 +3424,11 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             *(*line_buf).items.offset(c2rust_fresh8 as isize) = '\n' as ::core::ffi::c_char;
         } else {
             if (*line_buf).size == (*line_buf).capacity {
-                (*line_buf).capacity = (if (*line_buf).capacity != 0 {
+                (*line_buf).capacity = if (*line_buf).capacity != 0 {
                     (*line_buf).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*line_buf).items = xrealloc(
                     (*line_buf).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3452,11 +3452,11 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
         }
         if '\n' as ::core::ffi::c_int == NL {
             if (*line_buf).size == (*line_buf).capacity {
-                (*line_buf).capacity = (if (*line_buf).capacity != 0 {
+                (*line_buf).capacity = if (*line_buf).capacity != 0 {
                     (*line_buf).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*line_buf).items = xrealloc(
                     (*line_buf).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3483,11 +3483,11 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             ) as *mut ::core::ffi::c_char;
         } else if '\n' as ::core::ffi::c_int == NUL {
             if (*line_buf).size == (*line_buf).capacity {
-                (*line_buf).capacity = (if (*line_buf).capacity != 0 {
+                (*line_buf).capacity = if (*line_buf).capacity != 0 {
                     (*line_buf).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*line_buf).items = xrealloc(
                     (*line_buf).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3500,11 +3500,11 @@ unsafe extern "C" fn write_msg(mut message: String_0, mut to_err: bool, mut writ
             *(*line_buf).items.offset(c2rust_fresh11 as isize) = '\n' as ::core::ffi::c_char;
         } else {
             if (*line_buf).size == (*line_buf).capacity {
-                (*line_buf).capacity = (if (*line_buf).capacity != 0 {
+                (*line_buf).capacity = if (*line_buf).capacity != 0 {
                     (*line_buf).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*line_buf).items = xrealloc(
                     (*line_buf).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()

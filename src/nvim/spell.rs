@@ -11809,7 +11809,7 @@ pub unsafe extern "C" fn check_need_cap(
     return need_cap;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_spellrepall(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_spellrepall(mut _eap: *mut exarg_T) {
     let mut pos: pos_T = (*curwin).w_cursor;
     let mut save_ws: bool = p_ws != 0;
     let mut prev_lnum: linenr_T = 0 as linenr_T;
@@ -12486,7 +12486,7 @@ unsafe extern "C" fn spell_soundfold_wsal(
     *res.offset(l as isize) = NUL as ::core::ffi::c_char;
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_spellinfo(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_spellinfo(mut _eap: *mut exarg_T) {
     if no_spell_checking(curwin) {
         return;
     }
@@ -13063,7 +13063,7 @@ pub unsafe extern "C" fn spell_expand_check_cap(mut col: colnr_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn expand_spelling(
-    mut lnum: linenr_T,
+    mut _lnum: linenr_T,
     mut pat: *mut ::core::ffi::c_char,
     mut matchp: *mut *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {

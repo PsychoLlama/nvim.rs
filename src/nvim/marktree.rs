@@ -532,7 +532,7 @@ unsafe extern "C" fn split_node(
         MARKTREE_END_FLAG
     };
     if (*z).intersect.capacity < (*y).intersect.size {
-        (*z).intersect.capacity = (if (*y).intersect.size
+        (*z).intersect.capacity = if (*y).intersect.size
             > ::core::mem::size_of::<[uint64_t; 4]>()
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
@@ -549,7 +549,7 @@ unsafe extern "C" fn split_node(
                         .wrapping_rem(::core::mem::size_of::<uint64_t>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         (*z).intersect.items = (if (*z).intersect.capacity
             == ::core::mem::size_of::<[uint64_t; 4]>()
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -558,7 +558,7 @@ unsafe extern "C" fn split_node(
                         .wrapping_rem(::core::mem::size_of::<uint64_t>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
+            if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
                 (*z).intersect.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -568,9 +568,9 @@ unsafe extern "C" fn split_node(
                         .size
                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
-            })
+            }
         } else {
-            (if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
+            if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
                 memcpy(
                     xmalloc(
                         (*z).intersect
@@ -589,7 +589,7 @@ unsafe extern "C" fn split_node(
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
-            })
+            }
         }) as *mut uint64_t;
     }
     (*z).intersect.size = (*y).intersect.size;
@@ -907,7 +907,7 @@ unsafe extern "C" fn intersection_has(mut x: *mut Intersection, mut id: uint64_t
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mut id: uint64_t) {
+unsafe extern "C" fn intersect_node(mut _b: *mut MarkTree, mut x: *mut MTNode, mut id: uint64_t) {
     '_c2rust_label: {
         if id & 1 as ::core::ffi::c_int as uint64_t == 0 {
         } else {
@@ -922,7 +922,7 @@ unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mu
         }
     };
     if (*x).intersect.size == (*x).intersect.capacity {
-        (*x).intersect.capacity = (if (*x).intersect.capacity << 1 as ::core::ffi::c_int
+        (*x).intersect.capacity = if (*x).intersect.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[uint64_t; 4]>()
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                 .wrapping_div(
@@ -939,7 +939,7 @@ unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mu
                         .wrapping_rem(::core::mem::size_of::<uint64_t>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         (*x).intersect.items = (if (*x).intersect.capacity
             == ::core::mem::size_of::<[uint64_t; 4]>()
                 .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -948,7 +948,7 @@ unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mu
                         .wrapping_rem(::core::mem::size_of::<uint64_t>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
+            if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                 (*x).intersect.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -958,9 +958,9 @@ unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mu
                         .size
                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
-            })
+            }
         } else {
-            (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
+            if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                 memcpy(
                     xmalloc(
                         (*x).intersect
@@ -979,7 +979,7 @@ unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mu
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                 )
-            })
+            }
         }) as *mut uint64_t;
     } else {
     };
@@ -997,7 +997,7 @@ unsafe extern "C" fn intersect_node(mut b: *mut MarkTree, mut x: *mut MTNode, mu
     }
 }
 unsafe extern "C" fn unintersect_node(
-    mut b: *mut MarkTree,
+    mut _b: *mut MarkTree,
     mut x: *mut MTNode,
     mut id: uint64_t,
     mut strict: bool,
@@ -1764,7 +1764,7 @@ unsafe extern "C" fn intersect_merge(
     while xi < (*x).size && yi < (*y).size {
         if *(*x).items.offset(xi as isize) == *(*y).items.offset(yi as isize) {
             if (*m).size == (*m).capacity {
-                (*m).capacity = (if (*m).capacity << 1 as ::core::ffi::c_int
+                (*m).capacity = if (*m).capacity << 1 as ::core::ffi::c_int
                     > ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
@@ -1781,7 +1781,7 @@ unsafe extern "C" fn intersect_merge(
                                 .wrapping_rem(::core::mem::size_of::<uint64_t>())
                                 == 0) as ::core::ffi::c_int as size_t,
                         )
-                });
+                };
                 (*m).items = (if (*m).capacity
                     == ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -1790,7 +1790,7 @@ unsafe extern "C" fn intersect_merge(
                                 .wrapping_rem(::core::mem::size_of::<uint64_t>())
                                 == 0) as ::core::ffi::c_int as usize,
                         ) {
-                    (if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
+                    if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
                         (*m).items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
@@ -1798,9 +1798,9 @@ unsafe extern "C" fn intersect_merge(
                             (*m).items as *mut ::core::ffi::c_void,
                             (*m).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
-                    })
+                    }
                 } else {
-                    (if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
+                    if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
                         memcpy(
                             xmalloc(
                                 (*m).capacity
@@ -1815,7 +1815,7 @@ unsafe extern "C" fn intersect_merge(
                             (*m).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
-                    })
+                    }
                 }) as *mut uint64_t;
             } else {
             };
@@ -1881,7 +1881,7 @@ unsafe extern "C" fn intersect_mov(
                 && *(*y).items.offset(yi as isize) < *(*w).items.offset(wi as isize)
             {
                 if (*d).size == (*d).capacity {
-                    (*d).capacity = (if (*d).capacity << 1 as ::core::ffi::c_int
+                    (*d).capacity = if (*d).capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[uint64_t; 4]>()
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
@@ -1900,7 +1900,7 @@ unsafe extern "C" fn intersect_mov(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*d).items = (if (*d).capacity
                         == ::core::mem::size_of::<[uint64_t; 4]>()
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -1910,7 +1910,7 @@ unsafe extern "C" fn intersect_mov(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
+                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             (*d).items as *mut ::core::ffi::c_void
                         } else {
                             _memcpy_free(
@@ -1919,9 +1919,9 @@ unsafe extern "C" fn intersect_mov(
                                 (*d).items as *mut ::core::ffi::c_void,
                                 (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
+                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             memcpy(
                                 xmalloc(
                                     (*d).capacity
@@ -1936,7 +1936,7 @@ unsafe extern "C" fn intersect_mov(
                                 (*d).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             )
-                        })
+                        }
                     }) as *mut uint64_t;
                 } else {
                 };
@@ -1967,7 +1967,7 @@ unsafe extern "C" fn intersect_mov(
                 && *(*y).items.offset(yi as isize) < *(*x).items.offset(xi as isize)
             {
                 if (*d).size == (*d).capacity {
-                    (*d).capacity = (if (*d).capacity << 1 as ::core::ffi::c_int
+                    (*d).capacity = if (*d).capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[uint64_t; 4]>()
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
                             .wrapping_div(
@@ -1986,7 +1986,7 @@ unsafe extern "C" fn intersect_mov(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*d).items = (if (*d).capacity
                         == ::core::mem::size_of::<[uint64_t; 4]>()
                             .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -1996,7 +1996,7 @@ unsafe extern "C" fn intersect_mov(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
+                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             (*d).items as *mut ::core::ffi::c_void
                         } else {
                             _memcpy_free(
@@ -2005,9 +2005,9 @@ unsafe extern "C" fn intersect_mov(
                                 (*d).items as *mut ::core::ffi::c_void,
                                 (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
+                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                             memcpy(
                                 xmalloc(
                                     (*d).capacity
@@ -2022,7 +2022,7 @@ unsafe extern "C" fn intersect_mov(
                                 (*d).capacity
                                     .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                             )
-                        })
+                        }
                     }) as *mut uint64_t;
                 } else {
                 };
@@ -2044,7 +2044,7 @@ unsafe extern "C" fn intersect_mov(
                 if wi == wn {
                     let mut n: size_t = (*w).size.wrapping_sub(wn);
                     if (*w).size == (*w).capacity {
-                        (*w).capacity = (if (*w).capacity << 1 as ::core::ffi::c_int
+                        (*w).capacity = if (*w).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[uint64_t; 4]>()
                                 .wrapping_div(::core::mem::size_of::<uint64_t>())
                                 .wrapping_div(
@@ -2065,7 +2065,7 @@ unsafe extern "C" fn intersect_mov(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*w).items = (if (*w).capacity
                             == ::core::mem::size_of::<[uint64_t; 4]>()
                                 .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -2076,7 +2076,7 @@ unsafe extern "C" fn intersect_mov(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
+                            if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
                                 (*w).items as *mut ::core::ffi::c_void
                             } else {
                                 _memcpy_free(
@@ -2085,9 +2085,9 @@ unsafe extern "C" fn intersect_mov(
                                     (*w).items as *mut ::core::ffi::c_void,
                                     (*w).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
+                            if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
                                 memcpy(
                                     xmalloc(
                                         (*w).capacity
@@ -2102,7 +2102,7 @@ unsafe extern "C" fn intersect_mov(
                                     (*w).capacity
                                         .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                                 )
-                            })
+                            }
                         }) as *mut uint64_t;
                     } else {
                     };
@@ -2152,7 +2152,7 @@ unsafe extern "C" fn intersect_mov(
             (*d).capacity |= (*d).capacity >> 8 as ::core::ffi::c_int;
             (*d).capacity |= (*d).capacity >> 16 as ::core::ffi::c_int;
             (*d).capacity = (*d).capacity.wrapping_add(1);
-            (*d).capacity = (if (*d).capacity
+            (*d).capacity = if (*d).capacity
                 > ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
@@ -2169,7 +2169,7 @@ unsafe extern "C" fn intersect_mov(
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             (*d).items = (if (*d).capacity
                 == ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -2178,7 +2178,7 @@ unsafe extern "C" fn intersect_mov(
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
+                if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                     (*d).items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -2186,9 +2186,9 @@ unsafe extern "C" fn intersect_mov(
                         (*d).items as *mut ::core::ffi::c_void,
                         (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             } else {
-                (if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
+                if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(
                             (*d).capacity
@@ -2203,7 +2203,7 @@ unsafe extern "C" fn intersect_mov(
                         (*d).capacity
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             }) as *mut uint64_t;
         }
         memcpy(
@@ -2259,7 +2259,7 @@ pub unsafe extern "C" fn intersect_mov_test(
     let mut i: size_t = 0 as size_t;
     while i < nwin {
         if w.size == w.capacity {
-            w.capacity = (if w.capacity << 1 as ::core::ffi::c_int
+            w.capacity = if w.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
@@ -2276,7 +2276,7 @@ pub unsafe extern "C" fn intersect_mov_test(
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             w.items = (if w.capacity
                 == ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -2285,7 +2285,7 @@ pub unsafe extern "C" fn intersect_mov_test(
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if w.items == &raw mut w.init_array as *mut uint64_t {
+                if w.items == &raw mut w.init_array as *mut uint64_t {
                     w.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -2293,9 +2293,9 @@ pub unsafe extern "C" fn intersect_mov_test(
                         w.items as *mut ::core::ffi::c_void,
                         w.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             } else {
-                (if w.items == &raw mut w.init_array as *mut uint64_t {
+                if w.items == &raw mut w.init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(w.capacity.wrapping_mul(::core::mem::size_of::<uint64_t>())),
                         w.items as *const ::core::ffi::c_void,
@@ -2306,7 +2306,7 @@ pub unsafe extern "C" fn intersect_mov_test(
                         w.items as *mut ::core::ffi::c_void,
                         w.capacity.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             }) as *mut uint64_t;
         } else {
         };
@@ -2358,7 +2358,7 @@ unsafe extern "C" fn intersect_common(
     while xi < (*x).size && yi < (*y).size {
         if *(*x).items.offset(xi as isize) == *(*y).items.offset(yi as isize) {
             if (*i).size == (*i).capacity {
-                (*i).capacity = (if (*i).capacity << 1 as ::core::ffi::c_int
+                (*i).capacity = if (*i).capacity << 1 as ::core::ffi::c_int
                     > ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
@@ -2375,7 +2375,7 @@ unsafe extern "C" fn intersect_common(
                                 .wrapping_rem(::core::mem::size_of::<uint64_t>())
                                 == 0) as ::core::ffi::c_int as size_t,
                         )
-                });
+                };
                 (*i).items = (if (*i).capacity
                     == ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -2384,7 +2384,7 @@ unsafe extern "C" fn intersect_common(
                                 .wrapping_rem(::core::mem::size_of::<uint64_t>())
                                 == 0) as ::core::ffi::c_int as usize,
                         ) {
-                    (if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
+                    if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
                         (*i).items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
@@ -2392,9 +2392,9 @@ unsafe extern "C" fn intersect_common(
                             (*i).items as *mut ::core::ffi::c_void,
                             (*i).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
-                    })
+                    }
                 } else {
-                    (if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
+                    if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
                         memcpy(
                             xmalloc(
                                 (*i).capacity
@@ -2409,7 +2409,7 @@ unsafe extern "C" fn intersect_common(
                             (*i).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
-                    })
+                    }
                 }) as *mut uint64_t;
             } else {
             };
@@ -2435,7 +2435,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
         } else if *(*y).items.offset(yi as isize) < *(*x).items.offset(xi as isize) {
             let mut n: size_t = (*x).size.wrapping_sub(xi);
             if (*x).size == (*x).capacity {
-                (*x).capacity = (if (*x).capacity << 1 as ::core::ffi::c_int
+                (*x).capacity = if (*x).capacity << 1 as ::core::ffi::c_int
                     > ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
                         .wrapping_div(
@@ -2452,7 +2452,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                                 .wrapping_rem(::core::mem::size_of::<uint64_t>())
                                 == 0) as ::core::ffi::c_int as size_t,
                         )
-                });
+                };
                 (*x).items = (if (*x).capacity
                     == ::core::mem::size_of::<[uint64_t; 4]>()
                         .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -2461,7 +2461,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                                 .wrapping_rem(::core::mem::size_of::<uint64_t>())
                                 == 0) as ::core::ffi::c_int as usize,
                         ) {
-                    (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
+                    if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                         (*x).items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
@@ -2469,9 +2469,9 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                             (*x).items as *mut ::core::ffi::c_void,
                             (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
-                    })
+                    }
                 } else {
-                    (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
+                    if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                         memcpy(
                             xmalloc(
                                 (*x).capacity
@@ -2486,7 +2486,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                             (*x).capacity
                                 .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                         )
-                    })
+                    }
                 }) as *mut uint64_t;
             } else {
             };
@@ -2516,7 +2516,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
             (*x).capacity |= (*x).capacity >> 8 as ::core::ffi::c_int;
             (*x).capacity |= (*x).capacity >> 16 as ::core::ffi::c_int;
             (*x).capacity = (*x).capacity.wrapping_add(1);
-            (*x).capacity = (if (*x).capacity
+            (*x).capacity = if (*x).capacity
                 > ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
@@ -2533,7 +2533,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             (*x).items = (if (*x).capacity
                 == ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -2542,7 +2542,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
+                if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                     (*x).items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -2550,9 +2550,9 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                         (*x).items as *mut ::core::ffi::c_void,
                         (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             } else {
-                (if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
+                if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(
                             (*x).capacity
@@ -2567,7 +2567,7 @@ unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Interse
                         (*x).capacity
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             }) as *mut uint64_t;
         }
         memcpy(
@@ -2841,7 +2841,7 @@ pub unsafe extern "C" fn kvi_move(mut dest: *mut Intersection, mut src: *mut Int
 }
 unsafe extern "C" fn pivot_right(
     mut b: *mut MarkTree,
-    mut p_pos: MTPos,
+    mut _p_pos: MTPos,
     mut p: *mut MTNode,
     i: ::core::ffi::c_int,
 ) {
@@ -3025,7 +3025,7 @@ unsafe extern "C" fn pivot_right(
 }
 unsafe extern "C" fn pivot_left(
     mut b: *mut MarkTree,
-    mut p_pos: MTPos,
+    mut _p_pos: MTPos,
     mut p: *mut MTNode,
     mut i: ::core::ffi::c_int,
 ) {
@@ -3603,7 +3603,7 @@ pub unsafe extern "C" fn marktree_itr_next(
     );
 }
 unsafe extern "C" fn marktree_itr_next_skip(
-    mut b: *mut MarkTree,
+    mut _b: *mut MarkTree,
     mut itr: *mut MarkTreeIter,
     mut skip: bool,
     mut preload: bool,
@@ -3832,7 +3832,7 @@ unsafe extern "C" fn marktree_itr_check_filter(
 }
 #[no_mangle]
 pub unsafe extern "C" fn marktree_itr_prev(
-    mut b: *mut MarkTree,
+    mut _b: *mut MarkTree,
     mut itr: *mut MarkTreeIter,
 ) -> bool {
     if (*itr).x.is_null() {
@@ -4067,7 +4067,7 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
     return false_0 != 0;
 }
 unsafe extern "C" fn check_damage(
-    mut b: *mut MarkTree,
+    mut _b: *mut MarkTree,
     mut damage: *mut MTDamageMap,
     mut itr1: *mut MarkTreeIter,
     mut itr2: *mut MarkTreeIter,
@@ -4750,11 +4750,11 @@ pub unsafe extern "C" fn marktree_move_region(
         }
         relative(start, &raw mut k.pos);
         if saved.size == saved.capacity {
-            saved.capacity = (if saved.capacity != 0 {
+            saved.capacity = if saved.capacity != 0 {
                 saved.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             saved.items = xrealloc(
                 saved.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<MTKey>().wrapping_mul(saved.capacity),
@@ -5487,7 +5487,7 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
 pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut Map_ptr_t_ptr_t) {
     if (*x).intersect.size != 0 {
         if (*x).intersect.size == (*x).intersect.capacity {
-            (*x).intersect.capacity = (if (*x).intersect.capacity << 1 as ::core::ffi::c_int
+            (*x).intersect.capacity = if (*x).intersect.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
                     .wrapping_div(
@@ -5504,7 +5504,7 @@ pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut 
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             (*x).intersect.items = (if (*x).intersect.capacity
                 == ::core::mem::size_of::<[uint64_t; 4]>()
                     .wrapping_div(::core::mem::size_of::<uint64_t>())
@@ -5513,7 +5513,7 @@ pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut 
                             .wrapping_rem(::core::mem::size_of::<uint64_t>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
+                if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                     (*x).intersect.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -5524,9 +5524,9 @@ pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut 
                             .size
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             } else {
-                (if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
+                if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
                     memcpy(
                         xmalloc(
                             (*x).intersect
@@ -5545,7 +5545,7 @@ pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut 
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<uint64_t>()),
                     )
-                })
+                }
             }) as *mut uint64_t;
         } else {
         };

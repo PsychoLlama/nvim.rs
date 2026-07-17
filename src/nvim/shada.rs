@@ -7182,11 +7182,11 @@ pub unsafe extern "C" fn shada_write_file(
                             && (if old_info.stat.st_uid == getuid() as uint64_t {
                                 old_info.stat.st_mode & 0o200 as uint64_t
                             } else {
-                                (if old_info.stat.st_gid == getgid() as uint64_t {
+                                if old_info.stat.st_gid == getgid() as uint64_t {
                                     old_info.stat.st_mode & 0o20 as uint64_t
                                 } else {
                                     old_info.stat.st_mode & 0o2 as uint64_t
-                                })
+                                }
                             }) == 0
                     {
                         semsg(

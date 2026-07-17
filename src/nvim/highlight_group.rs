@@ -6373,7 +6373,7 @@ pub unsafe extern "C" fn get_highlight_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_highlight_name_ext(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
     mut skip_cleared: bool,
 ) -> *const ::core::ffi::c_char {

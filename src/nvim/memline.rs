@@ -4389,7 +4389,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
             ) == 0 as ::core::ffi::c_int
             && !vim_strchr(
                 b"abcdefghijklmnopqrstuvw\0".as_ptr() as *const ::core::ffi::c_char,
-                (if (*fname.offset((len - 2 as ::core::ffi::c_int) as isize) as uint8_t
+                if (*fname.offset((len - 2 as ::core::ffi::c_int) as isize) as uint8_t
                     as ::core::ffi::c_int)
                     < 'A' as ::core::ffi::c_int
                     || *fname.offset((len - 2 as ::core::ffi::c_int) as isize) as uint8_t
@@ -4402,7 +4402,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                     *fname.offset((len - 2 as ::core::ffi::c_int) as isize) as uint8_t
                         as ::core::ffi::c_int
                         + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-                }),
+                },
             )
             .is_null()
             && (*fname.offset((len - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_uint
@@ -7881,8 +7881,8 @@ pub unsafe extern "C" fn resolve_symlink(
 #[no_mangle]
 pub unsafe extern "C" fn makeswapname(
     mut fname: *mut ::core::ffi::c_char,
-    mut ffname: *mut ::core::ffi::c_char,
-    mut buf: *mut buf_T,
+    mut _ffname: *mut ::core::ffi::c_char,
+    mut _buf: *mut buf_T,
     mut dir_name: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let mut fname_res: *mut ::core::ffi::c_char = fname;

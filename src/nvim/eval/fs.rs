@@ -2681,7 +2681,7 @@ pub unsafe extern "C" fn modify_fname(
 pub unsafe extern "C" fn f_chdir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2742,7 +2742,7 @@ pub unsafe extern "C" fn f_chdir(
 pub unsafe extern "C" fn f_delete(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if check_secure() {
@@ -2795,7 +2795,7 @@ pub unsafe extern "C" fn f_delete(
 pub unsafe extern "C" fn f_executable(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -2810,7 +2810,7 @@ pub unsafe extern "C" fn f_executable(
 pub unsafe extern "C" fn f_exepath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_nonempty_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -2828,7 +2828,7 @@ pub unsafe extern "C" fn f_exepath(
 pub unsafe extern "C" fn f_filecopy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = false_0 as varnumber_T;
     if check_secure() as ::core::ffi::c_int != 0
@@ -2885,7 +2885,7 @@ pub unsafe extern "C" fn f_filecopy(
 pub unsafe extern "C" fn f_filereadable(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let p: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2898,7 +2898,7 @@ pub unsafe extern "C" fn f_filereadable(
 pub unsafe extern "C" fn f_filewritable(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut filename: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3017,7 +3017,7 @@ unsafe extern "C" fn findfilendir(
 pub unsafe extern "C" fn f_finddir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     findfilendir(argvars, rettv, FINDFILE_DIR as ::core::ffi::c_int);
 }
@@ -3025,7 +3025,7 @@ pub unsafe extern "C" fn f_finddir(
 pub unsafe extern "C" fn f_findfile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     findfilendir(argvars, rettv, FINDFILE_FILE as ::core::ffi::c_int);
 }
@@ -3033,7 +3033,7 @@ pub unsafe extern "C" fn f_findfile(
 pub unsafe extern "C" fn f_fnamemodify(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fbuf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: size_t = 0 as size_t;
@@ -3073,7 +3073,7 @@ pub unsafe extern "C" fn f_fnamemodify(
 pub unsafe extern "C" fn f_getcwd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut scope: CdScope = kCdScopeInvalid;
     let mut scope_number: [::core::ffi::c_int; 2] =
@@ -3213,7 +3213,7 @@ pub unsafe extern "C" fn f_getcwd(
 pub unsafe extern "C" fn f_getfperm(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut perm: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut flags: [::core::ffi::c_char; 4] =
@@ -3238,7 +3238,7 @@ pub unsafe extern "C" fn f_getfperm(
 pub unsafe extern "C" fn f_getfsize(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fname: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3293,7 +3293,7 @@ pub unsafe extern "C" fn f_getfsize(
 pub unsafe extern "C" fn f_getftime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fname: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3339,7 +3339,7 @@ pub unsafe extern "C" fn f_getftime(
 pub unsafe extern "C" fn f_getftype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut type_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut t: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -3405,7 +3405,7 @@ pub unsafe extern "C" fn f_getftype(
 pub unsafe extern "C" fn f_glob(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut options: ::core::ffi::c_int =
         WILD_SILENT as ::core::ffi::c_int | WILD_USE_NL as ::core::ffi::c_int;
@@ -3517,7 +3517,7 @@ pub unsafe extern "C" fn f_glob(
 pub unsafe extern "C" fn f_globpath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut flags: ::core::ffi::c_int = WILD_IGNORE_COMPLETESLASH as ::core::ffi::c_int;
     let mut error: bool = false_0 != 0;
@@ -3605,7 +3605,7 @@ pub unsafe extern "C" fn f_globpath(
 pub unsafe extern "C" fn f_glob2regpat(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let pat: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3625,7 +3625,7 @@ pub unsafe extern "C" fn f_glob2regpat(
 pub unsafe extern "C" fn f_haslocaldir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut scope: CdScope = kCdScopeInvalid;
     let mut scope_number: [::core::ffi::c_int; 2] =
@@ -3743,7 +3743,7 @@ pub unsafe extern "C" fn f_haslocaldir(
 pub unsafe extern "C" fn f_isabsolutepath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = path_is_absolute(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -3753,7 +3753,7 @@ pub unsafe extern "C" fn f_isabsolutepath(
 pub unsafe extern "C" fn f_isdirectory(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = os_isdir(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -3763,7 +3763,7 @@ pub unsafe extern "C" fn f_isdirectory(
 pub unsafe extern "C" fn f_mkdir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut prot: ::core::ffi::c_int = 0o755 as ::core::ffi::c_int;
     (*rettv).vval.v_number = FAIL as varnumber_T;
@@ -3870,7 +3870,7 @@ pub unsafe extern "C" fn f_mkdir(
 pub unsafe extern "C" fn f_pathshorten(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut trim_len: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -3949,7 +3949,7 @@ unsafe extern "C" fn readdir_checkitem(
 pub unsafe extern "C" fn f_readdir(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
     let mut path: *const ::core::ffi::c_char =
@@ -4388,7 +4388,7 @@ unsafe extern "C" fn read_file_or_blob(
 pub unsafe extern "C" fn f_readblob(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     read_file_or_blob(argvars, rettv, true_0 != 0);
 }
@@ -4396,7 +4396,7 @@ pub unsafe extern "C" fn f_readblob(
 pub unsafe extern "C" fn f_readfile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     read_file_or_blob(argvars, rettv, false_0 != 0);
 }
@@ -4404,7 +4404,7 @@ pub unsafe extern "C" fn f_readfile(
 pub unsafe extern "C" fn f_rename(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         (*rettv).vval.v_number = -1 as varnumber_T;
@@ -4423,7 +4423,7 @@ pub unsafe extern "C" fn f_rename(
 pub unsafe extern "C" fn f_resolve(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     let mut fname: *const ::core::ffi::c_char =
@@ -4611,7 +4611,7 @@ pub unsafe extern "C" fn f_resolve(
 pub unsafe extern "C" fn f_simplify(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let p: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -4621,9 +4621,9 @@ pub unsafe extern "C" fn f_simplify(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_tempname(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = vim_tempname();
@@ -4747,7 +4747,7 @@ unsafe extern "C" fn write_string(
 pub unsafe extern "C" fn f_writefile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if check_secure() {
@@ -4942,9 +4942,9 @@ pub unsafe extern "C" fn f_writefile(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_browse(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*rettv).v_type = VAR_STRING;

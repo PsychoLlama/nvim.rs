@@ -4310,9 +4310,9 @@ unsafe extern "C" fn mouse_check_grid(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getmousepos(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut row: ::core::ffi::c_int = mouse_row;
     let mut col: ::core::ffi::c_int = mouse_col;

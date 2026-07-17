@@ -1693,7 +1693,7 @@ pub unsafe extern "C" fn remote_ui_connect(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn remote_ui_stop(mut ui: *mut RemoteUI) {}
+pub unsafe extern "C" fn remote_ui_stop(mut _ui: *mut RemoteUI) {}
 #[no_mangle]
 pub unsafe extern "C" fn nvim_ui_try_resize(
     mut channel_id: uint64_t,
@@ -2505,7 +2505,7 @@ pub unsafe extern "C" fn remote_ui_hl_attr_define(
     mut ui: *mut RemoteUI,
     mut id: Integer,
     mut rgb_attrs: HlAttrs,
-    mut cterm_attrs: HlAttrs,
+    mut _cterm_attrs: HlAttrs,
     mut info: Array,
 ) {
     if !(*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] {
@@ -3284,9 +3284,9 @@ pub unsafe extern "C" fn remote_ui_event(
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_ui_send(
-    mut channel_id: uint64_t,
+    mut _channel_id: uint64_t,
     mut content: String_0,
-    mut err: *mut Error,
+    mut _err: *mut Error,
 ) {
     ui_call_ui_send(content);
 }

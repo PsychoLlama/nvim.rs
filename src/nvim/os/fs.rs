@@ -2071,12 +2071,12 @@ pub unsafe extern "C" fn os_copy_xattr(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_get_acl(mut fname: *const ::core::ffi::c_char) -> vim_acl_T {
+pub unsafe extern "C" fn os_get_acl(mut _fname: *const ::core::ffi::c_char) -> vim_acl_T {
     let mut ret: vim_acl_T = NULL;
     return ret;
 }
 #[no_mangle]
-pub unsafe extern "C" fn os_set_acl(mut fname: *const ::core::ffi::c_char, mut aclent: vim_acl_T) {
+pub unsafe extern "C" fn os_set_acl(mut _fname: *const ::core::ffi::c_char, mut aclent: vim_acl_T) {
     if aclent.is_null() {
         return;
     }

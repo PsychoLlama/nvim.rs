@@ -4171,11 +4171,11 @@ unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::core::ffi::
         }
         if vim_iswordc((*s).c) as ::core::ffi::c_int != 0
             || !echeck_abbr(
-                (if (*s).c >= 0x100 as ::core::ffi::c_int {
+                if (*s).c >= 0x100 as ::core::ffi::c_int {
                     (*s).c + ABBR_OFF
                 } else {
                     (*s).c
-                }),
+                },
             ) && (*s).c != Ctrl_RSB
         {
             insert_special((*s).c, false_0, false_0);
@@ -4851,7 +4851,7 @@ pub unsafe extern "C" fn insertchar(
     {
         let mut do_internal: bool = true_0 != 0;
         let mut virtcol: colnr_T =
-            get_nolist_virtcol() + char2cells((if c != NUL { c } else { gchar_cursor() }));
+            get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
         if *(*curbuf).b_p_fex as ::core::ffi::c_int != NUL
             && flags & INSCHAR_NO_FEX as ::core::ffi::c_int == 0 as ::core::ffi::c_int
             && (force_format != 0 || virtcol > textwidth)

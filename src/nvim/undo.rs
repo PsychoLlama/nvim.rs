@@ -3538,11 +3538,11 @@ unsafe extern "C" fn unserialize_uhp(
             return ::core::ptr::null_mut::<u_header_T>();
         }
         if (*uhp).uh_extmark.size == (*uhp).uh_extmark.capacity {
-            (*uhp).uh_extmark.capacity = (if (*uhp).uh_extmark.capacity != 0 {
+            (*uhp).uh_extmark.capacity = if (*uhp).uh_extmark.capacity != 0 {
                 (*uhp).uh_extmark.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*uhp).uh_extmark.items = xrealloc(
                 (*uhp).uh_extmark.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<ExtmarkUndoObject>()
@@ -3599,7 +3599,7 @@ unsafe extern "C" fn serialize_extmark(
 unsafe extern "C" fn unserialize_extmark(
     mut bi: *mut bufinfo_T,
     mut error: *mut bool,
-    mut filename: *const ::core::ffi::c_char,
+    mut _filename: *const ::core::ffi::c_char,
 ) -> *mut ExtmarkUndoObject {
     let mut buf: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
     let mut extup: *mut ExtmarkUndoObject =
@@ -5028,25 +5028,25 @@ pub unsafe extern "C" fn undo_time(
                         ((*uhp).uh_seq > (*curbuf).b_u_seq_cur) as ::core::ffi::c_int
                     }) != 0
                         && (if dosec as ::core::ffi::c_int != 0 && val == closest {
-                            (if step < 0 as ::core::ffi::c_int {
+                            if step < 0 as ::core::ffi::c_int {
                                 ((*uhp).uh_seq < closest_seq) as ::core::ffi::c_int
                             } else {
                                 ((*uhp).uh_seq > closest_seq) as ::core::ffi::c_int
-                            })
+                            }
                         } else {
                             (closest == closest_start
                                 || (if val > target {
-                                    (if closest > target {
+                                    if closest > target {
                                         (val - target <= closest - target) as ::core::ffi::c_int
                                     } else {
                                         (val - target <= target - closest) as ::core::ffi::c_int
-                                    })
+                                    }
                                 } else {
-                                    (if closest > target {
+                                    if closest > target {
                                         (target - val <= closest - target) as ::core::ffi::c_int
                                     } else {
                                         (target - val <= target - closest) as ::core::ffi::c_int
-                                    })
+                                    }
                                 }) != 0) as ::core::ffi::c_int
                         }) != 0
                     {
@@ -5670,7 +5670,7 @@ pub unsafe extern "C" fn u_sync(mut force: bool) {
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
     let mut changes: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     lastmark += 1;
     let mut mark: ::core::ffi::c_int = lastmark;
@@ -5783,7 +5783,7 @@ pub unsafe extern "C" fn ex_undolist(mut eap: *mut exarg_T) {
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_undojoin(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_undojoin(mut _eap: *mut exarg_T) {
     if (*curbuf).b_u_newhead.is_null() {
         return;
     }
@@ -6172,7 +6172,7 @@ unsafe extern "C" fn u_eval_tree(buf: *mut buf_T, first_uhp: *const u_header_T) 
 pub unsafe extern "C" fn f_undofile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     let fname: *const ::core::ffi::c_char =
@@ -6191,7 +6191,7 @@ pub unsafe extern "C" fn f_undofile(
 pub unsafe extern "C" fn f_undotree(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let tv: *mut typval_T = argvars.offset(0 as ::core::ffi::c_int as isize);

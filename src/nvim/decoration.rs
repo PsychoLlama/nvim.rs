@@ -2262,11 +2262,11 @@ pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t 
     } else {
         let mut pos_0: uint32_t = decor_items.size as uint32_t;
         if decor_items.size == decor_items.capacity {
-            decor_items.capacity = (if decor_items.capacity != 0 {
+            decor_items.capacity = if decor_items.capacity != 0 {
                 decor_items.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             decor_items.items = xrealloc(
                 decor_items.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<DecorSignHighlight>().wrapping_mul(decor_items.capacity),
@@ -2895,11 +2895,11 @@ unsafe extern "C" fn decor_range_insert(mut state: *mut DecorState, mut range: *
     } else {
         index = (*state).slots.size as ::core::ffi::c_int;
         if (*state).slots.size == (*state).slots.capacity {
-            (*state).slots.capacity = (if (*state).slots.capacity != 0 {
+            (*state).slots.capacity = if (*state).slots.capacity != 0 {
                 (*state).slots.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*state).slots.items = xrealloc(
                 (*state).slots.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<DecorRangeSlot>().wrapping_mul((*state).slots.capacity),
@@ -2933,11 +2933,11 @@ unsafe extern "C" fn decor_range_insert(mut state: *mut DecorState, mut range: *
         }
     }
     if (*state).ranges_i.size == (*state).ranges_i.capacity {
-        (*state).ranges_i.capacity = (if (*state).ranges_i.capacity != 0 {
+        (*state).ranges_i.capacity = if (*state).ranges_i.capacity != 0 {
             (*state).ranges_i.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*state).ranges_i.items = xrealloc(
             (*state).ranges_i.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul((*state).ranges_i.capacity),
@@ -3491,11 +3491,11 @@ pub unsafe extern "C" fn decor_redraw_signs(
             num_text += ((*sh).text[0 as ::core::ffi::c_int as usize] != NUL as schar_T)
                 as ::core::ffi::c_int;
             if signs.size == signs.capacity {
-                signs.capacity = (if signs.capacity != 0 {
+                signs.capacity = if signs.capacity != 0 {
                     signs.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 signs.items = xrealloc(
                     signs.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<SignItem>().wrapping_mul(signs.capacity),
@@ -3529,11 +3529,11 @@ pub unsafe extern "C" fn decor_redraw_signs(
             num_text += ((*sh_0).text[0 as ::core::ffi::c_int as usize] != NUL as schar_T)
                 as ::core::ffi::c_int;
             if signs.size == signs.capacity {
-                signs.capacity = (if signs.capacity != 0 {
+                signs.capacity = if signs.capacity != 0 {
                     signs.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 signs.items = xrealloc(
                     signs.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<SignItem>().wrapping_mul(signs.capacity),
@@ -4217,11 +4217,11 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
                 arena,
             );
             if all_chunks.size == all_chunks.capacity {
-                all_chunks.capacity = (if all_chunks.capacity != 0 {
+                all_chunks.capacity = if all_chunks.capacity != 0 {
                     all_chunks.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 all_chunks.items = xrealloc(
                     all_chunks.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<Object>().wrapping_mul(all_chunks.capacity),

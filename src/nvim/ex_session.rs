@@ -2810,11 +2810,11 @@ unsafe extern "C" fn ses_win_rec(mut fd: *mut FILE, mut fr: *mut frame_T) -> ::c
                 fd,
                 b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
                 b"wincmd _ | wincmd |\n\0".as_ptr() as *const ::core::ffi::c_char,
-                (if (*fr).fr_layout as ::core::ffi::c_int == FR_COL {
+                if (*fr).fr_layout as ::core::ffi::c_int == FR_COL {
                     b"split\n\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"vsplit\n\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             ) < 0 as ::core::ffi::c_int
             {
                 return FAIL;
@@ -2825,11 +2825,11 @@ unsafe extern "C" fn ses_win_rec(mut fd: *mut FILE, mut fr: *mut frame_T) -> ::c
     if count > 0 as ::core::ffi::c_int
         && fprintf(
             fd,
-            (if (*fr).fr_layout as ::core::ffi::c_int == FR_COL {
+            if (*fr).fr_layout as ::core::ffi::c_int == FR_COL {
                 b"%dwincmd k\n\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"%dwincmd h\n\0".as_ptr() as *const ::core::ffi::c_char
-            }),
+            },
             count,
         ) < 0 as ::core::ffi::c_int
     {
@@ -2975,7 +2975,7 @@ unsafe extern "C" fn ses_fname(
 }
 unsafe extern "C" fn ses_escape_fname(
     mut name: *mut ::core::ffi::c_char,
-    mut flagp: *mut ::core::ffi::c_uint,
+    mut _flagp: *mut ::core::ffi::c_uint,
 ) -> *mut ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut sname: *mut ::core::ffi::c_char =
@@ -3308,21 +3308,21 @@ unsafe extern "C" fn store_session_globals(mut fd: *mut FILE) -> ::core::ffi::c_
                     fd,
                     b"let %s = %c%s%c\0".as_ptr() as *const ::core::ffi::c_char,
                     &raw mut (*this_var).di_key as *mut ::core::ffi::c_char,
-                    (if (*this_var).di_tv.v_type as ::core::ffi::c_uint
+                    if (*this_var).di_tv.v_type as ::core::ffi::c_uint
                         == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         '"' as ::core::ffi::c_int
                     } else {
                         ' ' as ::core::ffi::c_int
-                    }),
+                    },
                     p,
-                    (if (*this_var).di_tv.v_type as ::core::ffi::c_uint
+                    if (*this_var).di_tv.v_type as ::core::ffi::c_uint
                         == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         '"' as ::core::ffi::c_int
                     } else {
                         ' ' as ::core::ffi::c_int
-                    }),
+                    },
                 ) < 0 as ::core::ffi::c_int
                     || put_eol(fd) == 0 as ::core::ffi::c_int
                 {
@@ -3491,7 +3491,7 @@ unsafe extern "C" fn makeopens(
             if fprintf(
                 fd,
                 b"badd +%ld \0".as_ptr() as *const ::core::ffi::c_char,
-                (if (*buf).b_wininfo.size == 0 as size_t {
+                if (*buf).b_wininfo.size == 0 as size_t {
                     1 as int64_t
                 } else {
                     (**(*buf)
@@ -3501,7 +3501,7 @@ unsafe extern "C" fn makeopens(
                     .wi_mark
                     .mark
                     .lnum as int64_t
-                }),
+                },
             ) < 0 as ::core::ffi::c_int
                 || ses_fname(fd, buf, &raw mut ssop_flags, true_0 != 0) == FAIL
             {

@@ -1302,7 +1302,7 @@ unsafe extern "C" fn set_duplicating_descriptor(
     close(fd_dup);
     return status;
 }
-unsafe extern "C" fn chld_handler(mut handle: *mut uv_signal_t, mut signum: ::core::ffi::c_int) {
+unsafe extern "C" fn chld_handler(mut handle: *mut uv_signal_t, mut _signum: ::core::ffi::c_int) {
     let mut stat: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut pid: ::core::ffi::c_int = 0;
     let mut loop_0: *mut Loop = (*(*handle).loop_0).data as *mut Loop;

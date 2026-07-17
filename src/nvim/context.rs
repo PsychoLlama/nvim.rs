@@ -872,11 +872,11 @@ pub unsafe extern "C" fn ctx_free(mut ctx: *mut Context) {
 pub unsafe extern "C" fn ctx_save(mut ctx: *mut Context, flags: ::core::ffi::c_int) {
     if ctx.is_null() {
         if ctx_stack.size == ctx_stack.capacity {
-            ctx_stack.capacity = (if ctx_stack.capacity != 0 {
+            ctx_stack.capacity = if ctx_stack.capacity != 0 {
                 ctx_stack.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             ctx_stack.items = xrealloc(
                 ctx_stack.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Context>().wrapping_mul(ctx_stack.capacity),
@@ -1056,11 +1056,11 @@ unsafe extern "C" fn ctx_save_funcs(mut ctx: *mut Context, mut scriptonly: bool)
                 xfree(cmd as *mut ::core::ffi::c_void);
                 if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
                     if (*ctx).funcs.size == (*ctx).funcs.capacity {
-                        (*ctx).funcs.capacity = (if (*ctx).funcs.capacity != 0 {
+                        (*ctx).funcs.capacity = if (*ctx).funcs.capacity != 0 {
                             (*ctx).funcs.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         (*ctx).funcs.items = xrealloc(
                             (*ctx).funcs.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul((*ctx).funcs.capacity),

@@ -1848,11 +1848,11 @@ static mut dbghl_recompose: ::core::ffi::c_int = 0;
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_init() {
     if layers.size == layers.capacity {
-        layers.capacity = (if layers.capacity != 0 {
+        layers.capacity = if layers.capacity != 0 {
             layers.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         layers.items = xrealloc(
             layers.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*mut ScreenGrid>().wrapping_mul(layers.capacity),
@@ -2048,11 +2048,11 @@ pub unsafe extern "C" fn ui_comp_put_grid(
             insert_at = insert_at.wrapping_sub(1);
         }
         if layers.size == layers.capacity {
-            layers.capacity = (if layers.capacity != 0 {
+            layers.capacity = if layers.capacity != 0 {
                 layers.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             layers.items = xrealloc(
                 layers.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<*mut ScreenGrid>().wrapping_mul(layers.capacity),
@@ -2806,12 +2806,12 @@ pub unsafe extern "C" fn ui_comp_set_screen_valid(mut valid: bool) -> bool {
 }
 #[no_mangle]
 pub unsafe extern "C" fn ui_comp_msg_set_pos(
-    mut grid: Integer,
+    mut _grid: Integer,
     mut row: Integer,
     mut scrolled: Boolean,
     mut sep_char: String_0,
-    mut zindex: Integer,
-    mut compindex: Integer,
+    mut _zindex: Integer,
+    mut _compindex: Integer,
 ) {
     msg_grid.pending_comp_index_update = true_0 != 0;
     msg_grid.comp_row = row as ::core::ffi::c_int;

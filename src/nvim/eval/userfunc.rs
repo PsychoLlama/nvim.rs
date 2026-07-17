@@ -8328,10 +8328,10 @@ pub unsafe extern "C" fn get_return_cmd(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_func_line(
-    mut c: ::core::ffi::c_int,
+    mut _c: ::core::ffi::c_int,
     mut cookie: *mut ::core::ffi::c_void,
-    mut indent: ::core::ffi::c_int,
-    mut do_concat: bool,
+    mut _indent: ::core::ffi::c_int,
+    mut _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     let mut fcp: *mut funccall_T = cookie as *mut funccall_T;
     let mut fp: *mut ufunc_T = (*fcp).fc_func;

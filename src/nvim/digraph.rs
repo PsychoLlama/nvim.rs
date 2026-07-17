@@ -9997,7 +9997,7 @@ unsafe extern "C" fn digraph_set_common(
 pub unsafe extern "C" fn f_digraph_get(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -10029,7 +10029,7 @@ pub unsafe extern "C" fn f_digraph_get(
 pub unsafe extern "C" fn f_digraph_getlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_opt_bool_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -10049,7 +10049,7 @@ pub unsafe extern "C" fn f_digraph_getlist(
 pub unsafe extern "C" fn f_digraph_set(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_BOOL;
     (*rettv).vval.v_bool = kBoolVarFalse;
@@ -10065,7 +10065,7 @@ pub unsafe extern "C" fn f_digraph_set(
 pub unsafe extern "C" fn f_digraph_setlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_BOOL;
     (*rettv).vval.v_bool = kBoolVarFalse;

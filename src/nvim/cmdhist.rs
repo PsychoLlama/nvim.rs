@@ -1668,7 +1668,7 @@ unsafe extern "C" fn del_history_idx(
 pub unsafe extern "C" fn f_histadd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = false_0 as varnumber_T;
     if check_secure() {
@@ -1706,7 +1706,7 @@ pub unsafe extern "C" fn f_histadd(
 pub unsafe extern "C" fn f_histdel(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: ::core::ffi::c_int = 0;
     let str: *const ::core::ffi::c_char =
@@ -1740,7 +1740,7 @@ pub unsafe extern "C" fn f_histdel(
 pub unsafe extern "C" fn f_histget(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let str: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -1776,7 +1776,7 @@ pub unsafe extern "C" fn f_histget(
 pub unsafe extern "C" fn f_histnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let histname: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));

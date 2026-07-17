@@ -698,11 +698,11 @@ unsafe extern "C" fn xdl_trim_ends(
     recs1 = (*xdf1).recs;
     recs2 = (*xdf2).recs;
     i = 0 as ::core::ffi::c_long;
-    lim = (if (*xdf1).nrec < (*xdf2).nrec {
+    lim = if (*xdf1).nrec < (*xdf2).nrec {
         (*xdf1).nrec
     } else {
         (*xdf2).nrec
-    });
+    };
     while i < lim {
         if (**recs1).ha != (**recs2).ha {
             break;

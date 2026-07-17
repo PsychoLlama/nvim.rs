@@ -3078,11 +3078,11 @@ unsafe extern "C" fn buf_set_sign(
 ) {
     if !group.is_null() && map_get_String_int(&raw mut namespace_ids, cstr_as_string(group)) == 0 {
         if sign_ns.size == sign_ns.capacity {
-            sign_ns.capacity = (if sign_ns.capacity != 0 {
+            sign_ns.capacity = if sign_ns.capacity != 0 {
                 sign_ns.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             sign_ns.items = xrealloc(
                 sign_ns.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Integer>().wrapping_mul(sign_ns.capacity),
@@ -3309,11 +3309,11 @@ unsafe extern "C" fn buf_delete_signs(
                 && mt_decor_sign(pair.start) as ::core::ffi::c_int != 0
             {
                 if signs.size == signs.capacity {
-                    signs.capacity = (if signs.capacity != 0 {
+                    signs.capacity = if signs.capacity != 0 {
                         signs.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     signs.items = xrealloc(
                         signs.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<MTKey>().wrapping_mul(signs.capacity),
@@ -3345,11 +3345,11 @@ unsafe extern "C" fn buf_delete_signs(
         {
             if atlnum > 0 as linenr_T {
                 if signs.size == signs.capacity {
-                    signs.capacity = (if signs.capacity != 0 {
+                    signs.capacity = if signs.capacity != 0 {
                         signs.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     signs.items = xrealloc(
                         signs.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<MTKey>().wrapping_mul(signs.capacity),
@@ -3458,11 +3458,11 @@ unsafe extern "C" fn sign_list_placed(mut rbuf: *mut buf_T, mut group: *mut ::co
                     && (ns == UINT32_MAX as int64_t || ns == mark.ns as int64_t)
                 {
                     if signs.size == signs.capacity {
-                        signs.capacity = (if signs.capacity != 0 {
+                        signs.capacity = if signs.capacity != 0 {
                             signs.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         signs.items = xrealloc(
                             signs.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<MTKey>().wrapping_mul(signs.capacity),
@@ -4082,11 +4082,11 @@ unsafe extern "C" fn sign_unplace_cmd(
     }
     if sign_unplace(
         buf,
-        (if 0 as ::core::ffi::c_int > id {
+        if 0 as ::core::ffi::c_int > id {
             0 as ::core::ffi::c_int
         } else {
             id
-        }),
+        },
         group,
         lnum,
     ) == 0
@@ -4539,11 +4539,11 @@ unsafe extern "C" fn sign_get_placed_in_buf(
         {
             if mt_decor_sign(mark) {
                 if signs.size == signs.capacity {
-                    signs.capacity = (if signs.capacity != 0 {
+                    signs.capacity = if signs.capacity != 0 {
                         signs.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     signs.items = xrealloc(
                         signs.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<MTKey>().wrapping_mul(signs.capacity),
@@ -4619,11 +4619,11 @@ pub unsafe extern "C" fn free_signs() {
     while __i < sign_map.set.h.n_keys {
         name = *sign_map.set.keys.offset(__i as isize);
         if names.size == names.capacity {
-            names.capacity = (if names.capacity != 0 {
+            names.capacity = if names.capacity != 0 {
                 names.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             names.items = xrealloc(
                 names.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<cstr_t>().wrapping_mul(names.capacity),
@@ -4676,7 +4676,7 @@ unsafe extern "C" fn get_nth_sign_group_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_sign_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     match expand_what as ::core::ffi::c_uint {
@@ -4953,7 +4953,7 @@ unsafe extern "C" fn sign_define_multiple(mut l: *mut list_T, mut retlist: *mut 
 pub unsafe extern "C" fn f_sign_define(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -4995,7 +4995,7 @@ pub unsafe extern "C" fn f_sign_define(
 pub unsafe extern "C" fn f_sign_getdefined(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, 0 as ptrdiff_t);
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -5023,7 +5023,7 @@ pub unsafe extern "C" fn f_sign_getdefined(
 pub unsafe extern "C" fn f_sign_getplaced(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     let mut lnum: linenr_T = 0 as linenr_T;
@@ -5093,7 +5093,7 @@ pub unsafe extern "C" fn f_sign_getplaced(
 pub unsafe extern "C" fn f_sign_jump(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut notanum: bool = false_0 != 0;
@@ -5243,7 +5243,7 @@ unsafe extern "C" fn sign_place_from_dict(
 pub unsafe extern "C" fn f_sign_place(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     (*rettv).vval.v_number = -1 as varnumber_T;
@@ -5269,7 +5269,7 @@ pub unsafe extern "C" fn f_sign_place(
 pub unsafe extern "C" fn f_sign_placelist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -5323,7 +5323,7 @@ unsafe extern "C" fn sign_undefine_multiple(mut l: *mut list_T, mut retlist: *mu
 pub unsafe extern "C" fn f_sign_undefine(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5410,7 +5410,7 @@ unsafe extern "C" fn sign_unplace_from_dict(
 pub unsafe extern "C" fn f_sign_unplace(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
     (*rettv).vval.v_number = -1 as varnumber_T;
@@ -5434,7 +5434,7 @@ pub unsafe extern "C" fn f_sign_unplace(
 pub unsafe extern "C" fn f_sign_unplacelist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint

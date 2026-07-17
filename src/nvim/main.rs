@@ -11012,7 +11012,7 @@ unsafe extern "C" fn init_startuptime(mut paramp: *mut mparm_T) {
         }
     }
 }
-unsafe extern "C" fn check_and_set_isatty(mut paramp: *mut mparm_T) {
+unsafe extern "C" fn check_and_set_isatty(mut _paramp: *mut mparm_T) {
     stdin_isatty = os_isatty(STDIN_FILENO);
     stdout_isatty = os_isatty(STDOUT_FILENO);
     stderr_isatty = os_isatty(STDERR_FILENO);
@@ -15141,7 +15141,7 @@ unsafe extern "C" fn init_path(mut exename: *const ::core::ffi::c_char) {
     );
     set_vim_var_string(VV_PROGNAME, path_tail(exename), -1 as ptrdiff_t);
 }
-unsafe extern "C" fn get_fname(mut parmp: *mut mparm_T) -> *mut ::core::ffi::c_char {
+unsafe extern "C" fn get_fname(mut _parmp: *mut mparm_T) -> *mut ::core::ffi::c_char {
     return alist_name(
         (global_alist.al_ga.ga_data as *mut aentry_T).offset(0 as ::core::ffi::c_int as isize),
     );

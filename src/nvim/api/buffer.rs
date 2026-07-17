@@ -2955,7 +2955,7 @@ pub unsafe extern "C" fn nvim_buf_get_text(
     mut start_col: Integer,
     mut end_row: Integer,
     mut end_col: Integer,
-    mut opts: *mut KeyDict_empty,
+    mut _opts: *mut KeyDict_empty,
     mut arena: *mut Arena,
     mut lstate: *mut lua_State,
     mut err: *mut Error,
@@ -3396,7 +3396,7 @@ pub unsafe extern "C" fn nvim_buf_set_mark(
     mut name: String_0,
     mut line: Integer,
     mut col: Integer,
-    mut opts: *mut KeyDict_empty,
+    mut _opts: *mut KeyDict_empty,
     mut err: *mut Error,
 ) -> Boolean {
     let mut res: bool = false_0 != 0;

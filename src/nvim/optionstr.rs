@@ -3071,11 +3071,11 @@ pub unsafe extern "C" fn check_illegal_path_names(
     return flags & kOptFlagNFname as ::core::ffi::c_int as uint32_t != 0
         && !strpbrk(
             val,
-            (if secure != 0 {
+            if secure != 0 {
                 b"/\\*?[|;&<>\r\n\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"/\\*?[<>\r\n\0".as_ptr() as *const ::core::ffi::c_char
-            }),
+            },
         )
         .is_null()
         || flags & kOptFlagNDname as ::core::ffi::c_int as uint32_t != 0
@@ -3341,7 +3341,7 @@ pub unsafe extern "C" fn did_set_ambiwidth(mut args: *mut optset_T) -> *const ::
     return check_chars_options();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_emoji(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_emoji(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if check_str_opt(
         kOptAmbiwidth,
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
@@ -3451,19 +3451,19 @@ pub unsafe extern "C" fn did_set_backupcopy(mut args: *mut optset_T) -> *const :
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_backupext_or_patchmode(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     if strcmp(
-        (if *p_bex as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
+        if *p_bex as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
             p_bex.offset(1 as ::core::ffi::c_int as isize)
         } else {
             p_bex
-        }),
-        (if *p_pm as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
+        },
+        if *p_pm as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
             p_pm.offset(1 as ::core::ffi::c_int as isize)
         } else {
             p_pm
-        }),
+        },
     ) == 0 as ::core::ffi::c_int
     {
         return &raw const e_backupext_and_patchmode_are_equal as *const ::core::ffi::c_char;
@@ -3471,7 +3471,7 @@ pub unsafe extern "C" fn did_set_backupext_or_patchmode(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_breakat(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_breakat(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < 256 as ::core::ffi::c_int {
         breakat_flags[i as usize] = false_0 as ::core::ffi::c_char;
@@ -3494,11 +3494,11 @@ pub unsafe extern "C" fn did_set_breakindentopt(
     let mut varp: *mut *mut ::core::ffi::c_char = (*args).os_varp as *mut *mut ::core::ffi::c_char;
     if briopt_check(
         *varp,
-        (if varp == &raw mut (*win).w_onebuf_opt.wo_briopt {
+        if varp == &raw mut (*win).w_onebuf_opt.wo_briopt {
             win
         } else {
             ::core::ptr::null_mut::<win_T>()
-        }),
+        },
     ) as ::core::ffi::c_int
         == FAIL
     {
@@ -3910,7 +3910,7 @@ pub unsafe extern "C" fn did_set_complete(mut args: *mut optset_T) -> *const ::c
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_completeitemalign(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut p: *mut ::core::ffi::c_char = p_cia;
     let mut new_cia_flags: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
@@ -4066,7 +4066,7 @@ pub unsafe extern "C" fn did_set_diffanchors(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_diffopt(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_diffopt(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     return if diffopt_changed() == FAIL {
         &raw const e_invarg as *const ::core::ffi::c_char
     } else {
@@ -4281,7 +4281,7 @@ pub unsafe extern "C" fn did_set_fileformat(mut args: *mut optset_T) -> *const :
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_fileformat_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx
@@ -4382,7 +4382,7 @@ pub unsafe extern "C" fn expand_set_formatoptions(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_guicursor(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_guicursor(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut errmsg: *const ::core::ffi::c_char = parse_shape_opt(SHAPE_CURSOR);
     if !errmsg.is_null() {
         return errmsg;
@@ -4393,7 +4393,7 @@ pub unsafe extern "C" fn did_set_guicursor(mut args: *mut optset_T) -> *const ::
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_helpfile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_helpfile(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if didset_vim {
         vim_unsetenv_ext(b"VIM\0".as_ptr() as *const ::core::ffi::c_char);
     }
@@ -4403,7 +4403,7 @@ pub unsafe extern "C" fn did_set_helpfile(mut args: *mut optset_T) -> *const ::c
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_helplang(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_helplang(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut s: *mut ::core::ffi::c_char = p_hlg;
     while *s as ::core::ffi::c_int != NUL {
         if *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
@@ -4554,7 +4554,7 @@ pub unsafe extern "C" fn did_set_matchpairs(mut args: *mut optset_T) -> *const :
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_messagesopt(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     if messagesopt_changed() == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -4562,7 +4562,7 @@ pub unsafe extern "C" fn did_set_messagesopt(
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_mkspellmem(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_mkspellmem(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if spell_check_msm() != OK {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -4593,7 +4593,7 @@ pub unsafe extern "C" fn expand_set_mouse(
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_mousescroll(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut vertical: OptInt = -1 as OptInt;
     let mut horizontal: OptInt = -1 as OptInt;
@@ -4872,11 +4872,11 @@ pub unsafe extern "C" fn did_set_signcolumn(mut args: *mut optset_T) -> *const :
     let mut oldval: *const ::core::ffi::c_char = (*args).os_oldval.string.data;
     if check_signcolumn(
         *varp,
-        (if varp == &raw mut (*win).w_onebuf_opt.wo_scl {
+        if varp == &raw mut (*win).w_onebuf_opt.wo_scl {
             win
         } else {
             ::core::ptr::null_mut::<win_T>()
-        }),
+        },
     ) != OK
     {
         return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -4944,7 +4944,7 @@ pub unsafe extern "C" fn did_set_spelloptions(
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_spellsuggest(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     if spell_check_sps() != OK {
         return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -5161,7 +5161,7 @@ pub unsafe extern "C" fn did_set_vartabstop(mut args: *mut optset_T) -> *const :
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_verbosefile(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     verbose_stop();
     if *p_vfile as ::core::ffi::c_int != NUL && verbose_open() == FAIL {
@@ -5220,7 +5220,7 @@ pub unsafe extern "C" fn expand_set_whichwrap(
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_wildmode(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_wildmode(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if check_opt_wim() == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -5287,14 +5287,14 @@ unsafe extern "C" fn parse_border_opt(mut border_opt: *mut ::core::ffi::c_char) 
     return result;
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_winborder(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_winborder(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !parse_border_opt(p_winborder) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_pumborder(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_pumborder(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if !parse_border_opt(p_pumborder) {
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
@@ -5882,7 +5882,7 @@ pub unsafe extern "C" fn set_chars_option(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_fillchars_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx < 0 as ::core::ffi::c_int
@@ -5901,7 +5901,7 @@ pub unsafe extern "C" fn get_fillchars_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_listchars_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx < 0 as ::core::ffi::c_int

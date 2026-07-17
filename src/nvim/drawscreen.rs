@@ -5205,13 +5205,13 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
                             (*wp).w_view_height - 1 as ::core::ffi::c_int,
                         );
                         let mut width: ::core::ffi::c_int = if grid_line_getchar(
-                            (if (*wp).w_view_width - 3 as ::core::ffi::c_int
+                            if (*wp).w_view_width - 3 as ::core::ffi::c_int
                                 > 0 as ::core::ffi::c_int
                             {
                                 (*wp).w_view_width - 3 as ::core::ffi::c_int
                             } else {
                                 0 as ::core::ffi::c_int
-                            }),
+                            },
                             ::core::ptr::null_mut::<::core::ffi::c_int>(),
                         ) == NUL as schar_T
                         {

@@ -947,7 +947,7 @@ unsafe extern "C" fn lookup_colour_palette(
     return false_0 != 0;
 }
 unsafe extern "C" fn lookup_colour(
-    mut state: *const VTermState,
+    mut _state: *const VTermState,
     mut palette: ::core::ffi::c_int,
     mut args: *const ::core::ffi::c_long,
     mut argcount: ::core::ffi::c_int,
@@ -998,7 +998,7 @@ unsafe extern "C" fn lookup_colour(
 unsafe extern "C" fn setpenattr(
     mut state: *mut VTermState,
     mut attr: VTermAttr,
-    mut type_0: VTermValueType,
+    mut _type_0: VTermValueType,
     mut val: *mut VTermValue,
 ) {
     if !(*state).callbacks.is_null() && (*(*state).callbacks).setpenattr.is_some() {
@@ -1688,7 +1688,7 @@ unsafe extern "C" fn vterm_state_getpen_color(
 pub unsafe extern "C" fn vterm_state_getpen(
     mut state: *mut VTermState,
     mut args: *mut ::core::ffi::c_long,
-    mut argcount: ::core::ffi::c_int,
+    mut _argcount: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut argi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if (*state).pen.bold() != 0 {

@@ -2508,7 +2508,7 @@ pub unsafe extern "C" fn internal_format(
         let mut col: colnr_T = 0;
         let mut did_do_comment: bool = false_0 != 0;
         let mut virtcol: colnr_T =
-            get_nolist_virtcol() + char2cells((if c != NUL { c } else { gchar_cursor() }));
+            get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
         if virtcol <= textwidth {
             break;
         }

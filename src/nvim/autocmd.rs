@@ -5543,11 +5543,11 @@ pub unsafe extern "C" fn autocmd_register(
         == autocmds[event as ::core::ffi::c_int as usize].capacity
     {
         autocmds[event as ::core::ffi::c_int as usize].capacity =
-            (if autocmds[event as ::core::ffi::c_int as usize].capacity != 0 {
+            if autocmds[event as ::core::ffi::c_int as usize].capacity != 0 {
                 autocmds[event as ::core::ffi::c_int as usize].capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
         autocmds[event as ::core::ffi::c_int as usize].items = xrealloc(
             autocmds[event as ::core::ffi::c_int as usize].items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<AutoCmd>()
@@ -5773,11 +5773,11 @@ pub unsafe extern "C" fn aucmd_prepbuf(mut aco: *mut aco_save_T, mut buf: *mut b
         }
         if auc_idx == aucmd_win_vec.size as ::core::ffi::c_int {
             if aucmd_win_vec.size == aucmd_win_vec.capacity {
-                aucmd_win_vec.capacity = (if aucmd_win_vec.capacity != 0 {
+                aucmd_win_vec.capacity = if aucmd_win_vec.capacity != 0 {
                     aucmd_win_vec.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 aucmd_win_vec.items = xrealloc(
                     aucmd_win_vec.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<aucmdwin_T>().wrapping_mul(aucmd_win_vec.capacity),
@@ -7041,10 +7041,10 @@ unsafe extern "C" fn au_callback(mut ac: *const AutoCmd, mut apc: *const AutoPat
 }
 #[no_mangle]
 pub unsafe extern "C" fn getnextac(
-    mut c: ::core::ffi::c_int,
+    mut _c: ::core::ffi::c_int,
     mut cookie: *mut ::core::ffi::c_void,
-    mut indent: ::core::ffi::c_int,
-    mut do_concat: bool,
+    mut _indent: ::core::ffi::c_int,
+    mut _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     let apc: *mut AutoPatCmd = cookie as *mut AutoPatCmd;
     let acs: *mut AutoCmdVec =
@@ -7169,7 +7169,7 @@ pub unsafe extern "C" fn has_autocmd(
 }
 #[no_mangle]
 pub unsafe extern "C" fn expand_get_augroup_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     return augroup_name(idx + 1 as ::core::ffi::c_int);
@@ -7225,7 +7225,7 @@ pub unsafe extern "C" fn set_context_in_autocmd(
 }
 #[no_mangle]
 pub unsafe extern "C" fn expand_get_event_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let mut name: *mut ::core::ffi::c_char = augroup_name(idx + 1 as ::core::ffi::c_int);
@@ -7243,7 +7243,7 @@ pub unsafe extern "C" fn expand_get_event_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_event_name_no_group(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
     mut win: bool,
 ) -> *mut ::core::ffi::c_char {
@@ -7586,7 +7586,7 @@ unsafe extern "C" fn arg_autocmd_flag_get(
     return false_0 != 0;
 }
 static mut pending_vimresume: TriState = kFalse;
-unsafe extern "C" fn vimresume_event(mut argv: *mut *mut ::core::ffi::c_void) {
+unsafe extern "C" fn vimresume_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     apply_autocmds(
         EVENT_VIMRESUME,
         ::core::ptr::null_mut::<::core::ffi::c_char>(),

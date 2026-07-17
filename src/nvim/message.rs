@@ -4348,11 +4348,11 @@ unsafe extern "C" fn format_progress_message(
             );
         }
         if updated_msg.size == updated_msg.capacity {
-            updated_msg.capacity = (if updated_msg.capacity != 0 {
+            updated_msg.capacity = if updated_msg.capacity != 0 {
                 updated_msg.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             updated_msg.items = xrealloc(
                 updated_msg.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
@@ -4366,11 +4366,11 @@ unsafe extern "C" fn format_progress_message(
             hl_id: hl_id,
         };
         if updated_msg.size == updated_msg.capacity {
-            updated_msg.capacity = (if updated_msg.capacity != 0 {
+            updated_msg.capacity = if updated_msg.capacity != 0 {
                 updated_msg.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             updated_msg.items = xrealloc(
                 updated_msg.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
@@ -4399,11 +4399,11 @@ unsafe extern "C" fn format_progress_message(
             ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
         );
         if updated_msg.size == updated_msg.capacity {
-            updated_msg.capacity = (if updated_msg.capacity != 0 {
+            updated_msg.capacity = if updated_msg.capacity != 0 {
                 updated_msg.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             updated_msg.items = xrealloc(
                 updated_msg.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
@@ -4421,11 +4421,11 @@ unsafe extern "C" fn format_progress_message(
         let mut i: uint32_t = 0 as uint32_t;
         while (i as size_t) < hl_msg.size {
             if updated_msg.size == updated_msg.capacity {
-                updated_msg.capacity = (if updated_msg.capacity != 0 {
+                updated_msg.capacity = if updated_msg.capacity != 0 {
                     updated_msg.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 updated_msg.items = xrealloc(
                     updated_msg.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(updated_msg.capacity),
@@ -5472,11 +5472,11 @@ unsafe extern "C" fn msg_hist_add(
         items: ::core::ptr::null_mut::<HlMessageChunk>(),
     };
     if msg_0.size == msg_0.capacity {
-        msg_0.capacity = (if msg_0.capacity != 0 {
+        msg_0.capacity = if msg_0.capacity != 0 {
             msg_0.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         msg_0.items = xrealloc(
             msg_0.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(msg_0.capacity),
@@ -5526,11 +5526,11 @@ pub unsafe extern "C" fn do_autocmd_progress(
     let mut i: size_t = 0 as size_t;
     while i < msg_0.size {
         if messages.size == messages.capacity {
-            messages.capacity = (if messages.capacity != 0 {
+            messages.capacity = if messages.capacity != 0 {
                 messages.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             messages.items = xrealloc(
                 messages.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Object>().wrapping_mul(messages.capacity),
@@ -5645,7 +5645,7 @@ pub unsafe extern "C" fn do_autocmd_progress(
 unsafe extern "C" fn msg_hist_add_multihl(
     mut msg_0: HlMessage,
     mut temp: bool,
-    mut msg_data: *mut MessageData,
+    mut _msg_data: *mut MessageData,
 ) {
     if do_clear_hist_temp {
         msg_hist_clear_temp();
@@ -5885,11 +5885,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                     items: ::core::ptr::null_mut::<Object>(),
                 };
                 if entry.size == entry.capacity {
-                    entry.capacity = (if entry.capacity != 0 {
+                    entry.capacity = if entry.capacity != 0 {
                         entry.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     entry.items = xrealloc(
                         entry.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(entry.capacity),
@@ -5918,11 +5918,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                         items: ::core::ptr::null_mut::<Object>(),
                     };
                     if content_entry.size == content_entry.capacity {
-                        content_entry.capacity = (if content_entry.capacity != 0 {
+                        content_entry.capacity = if content_entry.capacity != 0 {
                             content_entry.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         content_entry.items = xrealloc(
                             content_entry.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(content_entry.capacity),
@@ -5942,11 +5942,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                         },
                     };
                     if content_entry.size == content_entry.capacity {
-                        content_entry.capacity = (if content_entry.capacity != 0 {
+                        content_entry.capacity = if content_entry.capacity != 0 {
                             content_entry.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         content_entry.items = xrealloc(
                             content_entry.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(content_entry.capacity),
@@ -5962,11 +5962,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                         },
                     };
                     if content_entry.size == content_entry.capacity {
-                        content_entry.capacity = (if content_entry.capacity != 0 {
+                        content_entry.capacity = if content_entry.capacity != 0 {
                             content_entry.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         content_entry.items = xrealloc(
                             content_entry.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(content_entry.capacity),
@@ -5982,11 +5982,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                         },
                     };
                     if content.size == content.capacity {
-                        content.capacity = (if content.capacity != 0 {
+                        content.capacity = if content.capacity != 0 {
                             content.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         content.items = xrealloc(
                             content.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(content.capacity),
@@ -6004,11 +6004,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                     i = i.wrapping_add(1);
                 }
                 if entry.size == entry.capacity {
-                    entry.capacity = (if entry.capacity != 0 {
+                    entry.capacity = if entry.capacity != 0 {
                         entry.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     entry.items = xrealloc(
                         entry.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(entry.capacity),
@@ -6022,11 +6022,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                     data: C2Rust_Unnamed_11 { array: content },
                 };
                 if entry.size == entry.capacity {
-                    entry.capacity = (if entry.capacity != 0 {
+                    entry.capacity = if entry.capacity != 0 {
                         entry.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     entry.items = xrealloc(
                         entry.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(entry.capacity),
@@ -6042,11 +6042,11 @@ pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
                     },
                 };
                 if entries.size == entries.capacity {
-                    entries.capacity = (if entries.capacity != 0 {
+                    entries.capacity = if entries.capacity != 0 {
                         entries.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     entries.items = xrealloc(
                         entries.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(entries.capacity),
@@ -7304,11 +7304,11 @@ unsafe extern "C" fn msg_ext_emit_chunk() {
         items: ::core::ptr::null_mut::<Object>(),
     };
     if chunk.size == chunk.capacity {
-        chunk.capacity = (if chunk.capacity != 0 {
+        chunk.capacity = if chunk.capacity != 0 {
             chunk.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         chunk.items = xrealloc(
             chunk.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
@@ -7326,11 +7326,11 @@ unsafe extern "C" fn msg_ext_emit_chunk() {
     msg_ext_last_attr = -1 as ::core::ffi::c_int as sattr_T;
     let mut text: String_0 = ga_take_string(&raw mut msg_ext_last_chunk);
     if chunk.size == chunk.capacity {
-        chunk.capacity = (if chunk.capacity != 0 {
+        chunk.capacity = if chunk.capacity != 0 {
             chunk.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         chunk.items = xrealloc(
             chunk.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
@@ -7344,11 +7344,11 @@ unsafe extern "C" fn msg_ext_emit_chunk() {
         data: C2Rust_Unnamed_11 { string: text },
     };
     if chunk.size == chunk.capacity {
-        chunk.capacity = (if chunk.capacity != 0 {
+        chunk.capacity = if chunk.capacity != 0 {
             chunk.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         chunk.items = xrealloc(
             chunk.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
@@ -7364,11 +7364,11 @@ unsafe extern "C" fn msg_ext_emit_chunk() {
         },
     };
     if (*msg_ext_chunks).size == (*msg_ext_chunks).capacity {
-        (*msg_ext_chunks).capacity = (if (*msg_ext_chunks).capacity != 0 {
+        (*msg_ext_chunks).capacity = if (*msg_ext_chunks).capacity != 0 {
             (*msg_ext_chunks).capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*msg_ext_chunks).items = xrealloc(
             (*msg_ext_chunks).items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul((*msg_ext_chunks).capacity),
@@ -8523,11 +8523,11 @@ pub unsafe extern "C" fn msg_ext_ui_flush() {
             while i < (*tofree).size {
                 let mut chunk: *mut Object = (*(*tofree).items.offset(i as isize)).data.array.items;
                 if msg_0.size == msg_0.capacity {
-                    msg_0.capacity = (if msg_0.capacity != 0 {
+                    msg_0.capacity = if msg_0.capacity != 0 {
                         msg_0.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     msg_0.items = xrealloc(
                         msg_0.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(msg_0.capacity),
@@ -8819,12 +8819,12 @@ pub unsafe extern "C" fn msg_advance(mut col: ::core::ffi::c_int) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn do_dialog(
-    mut type_0: ::core::ffi::c_int,
-    mut title: *const ::core::ffi::c_char,
+    mut _type_0: ::core::ffi::c_int,
+    mut _title: *const ::core::ffi::c_char,
     mut message: *const ::core::ffi::c_char,
     mut buttons: *const ::core::ffi::c_char,
     mut dfltbutton: ::core::ffi::c_int,
-    mut textfield: *const ::core::ffi::c_char,
+    mut _textfield: *const ::core::ffi::c_char,
     mut ex_cmd: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -9115,11 +9115,11 @@ pub unsafe extern "C" fn vim_dialog_yesno(
 ) -> ::core::ffi::c_int {
     if do_dialog(
         type_0,
-        (if title.is_null() {
+        if title.is_null() {
             gettext(b"Question\0".as_ptr() as *const ::core::ffi::c_char)
         } else {
             title
-        }),
+        },
         message,
         gettext(b"&Yes\n&No\0".as_ptr() as *const ::core::ffi::c_char),
         dflt,

@@ -4231,9 +4231,9 @@ pub unsafe extern "C" fn stacktrace_create() -> *mut list_T {
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getstacktrace(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_set_ret(rettv, stacktrace_create());
 }
@@ -4629,11 +4629,11 @@ unsafe extern "C" fn copy_runtime_search_path(src: RuntimeSearchPath) -> Runtime
     while j < src.size {
         let mut item: SearchPathItem = *src.items.offset(j as isize);
         if dst.size == dst.capacity {
-            dst.capacity = (if dst.capacity != 0 {
+            dst.capacity = if dst.capacity != 0 {
                 dst.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             dst.items = xrealloc(
                 dst.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<SearchPathItem>().wrapping_mul(dst.capacity),
@@ -5086,11 +5086,11 @@ unsafe extern "C" fn push_path(
     if set_put_String(rtp_used, cstr_as_string(entry), &raw mut key_alloc) {
         *key_alloc = cstr_to_string(entry);
         if (*search_path).size == (*search_path).capacity {
-            (*search_path).capacity = (if (*search_path).capacity != 0 {
+            (*search_path).capacity = if (*search_path).capacity != 0 {
                 (*search_path).capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*search_path).items = xrealloc(
                 (*search_path).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<SearchPathItem>().wrapping_mul((*search_path).capacity),
@@ -5197,11 +5197,11 @@ unsafe extern "C" fn expand_pack_entry(
                 after_size,
             );
             if (*after_path).size == (*after_path).capacity {
-                (*after_path).capacity = (if (*after_path).capacity != 0 {
+                (*after_path).capacity = if (*after_path).capacity != 0 {
                     (*after_path).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*after_path).items = xrealloc(
                     (*after_path).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<*mut ::core::ffi::c_char>()
@@ -5263,11 +5263,11 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
             size: buflen,
         };
         if pack_entries.size == pack_entries.capacity {
-            pack_entries.capacity = (if pack_entries.capacity != 0 {
+            pack_entries.capacity = if pack_entries.capacity != 0 {
                 pack_entries.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             pack_entries.items = xrealloc(
                 pack_entries.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<String_0>().wrapping_mul(pack_entries.capacity),
@@ -5395,7 +5395,7 @@ unsafe extern "C" fn runtime_search_path_build() -> RuntimeSearchPath {
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_runtimepackpath(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     runtime_search_path_valid = false_0 != 0;
     return ::core::ptr::null::<::core::ffi::c_char>();
@@ -5760,11 +5760,11 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
                 runtime_search_path_valid = true_0 != 0;
                 runtime_search_path_valid_thread = false_0 != 0;
                 if runtime_search_path.size == runtime_search_path.capacity {
-                    runtime_search_path.capacity = (if runtime_search_path.capacity != 0 {
+                    runtime_search_path.capacity = if runtime_search_path.capacity != 0 {
                         runtime_search_path.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     runtime_search_path.items = xrealloc(
                         runtime_search_path.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<SearchPathItem>()
@@ -5776,11 +5776,11 @@ unsafe extern "C" fn add_pack_dir_to_rtp(
                 let mut i: ssize_t = runtime_search_path.size as ssize_t - 1 as ssize_t;
                 if afterlen > 0 as size_t {
                     if runtime_search_path.size == runtime_search_path.capacity {
-                        runtime_search_path.capacity = (if runtime_search_path.capacity != 0 {
+                        runtime_search_path.capacity = if runtime_search_path.capacity != 0 {
                             runtime_search_path.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         runtime_search_path.items = xrealloc(
                             runtime_search_path.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<SearchPathItem>()
@@ -6043,7 +6043,7 @@ unsafe extern "C" fn add_pack_start_dir(
     mut num_fnames: ::core::ffi::c_int,
     mut fnames: *mut *mut ::core::ffi::c_char,
     mut all: bool,
-    mut cookie: *mut ::core::ffi::c_void,
+    mut _cookie: *mut ::core::ffi::c_void,
 ) -> bool {
     static mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -7151,7 +7151,7 @@ pub unsafe extern "C" fn ex_source(mut eap: *mut exarg_T) {
     cmd_source((*eap).arg, eap);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_options(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_options(mut _eap: *mut exarg_T) {
     let mut buf: [::core::ffi::c_char; 500] = [0; 500];
     let mut multi_mods: bool = false;
     buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
@@ -8157,7 +8157,7 @@ unsafe extern "C" fn get_script_local_funcs(mut sid: scid_T) -> *mut list_T {
 pub unsafe extern "C" fn f_getscriptinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, script_items.ga_len as ptrdiff_t);
     if tv_check_for_opt_dict_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
@@ -8284,9 +8284,9 @@ pub unsafe extern "C" fn f_getscriptinfo(
 }
 #[no_mangle]
 pub unsafe extern "C" fn getsourceline(
-    mut c: ::core::ffi::c_int,
+    mut _c: ::core::ffi::c_int,
     mut cookie: *mut ::core::ffi::c_void,
-    mut indent: ::core::ffi::c_int,
+    mut _indent: ::core::ffi::c_int,
     mut do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     let mut sp: *mut source_cookie_T = cookie as *mut source_cookie_T;

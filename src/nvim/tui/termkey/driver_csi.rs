@@ -333,7 +333,7 @@ static mut csi_ss3s: [keyinfo; 64] = [keyinfo {
     modifier_set: 0,
 }; 64];
 unsafe extern "C" fn handle_csi_ss3_full(
-    mut tk: *mut TermKey,
+    mut _tk: *mut TermKey,
     mut key: *mut TermKeyKey,
     mut cmd: ::core::ffi::c_int,
     mut params: *mut TermKeyCsiParam,
@@ -452,7 +452,7 @@ static mut csifuncs: [keyinfo; 35] = [keyinfo {
 unsafe extern "C" fn handle_csifunc(
     mut tk: *mut TermKey,
     mut key: *mut TermKeyKey,
-    mut cmd: ::core::ffi::c_int,
+    mut _cmd: ::core::ffi::c_int,
     mut params: *mut TermKeyCsiParam,
     mut nparams: ::core::ffi::c_int,
 ) -> TermKeyResult {
@@ -638,7 +638,7 @@ unsafe extern "C" fn handle_csi_u(
     };
 }
 unsafe extern "C" fn handle_csi_m(
-    mut tk: *mut TermKey,
+    mut _tk: *mut TermKey,
     mut key: *mut TermKeyKey,
     mut cmd: ::core::ffi::c_int,
     mut params: *mut TermKeyCsiParam,
@@ -713,7 +713,7 @@ unsafe extern "C" fn handle_csi_m(
 }
 #[no_mangle]
 pub unsafe extern "C" fn termkey_interpret_mouse(
-    mut tk: *mut TermKey,
+    mut _tk: *mut TermKey,
     mut key: *const TermKeyKey,
     mut event: *mut TermKeyMouseEvent,
     mut button: *mut ::core::ffi::c_int,
@@ -825,7 +825,7 @@ unsafe extern "C" fn handle_csi_R(
 }
 #[no_mangle]
 pub unsafe extern "C" fn termkey_interpret_position(
-    mut tk: *mut TermKey,
+    mut _tk: *mut TermKey,
     mut key: *const TermKeyKey,
     mut line: *mut ::core::ffi::c_int,
     mut col: *mut ::core::ffi::c_int,
@@ -837,7 +837,7 @@ pub unsafe extern "C" fn termkey_interpret_position(
     return TERMKEY_RES_KEY;
 }
 unsafe extern "C" fn handle_csi_y(
-    mut tk: *mut TermKey,
+    mut _tk: *mut TermKey,
     mut key: *mut TermKeyKey,
     mut cmd: ::core::ffi::c_int,
     mut params: *mut TermKeyCsiParam,
@@ -888,7 +888,7 @@ unsafe extern "C" fn handle_csi_y(
 }
 #[no_mangle]
 pub unsafe extern "C" fn termkey_interpret_modereport(
-    mut tk: *mut TermKey,
+    mut _tk: *mut TermKey,
     mut key: *const TermKeyKey,
     mut initial: *mut ::core::ffi::c_int,
     mut mode: *mut ::core::ffi::c_int,
@@ -1488,7 +1488,7 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn new_driver_csi(
     mut tk: *mut TermKey,
-    mut term: *mut TerminfoEntry,
+    mut _term: *mut TerminfoEntry,
 ) -> *mut ::core::ffi::c_void {
     if keyinfo_initialised == 0 {
         if register_keys() == 0 {
@@ -1511,7 +1511,7 @@ pub unsafe extern "C" fn free_driver_csi(mut info: *mut ::core::ffi::c_void) {
 }
 unsafe extern "C" fn peekkey_csi_csi(
     mut tk: *mut TermKey,
-    mut csi: *mut TermKeyCsi,
+    mut _csi: *mut TermKeyCsi,
     mut introlen: size_t,
     mut key: *mut TermKeyKey,
     mut force: ::core::ffi::c_int,
@@ -1603,7 +1603,7 @@ unsafe extern "C" fn peekkey_csi_csi(
 }
 unsafe extern "C" fn peekkey_ss3(
     mut tk: *mut TermKey,
-    mut csi: *mut TermKeyCsi,
+    mut _csi: *mut TermKeyCsi,
     mut introlen: size_t,
     mut key: *mut TermKeyKey,
     mut force: ::core::ffi::c_int,
@@ -1673,7 +1673,7 @@ unsafe extern "C" fn peekkey_ctrlstring(
     mut csi: *mut TermKeyCsi,
     mut introlen: size_t,
     mut key: *mut TermKeyKey,
-    mut force: ::core::ffi::c_int,
+    mut _force: ::core::ffi::c_int,
     mut nbytep: *mut size_t,
 ) -> TermKeyResult {
     let mut str_end: size_t = introlen;

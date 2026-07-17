@@ -744,7 +744,7 @@ pub type PutCallback =
     Option<unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()>;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 #[no_mangle]
-pub unsafe extern "C" fn loop_init(mut loop_0: *mut Loop, mut data: *mut ::core::ffi::c_void) {
+pub unsafe extern "C" fn loop_init(mut loop_0: *mut Loop, mut _data: *mut ::core::ffi::c_void) {
     uv_loop_init(&raw mut (*loop_0).uv);
     (*loop_0).recursive = 0 as ::core::ffi::c_int;
     (*loop_0).closing = false_0 != 0;
@@ -845,7 +845,7 @@ unsafe extern "C" fn loop_deferred_event(mut argv: *mut *mut ::core::ffi::c_void
 }
 #[no_mangle]
 pub unsafe extern "C" fn loop_on_put(
-    mut queue: *mut MultiQueue,
+    mut _queue: *mut MultiQueue,
     mut data: *mut ::core::ffi::c_void,
 ) {
     let mut loop_0: *mut Loop = data as *mut Loop;
@@ -853,7 +853,7 @@ pub unsafe extern "C" fn loop_on_put(
         uv_stop(&raw mut (*loop_0).uv);
     }
 }
-unsafe extern "C" fn loop_walk_cb(mut handle: *mut uv_handle_t, mut arg: *mut ::core::ffi::c_void) {
+unsafe extern "C" fn loop_walk_cb(mut handle: *mut uv_handle_t, mut _arg: *mut ::core::ffi::c_void) {
     if uv_is_closing(handle) == 0 {
         uv_close(handle, None);
     }

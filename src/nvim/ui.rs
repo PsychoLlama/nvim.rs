@@ -2921,7 +2921,7 @@ pub unsafe extern "C" fn ui_pum_get_pos(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn ui_refresh_event(mut argv: *mut *mut ::core::ffi::c_void) {
+unsafe extern "C" fn ui_refresh_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     ui_refresh();
 }
 #[no_mangle]

@@ -1132,7 +1132,7 @@ unsafe extern "C" fn erase_internal(
 }
 unsafe extern "C" fn erase_user(
     mut rect: VTermRect,
-    mut selective: ::core::ffi::c_int,
+    mut _selective: ::core::ffi::c_int,
     mut user: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut screen: *mut VTermScreen = user as *mut VTermScreen;
@@ -1447,7 +1447,7 @@ unsafe extern "C" fn bell(mut user: *mut ::core::ffi::c_void) -> ::core::ffi::c_
 unsafe extern "C" fn line_popcount(
     mut buffer: *mut ScreenCell,
     mut row: ::core::ffi::c_int,
-    mut rows: ::core::ffi::c_int,
+    mut _rows: ::core::ffi::c_int,
     mut cols: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut col: ::core::ffi::c_int = cols - 1 as ::core::ffi::c_int;

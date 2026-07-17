@@ -3330,11 +3330,11 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                             b"E162: No write since last change for buffer \"%s\"\0".as_ptr()
                                 as *const ::core::ffi::c_char,
                         ),
-                        (if !buf_spname(buf_1).is_null() {
+                        if !buf_spname(buf_1).is_null() {
                             buf_spname(buf_1)
                         } else {
                             (*buf_1).b_fname
-                        }),
+                        },
                     ) as ::core::ffi::c_int
                 }) != 0
                     && msg_didany as ::core::ffi::c_int != 0

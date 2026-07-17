@@ -190,11 +190,11 @@ unsafe extern "C" fn xdg_remove_duplicate(
         }
         if !is_duplicate {
             if data.size == data.capacity {
-                data.capacity = (if data.capacity != 0 {
+                data.capacity = if data.capacity != 0 {
                     data.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(data.capacity),

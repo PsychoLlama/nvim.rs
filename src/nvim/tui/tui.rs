@@ -1577,11 +1577,11 @@ pub unsafe extern "C" fn tui_start(
         SIGWINCH,
     );
     if (*tui).attrs.size == (*tui).attrs.capacity {
-        (*tui).attrs.capacity = (if (*tui).attrs.capacity != 0 {
+        (*tui).attrs.capacity = if (*tui).attrs.capacity != 0 {
             (*tui).attrs.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*tui).attrs.items = xrealloc(
             (*tui).attrs.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<HlAttrs>().wrapping_mul((*tui).attrs.capacity),
@@ -2259,8 +2259,8 @@ pub unsafe extern "C" fn tui_is_stopped(mut tui: *mut TUIData) -> bool {
     return (*tui).stopped;
 }
 unsafe extern "C" fn sigwinch_cb(
-    mut watcher: *mut SignalWatcher,
-    mut signum: ::core::ffi::c_int,
+    mut _watcher: *mut SignalWatcher,
+    mut _signum: ::core::ffi::c_int,
     mut cbdata: *mut ::core::ffi::c_void,
 ) {
     let mut tui: *mut TUIData = cbdata as *mut TUIData;
@@ -2978,7 +2978,7 @@ unsafe extern "C" fn reset_scroll_region(mut tui: *mut TUIData, mut fullwidth: b
 #[no_mangle]
 pub unsafe extern "C" fn tui_grid_resize(
     mut tui: *mut TUIData,
-    mut g: Integer,
+    mut _g: Integer,
     mut width: Integer,
     mut height: Integer,
 ) {
@@ -3021,7 +3021,7 @@ pub unsafe extern "C" fn tui_grid_resize(
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn tui_grid_clear(mut tui: *mut TUIData, mut g: Integer) {
+pub unsafe extern "C" fn tui_grid_clear(mut tui: *mut TUIData, mut _g: Integer) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
     ugrid_clear(grid);
     schar_cache_clear_if_full();
@@ -3038,7 +3038,7 @@ pub unsafe extern "C" fn tui_grid_clear(mut tui: *mut TUIData, mut g: Integer) {
 #[no_mangle]
 pub unsafe extern "C" fn tui_grid_cursor_goto(
     mut tui: *mut TUIData,
-    mut grid: Integer,
+    mut _grid: Integer,
     mut row: Integer,
     mut col: Integer,
 ) {
@@ -3150,7 +3150,7 @@ pub unsafe extern "C" fn tui_mode_info_set(
     tui_set_mode(tui, (*tui).showing_mode);
 }
 #[no_mangle]
-pub unsafe extern "C" fn tui_update_menu(mut tui: *mut TUIData) {}
+pub unsafe extern "C" fn tui_update_menu(mut _tui: *mut TUIData) {}
 #[no_mangle]
 pub unsafe extern "C" fn tui_busy_start(mut tui: *mut TUIData) {
     (*tui).busy = true_0 != 0;
@@ -3287,7 +3287,7 @@ unsafe extern "C" fn tui_set_mode(mut tui: *mut TUIData, mut mode: ModeShape) {
 #[no_mangle]
 pub unsafe extern "C" fn tui_mode_change(
     mut tui: *mut TUIData,
-    mut mode: String_0,
+    mut _mode: String_0,
     mut mode_idx: Integer,
 ) {
     if (*tui).out_isatty as ::core::ffi::c_int != 0
@@ -3332,13 +3332,13 @@ pub unsafe extern "C" fn tui_mode_change(
 #[no_mangle]
 pub unsafe extern "C" fn tui_grid_scroll(
     mut tui: *mut TUIData,
-    mut g: Integer,
+    mut _g: Integer,
     mut startrow: Integer,
     mut endrow: Integer,
     mut startcol: Integer,
     mut endcol: Integer,
     mut rows: Integer,
-    mut cols: Integer,
+    mut _cols: Integer,
 ) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
     let mut top: ::core::ffi::c_int = startrow as ::core::ffi::c_int;
@@ -3408,7 +3408,7 @@ pub unsafe extern "C" fn tui_grid_scroll(
 }
 #[no_mangle]
 pub unsafe extern "C" fn tui_add_url(
-    mut tui: *mut TUIData,
+    mut _tui: *mut TUIData,
     mut url: *const ::core::ffi::c_char,
 ) -> int32_t {
     if url.is_null() {
@@ -3427,7 +3427,7 @@ pub unsafe extern "C" fn tui_hl_attr_define(
     mut id: Integer,
     mut attrs: HlAttrs,
     mut cterm_attrs: HlAttrs,
-    mut info: Array,
+    mut _info: Array,
 ) {
     attrs.cterm_ae_attr = cterm_attrs.cterm_ae_attr;
     attrs.cterm_fg_color = cterm_attrs.cterm_fg_color;
@@ -3876,7 +3876,7 @@ pub unsafe extern "C" fn tui_set_title(mut tui: *mut TUIData, mut title: String_
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn tui_set_icon(mut tui: *mut TUIData, mut icon: String_0) {}
+pub unsafe extern "C" fn tui_set_icon(mut _tui: *mut TUIData, mut _icon: String_0) {}
 #[no_mangle]
 pub unsafe extern "C" fn tui_screenshot(mut tui: *mut TUIData, mut path: String_0) {
     let mut f: *mut FILE =
@@ -4004,7 +4004,7 @@ pub unsafe extern "C" fn tui_option_set(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn tui_chdir(mut tui: *mut TUIData, mut path: String_0) {
+pub unsafe extern "C" fn tui_chdir(mut _tui: *mut TUIData, mut path: String_0) {
     let mut err: ::core::ffi::c_int = uv_chdir(path.data);
     if err != 0 as ::core::ffi::c_int {
         logmsg(
@@ -4022,7 +4022,7 @@ pub unsafe extern "C" fn tui_chdir(mut tui: *mut TUIData, mut path: String_0) {
 #[no_mangle]
 pub unsafe extern "C" fn tui_raw_line(
     mut tui: *mut TUIData,
-    mut g: Integer,
+    mut _g: Integer,
     mut linerow: Integer,
     mut startcol: Integer,
     mut endcol: Integer,
@@ -4152,11 +4152,11 @@ unsafe extern "C" fn invalidate(
         };
     } else {
         if (*tui).invalid_regions.size == (*tui).invalid_regions.capacity {
-            (*tui).invalid_regions.capacity = (if (*tui).invalid_regions.capacity != 0 {
+            (*tui).invalid_regions.capacity = if (*tui).invalid_regions.capacity != 0 {
                 (*tui).invalid_regions.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*tui).invalid_regions.items = xrealloc(
                 (*tui).invalid_regions.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Rect>().wrapping_mul((*tui).invalid_regions.capacity),

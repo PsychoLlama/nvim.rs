@@ -2593,11 +2593,11 @@ pub unsafe extern "C" fn win_float_remove(mut bang: bool, mut count: ::core::ffi
     let mut wp: *mut win_T = lastwin;
     while !wp.is_null() && (*wp).w_floating as ::core::ffi::c_int != 0 {
         if float_win_arr.size == float_win_arr.capacity {
-            float_win_arr.capacity = (if float_win_arr.capacity != 0 {
+            float_win_arr.capacity = if float_win_arr.capacity != 0 {
                 float_win_arr.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             float_win_arr.items = xrealloc(
                 float_win_arr.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<*mut win_T>().wrapping_mul(float_win_arr.capacity),

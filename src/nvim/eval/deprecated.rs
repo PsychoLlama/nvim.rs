@@ -2495,7 +2495,7 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 pub unsafe extern "C" fn f_rpcstart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -2672,9 +2672,9 @@ pub unsafe extern "C" fn f_rpcstop(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_last_buffer_nr(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut buf: *mut buf_T = firstbuf;

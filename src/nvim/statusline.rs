@@ -3110,11 +3110,11 @@ unsafe extern "C" fn win_redr_custom(
                 } else {
                     let mut chunk: Array = ARRAY_DICT_INIT;
                     if chunk.size == chunk.capacity {
-                        chunk.capacity = (if chunk.capacity != 0 {
+                        chunk.capacity = if chunk.capacity != 0 {
                             chunk.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         chunk.items = xrealloc(
                             chunk.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
@@ -3130,11 +3130,11 @@ unsafe extern "C" fn win_redr_custom(
                         },
                     };
                     if chunk.size == chunk.capacity {
-                        chunk.capacity = (if chunk.capacity != 0 {
+                        chunk.capacity = if chunk.capacity != 0 {
                             chunk.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         chunk.items = xrealloc(
                             chunk.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
@@ -3157,11 +3157,11 @@ unsafe extern "C" fn win_redr_custom(
                         },
                     };
                     if chunk.size == chunk.capacity {
-                        chunk.capacity = (if chunk.capacity != 0 {
+                        chunk.capacity = if chunk.capacity != 0 {
                             chunk.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         chunk.items = xrealloc(
                             chunk.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(chunk.capacity),
@@ -3177,11 +3177,11 @@ unsafe extern "C" fn win_redr_custom(
                         },
                     };
                     if content.size == content.capacity {
-                        content.capacity = (if content.capacity != 0 {
+                        content.capacity = if content.capacity != 0 {
                             content.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         content.items = xrealloc(
                             content.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<Object>().wrapping_mul(content.capacity),

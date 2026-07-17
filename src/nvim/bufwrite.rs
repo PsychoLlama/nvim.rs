@@ -3624,7 +3624,7 @@ unsafe extern "C" fn emit_err(mut e: *mut Error_T) {
 unsafe extern "C" fn get_fileinfo_os(
     mut fname: *mut ::core::ffi::c_char,
     mut file_info_old: *mut FileInfo,
-    mut overwriting: bool,
+    mut _overwriting: bool,
     mut perm: *mut ::core::ffi::c_int,
     mut device: *mut bool,
     mut newfile: *mut bool,
@@ -4493,11 +4493,11 @@ pub unsafe extern "C" fn buf_write(
                             } else {
                                 fflags = O_WRONLY
                                     | (if append as ::core::ffi::c_int != 0 {
-                                        (if forceit as ::core::ffi::c_int != 0 {
+                                        if forceit as ::core::ffi::c_int != 0 {
                                             O_APPEND | O_CREAT
                                         } else {
                                             O_APPEND
-                                        })
+                                        }
                                     } else {
                                         O_CREAT | O_TRUNC
                                     });
@@ -5097,11 +5097,11 @@ pub unsafe extern "C" fn buf_write(
                                             empty_fd = os_open(
                                                 org,
                                                 O_CREAT | O_EXCL | O_NOFOLLOW,
-                                                (if perm < 0 as ::core::ffi::c_int {
+                                                if perm < 0 as ::core::ffi::c_int {
                                                     0o666 as ::core::ffi::c_int
                                                 } else {
                                                     perm & 0o777 as ::core::ffi::c_int
-                                                }),
+                                                },
                                             );
                                             empty_fd < 0 as ::core::ffi::c_int
                                         } {

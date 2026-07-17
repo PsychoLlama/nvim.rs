@@ -2597,7 +2597,7 @@ pub unsafe extern "C" fn input_stop() {
     rstream_stop(&raw mut read_stream);
     rstream_may_close(&raw mut read_stream);
 }
-unsafe extern "C" fn cursorhold_event(mut argv: *mut *mut ::core::ffi::c_void) {
+unsafe extern "C" fn cursorhold_event(mut _argv: *mut *mut ::core::ffi::c_void) {
     let mut event: event_T = (if State & MODE_INSERT as ::core::ffi::c_int != 0 {
         EVENT_CURSORHOLDI as ::core::ffi::c_int
     } else {
@@ -3210,10 +3210,10 @@ unsafe extern "C" fn inbuf_poll(
     }) as TriState;
 }
 unsafe extern "C" fn input_read_cb(
-    mut stream: *mut RStream,
+    mut _stream: *mut RStream,
     mut buf: *const ::core::ffi::c_char,
     mut c: size_t,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
     mut at_eof: bool,
 ) -> size_t {
     if at_eof {

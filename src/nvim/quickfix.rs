@@ -5134,7 +5134,7 @@ unsafe extern "C" fn qf_setup_state(
         convert_setup(&raw mut (*pstate).vc, enc, p_enc);
     }
     if !efile.is_null() && {
-        (*pstate).fd = (if strequal(efile, b"-\0".as_ptr() as *const ::core::ffi::c_char)
+        (*pstate).fd = if strequal(efile, b"-\0".as_ptr() as *const ::core::ffi::c_char)
             as ::core::ffi::c_int
             != 0
         {
@@ -5144,7 +5144,7 @@ unsafe extern "C" fn qf_setup_state(
             )
         } else {
             os_fopen(efile, b"r\0".as_ptr() as *const ::core::ffi::c_char)
-        });
+        };
         (*pstate).fd.is_null()
     } {
         semsg(
@@ -8467,7 +8467,7 @@ unsafe extern "C" fn qf_find_buf(mut qi: *mut qf_info_T) -> *mut buf_T {
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_quickfixtextfunc(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     if option_set_callback_func(p_qftf, &raw mut qftf_cb) == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;
@@ -8611,7 +8611,7 @@ unsafe extern "C" fn qf_update_buffer(mut qi: *mut qf_info_T, mut old_last: *mut
     decr_quickfix_busy();
 }
 unsafe extern "C" fn qf_buf_add_line(
-    mut qfl: *mut qf_list_T,
+    mut _qfl: *mut qf_list_T,
     mut buf: *mut buf_T,
     mut lnum: linenr_T,
     mut qfp: *const qfline_T,
@@ -8971,11 +8971,11 @@ pub unsafe extern "C" fn grep_internal(mut cmdidx: cmdidx_T) -> ::core::ffi::c_i
         || cmdidx as ::core::ffi::c_int == CMD_lgrepadd as ::core::ffi::c_int)
         && strcmp(
             b"internal\0".as_ptr() as *const ::core::ffi::c_char,
-            (if *(*curbuf).b_p_gp as ::core::ffi::c_int == NUL {
+            if *(*curbuf).b_p_gp as ::core::ffi::c_int == NUL {
                 p_gp
             } else {
                 (*curbuf).b_p_gp
-            }),
+            },
         ) == 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
 }
 unsafe extern "C" fn make_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
@@ -10068,11 +10068,11 @@ unsafe extern "C" fn vgr_match_buflines(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     fname,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    (if duplicate_name != 0 {
+                    if duplicate_name != 0 {
                         0 as ::core::ffi::c_int
                     } else {
                         (*buf).handle as ::core::ffi::c_int
-                    }),
+                    },
                     ml_get_buf(
                         buf,
                         (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
@@ -10141,11 +10141,11 @@ unsafe extern "C" fn vgr_match_buflines(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     fname,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    (if duplicate_name != 0 {
+                    if duplicate_name != 0 {
                         0 as ::core::ffi::c_int
                     } else {
                         (*buf).handle as ::core::ffi::c_int
-                    }),
+                    },
                     str,
                     lnum,
                     0 as linenr_T,
@@ -10816,31 +10816,31 @@ unsafe extern "C" fn get_qfline_items(
             dict,
             b"module\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            (if (*qfp).qf_module.is_null() {
+            if (*qfp).qf_module.is_null() {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 (*qfp).qf_module as *const ::core::ffi::c_char
-            }),
+            },
         ) == FAIL
         || tv_dict_add_str(
             dict,
             b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            (if (*qfp).qf_pattern.is_null() {
+            if (*qfp).qf_pattern.is_null() {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 (*qfp).qf_pattern as *const ::core::ffi::c_char
-            }),
+            },
         ) == FAIL
         || tv_dict_add_str(
             dict,
             b"text\0".as_ptr() as *const ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            (if (*qfp).qf_text.is_null() {
+            if (*qfp).qf_text.is_null() {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 (*qfp).qf_text as *const ::core::ffi::c_char
-            }),
+            },
         ) == FAIL
         || tv_dict_add_str(
             dict,
@@ -12939,7 +12939,7 @@ unsafe extern "C" fn get_qf_loc_list(
 pub unsafe extern "C" fn f_getloclist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     get_qf_loc_list(
@@ -12953,7 +12953,7 @@ pub unsafe extern "C" fn f_getloclist(
 pub unsafe extern "C" fn f_getqflist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_qf_loc_list(
         true_0 != 0,
@@ -13060,7 +13060,7 @@ unsafe extern "C" fn set_qf_ll_list(
 pub unsafe extern "C" fn f_setloclist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut win: *mut win_T =
@@ -13073,7 +13073,7 @@ pub unsafe extern "C" fn f_setloclist(
 pub unsafe extern "C" fn f_setqflist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     set_qf_ll_list(::core::ptr::null_mut::<win_T>(), argvars, rettv);
 }

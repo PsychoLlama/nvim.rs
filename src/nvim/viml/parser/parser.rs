@@ -209,7 +209,7 @@ unsafe extern "C" fn viml_preader_get_line(
         pline = cpline;
     }
     if (*preader).lines.size == (*preader).lines.capacity {
-        (*preader).lines.capacity = (if (*preader).lines.capacity << 1 as ::core::ffi::c_int
+        (*preader).lines.capacity = if (*preader).lines.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[ParserLine; 4]>()
                 .wrapping_div(::core::mem::size_of::<ParserLine>())
                 .wrapping_div(
@@ -226,7 +226,7 @@ unsafe extern "C" fn viml_preader_get_line(
                         .wrapping_rem(::core::mem::size_of::<ParserLine>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         (*preader).lines.items = (if (*preader).lines.capacity
             == ::core::mem::size_of::<[ParserLine; 4]>()
                 .wrapping_div(::core::mem::size_of::<ParserLine>())
@@ -235,7 +235,7 @@ unsafe extern "C" fn viml_preader_get_line(
                         .wrapping_rem(::core::mem::size_of::<ParserLine>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if (*preader).lines.items == &raw mut (*preader).lines.init_array as *mut ParserLine {
+            if (*preader).lines.items == &raw mut (*preader).lines.init_array as *mut ParserLine {
                 (*preader).lines.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -247,9 +247,9 @@ unsafe extern "C" fn viml_preader_get_line(
                         .size
                         .wrapping_mul(::core::mem::size_of::<ParserLine>()),
                 )
-            })
+            }
         } else {
-            (if (*preader).lines.items == &raw mut (*preader).lines.init_array as *mut ParserLine {
+            if (*preader).lines.items == &raw mut (*preader).lines.init_array as *mut ParserLine {
                 memcpy(
                     xmalloc(
                         (*preader)
@@ -271,7 +271,7 @@ unsafe extern "C" fn viml_preader_get_line(
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<ParserLine>()),
                 )
-            })
+            }
         }) as *mut ParserLine;
     } else {
     };

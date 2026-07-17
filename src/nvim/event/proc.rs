@@ -901,11 +901,11 @@ pub unsafe extern "C" fn proc_spawn(
         Some(decref as unsafe extern "C" fn(*mut Proc) -> ()) as internal_proc_cb;
     (*proc).refcount += 1;
     if (*(*proc).loop_0).children.size == (*(*proc).loop_0).children.capacity {
-        (*(*proc).loop_0).children.capacity = (if (*(*proc).loop_0).children.capacity != 0 {
+        (*(*proc).loop_0).children.capacity = if (*(*proc).loop_0).children.capacity != 0 {
             (*(*proc).loop_0).children.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*(*proc).loop_0).children.items = xrealloc(
             (*(*proc).loop_0).children.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*mut Proc>().wrapping_mul((*(*proc).loop_0).children.capacity),
@@ -1336,7 +1336,7 @@ unsafe extern "C" fn proc_close_handles(mut argv: *mut *mut ::core::ffi::c_void)
     proc_close(proc);
     exit_need_delay -= 1;
 }
-unsafe extern "C" fn exit_delay_cb(mut handle: *mut uv_timer_t) {
+unsafe extern "C" fn exit_delay_cb(mut _handle: *mut uv_timer_t) {
     uv_timer_stop(&raw mut main_loop.exit_delay_timer);
     multiqueue_put_event(
         main_loop.fast_events,
@@ -1466,7 +1466,7 @@ unsafe extern "C" fn on_proc_exit(mut proc: *mut Proc) {
     };
 }
 unsafe extern "C" fn on_proc_stream_close(
-    mut stream: *mut Stream,
+    mut _stream: *mut Stream,
     mut data: *mut ::core::ffi::c_void,
 ) {
     let mut proc: *mut Proc = data as *mut Proc;

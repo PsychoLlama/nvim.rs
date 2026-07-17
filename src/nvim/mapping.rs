@@ -6482,7 +6482,7 @@ pub unsafe extern "C" fn check_map(
 pub unsafe extern "C" fn f_hasmapto(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut mode: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let name: *const ::core::ffi::c_char =
@@ -6998,8 +6998,8 @@ unsafe extern "C" fn get_map_mode_string(
 #[no_mangle]
 pub unsafe extern "C" fn f_mapset(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;
@@ -7233,7 +7233,7 @@ pub unsafe extern "C" fn f_mapset(
 pub unsafe extern "C" fn f_maplist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let flags: ::core::ffi::c_int =
         REPTERM_FROM_PART as ::core::ffi::c_int | REPTERM_DO_LT as ::core::ffi::c_int;
@@ -7336,7 +7336,7 @@ pub unsafe extern "C" fn f_maplist(
 pub unsafe extern "C" fn f_maparg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_maparg(argvars, rettv, true_0);
 }
@@ -7344,7 +7344,7 @@ pub unsafe extern "C" fn f_maparg(
 pub unsafe extern "C" fn f_mapcheck(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_maparg(argvars, rettv, false_0);
 }
@@ -8058,7 +8058,7 @@ pub unsafe extern "C" fn keymap_array(
             if (*current_maphash).m_simplified == 0 {
                 if int_mode & (*current_maphash).m_mode != 0 {
                     if mappings.size == mappings.capacity {
-                        mappings.capacity = (if mappings.capacity << 1 as ::core::ffi::c_int
+                        mappings.capacity = if mappings.capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
@@ -8079,7 +8079,7 @@ pub unsafe extern "C" fn keymap_array(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         mappings.items = (if mappings.capacity
                             == ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -8090,7 +8090,7 @@ pub unsafe extern "C" fn keymap_array(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if mappings.items == &raw mut mappings.init_array as *mut Object {
+                            if mappings.items == &raw mut mappings.init_array as *mut Object {
                                 mappings.items as *mut ::core::ffi::c_void
                             } else {
                                 _memcpy_free(
@@ -8099,9 +8099,9 @@ pub unsafe extern "C" fn keymap_array(
                                     mappings.items as *mut ::core::ffi::c_void,
                                     mappings.size.wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if mappings.items == &raw mut mappings.init_array as *mut Object {
+                            if mappings.items == &raw mut mappings.init_array as *mut Object {
                                 memcpy(
                                     xmalloc(
                                         mappings
@@ -8118,7 +8118,7 @@ pub unsafe extern "C" fn keymap_array(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };

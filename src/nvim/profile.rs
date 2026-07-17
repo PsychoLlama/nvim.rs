@@ -1822,7 +1822,7 @@ static mut pexpand_cmds: [*mut ::core::ffi::c_char; 8] = [
 ];
 #[no_mangle]
 pub unsafe extern "C" fn get_profile_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     match pexpand_what as ::core::ffi::c_uint {

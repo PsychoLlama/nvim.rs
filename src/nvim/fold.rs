@@ -4597,7 +4597,7 @@ unsafe extern "C" fn foldInsert(mut gap: *mut garray_T, mut i: ::core::ffi::c_in
     );
 }
 unsafe extern "C" fn foldSplit(
-    mut buf: *mut buf_T,
+    mut _buf: *mut buf_T,
     gap: *mut garray_T,
     i: ::core::ffi::c_int,
     top: linenr_T,
@@ -5210,11 +5210,11 @@ unsafe extern "C" fn put_fold_open_close(
         || fprintf(
             fd,
             b"sil! normal! z%c\0".as_ptr() as *const ::core::ffi::c_char,
-            (if (*fp).fd_flags as ::core::ffi::c_int == FD_CLOSED as ::core::ffi::c_int {
+            if (*fp).fd_flags as ::core::ffi::c_int == FD_CLOSED as ::core::ffi::c_int {
                 'c' as ::core::ffi::c_int
             } else {
                 'o' as ::core::ffi::c_int
-            }),
+            },
         ) < 0 as ::core::ffi::c_int
         || put_eol(fd) == FAIL
     {
@@ -5253,7 +5253,7 @@ unsafe extern "C" fn foldclosed_both(
 pub unsafe extern "C" fn f_foldclosed(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     foldclosed_both(argvars, rettv, false_0 != 0);
 }
@@ -5261,7 +5261,7 @@ pub unsafe extern "C" fn f_foldclosed(
 pub unsafe extern "C" fn f_foldclosedend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     foldclosed_both(argvars, rettv, true_0 != 0);
 }
@@ -5269,7 +5269,7 @@ pub unsafe extern "C" fn f_foldclosedend(
 pub unsafe extern "C" fn f_foldlevel(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let lnum: linenr_T = tv_get_lnum(argvars);
     if lnum >= 1 as linenr_T && lnum <= (*curbuf).b_ml.ml_line_count {
@@ -5278,9 +5278,9 @@ pub unsafe extern "C" fn f_foldlevel(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_foldtext(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5336,7 +5336,7 @@ pub unsafe extern "C" fn f_foldtext(
 pub unsafe extern "C" fn f_foldtextresult(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 51] = [0; 51];
     static mut entered: bool = false_0 != 0;

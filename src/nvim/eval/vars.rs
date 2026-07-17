@@ -8894,7 +8894,7 @@ unsafe extern "C" fn do_unlet_var(
     mut lp: *mut lval_T,
     mut name_end: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
-    mut deep: ::core::ffi::c_int,
+    mut _deep: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let mut forceit: ::core::ffi::c_int = (*eap).forceit;
     let mut ret: ::core::ffi::c_int = OK;
@@ -9089,7 +9089,7 @@ pub unsafe extern "C" fn do_unlet(
 }
 unsafe extern "C" fn do_lock_var(
     mut lp: *mut lval_T,
-    mut name_end: *mut ::core::ffi::c_char,
+    mut _name_end: *mut ::core::ffi::c_char,
     mut eap: *mut exarg_T,
     mut deep: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -11028,7 +11028,7 @@ pub unsafe extern "C" fn var_redir_stop() {
 pub unsafe extern "C" fn f_gettabvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let varname: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
@@ -11058,7 +11058,7 @@ pub unsafe extern "C" fn f_gettabvar(
 pub unsafe extern "C" fn f_gettabwinvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getwinvar(argvars, rettv, 1 as ::core::ffi::c_int);
 }
@@ -11066,7 +11066,7 @@ pub unsafe extern "C" fn f_gettabwinvar(
 pub unsafe extern "C" fn f_getwinvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getwinvar(argvars, rettv, 0 as ::core::ffi::c_int);
 }
@@ -11074,7 +11074,7 @@ pub unsafe extern "C" fn f_getwinvar(
 pub unsafe extern "C" fn f_getbufvar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let varname: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(1 as ::core::ffi::c_int as isize));
@@ -11092,8 +11092,8 @@ pub unsafe extern "C" fn f_getbufvar(
 #[no_mangle]
 pub unsafe extern "C" fn f_settabvar(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;
@@ -11141,24 +11141,24 @@ pub unsafe extern "C" fn f_settabvar(
 #[no_mangle]
 pub unsafe extern "C" fn f_settabwinvar(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     setwinvar(argvars, 1 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_setwinvar(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     setwinvar(argvars, 0 as ::core::ffi::c_int);
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_setbufvar(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() as ::core::ffi::c_int != 0
         || !tv_check_str_or_nr(argvars.offset(0 as ::core::ffi::c_int as isize))

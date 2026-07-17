@@ -1193,7 +1193,7 @@ pub unsafe extern "C" fn xdl_free_script(mut xscr: *mut xdchange_t) {
     }
 }
 unsafe extern "C" fn xdl_call_hunk_func(
-    mut xe: *mut xdfenv_t,
+    mut _xe: *mut xdfenv_t,
     mut xscr: *mut xdchange_t,
     mut ecb: *mut xdemitcb_t,
     mut xecfg: *const xdemitconf_t,

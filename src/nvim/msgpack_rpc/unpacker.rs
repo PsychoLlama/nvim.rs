@@ -735,7 +735,7 @@ unsafe extern "C" fn api_parse_enter(mut parser: *mut mpack_parser_t, mut node: 
         _ => {}
     };
 }
-unsafe extern "C" fn api_parse_exit(mut parser: *mut mpack_parser_t, mut node: *mut mpack_node_t) {}
+unsafe extern "C" fn api_parse_exit(mut _parser: *mut mpack_parser_t, mut _node: *mut mpack_node_t) {}
 #[no_mangle]
 pub unsafe extern "C" fn unpacker_init(mut p: *mut Unpacker) {
     mpack_parser_init(&raw mut (*p).parser, 0 as mpack_uint32_t);
@@ -1496,7 +1496,7 @@ pub unsafe extern "C" fn unpack_uint_or_sint(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn parse_nop(mut parser: *mut mpack_parser_t, mut node: *mut mpack_node_t) {}
+unsafe extern "C" fn parse_nop(mut _parser: *mut mpack_parser_t, mut _node: *mut mpack_node_t) {}
 #[no_mangle]
 pub unsafe extern "C" fn unpack_skip(
     mut data: *mut *const ::core::ffi::c_char,
@@ -1817,11 +1817,11 @@ pub unsafe extern "C" fn unpack_keydict(
                             return false_0 != 0;
                         }
                         if (*a).size == (*a).capacity {
-                            (*a).capacity = (if (*a).capacity != 0 {
+                            (*a).capacity = if (*a).capacity != 0 {
                                 (*a).capacity << 1 as ::core::ffi::c_int
                             } else {
                                 8 as size_t
-                            });
+                            };
                             (*a).items = xrealloc(
                                 (*a).items as *mut ::core::ffi::c_void,
                                 ::core::mem::size_of::<String_0>().wrapping_mul((*a).capacity),

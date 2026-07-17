@@ -3288,12 +3288,12 @@ pub unsafe extern "C" fn nvim_buf_set_extmark(
                                     == virt_lines.data.virt_lines.capacity
                                 {
                                     virt_lines.data.virt_lines.capacity =
-                                        (if virt_lines.data.virt_lines.capacity != 0 {
+                                        if virt_lines.data.virt_lines.capacity != 0 {
                                             virt_lines.data.virt_lines.capacity
                                                 << 1 as ::core::ffi::c_int
                                         } else {
                                             8 as size_t
-                                        });
+                                        };
                                     virt_lines.data.virt_lines.items = xrealloc(
                                         virt_lines.data.virt_lines.items
                                             as *mut ::core::ffi::c_void,
@@ -3811,7 +3811,7 @@ pub unsafe extern "C" fn nvim_buf_clear_namespace(
 pub unsafe extern "C" fn nvim_set_decoration_provider(
     mut ns_id: Integer,
     mut opts: *mut KeyDict_set_decoration_provider,
-    mut err: *mut Error,
+    mut _err: *mut Error,
 ) {
     let mut p: *mut DecorProvider = get_decor_provider(ns_id as NS, true_0 != 0);
     '_c2rust_label: {
@@ -4060,11 +4060,11 @@ pub unsafe extern "C" fn parse_virt_text(
                                     }
                                     if j < arr.size.wrapping_sub(1 as size_t) {
                                         if virt_text.size == virt_text.capacity {
-                                            virt_text.capacity = (if virt_text.capacity != 0 {
+                                            virt_text.capacity = if virt_text.capacity != 0 {
                                                 virt_text.capacity << 1 as ::core::ffi::c_int
                                             } else {
                                                 8 as size_t
-                                            });
+                                            };
                                             virt_text.items = xrealloc(
                                                 virt_text.items as *mut ::core::ffi::c_void,
                                                 ::core::mem::size_of::<VirtTextChunk>()
@@ -4108,11 +4108,11 @@ pub unsafe extern "C" fn parse_virt_text(
                     );
                     w += mb_string2cells(text) as ::core::ffi::c_int;
                     if virt_text.size == virt_text.capacity {
-                        virt_text.capacity = (if virt_text.capacity != 0 {
+                        virt_text.capacity = if virt_text.capacity != 0 {
                             virt_text.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         virt_text.items = xrealloc(
                             virt_text.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<VirtTextChunk>()
@@ -4355,11 +4355,11 @@ pub unsafe extern "C" fn nvim__ns_get(
         while !wp_0.is_null() {
             if set_has_uint32_t(&raw mut (*wp_0).w_ns_set, ns_id as uint32_t) {
                 if windows.size == windows.capacity {
-                    windows.capacity = (if windows.capacity != 0 {
+                    windows.capacity = if windows.capacity != 0 {
                         windows.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     windows.items = xrealloc(
                         windows.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity),

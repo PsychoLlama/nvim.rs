@@ -3727,7 +3727,7 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_breaklist(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_breaklist(mut _eap: *mut exarg_T) {
     if dbg_breakp.ga_len <= 0 as ::core::ffi::c_int {
         msg(
             gettext(b"No breakpoints defined\0".as_ptr() as *const ::core::ffi::c_char),

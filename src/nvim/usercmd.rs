@@ -3334,7 +3334,7 @@ pub unsafe extern "C" fn expand_user_command_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_user_commands(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     let buf: *const buf_T = (*prevwin_curwin()).w_buffer;
@@ -3378,14 +3378,14 @@ pub unsafe extern "C" fn get_user_command_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_addr_type(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     return addr_type_complete[idx as usize].name;
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_flags(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut user_cmd_flags: [*mut ::core::ffi::c_char; 10] = [
@@ -3415,7 +3415,7 @@ pub unsafe extern "C" fn get_user_cmd_flags(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_nargs(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut user_cmd_nargs: [*mut ::core::ffi::c_char; 5] = [
@@ -3455,7 +3455,7 @@ unsafe extern "C" fn get_command_complete(mut arg: ::core::ffi::c_int) -> *mut :
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_user_cmd_complete(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx
@@ -4484,7 +4484,7 @@ pub unsafe extern "C" fn ex_command(mut eap: *mut exarg_T) {
     xfree(compl_arg as *mut ::core::ffi::c_void);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_comclear(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_comclear(mut _eap: *mut exarg_T) {
     uc_clear(&raw mut ucmds);
     if !curbuf.is_null() {
         uc_clear(&raw mut (*curbuf).b_ucmds);

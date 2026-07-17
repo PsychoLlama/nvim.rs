@@ -5224,7 +5224,7 @@ unsafe extern "C" fn taglen_advance(mut l: ::core::ffi::c_int) {
     };
 }
 #[no_mangle]
-pub unsafe extern "C" fn do_tags(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn do_tags(mut _eap: *mut exarg_T) {
     let mut tagstack: *mut taggy_T = &raw mut (*curwin).w_tagstack as *mut taggy_T;
     let mut tagstackidx: ::core::ffi::c_int = (*curwin).w_tagstackidx;
     let mut tagstacklen: ::core::ffi::c_int = (*curwin).w_tagstacklen;
@@ -6395,11 +6395,11 @@ unsafe extern "C" fn findtags_add_match(
             b"%06d\0".as_ptr() as *const ::core::ffi::c_char,
             help_heuristic(
                 (*tagpp).tagname,
-                (if (*margs).match_re as ::core::ffi::c_int != 0 {
+                if (*margs).match_re as ::core::ffi::c_int != 0 {
                     (*margs).matchoff
                 } else {
                     0 as ::core::ffi::c_int
-                }),
+                },
                 !(*margs).match_no_ic,
             ) + (*st).help_pri,
         );
@@ -6626,7 +6626,7 @@ unsafe extern "C" fn findtags_get_all_tags(
 }
 unsafe extern "C" fn findtags_in_file(
     mut st: *mut findtags_state_T,
-    mut flags: ::core::ffi::c_int,
+    mut _flags: ::core::ffi::c_int,
     mut buf_ffname: *mut ::core::ffi::c_char,
 ) {
     let mut margs: findtags_match_args_T = findtags_match_args_T {
@@ -6954,7 +6954,7 @@ unsafe extern "C" fn found_tagfile_cb(
     mut num_fnames: ::core::ffi::c_int,
     mut fnames: *mut *mut ::core::ffi::c_char,
     mut all: bool,
-    mut cookie: *mut ::core::ffi::c_void,
+    mut _cookie: *mut ::core::ffi::c_void,
 ) -> bool {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < num_fnames {
@@ -7397,11 +7397,11 @@ unsafe extern "C" fn jumpto_tag(
                         cmdmod.cmod_tab = tabpage_index(curtab) + 1 as ::core::ffi::c_int;
                     }
                     if win_split(
-                        (if postponed_split > 0 as ::core::ffi::c_int {
+                        if postponed_split > 0 as ::core::ffi::c_int {
                             postponed_split
                         } else {
                             0 as ::core::ffi::c_int
-                        }),
+                        },
                         postponed_split_flags,
                     ) == FAIL
                     {
@@ -8014,11 +8014,11 @@ pub unsafe extern "C" fn get_tags(
                         dict,
                         b"kind\0".as_ptr() as *const ::core::ffi::c_char,
                         tp.tagkind,
-                        (if !tp.tagkind.is_null() {
+                        if !tp.tagkind.is_null() {
                             tp.tagkind_end
                         } else {
                             ::core::ptr::null_mut::<::core::ffi::c_char>()
-                        }),
+                        },
                     ) == FAIL
                     || tv_dict_add_nr(
                         dict,

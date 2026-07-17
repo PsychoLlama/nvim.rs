@@ -5644,7 +5644,7 @@ pub unsafe extern "C" fn fix_indent() {
 pub unsafe extern "C" fn f_indent(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let lnum: linenr_T = tv_get_lnum(argvars);
     if lnum >= 1 as linenr_T && lnum <= (*curbuf).b_ml.ml_line_count {
@@ -5657,7 +5657,7 @@ pub unsafe extern "C" fn f_indent(
 pub unsafe extern "C" fn f_lispindent(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let pos: pos_T = (*curwin).w_cursor;
     let lnum: linenr_T = tv_get_lnum(argvars);

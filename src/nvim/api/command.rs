@@ -3037,7 +3037,7 @@ unsafe extern "C" fn parse_map_cmd(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_parse_cmd(
     mut str: String_0,
-    mut opts: *mut KeyDict_empty,
+    mut _opts: *mut KeyDict_empty,
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> KeyDict_cmd {
@@ -5930,11 +5930,11 @@ unsafe extern "C" fn build_cmdline_str(
         i = i.wrapping_add(1);
     }
     if cmdline.size == cmdline.capacity {
-        cmdline.capacity = (if cmdline.capacity != 0 {
+        cmdline.capacity = if cmdline.capacity != 0 {
             cmdline.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         cmdline.items = xrealloc(
             cmdline.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(cmdline.capacity),

@@ -690,7 +690,7 @@ pub unsafe extern "C" fn terminfo_is_term_family(
             || '.' as ::core::ffi::c_int == *term.offset(flen as isize) as ::core::ffi::c_int);
 }
 #[no_mangle]
-pub unsafe extern "C" fn terminfo_is_bsd_console(mut term: *const ::core::ffi::c_char) -> bool {
+pub unsafe extern "C" fn terminfo_is_bsd_console(mut _term: *const ::core::ffi::c_char) -> bool {
     return false_0 != 0;
 }
 #[no_mangle]
@@ -1189,11 +1189,11 @@ pub unsafe extern "C" fn terminfo_info_msg(
             );
             kv_transstr(&raw mut data, s, false_0 != 0);
             if data.size == data.capacity {
-                data.capacity = (if data.capacity != 0 {
+                data.capacity = if data.capacity != 0 {
                     data.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
@@ -1254,11 +1254,11 @@ pub unsafe extern "C" fn terminfo_info_msg(
                 kv_transstr(&raw mut data, ss, false_0 != 0);
             }
             if data.size == data.capacity {
-                data.capacity = (if data.capacity != 0 {
+                data.capacity = if data.capacity != 0 {
                     data.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
@@ -1355,11 +1355,11 @@ pub unsafe extern "C" fn terminfo_info_msg(
             );
             kv_transstr(&raw mut data, s_1, false_0 != 0);
             if data.size == data.capacity {
-                data.capacity = (if data.capacity != 0 {
+                data.capacity = if data.capacity != 0 {
                     data.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 data.items = xrealloc(
                     data.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),
@@ -1373,11 +1373,11 @@ pub unsafe extern "C" fn terminfo_info_msg(
         i_1 = i_1.wrapping_add(1);
     }
     if data.size == data.capacity {
-        data.capacity = (if data.capacity != 0 {
+        data.capacity = if data.capacity != 0 {
             data.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         data.items = xrealloc(
             data.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(data.capacity),

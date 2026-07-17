@@ -6442,7 +6442,7 @@ pub unsafe extern "C" fn handle_nvim_create_autocmd(
 pub unsafe extern "C" fn handle_nvim_del_autocmd(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -6589,7 +6589,7 @@ pub unsafe extern "C" fn handle_nvim_clear_autocmds(
 pub unsafe extern "C" fn handle_nvim_create_augroup(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -6699,7 +6699,7 @@ pub unsafe extern "C" fn handle_nvim_create_augroup(
 pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -6746,7 +6746,7 @@ pub unsafe extern "C" fn handle_nvim_del_augroup_by_id(
 pub unsafe extern "C" fn handle_nvim_del_augroup_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -6902,7 +6902,7 @@ pub unsafe extern "C" fn handle_nvim_exec_autocmds(
 pub unsafe extern "C" fn handle_nvim_buf_line_count(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -6975,7 +6975,7 @@ pub unsafe extern "C" fn handle_nvim_buf_line_count(
 pub unsafe extern "C" fn handle_nvim_buf_attach(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -7133,7 +7133,7 @@ pub unsafe extern "C" fn handle_nvim_buf_attach(
 pub unsafe extern "C" fn handle_nvim_buf_detach(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -7882,7 +7882,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_text(
 pub unsafe extern "C" fn handle_nvim_buf_get_offset(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -8061,7 +8061,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_var(
 pub unsafe extern "C" fn handle_nvim_buf_get_changedtick(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -8229,7 +8229,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_keymap(
 pub unsafe extern "C" fn handle_nvim_buf_set_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -8425,7 +8425,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_keymap(
 pub unsafe extern "C" fn handle_nvim_buf_del_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -8529,7 +8529,7 @@ pub unsafe extern "C" fn handle_nvim_buf_del_keymap(
 pub unsafe extern "C" fn handle_nvim_buf_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -8619,7 +8619,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_var(
 pub unsafe extern "C" fn handle_nvim_buf_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -8704,7 +8704,7 @@ pub unsafe extern "C" fn handle_nvim_buf_del_var(
 pub unsafe extern "C" fn handle_nvim_buf_get_name(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: String_0 = String_0 {
@@ -8780,7 +8780,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_name(
 pub unsafe extern "C" fn handle_nvim_buf_set_name(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -8865,7 +8865,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_name(
 pub unsafe extern "C" fn handle_nvim_buf_is_loaded(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -8936,7 +8936,7 @@ pub unsafe extern "C" fn handle_nvim_buf_is_loaded(
 pub unsafe extern "C" fn handle_nvim_buf_delete(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -9064,7 +9064,7 @@ pub unsafe extern "C" fn handle_nvim_buf_delete(
 pub unsafe extern "C" fn handle_nvim_buf_is_valid(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -9135,7 +9135,7 @@ pub unsafe extern "C" fn handle_nvim_buf_is_valid(
 pub unsafe extern "C" fn handle_nvim_buf_del_mark(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -9226,7 +9226,7 @@ pub unsafe extern "C" fn handle_nvim_buf_del_mark(
 pub unsafe extern "C" fn handle_nvim_buf_set_mark(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -9924,7 +9924,7 @@ pub unsafe extern "C" fn handle_nvim_cmd(
 pub unsafe extern "C" fn handle_nvim_create_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -10065,7 +10065,7 @@ pub unsafe extern "C" fn handle_nvim_create_user_command(
 pub unsafe extern "C" fn handle_nvim_del_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -10115,7 +10115,7 @@ pub unsafe extern "C" fn handle_nvim_del_user_command(
 pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -10298,7 +10298,7 @@ pub unsafe extern "C" fn handle_nvim_buf_create_user_command(
 pub unsafe extern "C" fn handle_nvim_buf_del_user_command(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -10602,7 +10602,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_commands(
 pub unsafe extern "C" fn handle_nvim_exec(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: String_0 = String_0 {
@@ -10692,7 +10692,7 @@ pub unsafe extern "C" fn handle_nvim_exec(
 pub unsafe extern "C" fn handle_nvim_command_output(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: String_0 = String_0 {
@@ -10826,7 +10826,7 @@ pub unsafe extern "C" fn handle_nvim_execute_lua(
 pub unsafe extern "C" fn handle_nvim_buf_get_number(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -10899,7 +10899,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_number(
 pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -11014,7 +11014,7 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_highlight(
 pub unsafe extern "C" fn handle_nvim_buf_add_highlight(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -11173,7 +11173,7 @@ pub unsafe extern "C" fn handle_nvim_buf_add_highlight(
 pub unsafe extern "C" fn handle_nvim_buf_set_virtual_text(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -12995,7 +12995,7 @@ pub unsafe extern "C" fn handle_nvim_get_option_info(
 pub unsafe extern "C" fn handle_nvim_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13050,7 +13050,7 @@ pub unsafe extern "C" fn handle_nvim_set_option(
 pub unsafe extern "C" fn handle_nvim_get_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Object = Object {
@@ -13106,7 +13106,7 @@ pub unsafe extern "C" fn handle_nvim_get_option(
 pub unsafe extern "C" fn handle_nvim_buf_get_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Object = Object {
@@ -13197,7 +13197,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_option(
 pub unsafe extern "C" fn handle_nvim_buf_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13287,7 +13287,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_option(
 pub unsafe extern "C" fn handle_nvim_win_get_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Object = Object {
@@ -13378,7 +13378,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_option(
 pub unsafe extern "C" fn handle_nvim_win_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13529,7 +13529,7 @@ pub unsafe extern "C" fn handle_nvim_call_atomic(
 pub unsafe extern "C" fn handle_nvim_subscribe(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13578,7 +13578,7 @@ pub unsafe extern "C" fn handle_nvim_subscribe(
 pub unsafe extern "C" fn handle_nvim_unsubscribe(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13627,7 +13627,7 @@ pub unsafe extern "C" fn handle_nvim_unsubscribe(
 pub unsafe extern "C" fn handle_nvim_out_write(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13676,7 +13676,7 @@ pub unsafe extern "C" fn handle_nvim_out_write(
 pub unsafe extern "C" fn handle_nvim_err_write(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13725,7 +13725,7 @@ pub unsafe extern "C" fn handle_nvim_err_write(
 pub unsafe extern "C" fn handle_nvim_err_writeln(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13879,7 +13879,7 @@ pub unsafe extern "C" fn handle_nvim_notify(
 pub unsafe extern "C" fn handle_nvim_error_event(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13943,7 +13943,7 @@ pub unsafe extern "C" fn handle_nvim_error_event(
 pub unsafe extern "C" fn handle_nvim_ui_term_event(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -13998,7 +13998,7 @@ pub unsafe extern "C" fn handle_nvim_ui_term_event(
 pub unsafe extern "C" fn handle_nvim_create_namespace(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -14427,7 +14427,7 @@ pub unsafe extern "C" fn handle_nvim_buf_get_extmarks(
 pub unsafe extern "C" fn handle_nvim_buf_set_extmark(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -14669,7 +14669,7 @@ pub unsafe extern "C" fn handle_nvim_buf_set_extmark(
 pub unsafe extern "C" fn handle_nvim_buf_del_extmark(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -14774,7 +14774,7 @@ pub unsafe extern "C" fn handle_nvim_buf_del_extmark(
 pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -14889,7 +14889,7 @@ pub unsafe extern "C" fn handle_nvim_buf_clear_namespace(
 pub unsafe extern "C" fn handle_nvim__buf_debug_extmarks(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: String_0 = String_0 {
@@ -15021,7 +15021,7 @@ pub unsafe extern "C" fn handle_nvim__buf_debug_extmarks(
 pub unsafe extern "C" fn handle_nvim__ns_set(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -15200,7 +15200,7 @@ pub unsafe extern "C" fn handle_nvim__ns_get(
 pub unsafe extern "C" fn handle_nvim_get_option_value(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Object = Object {
@@ -15319,7 +15319,7 @@ pub unsafe extern "C" fn handle_nvim_get_option_value(
 pub unsafe extern "C" fn handle_nvim_set_option_value(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -15772,7 +15772,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_var(
 pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -15862,7 +15862,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_var(
 pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -15947,7 +15947,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_del_var(
 pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Window = 0;
@@ -16022,7 +16022,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_win(
 pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16120,7 +16120,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_set_win(
 pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -16193,7 +16193,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
 pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -16264,7 +16264,7 @@ pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
 pub unsafe extern "C" fn handle_nvim_open_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Tabpage = 0;
@@ -16427,7 +16427,7 @@ pub unsafe extern "C" fn handle_nvim_open_tabpage(
 pub unsafe extern "C" fn handle_nvim_ui_attach(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16523,7 +16523,7 @@ pub unsafe extern "C" fn handle_nvim_ui_attach(
 pub unsafe extern "C" fn handle_ui_attach(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16617,7 +16617,7 @@ pub unsafe extern "C" fn handle_ui_attach(
 pub unsafe extern "C" fn handle_nvim_ui_set_focus(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16681,7 +16681,7 @@ pub unsafe extern "C" fn handle_nvim_ui_set_focus(
 pub unsafe extern "C" fn handle_nvim_ui_detach(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16715,7 +16715,7 @@ pub unsafe extern "C" fn handle_nvim_ui_detach(
 pub unsafe extern "C" fn handle_nvim_ui_try_resize(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16777,7 +16777,7 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize(
 pub unsafe extern "C" fn handle_nvim_ui_set_option(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16832,7 +16832,7 @@ pub unsafe extern "C" fn handle_nvim_ui_set_option(
 pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16909,7 +16909,7 @@ pub unsafe extern "C" fn handle_nvim_ui_try_resize_grid(
 pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -16956,7 +16956,7 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_height(
 pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17084,7 +17084,7 @@ pub unsafe extern "C" fn handle_nvim_ui_pum_set_bounds(
 pub unsafe extern "C" fn handle_nvim_ui_send(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17134,7 +17134,7 @@ pub unsafe extern "C" fn handle_nvim_ui_send(
 pub unsafe extern "C" fn handle_nvim_get_hl_id_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -17305,7 +17305,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl(
 pub unsafe extern "C" fn handle_nvim_set_hl(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17491,7 +17491,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl(
 pub unsafe extern "C" fn handle_nvim_get_hl_ns(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -17584,7 +17584,7 @@ pub unsafe extern "C" fn handle_nvim_get_hl_ns(
 pub unsafe extern "C" fn handle_nvim_set_hl_ns(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17631,7 +17631,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns(
 pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17678,7 +17678,7 @@ pub unsafe extern "C" fn handle_nvim_set_hl_ns_fast(
 pub unsafe extern "C" fn handle_nvim_feedkeys(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17777,7 +17777,7 @@ pub unsafe extern "C" fn handle_nvim_feedkeys(
 pub unsafe extern "C" fn handle_nvim_input(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -17831,7 +17831,7 @@ pub unsafe extern "C" fn handle_nvim_input(
 pub unsafe extern "C" fn handle_nvim_input_mouse(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -17966,7 +17966,7 @@ pub unsafe extern "C" fn handle_nvim_input_mouse(
 pub unsafe extern "C" fn handle_nvim_replace_termcodes(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: String_0 = String_0 {
@@ -18260,7 +18260,7 @@ pub unsafe extern "C" fn handle_nvim__exec_lua_fast(
 pub unsafe extern "C" fn handle_nvim_strwidth(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -18493,7 +18493,7 @@ pub unsafe extern "C" fn handle_nvim_get_runtime_file(
 pub unsafe extern "C" fn handle_nvim__get_lib_dir(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: String_0 = String_0 {
@@ -18677,7 +18677,7 @@ pub unsafe extern "C" fn handle_nvim__get_runtime(
 pub unsafe extern "C" fn handle_nvim_set_current_dir(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -18926,7 +18926,7 @@ pub unsafe extern "C" fn handle_nvim_get_var(
 pub unsafe extern "C" fn handle_nvim_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -18981,7 +18981,7 @@ pub unsafe extern "C" fn handle_nvim_set_var(
 pub unsafe extern "C" fn handle_nvim_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -19087,7 +19087,7 @@ pub unsafe extern "C" fn handle_nvim_get_vvar(
 pub unsafe extern "C" fn handle_nvim_set_vvar(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -19142,7 +19142,7 @@ pub unsafe extern "C" fn handle_nvim_set_vvar(
 pub unsafe extern "C" fn handle_nvim_echo(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Object = Object {
@@ -19351,7 +19351,7 @@ pub unsafe extern "C" fn handle_nvim_list_bufs(
 pub unsafe extern "C" fn handle_nvim_get_current_buf(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Buffer = 0;
@@ -19391,7 +19391,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_buf(
 pub unsafe extern "C" fn handle_nvim_set_current_buf(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -19509,7 +19509,7 @@ pub unsafe extern "C" fn handle_nvim_list_wins(
 pub unsafe extern "C" fn handle_nvim_get_current_win(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Window = 0;
@@ -19549,7 +19549,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_win(
 pub unsafe extern "C" fn handle_nvim_set_current_win(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -19625,7 +19625,7 @@ pub unsafe extern "C" fn handle_nvim_set_current_win(
 pub unsafe extern "C" fn handle_nvim_create_buf(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Buffer = 0;
@@ -19725,7 +19725,7 @@ pub unsafe extern "C" fn handle_nvim_create_buf(
 pub unsafe extern "C" fn handle_nvim_open_term(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -19859,7 +19859,7 @@ pub unsafe extern "C" fn handle_nvim_open_term(
 pub unsafe extern "C" fn handle_nvim_chan_send(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -19966,7 +19966,7 @@ pub unsafe extern "C" fn handle_nvim_list_tabpages(
 pub unsafe extern "C" fn handle_nvim_get_current_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Tabpage = 0;
@@ -20006,7 +20006,7 @@ pub unsafe extern "C" fn handle_nvim_get_current_tabpage(
 pub unsafe extern "C" fn handle_nvim_set_current_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -20337,7 +20337,7 @@ pub unsafe extern "C" fn handle_nvim_put(
 pub unsafe extern "C" fn handle_nvim_get_color_by_name(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -20534,7 +20534,7 @@ pub unsafe extern "C" fn handle_nvim_get_context(
 pub unsafe extern "C" fn handle_nvim_load_context(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Object = Object {
@@ -20706,7 +20706,7 @@ pub unsafe extern "C" fn handle_nvim_get_keymap(
 pub unsafe extern "C" fn handle_nvim_set_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -20860,7 +20860,7 @@ pub unsafe extern "C" fn handle_nvim_set_keymap(
 pub unsafe extern "C" fn handle_nvim_del_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -21133,7 +21133,7 @@ pub unsafe extern "C" fn handle_nvim_set_client_info(
 pub unsafe extern "C" fn handle_nvim__chan_set_detach(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -21472,7 +21472,7 @@ pub unsafe extern "C" fn handle_nvim__id_dict(
 pub unsafe extern "C" fn handle_nvim__id_float(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Float = 0.;
@@ -21729,7 +21729,7 @@ pub unsafe extern "C" fn handle_nvim_get_proc(
 pub unsafe extern "C" fn handle_nvim_select_popupmenu_item(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -21970,7 +21970,7 @@ pub unsafe extern "C" fn handle_nvim__inspect_cell(
 pub unsafe extern "C" fn handle_nvim__screenshot(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -22019,7 +22019,7 @@ pub unsafe extern "C" fn handle_nvim__screenshot(
 pub unsafe extern "C" fn handle_nvim__invalidate_glyph_cache(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -22109,7 +22109,7 @@ pub unsafe extern "C" fn handle_nvim__unpack(
 pub unsafe extern "C" fn handle_nvim_del_mark(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -22513,7 +22513,7 @@ pub unsafe extern "C" fn handle_nvim__complete_set(
 pub unsafe extern "C" fn handle_nvim__redraw(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -22613,7 +22613,7 @@ pub unsafe extern "C" fn handle_nvim__redraw(
 pub unsafe extern "C" fn handle_nvim_exec2(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Dict = Dict {
@@ -22724,7 +22724,7 @@ pub unsafe extern "C" fn handle_nvim_exec2(
 pub unsafe extern "C" fn handle_nvim_command(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -23097,7 +23097,7 @@ pub unsafe extern "C" fn handle_nvim_parse_expression(
 pub unsafe extern "C" fn handle_nvim_open_win(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Window = 0;
@@ -23314,7 +23314,7 @@ pub unsafe extern "C" fn handle_nvim_open_win(
 pub unsafe extern "C" fn handle_nvim_win_set_config(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -23631,7 +23631,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_config(
 pub unsafe extern "C" fn handle_nvim_win_get_buf(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Buffer = 0;
@@ -23706,7 +23706,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_buf(
 pub unsafe extern "C" fn handle_nvim_win_set_buf(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -23890,7 +23890,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_cursor(
 pub unsafe extern "C" fn handle_nvim_win_set_cursor(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -23976,7 +23976,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_cursor(
 pub unsafe extern "C" fn handle_nvim_win_get_height(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -24049,7 +24049,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_height(
 pub unsafe extern "C" fn handle_nvim_win_set_height(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -24131,7 +24131,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_height(
 pub unsafe extern "C" fn handle_nvim_win_get_width(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -24204,7 +24204,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_width(
 pub unsafe extern "C" fn handle_nvim_win_set_width(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -24377,7 +24377,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_var(
 pub unsafe extern "C" fn handle_nvim_win_set_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -24467,7 +24467,7 @@ pub unsafe extern "C" fn handle_nvim_win_set_var(
 pub unsafe extern "C" fn handle_nvim_win_del_var(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -24629,7 +24629,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_position(
 pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Tabpage = 0;
@@ -24704,7 +24704,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_tabpage(
 pub unsafe extern "C" fn handle_nvim_win_get_number(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Integer = 0;
@@ -24777,7 +24777,7 @@ pub unsafe extern "C" fn handle_nvim_win_get_number(
 pub unsafe extern "C" fn handle_nvim_win_is_valid(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     let mut rv: Boolean = false;
@@ -24848,7 +24848,7 @@ pub unsafe extern "C" fn handle_nvim_win_is_valid(
 pub unsafe extern "C" fn handle_nvim_win_hide(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -24924,7 +24924,7 @@ pub unsafe extern "C" fn handle_nvim_win_hide(
 pub unsafe extern "C" fn handle_nvim_win_close(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(
@@ -25028,7 +25028,7 @@ pub unsafe extern "C" fn handle_nvim_win_close(
 pub unsafe extern "C" fn handle_nvim_win_set_hl_ns(
     mut channel_id: uint64_t,
     mut args: Array,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     logmsg(

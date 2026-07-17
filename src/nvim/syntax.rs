@@ -4414,7 +4414,7 @@ unsafe extern "C" fn syn_current_attr(
                                     0 as ::core::ffi::c_int,
                                 )
                             } else {
-                                (if cur_si.is_null() {
+                                if cur_si.is_null() {
                                     ((*spp).sp_flags & HL_CONTAINED as ::core::ffi::c_int == 0)
                                         as ::core::ffi::c_int
                                 } else {
@@ -4424,7 +4424,7 @@ unsafe extern "C" fn syn_current_attr(
                                         &raw mut (*spp).sp_syn,
                                         (*spp).sp_flags,
                                     )
-                                })
+                                }
                             }) != 0)
                         {
                             continue;
@@ -5550,7 +5550,7 @@ unsafe extern "C" fn match_keyword(
     }
     return ::core::ptr::null_mut::<keyentry_T>();
 }
-unsafe extern "C" fn syn_cmd_conceal(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_conceal(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut next: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*eap).nextcmd = find_nextcmd(arg);
@@ -5593,7 +5593,7 @@ unsafe extern "C" fn syn_cmd_conceal(mut eap: *mut exarg_T, mut syncing: ::core:
         );
     };
 }
-unsafe extern "C" fn syn_cmd_case(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_case(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut next: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*eap).nextcmd = find_nextcmd(arg);
@@ -5636,7 +5636,7 @@ unsafe extern "C" fn syn_cmd_case(mut eap: *mut exarg_T, mut syncing: ::core::ff
         );
     };
 }
-unsafe extern "C" fn syn_cmd_foldlevel(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_foldlevel(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut arg_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*eap).nextcmd = find_nextcmd(arg);
@@ -5693,7 +5693,7 @@ unsafe extern "C" fn syn_cmd_foldlevel(mut eap: *mut exarg_T, mut syncing: ::cor
         );
     }
 }
-unsafe extern "C" fn syn_cmd_spell(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_spell(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut next: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*eap).nextcmd = find_nextcmd(arg);
@@ -5751,7 +5751,7 @@ unsafe extern "C" fn syn_cmd_spell(mut eap: *mut exarg_T, mut syncing: ::core::f
     }
     redraw_later(curwin, UPD_NOT_VALID as ::core::ffi::c_int);
 }
-unsafe extern "C" fn syn_cmd_iskeyword(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_iskeyword(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut save_chartab_0: [::core::ffi::c_char; 32] = [0; 32];
     let mut save_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6045,25 +6045,25 @@ unsafe extern "C" fn syn_clear_one(id: ::core::ffi::c_int, syncing: bool) {
         syn_remove_pattern((*curwin).w_s, idx);
     }
 }
-unsafe extern "C" fn syn_cmd_on(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_on(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     syn_cmd_onoff(
         eap,
         b"syntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
 }
-unsafe extern "C" fn syn_cmd_reset(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_reset(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     (*eap).nextcmd = check_nextcmd((*eap).arg);
     if (*eap).skip == 0 {
         init_highlight(true_0 != 0, true_0 != 0);
     }
 }
-unsafe extern "C" fn syn_cmd_manual(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_manual(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     syn_cmd_onoff(
         eap,
         b"manual\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
 }
-unsafe extern "C" fn syn_cmd_off(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_off(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     syn_cmd_onoff(
         eap,
         b"nosyntax\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -7230,7 +7230,7 @@ unsafe extern "C" fn syn_incl_toplevel(
         );
     }
 }
-unsafe extern "C" fn syn_cmd_include(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_include(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut sgl_id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut group_name_end: *mut ::core::ffi::c_char =
@@ -7302,7 +7302,7 @@ unsafe extern "C" fn syn_cmd_include(mut eap: *mut exarg_T, mut syncing: ::core:
     (*(*curwin).w_s).b_syn_topgrp = prev_toplvl_grp;
     current_syn_inc_tag = prev_syn_inc_tag;
 }
-unsafe extern "C" fn syn_cmd_keyword(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_keyword(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut group_name_end: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -8096,7 +8096,7 @@ unsafe extern "C" fn syn_add_cluster(mut name: *mut ::core::ffi::c_char) -> ::co
     }
     return len + SYNID_CLUSTER;
 }
-unsafe extern "C" fn syn_cmd_cluster(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_cluster(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut group_name_end: *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -8331,7 +8331,7 @@ unsafe extern "C" fn get_syn_pattern(
     }
     return skipwhite(end);
 }
-unsafe extern "C" fn syn_cmd_sync(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
+unsafe extern "C" fn syn_cmd_sync(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg_start: *mut ::core::ffi::c_char = (*eap).arg;
     let mut key: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut illegal: bool = false_0 != 0;
@@ -9371,7 +9371,7 @@ unsafe extern "C" fn syntime_clear() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_syntime_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     match idx {

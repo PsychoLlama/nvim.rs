@@ -2292,11 +2292,11 @@ pub unsafe extern "C" fn vim_vsnprintf_typval(
                                     str_arg_l = (xmemscan(
                                         str_arg as *const ::core::ffi::c_void,
                                         NUL as ::core::ffi::c_char,
-                                        (if precision < 0x7fffffff as ::core::ffi::c_int as size_t {
+                                        if precision < 0x7fffffff as ::core::ffi::c_int as size_t {
                                             precision
                                         } else {
                                             0x7fffffff as ::core::ffi::c_int as size_t
-                                        }),
+                                        },
                                     )
                                         as *mut ::core::ffi::c_char)
                                         .offset_from(str_arg)
@@ -3531,7 +3531,7 @@ unsafe extern "C" fn byteidx_common(
 pub unsafe extern "C" fn f_byteidx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     byteidx_common(argvars, rettv, false_0 != 0);
 }
@@ -3539,7 +3539,7 @@ pub unsafe extern "C" fn f_byteidx(
 pub unsafe extern "C" fn f_byteidxcomp(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     byteidx_common(argvars, rettv, true_0 != 0);
 }
@@ -3547,7 +3547,7 @@ pub unsafe extern "C" fn f_byteidxcomp(
 pub unsafe extern "C" fn f_charidx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
@@ -3640,7 +3640,7 @@ pub unsafe extern "C" fn f_charidx(
 pub unsafe extern "C" fn f_str2list(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
     let mut p: *const ::core::ffi::c_char =
@@ -3654,7 +3654,7 @@ pub unsafe extern "C" fn f_str2list(
 pub unsafe extern "C" fn f_str2nr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut base: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
     let mut what: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3723,7 +3723,7 @@ pub unsafe extern "C" fn f_str2nr(
 pub unsafe extern "C" fn f_strgetchar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let str: *const ::core::ffi::c_char =
@@ -3755,7 +3755,7 @@ pub unsafe extern "C" fn f_strgetchar(
 pub unsafe extern "C" fn f_stridx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
@@ -3793,7 +3793,7 @@ pub unsafe extern "C" fn f_stridx(
 pub unsafe extern "C" fn f_string(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = encode_tv2string(
@@ -3805,7 +3805,7 @@ pub unsafe extern "C" fn f_string(
 pub unsafe extern "C" fn f_strlen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = strlen(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -3844,7 +3844,7 @@ unsafe extern "C" fn strchar_common(
 pub unsafe extern "C" fn f_strcharlen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     strchar_common(argvars, rettv, true_0 != 0);
 }
@@ -3852,7 +3852,7 @@ pub unsafe extern "C" fn f_strcharlen(
 pub unsafe extern "C" fn f_strchars(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut skipcc: varnumber_T = false_0 as varnumber_T;
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -3880,7 +3880,7 @@ pub unsafe extern "C" fn f_strchars(
 pub unsafe extern "C" fn f_strutf16len(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
@@ -3926,7 +3926,7 @@ pub unsafe extern "C" fn f_strutf16len(
 pub unsafe extern "C" fn f_strdisplaywidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let s: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3943,7 +3943,7 @@ pub unsafe extern "C" fn f_strdisplaywidth(
 pub unsafe extern "C" fn f_strwidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let s: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -3953,7 +3953,7 @@ pub unsafe extern "C" fn f_strwidth(
 pub unsafe extern "C" fn f_strcharpart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let p: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -4040,7 +4040,7 @@ pub unsafe extern "C" fn f_strcharpart(
 pub unsafe extern "C" fn f_strpart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut error: bool = false_0 != 0;
     let p: *const ::core::ffi::c_char =
@@ -4094,7 +4094,7 @@ pub unsafe extern "C" fn f_strpart(
 pub unsafe extern "C" fn f_strridx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     let needle: *const ::core::ffi::c_char =
@@ -4144,7 +4144,7 @@ pub unsafe extern "C" fn f_strridx(
 pub unsafe extern "C" fn f_strtrans(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = transstr(
@@ -4156,7 +4156,7 @@ pub unsafe extern "C" fn f_strtrans(
 pub unsafe extern "C" fn f_utf16idx(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
@@ -4247,7 +4247,7 @@ pub unsafe extern "C" fn f_utf16idx(
 pub unsafe extern "C" fn f_tolower(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = strcase_save(
@@ -4259,7 +4259,7 @@ pub unsafe extern "C" fn f_tolower(
 pub unsafe extern "C" fn f_toupper(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = strcase_save(
@@ -4271,7 +4271,7 @@ pub unsafe extern "C" fn f_toupper(
 pub unsafe extern "C" fn f_tr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
@@ -4377,7 +4377,7 @@ pub unsafe extern "C" fn f_tr(
 pub unsafe extern "C" fn f_trim(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
     let mut buf2: [::core::ffi::c_char; 65] = [0; 65];

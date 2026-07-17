@@ -2300,7 +2300,7 @@ unsafe extern "C" fn get_tabpage_info(
 pub unsafe extern "C" fn f_gettabinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut tparg: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     tv_list_alloc_ret(
@@ -2342,7 +2342,7 @@ pub unsafe extern "C" fn f_gettabinfo(
 pub unsafe extern "C" fn f_getwininfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wparg: *mut win_T = ::core::ptr::null_mut::<win_T>();
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
@@ -2392,9 +2392,9 @@ pub unsafe extern "C" fn f_getwininfo(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getwinpos(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
     tv_list_append_number((*rettv).vval.v_list, -1 as varnumber_T);
@@ -2402,17 +2402,17 @@ pub unsafe extern "C" fn f_getwinpos(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getwinposx(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getwinposy(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
 }
@@ -2420,7 +2420,7 @@ pub unsafe extern "C" fn f_getwinposy(
 pub unsafe extern "C" fn f_tabpagenr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut nr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -2457,7 +2457,7 @@ pub unsafe extern "C" fn f_tabpagenr(
 pub unsafe extern "C" fn f_tabpagewinnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut nr: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let tp: *mut tabpage_T = find_tabpage(tv_get_number(
@@ -2543,7 +2543,7 @@ pub unsafe extern "C" fn win_execute_after(mut args: *mut win_execute_T) {
 pub unsafe extern "C" fn f_win_execute(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2580,7 +2580,7 @@ pub unsafe extern "C" fn f_win_execute(
 pub unsafe extern "C" fn f_win_findbuf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     win_findbuf(argvars, (*rettv).vval.v_list);
@@ -2589,7 +2589,7 @@ pub unsafe extern "C" fn f_win_findbuf(
 pub unsafe extern "C" fn f_win_getid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = win_getid(argvars) as varnumber_T;
 }
@@ -2597,7 +2597,7 @@ pub unsafe extern "C" fn f_win_getid(
 pub unsafe extern "C" fn f_win_gotoid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut id: ::core::ffi::c_int =
         tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
@@ -2633,7 +2633,7 @@ pub unsafe extern "C" fn f_win_gotoid(
 pub unsafe extern "C" fn f_win_id2tabwin(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     win_id2tabwin(argvars, rettv);
 }
@@ -2641,7 +2641,7 @@ pub unsafe extern "C" fn f_win_id2tabwin(
 pub unsafe extern "C" fn f_win_id2win(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = win_id2win(argvars) as varnumber_T;
 }
@@ -2649,7 +2649,7 @@ pub unsafe extern "C" fn f_win_id2win(
 pub unsafe extern "C" fn f_win_move_separator(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = false_0 as varnumber_T;
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2671,7 +2671,7 @@ pub unsafe extern "C" fn f_win_move_separator(
 pub unsafe extern "C" fn f_win_move_statusline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut offset: ::core::ffi::c_int = 0;
@@ -2694,7 +2694,7 @@ pub unsafe extern "C" fn f_win_move_statusline(
 pub unsafe extern "C" fn f_win_screenpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
     let wp: *const win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2719,7 +2719,7 @@ pub unsafe extern "C" fn f_win_screenpos(
 pub unsafe extern "C" fn f_win_splitmove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     let mut targetwin: *mut win_T =
@@ -2793,7 +2793,7 @@ pub unsafe extern "C" fn f_win_splitmove(
 pub unsafe extern "C" fn f_win_gettype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = curwin;
     (*rettv).v_type = VAR_STRING;
@@ -2825,9 +2825,9 @@ pub unsafe extern "C" fn f_win_gettype(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdwintype(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2841,7 +2841,7 @@ pub unsafe extern "C" fn f_getcmdwintype(
 pub unsafe extern "C" fn f_winbufnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
@@ -2852,9 +2852,9 @@ pub unsafe extern "C" fn f_winbufnr(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_wincol(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     validate_cursor(curwin);
     (*rettv).vval.v_number = ((*curwin).w_wcol + 1 as ::core::ffi::c_int) as varnumber_T;
@@ -2863,7 +2863,7 @@ pub unsafe extern "C" fn f_wincol(
 pub unsafe extern "C" fn f_winheight(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {
@@ -2876,7 +2876,7 @@ pub unsafe extern "C" fn f_winheight(
 pub unsafe extern "C" fn f_winlayout(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
     tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
@@ -2896,9 +2896,9 @@ pub unsafe extern "C" fn f_winlayout(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_winline(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     validate_cursor(curwin);
     (*rettv).vval.v_number = ((*curwin).w_wrow + 1 as ::core::ffi::c_int) as varnumber_T;
@@ -2907,16 +2907,16 @@ pub unsafe extern "C" fn f_winline(
 pub unsafe extern "C" fn f_winnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number =
         get_winnr(curtab, argvars.offset(0 as ::core::ffi::c_int as isize)) as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_winrestcmd(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 50] = [0; 50];
     let mut ga: garray_T = garray_T {
@@ -2978,8 +2978,8 @@ pub unsafe extern "C" fn f_winrestcmd(
 #[no_mangle]
 pub unsafe extern "C" fn f_winrestview(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_nonnull_dict_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -3067,9 +3067,9 @@ pub unsafe extern "C" fn f_winrestview(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_winsaveview(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let mut dict: *mut dict_T = (*rettv).vval.v_dict;
@@ -3127,7 +3127,7 @@ pub unsafe extern "C" fn f_winsaveview(
 pub unsafe extern "C" fn f_winwidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
     if wp.is_null() {

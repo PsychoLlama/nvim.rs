@@ -722,8 +722,8 @@ unsafe extern "C" fn libuv_proc_stdio(
     mut idx: ::core::ffi::c_int,
     mut parent_pipe: *mut uv_pipe_t,
     mut child_readable: bool,
-    mut overlapped: bool,
-    mut win_create_pipe: bool,
+    mut _overlapped: bool,
+    mut _win_create_pipe: bool,
     mut to_close: *mut ::core::ffi::c_int,
 ) {
     let mut child_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

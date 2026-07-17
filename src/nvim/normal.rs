@@ -5616,7 +5616,7 @@ unsafe extern "C" fn normal_need_redraw_mode_message(mut s: *mut NormalState) ->
         && !did_wait_return
         && (*s).oa.op_type == OP_NOP as ::core::ffi::c_int;
 }
-unsafe extern "C" fn normal_redraw_mode_message(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_redraw_mode_message(mut _s: *mut NormalState) {
     let mut save_State: ::core::ffi::c_int = State;
     if restart_edit != 0 as ::core::ffi::c_int {
         State = MODE_INSERT as ::core::ffi::c_int;
@@ -6259,7 +6259,7 @@ unsafe extern "C" fn normal_execute(
     normal_finish_command(s);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn normal_check_stuff_buffer(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_stuff_buffer(mut _s: *mut NormalState) {
     if stuff_empty() {
         did_check_timestamps = false_0 != 0;
         if need_check_timestamps {
@@ -6290,12 +6290,12 @@ unsafe extern "C" fn normal_check_interrupt(mut s: *mut NormalState) {
         (*s).previous_got_int = false_0 != 0;
     };
 }
-unsafe extern "C" fn normal_check_window_scrolled(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_window_scrolled(mut _s: *mut NormalState) {
     if !finish_op {
         may_trigger_win_scrolled_resized();
     }
 }
-unsafe extern "C" fn normal_check_cursor_moved(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_cursor_moved(mut _s: *mut NormalState) {
     if !finish_op
         && has_event(EVENT_CURSORMOVED) as ::core::ffi::c_int != 0
         && (last_cursormoved_win != curwin || !equalpos(last_cursormoved, (*curwin).w_cursor))
@@ -6311,7 +6311,7 @@ unsafe extern "C" fn normal_check_cursor_moved(mut s: *mut NormalState) {
         last_cursormoved = (*curwin).w_cursor;
     }
 }
-unsafe extern "C" fn normal_check_text_changed(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_text_changed(mut _s: *mut NormalState) {
     if !finish_op
         && has_event(EVENT_TEXTCHANGED) as ::core::ffi::c_int != 0
         && (*curbuf).b_last_changedtick != buf_get_changedtick(curbuf)
@@ -6326,7 +6326,7 @@ unsafe extern "C" fn normal_check_text_changed(mut s: *mut NormalState) {
         (*curbuf).b_last_changedtick = buf_get_changedtick(curbuf);
     }
 }
-unsafe extern "C" fn normal_check_buffer_modified(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_buffer_modified(mut _s: *mut NormalState) {
     if !finish_op
         && has_event(EVENT_BUFMODIFIEDSET) as ::core::ffi::c_int != 0
         && (*curbuf).b_changed_invalid as ::core::ffi::c_int == true_0
@@ -6341,10 +6341,10 @@ unsafe extern "C" fn normal_check_buffer_modified(mut s: *mut NormalState) {
         (*curbuf).b_changed_invalid = false_0 != 0;
     }
 }
-unsafe extern "C" fn normal_check_safe_state(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_safe_state(mut _s: *mut NormalState) {
     may_trigger_safestate(!op_pending() && restart_edit == 0 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn normal_check_folds(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_check_folds(mut _s: *mut NormalState) {
     foldAdjustVisual();
     if hasAnyFolding(curwin) != 0 && !char_avail() {
         foldCheckClose();
@@ -6353,7 +6353,7 @@ unsafe extern "C" fn normal_check_folds(mut s: *mut NormalState) {
         }
     }
 }
-unsafe extern "C" fn normal_redraw(mut s: *mut NormalState) {
+unsafe extern "C" fn normal_redraw(mut _s: *mut NormalState) {
     update_topline(curwin);
     validate_cursor(curwin);
     show_cursor_info_later(false_0 != 0);
@@ -7330,7 +7330,7 @@ pub unsafe extern "C" fn check_scrollbind(
 unsafe extern "C" fn nv_ignore(mut cap: *mut cmdarg_T) {
     (*cap).retval |= CA_COMMAND_BUSY as ::core::ffi::c_int;
 }
-unsafe extern "C" fn nv_nop(mut cap: *mut cmdarg_T) {}
+unsafe extern "C" fn nv_nop(mut _cap: *mut cmdarg_T) {}
 unsafe extern "C" fn nv_error(mut cap: *mut cmdarg_T) {
     clearopbeep((*cap).oap);
 }
@@ -8339,11 +8339,11 @@ unsafe extern "C" fn nv_zet(mut cap: *mut cmdarg_T) {
                                     106 | 107 => {
                                         if foldMoveTo(
                                             true_0 != 0,
-                                            (if nchar == 'j' as ::core::ffi::c_int {
+                                            if nchar == 'j' as ::core::ffi::c_int {
                                                 FORWARD as ::core::ffi::c_int
                                             } else {
                                                 BACKWARD as ::core::ffi::c_int
-                                            }),
+                                            },
                                             (*cap).count1,
                                         ) == false_0
                                         {
@@ -8789,11 +8789,11 @@ unsafe extern "C" fn nv_ident(mut cap: *mut cmdarg_T) {
     if ptr.is_null() && {
         n = find_ident_under_cursor(
             &raw mut ptr,
-            (if cmdchar == '*' as ::core::ffi::c_int || cmdchar == '#' as ::core::ffi::c_int {
+            if cmdchar == '*' as ::core::ffi::c_int || cmdchar == '#' as ::core::ffi::c_int {
                 FIND_IDENT as ::core::ffi::c_int | FIND_STRING as ::core::ffi::c_int
             } else {
                 FIND_IDENT as ::core::ffi::c_int
-            }),
+            },
             &raw mut ident_offset,
         );
         n == 0 as size_t
@@ -9390,11 +9390,11 @@ unsafe extern "C" fn nv_gotofile(mut cap: *mut cmdarg_T) {
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             ::core::ptr::null_mut::<exarg_T>(),
             ECMD_LAST as ::core::ffi::c_int as linenr_T,
-            (if buf_hide(curbuf) as ::core::ffi::c_int != 0 {
+            if buf_hide(curbuf) as ::core::ffi::c_int != 0 {
                 ECMD_HIDE as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            }),
+            },
             curwin,
         ) == OK
             && (*cap).nchar == 'F' as ::core::ffi::c_int
@@ -9947,11 +9947,11 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
     } else if (*cap).nchar == 'z' as ::core::ffi::c_int {
         if foldMoveTo(
             false_0 != 0,
-            (if (*cap).cmdchar == ']' as ::core::ffi::c_int {
+            if (*cap).cmdchar == ']' as ::core::ffi::c_int {
                 FORWARD as ::core::ffi::c_int
             } else {
                 BACKWARD as ::core::ffi::c_int
-            }),
+            },
             (*cap).count1,
         ) == false_0
         {
@@ -9959,11 +9959,11 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
         }
     } else if (*cap).nchar == 'c' as ::core::ffi::c_int {
         if diff_move_to(
-            (if (*cap).cmdchar == ']' as ::core::ffi::c_int {
+            if (*cap).cmdchar == ']' as ::core::ffi::c_int {
                 FORWARD as ::core::ffi::c_int
             } else {
                 BACKWARD as ::core::ffi::c_int
-            }),
+            },
             (*cap).count1,
         ) == false_0
         {
@@ -9978,19 +9978,19 @@ unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
         while n < (*cap).count1 {
             if spell_move_to(
                 curwin,
-                (if (*cap).cmdchar == ']' as ::core::ffi::c_int {
+                if (*cap).cmdchar == ']' as ::core::ffi::c_int {
                     FORWARD as ::core::ffi::c_int
                 } else {
                     BACKWARD as ::core::ffi::c_int
-                }),
+                },
                 (if (*cap).nchar == 's' as ::core::ffi::c_int {
                     SMT_ALL as ::core::ffi::c_int
                 } else {
-                    (if (*cap).nchar == 'r' as ::core::ffi::c_int {
+                    if (*cap).nchar == 'r' as ::core::ffi::c_int {
                         SMT_RARE as ::core::ffi::c_int
                     } else {
                         SMT_BAD as ::core::ffi::c_int
-                    })
+                    }
                 }) as smt_T,
                 false_0 != 0,
                 ::core::ptr::null_mut::<hlf_T>(),
@@ -11404,16 +11404,16 @@ unsafe extern "C" fn n_opencmd(mut cap: *mut cmdarg_T) {
             }),
     ) != 0
         && open_line(
-            (if (*cap).cmdchar == 'O' as ::core::ffi::c_int {
+            if (*cap).cmdchar == 'O' as ::core::ffi::c_int {
                 BACKWARD as ::core::ffi::c_int
             } else {
                 FORWARD as ::core::ffi::c_int
-            }),
-            (if has_format_option(FO_OPEN_COMS) as ::core::ffi::c_int != 0 {
+            },
+            if has_format_option(FO_OPEN_COMS) as ::core::ffi::c_int != 0 {
                 OPENLINE_DO_COM as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            }),
+            },
             0 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<bool>(),
         ) as ::core::ffi::c_int

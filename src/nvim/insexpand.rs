@@ -4563,11 +4563,11 @@ pub unsafe extern "C" fn ins_compl_col_range_attr(
             && ins_compl_preinsert_longest() as ::core::ffi::c_int != 0
         || {
             attr = syn_name2attr(
-                (if has_preinsert as ::core::ffi::c_int != 0 {
+                if has_preinsert as ::core::ffi::c_int != 0 {
                     b"PreInsert\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"ComplMatchIns\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             attr == 0 as ::core::ffi::c_int
         }
@@ -7203,8 +7203,8 @@ unsafe extern "C" fn set_completion(mut startcol: colnr_T, mut list: *mut list_T
 #[no_mangle]
 pub unsafe extern "C" fn f_complete(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if State & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
         emsg(gettext(
@@ -7239,7 +7239,7 @@ pub unsafe extern "C" fn f_complete(
 pub unsafe extern "C" fn f_complete_add(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = ins_compl_add_tv(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -7249,9 +7249,9 @@ pub unsafe extern "C" fn f_complete_add(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_complete_check(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut saved: ::core::ffi::c_int = RedrawingDisabled;
     RedrawingDisabled = 0 as ::core::ffi::c_int;
@@ -7573,7 +7573,7 @@ pub const CI_WHAT_ALL: ::core::ffi::c_int = 0xff as ::core::ffi::c_int;
 pub unsafe extern "C" fn f_complete_info(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let mut what_list: *mut list_T = ::core::ptr::null_mut::<list_T>();
@@ -8406,11 +8406,11 @@ unsafe extern "C" fn get_next_default_completion(
             ptr,
             len,
             p_ic != 0,
-            (if in_curbuf as ::core::ffi::c_int != 0 {
+            if in_curbuf as ::core::ffi::c_int != 0 {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             } else {
                 (*(*st).ins_buf).b_sfname
-            }),
+            },
             kDirectionNotSet,
             cont_s_ipos,
             score,
@@ -10814,9 +10814,9 @@ unsafe extern "C" fn cpt_compl_refresh() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_preinserted(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if ins_compl_preinsert_effect() {
         (*rettv).vval.v_number = 1 as varnumber_T;

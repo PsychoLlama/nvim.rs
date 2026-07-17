@@ -2920,7 +2920,7 @@ pub unsafe extern "C" fn textpos2screenpos(
 pub unsafe extern "C" fn f_screenpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let mut dict: *mut dict_T = (*rettv).vval.v_dict;
@@ -3012,7 +3012,7 @@ unsafe extern "C" fn virtcol2col(
 pub unsafe extern "C" fn f_virtcol2col(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if tv_check_for_number_arg(argvars, 0 as ::core::ffi::c_int) == FAIL

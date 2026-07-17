@@ -2926,7 +2926,7 @@ unsafe extern "C" fn menu_is_winbar(name: *const ::core::ffi::c_char) -> bool {
         6 as size_t,
     ) == 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn get_root_menu(name: *const ::core::ffi::c_char) -> *mut *mut vimmenu_T {
+unsafe extern "C" fn get_root_menu(_name: *const ::core::ffi::c_char) -> *mut *mut vimmenu_T {
     return &raw mut root_menu;
 }
 unsafe extern "C" fn is_menus_locked() -> ::core::ffi::c_int {
@@ -4098,7 +4098,7 @@ pub unsafe extern "C" fn set_context_in_menu_cmd(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_menu_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
@@ -4138,7 +4138,7 @@ pub unsafe extern "C" fn get_menu_name(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_menu_names(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut menu: *mut vimmenu_T = ::core::ptr::null_mut::<vimmenu_T>();
@@ -5228,7 +5228,7 @@ unsafe extern "C" fn menuitem_getinfo(
 pub unsafe extern "C" fn f_menu_info(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let retdict: *mut dict_T = (*rettv).vval.v_dict;

@@ -3729,7 +3729,7 @@ unsafe extern "C" fn do_intro_line(
     grid_line_flush();
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_intro(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_intro(mut _eap: *mut exarg_T) {
     screenclear();
     intro_message(true_0 != 0);
     plain_vgetc();

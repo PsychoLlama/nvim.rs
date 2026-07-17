@@ -1623,7 +1623,7 @@ pub unsafe extern "C" fn tinput_stop(mut input: *mut TermInput) {
     uv_timer_stop(&raw mut (*input).timer_handle);
     uv_timer_stop(&raw mut (*input).bg_query_timer);
 }
-unsafe extern "C" fn tinput_done_event(mut argv: *mut *mut ::core::ffi::c_void) -> ! {
+unsafe extern "C" fn tinput_done_event(mut _argv: *mut *mut ::core::ffi::c_void) -> ! {
     os_exit(1 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn tinput_flush(mut input: *mut TermInput) {
@@ -2253,7 +2253,7 @@ unsafe extern "C" fn bg_query_timer_cb(mut handle: *mut uv_timer_t) {
     tui_query_bg_color((*input).tui_data);
 }
 unsafe extern "C" fn handle_focus_event(
-    mut input: *mut TermInput,
+    mut _input: *mut TermInput,
     mut ptr: *const ::core::ffi::c_char,
     mut size: size_t,
 ) -> size_t {
@@ -2567,11 +2567,11 @@ unsafe extern "C" fn handle_primary_device_attr(
             );
             if i < nparams.wrapping_sub(1 as size_t) {
                 if response.size == response.capacity {
-                    response.capacity = (if response.capacity != 0 {
+                    response.capacity = if response.capacity != 0 {
                         response.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     response.items = xrealloc(
                         response.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>()
@@ -2586,11 +2586,11 @@ unsafe extern "C" fn handle_primary_device_attr(
             i = i.wrapping_add(1);
         }
         if response.size == response.capacity {
-            response.capacity = (if response.capacity != 0 {
+            response.capacity = if response.capacity != 0 {
                 response.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             response.items = xrealloc(
                 response.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(response.capacity),
@@ -2656,7 +2656,7 @@ unsafe extern "C" fn handle_unknown_csi(mut input: *mut TermInput, mut key: *con
     {
         return;
     }
-    let mut intermediate: uint8_t =
+    let mut _intermediate: uint8_t =
         (cmd >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint) as uint8_t;
     let mut initial: uint8_t =
         (cmd >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint) as uint8_t;
@@ -2919,7 +2919,7 @@ unsafe extern "C" fn handle_raw_buffer(
     return ptr.offset_from(data) as size_t;
 }
 unsafe extern "C" fn tinput_read_cb(
-    mut stream: *mut RStream,
+    mut _stream: *mut RStream,
     mut buf: *const ::core::ffi::c_char,
     mut count_: size_t,
     mut data: *mut ::core::ffi::c_void,

@@ -3931,11 +3931,11 @@ unsafe extern "C" fn redraw_wildmenu(
     }
     let mut clen: ::core::ffi::c_int = wildmenu_match_len(
         xp,
-        (if showtail as ::core::ffi::c_int != 0 {
+        if showtail as ::core::ffi::c_int != 0 {
             showmatches_gettail(*matches.offset(match_0 as isize), false_0 != 0)
         } else {
             *matches.offset(match_0 as isize)
-        }),
+        },
     ) + 3 as ::core::ffi::c_int;
     if match_0 == 0 as ::core::ffi::c_int {
         first_match = 0 as ::core::ffi::c_int;
@@ -3947,11 +3947,11 @@ unsafe extern "C" fn redraw_wildmenu(
         while i < match_0 {
             clen += wildmenu_match_len(
                 xp,
-                (if showtail as ::core::ffi::c_int != 0 {
+                if showtail as ::core::ffi::c_int != 0 {
                     showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
                 } else {
                     *matches.offset(i as isize)
-                }),
+                },
             ) + 2 as ::core::ffi::c_int;
             i += 1;
         }
@@ -3965,11 +3965,11 @@ unsafe extern "C" fn redraw_wildmenu(
             while i < num_matches {
                 clen += wildmenu_match_len(
                     xp,
-                    (if showtail as ::core::ffi::c_int != 0 {
+                    if showtail as ::core::ffi::c_int != 0 {
                         showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
                     } else {
                         *matches.offset(i as isize)
-                    }),
+                    },
                 ) + 2 as ::core::ffi::c_int;
                 if clen >= Columns {
                     break;
@@ -3985,14 +3985,14 @@ unsafe extern "C" fn redraw_wildmenu(
         while first_match > 0 as ::core::ffi::c_int {
             clen += wildmenu_match_len(
                 xp,
-                (if showtail as ::core::ffi::c_int != 0 {
+                if showtail as ::core::ffi::c_int != 0 {
                     showmatches_gettail(
                         *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize),
                         false_0 != 0,
                     )
                 } else {
                     *matches.offset((first_match - 1 as ::core::ffi::c_int) as isize)
-                }),
+                },
             ) + 2 as ::core::ffi::c_int;
             if clen >= Columns {
                 break;
@@ -4019,11 +4019,11 @@ unsafe extern "C" fn redraw_wildmenu(
     while (clen
         + wildmenu_match_len(
             xp,
-            (if showtail as ::core::ffi::c_int != 0 {
+            if showtail as ::core::ffi::c_int != 0 {
                 showmatches_gettail(*matches.offset(i as isize), false_0 != 0)
             } else {
                 *matches.offset(i as isize)
-            }),
+            },
         )
         + 2 as ::core::ffi::c_int)
         < Columns
@@ -6281,7 +6281,7 @@ unsafe extern "C" fn expand_files_and_dirs(
     return ret;
 }
 unsafe extern "C" fn get_filetypecmd_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx < 0 as ::core::ffi::c_int {
@@ -6334,7 +6334,7 @@ unsafe extern "C" fn get_filetypecmd_arg(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn get_breakadd_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx >= 0 as ::core::ffi::c_int && idx <= 3 as ::core::ffi::c_int {
@@ -6361,7 +6361,7 @@ unsafe extern "C" fn get_breakadd_arg(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn get_scriptnames_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if !(idx + 1 as ::core::ffi::c_int > 0 as ::core::ffi::c_int
@@ -6381,7 +6381,7 @@ unsafe extern "C" fn get_scriptnames_arg(
     return &raw mut NameBuff as *mut ::core::ffi::c_char;
 }
 unsafe extern "C" fn get_retab_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
@@ -6390,7 +6390,7 @@ unsafe extern "C" fn get_retab_arg(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn get_messages_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
@@ -6399,7 +6399,7 @@ unsafe extern "C" fn get_messages_arg(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn get_mapclear_arg(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx == 0 as ::core::ffi::c_int {
@@ -6408,7 +6408,7 @@ unsafe extern "C" fn get_mapclear_arg(
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn get_healthcheck_names(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut names: Object = object {
@@ -7007,11 +7007,11 @@ unsafe extern "C" fn ExpandFromContext(
     *numMatches = 0 as ::core::ffi::c_int;
     if (*xp).xp_context == EXPAND_HELP as ::core::ffi::c_int {
         if find_help_tags(
-            (if *pat as ::core::ffi::c_int == NUL {
+            if *pat as ::core::ffi::c_int == NUL {
                 b"help\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 pat as *const ::core::ffi::c_char
-            }),
+            },
             numMatches,
             matches,
             false_0 != 0,
@@ -8202,7 +8202,7 @@ pub unsafe extern "C" fn wildmenu_cleanup(mut cclp: *mut CmdlineInfo) {
 pub unsafe extern "C" fn f_getcompletion(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut xpc: expand_T = expand_T {
         xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -8409,7 +8409,7 @@ pub unsafe extern "C" fn f_getcompletion(
 pub unsafe extern "C" fn f_getcompletiontype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -8461,9 +8461,9 @@ pub unsafe extern "C" fn f_getcompletiontype(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_cmdcomplete_info(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ccline: *mut CmdlineInfo = get_cmdline_info();
     tv_dict_alloc_ret(rettv);

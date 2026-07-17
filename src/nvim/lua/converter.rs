@@ -866,7 +866,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
     stack.size = 0 as size_t;
     stack.items = &raw mut stack.init_array as *mut TVPopStackItem;
     if stack.size == stack.capacity {
-        stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+        stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[TVPopStackItem; 2]>()
                 .wrapping_div(::core::mem::size_of::<TVPopStackItem>())
                 .wrapping_div(
@@ -883,7 +883,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                         .wrapping_rem(::core::mem::size_of::<TVPopStackItem>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         stack.items = (if stack.capacity
             == ::core::mem::size_of::<[TVPopStackItem; 2]>()
                 .wrapping_div(::core::mem::size_of::<TVPopStackItem>())
@@ -892,7 +892,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                         .wrapping_rem(::core::mem::size_of::<TVPopStackItem>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if stack.items == &raw mut stack.init_array as *mut TVPopStackItem {
+            if stack.items == &raw mut stack.init_array as *mut TVPopStackItem {
                 stack.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -902,9 +902,9 @@ pub unsafe extern "C" fn nlua_pop_typval(
                         .size
                         .wrapping_mul(::core::mem::size_of::<TVPopStackItem>()),
                 )
-            })
+            }
         } else {
-            (if stack.items == &raw mut stack.init_array as *mut TVPopStackItem {
+            if stack.items == &raw mut stack.init_array as *mut TVPopStackItem {
                 memcpy(
                     xmalloc(
                         stack
@@ -923,7 +923,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<TVPopStackItem>()),
                 )
-            })
+            }
         }) as *mut TVPopStackItem;
     } else {
     };
@@ -1001,7 +1001,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                 },
                             );
                             if stack.size == stack.capacity {
-                                stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                                stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                     > ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                         .wrapping_div(::core::mem::size_of::<TVPopStackItem>())
                                         .wrapping_div(
@@ -1026,7 +1026,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                 as ::core::ffi::c_int
                                                 as size_t,
                                         )
-                                });
+                                };
                                 stack.items =
                                     (if stack.capacity
                                         == ::core::mem::size_of::<[TVPopStackItem; 2]>()
@@ -1042,7 +1042,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                     as usize,
                                             )
                                     {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut TVPopStackItem
                                         {
                                             stack.items as *mut ::core::ffi::c_void
@@ -1056,9 +1056,9 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                 >(
                                                 )),
                                             )
-                                        })
+                                        }
                                     } else {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut TVPopStackItem
                                         {
                                             memcpy(
@@ -1078,7 +1078,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                     ::core::mem::size_of::<TVPopStackItem>(),
                                                 ),
                                             )
-                                        })
+                                        }
                                     }) as *mut TVPopStackItem;
                             } else {
                             };
@@ -1103,7 +1103,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                 abort();
                             }
                             if stack.size == stack.capacity {
-                                stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                                stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                     > ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                         .wrapping_div(::core::mem::size_of::<TVPopStackItem>())
                                         .wrapping_div(
@@ -1128,7 +1128,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                 as ::core::ffi::c_int
                                                 as size_t,
                                         )
-                                });
+                                };
                                 stack.items =
                                     (if stack.capacity
                                         == ::core::mem::size_of::<[TVPopStackItem; 2]>()
@@ -1144,7 +1144,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                     as usize,
                                             )
                                     {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut TVPopStackItem
                                         {
                                             stack.items as *mut ::core::ffi::c_void
@@ -1158,9 +1158,9 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                 >(
                                                 )),
                                             )
-                                        })
+                                        }
                                     } else {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut TVPopStackItem
                                         {
                                             memcpy(
@@ -1180,7 +1180,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                     ::core::mem::size_of::<TVPopStackItem>(),
                                                 ),
                                             )
-                                        })
+                                        }
                                     }) as *mut TVPopStackItem;
                             } else {
                             };
@@ -1235,7 +1235,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                             },
                         );
                         if stack.size == stack.capacity {
-                            stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                            stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                 > ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                     .wrapping_div(::core::mem::size_of::<TVPopStackItem>())
                                     .wrapping_div(
@@ -1256,7 +1256,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                             as ::core::ffi::c_int
                                             as size_t,
                                     )
-                            });
+                            };
                             stack.items = (if stack.capacity
                                 == ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                     .wrapping_div(::core::mem::size_of::<TVPopStackItem>())
@@ -1267,7 +1267,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                             as ::core::ffi::c_int
                                             as usize,
                                     ) {
-                                (if stack.items == &raw mut stack.init_array as *mut TVPopStackItem
+                                if stack.items == &raw mut stack.init_array as *mut TVPopStackItem
                                 {
                                     stack.items as *mut ::core::ffi::c_void
                                 } else {
@@ -1279,9 +1279,9 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                             .size
                                             .wrapping_mul(::core::mem::size_of::<TVPopStackItem>()),
                                     )
-                                })
+                                }
                             } else {
-                                (if stack.items == &raw mut stack.init_array as *mut TVPopStackItem
+                                if stack.items == &raw mut stack.init_array as *mut TVPopStackItem
                                 {
                                     memcpy(
                                         xmalloc(
@@ -1303,7 +1303,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                             .capacity
                                             .wrapping_mul(::core::mem::size_of::<TVPopStackItem>()),
                                     )
-                                })
+                                }
                             }) as *mut TVPopStackItem;
                         } else {
                         };
@@ -1410,7 +1410,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                     cur.container = true_0 != 0;
                                     cur.idx = lua_gettop(lstate);
                                     if stack.size == stack.capacity {
-                                        stack.capacity = (if stack.capacity
+                                        stack.capacity = if stack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                                 .wrapping_div(
@@ -1442,7 +1442,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         as ::core::ffi::c_int
                                                         as size_t,
                                                 )
-                                        });
+                                        };
                                         stack.items = (if stack.capacity
                                             == ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                                 .wrapping_div(
@@ -1458,7 +1458,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         as ::core::ffi::c_int
                                                         as usize,
                                                 ) {
-                                            (if stack.items
+                                            if stack.items
                                                 == &raw mut stack.init_array as *mut TVPopStackItem
                                             {
                                                 stack.items as *mut ::core::ffi::c_void
@@ -1471,9 +1471,9 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         ::core::mem::size_of::<TVPopStackItem>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         } else {
-                                            (if stack.items
+                                            if stack.items
                                                 == &raw mut stack.init_array as *mut TVPopStackItem
                                             {
                                                 memcpy(
@@ -1492,7 +1492,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         ::core::mem::size_of::<TVPopStackItem>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         })
                                             as *mut TVPopStackItem;
                                     } else {
@@ -1581,7 +1581,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                     cur.container = true_0 != 0;
                                     cur.idx = lua_gettop(lstate);
                                     if stack.size == stack.capacity {
-                                        stack.capacity = (if stack.capacity
+                                        stack.capacity = if stack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                                 .wrapping_div(
@@ -1613,7 +1613,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         as ::core::ffi::c_int
                                                         as size_t,
                                                 )
-                                        });
+                                        };
                                         stack.items = (if stack.capacity
                                             == ::core::mem::size_of::<[TVPopStackItem; 2]>()
                                                 .wrapping_div(
@@ -1629,7 +1629,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         as ::core::ffi::c_int
                                                         as usize,
                                                 ) {
-                                            (if stack.items
+                                            if stack.items
                                                 == &raw mut stack.init_array as *mut TVPopStackItem
                                             {
                                                 stack.items as *mut ::core::ffi::c_void
@@ -1642,9 +1642,9 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         ::core::mem::size_of::<TVPopStackItem>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         } else {
-                                            (if stack.items
+                                            if stack.items
                                                 == &raw mut stack.init_array as *mut TVPopStackItem
                                             {
                                                 memcpy(
@@ -1663,7 +1663,7 @@ pub unsafe extern "C" fn nlua_pop_typval(
                                                         ::core::mem::size_of::<TVPopStackItem>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         })
                                             as *mut TVPopStackItem;
                                     } else {
@@ -1838,7 +1838,7 @@ unsafe extern "C" fn nlua_create_typed_table(
 pub unsafe extern "C" fn nlua_push_String(
     mut lstate: *mut lua_State,
     s: String_0,
-    mut flags: ::core::ffi::c_int,
+    mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushlstring(
         lstate,
@@ -1854,7 +1854,7 @@ pub unsafe extern "C" fn nlua_push_String(
 pub unsafe extern "C" fn nlua_push_Integer(
     mut lstate: *mut lua_State,
     n: Integer,
-    mut flags: ::core::ffi::c_int,
+    mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushnumber(lstate, n as lua_Number);
 }
@@ -1877,7 +1877,7 @@ pub unsafe extern "C" fn nlua_push_Float(
 pub unsafe extern "C" fn nlua_push_Boolean(
     mut lstate: *mut lua_State,
     b: Boolean,
-    mut flags: ::core::ffi::c_int,
+    mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushboolean(lstate, b as ::core::ffi::c_int);
 }
@@ -1934,7 +1934,7 @@ pub unsafe extern "C" fn nlua_push_Array(
 pub unsafe extern "C" fn nlua_push_handle(
     mut lstate: *mut lua_State,
     item: handle_T,
-    mut flags: ::core::ffi::c_int,
+    mut _flags: ::core::ffi::c_int,
 ) {
     lua_pushnumber(lstate, item as lua_Number);
 }
@@ -2033,7 +2033,7 @@ pub unsafe extern "C" fn nlua_pop_String(
 #[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Integer(
     mut lstate: *mut lua_State,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut err: *mut Error,
 ) -> Integer {
     if lua_type(lstate, -1 as ::core::ffi::c_int) != LUA_TNUMBER {
@@ -2063,8 +2063,8 @@ pub unsafe extern "C" fn nlua_pop_Integer(
 #[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Boolean(
     mut lstate: *mut lua_State,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
+    mut _arena: *mut Arena,
+    mut _err: *mut Error,
 ) -> Boolean {
     let ret: Boolean = lua_toboolean(lstate, -1 as ::core::ffi::c_int) != 0;
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
@@ -2152,7 +2152,7 @@ unsafe extern "C" fn nlua_check_type(
 #[no_mangle]
 pub unsafe extern "C" fn nlua_pop_Float(
     mut lstate: *mut lua_State,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut err: *mut Error,
 ) -> Float {
     if lua_type(lstate, -1 as ::core::ffi::c_int) == LUA_TNUMBER {
@@ -2324,7 +2324,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
     stack.size = 0 as size_t;
     stack.items = &raw mut stack.init_array as *mut ObjPopStackItem;
     if stack.size == stack.capacity {
-        stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+        stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                 .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
                 .wrapping_div(
@@ -2341,7 +2341,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                         .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         stack.items = (if stack.capacity
             == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                 .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
@@ -2350,7 +2350,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                         .wrapping_rem(::core::mem::size_of::<ObjPopStackItem>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
+            if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
                 stack.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -2360,9 +2360,9 @@ pub unsafe extern "C" fn nlua_pop_Object(
                         .size
                         .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
                 )
-            })
+            }
         } else {
-            (if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
+            if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
                 memcpy(
                     xmalloc(
                         stack
@@ -2381,7 +2381,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
                 )
-            })
+            }
         }) as *mut ObjPopStackItem;
     } else {
     };
@@ -2435,7 +2435,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                             },
                         );
                         if stack.size == stack.capacity {
-                            stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                            stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                 > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                                     .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
                                     .wrapping_div(
@@ -2456,7 +2456,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                             as ::core::ffi::c_int
                                             as size_t,
                                     )
-                            });
+                            };
                             stack.items = (if stack.capacity
                                 == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                                     .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
@@ -2467,7 +2467,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                             as ::core::ffi::c_int
                                             as usize,
                                     ) {
-                                (if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem
+                                if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem
                                 {
                                     stack.items as *mut ::core::ffi::c_void
                                 } else {
@@ -2479,9 +2479,9 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                             .size
                                             .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
                                     )
-                                })
+                                }
                             } else {
-                                (if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem
+                                if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem
                                 {
                                     memcpy(
                                         xmalloc(
@@ -2501,7 +2501,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                             .capacity
                                             .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
                                     )
-                                })
+                                }
                             }) as *mut ObjPopStackItem;
                         } else {
                         };
@@ -2530,7 +2530,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                     idx_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
                 );
                 if stack.size == stack.capacity {
-                    stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                    stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                             .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
                             .wrapping_div(
@@ -2549,7 +2549,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     stack.items = (if stack.capacity
                         == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                             .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
@@ -2559,7 +2559,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
+                        if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
                             stack.items as *mut ::core::ffi::c_void
                         } else {
                             _memcpy_free(
@@ -2570,9 +2570,9 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
                             )
-                        })
+                        }
                     } else {
-                        (if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
+                        if stack.items == &raw mut stack.init_array as *mut ObjPopStackItem {
                             memcpy(
                                 xmalloc(
                                     stack
@@ -2591,7 +2591,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<ObjPopStackItem>()),
                             )
-                        })
+                        }
                     }) as *mut ObjPopStackItem;
                 } else {
                 };
@@ -2705,7 +2705,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                     }
                                 };
                                 if stack.size == stack.capacity {
-                                    stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                                    stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                         > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                                             .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
                                             .wrapping_div(
@@ -2732,7 +2732,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                     as ::core::ffi::c_int
                                                     as size_t,
                                             )
-                                    });
+                                    };
                                     stack.items = (if stack.capacity
                                         == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                                             .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
@@ -2746,7 +2746,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                     as ::core::ffi::c_int
                                                     as usize,
                                             ) {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut ObjPopStackItem
                                         {
                                             stack.items as *mut ::core::ffi::c_void
@@ -2760,9 +2760,9 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                 >(
                                                 )),
                                             )
-                                        })
+                                        }
                                     } else {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut ObjPopStackItem
                                         {
                                             memcpy(
@@ -2782,7 +2782,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                     ::core::mem::size_of::<ObjPopStackItem>(),
                                                 ),
                                             )
-                                        })
+                                        }
                                     })
                                         as *mut ObjPopStackItem;
                                 } else {
@@ -2822,7 +2822,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                     }
                                 };
                                 if stack.size == stack.capacity {
-                                    stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                                    stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                         > ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                                             .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
                                             .wrapping_div(
@@ -2849,7 +2849,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                     as ::core::ffi::c_int
                                                     as size_t,
                                             )
-                                    });
+                                    };
                                     stack.items = (if stack.capacity
                                         == ::core::mem::size_of::<[ObjPopStackItem; 2]>()
                                             .wrapping_div(::core::mem::size_of::<ObjPopStackItem>())
@@ -2863,7 +2863,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                     as ::core::ffi::c_int
                                                     as usize,
                                             ) {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut ObjPopStackItem
                                         {
                                             stack.items as *mut ::core::ffi::c_void
@@ -2877,9 +2877,9 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                 >(
                                                 )),
                                             )
-                                        })
+                                        }
                                     } else {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut ObjPopStackItem
                                         {
                                             memcpy(
@@ -2899,7 +2899,7 @@ pub unsafe extern "C" fn nlua_pop_Object(
                                                     ::core::mem::size_of::<ObjPopStackItem>(),
                                                 ),
                                             )
-                                        })
+                                        }
                                     })
                                         as *mut ObjPopStackItem;
                                 } else {
@@ -3014,8 +3014,8 @@ pub unsafe extern "C" fn nlua_pop_Object(
 #[no_mangle]
 pub unsafe extern "C" fn nlua_pop_LuaRef(
     lstate: *mut lua_State,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
+    mut _arena: *mut Arena,
+    mut _err: *mut Error,
 ) -> LuaRef {
     let mut rv: LuaRef = nlua_ref_global(lstate, -1 as ::core::ffi::c_int);
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
@@ -3024,7 +3024,7 @@ pub unsafe extern "C" fn nlua_pop_LuaRef(
 #[no_mangle]
 pub unsafe extern "C" fn nlua_pop_handle(
     mut lstate: *mut lua_State,
-    mut arena: *mut Arena,
+    mut _arena: *mut Arena,
     mut err: *mut Error,
 ) -> handle_T {
     let mut ret: handle_T = 0;
@@ -3256,7 +3256,7 @@ unsafe extern "C" fn _typval_encode_lua_check_self_reference(
     mpstack: *const MPConvStack,
     copyID: ::core::ffi::c_int,
     conv_type: MPConvStackValType,
-    objname: *const ::core::ffi::c_char,
+    _objname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if *val_copyID == copyID {
         let mut backref: size_t = (*mpstack).size;
@@ -3295,7 +3295,7 @@ unsafe extern "C" fn _typval_encode_lua_check_self_reference(
 unsafe extern "C" fn _typval_encode_lua_convert_one_value(
     lstate: *mut lua_State,
     mpstack: *mut MPConvStack,
-    cur_mpsv: *mut MPConvStackVal,
+    _cur_mpsv: *mut MPConvStackVal,
     tv: *mut typval_T,
     copyID: ::core::ffi::c_int,
     objname: *const ::core::ffi::c_char,
@@ -3347,7 +3347,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                 } else {
                     partial_name(pt)
                 };
-                let prefix: *const ::core::ffi::c_char = if !fun.is_null()
+                let _prefix: *const ::core::ffi::c_char = if !fun.is_null()
                     && !pt.is_null()
                     && (*pt).pt_name.is_null()
                     && (*fun.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
@@ -3423,7 +3423,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                         }
                     };
                     if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                                 .wrapping_div(
@@ -3444,7 +3444,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*mpstack).items = (if (*mpstack).capacity
                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -3455,7 +3455,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 (*mpstack).items as *mut ::core::ffi::c_void
@@ -3468,9 +3468,9 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 memcpy(
@@ -3491,7 +3491,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         }) as *mut MPConvStackVal;
                     } else {
                     };
@@ -3800,7 +3800,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                 }
                                             };
                                             if (*mpstack).size == (*mpstack).capacity {
-                                                (*mpstack).capacity = (if (*mpstack).capacity
+                                                (*mpstack).capacity = if (*mpstack).capacity
                                                     << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
@@ -3838,7 +3838,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                                 (*mpstack).items = (if (*mpstack).capacity
                                                     == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
@@ -3857,7 +3857,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as usize,
                                                         ) {
-                                                    (if (*mpstack).items
+                                                    if (*mpstack).items
                                                         == &raw mut (*mpstack).init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -3876,9 +3876,9 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if (*mpstack).items
+                                                    if (*mpstack).items
                                                         == &raw mut (*mpstack).init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -3911,7 +3911,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut MPConvStackVal;
                                             } else {
@@ -4045,7 +4045,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                 };
                                                 if (*mpstack).size == (*mpstack).capacity {
                                                     (*mpstack).capacity =
-                                                        (if (*mpstack).capacity
+                                                        if (*mpstack).capacity
                                                             << 1 as ::core::ffi::c_int
                                                             > ::core::mem::size_of::<
                                                                 [MPConvStackVal; 8],
@@ -4095,7 +4095,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                     as ::core::ffi::c_int
                                                                     as size_t,
                                                             )
-                                                        });
+                                                        };
                                                     (*mpstack).items =
                                                         (if (*mpstack).capacity
                                                             == ::core::mem::size_of::<
@@ -4121,7 +4121,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                     as usize,
                                                             )
                                                         {
-                                                            (if (*mpstack).items
+                                                            if (*mpstack).items
                                                                 == &raw mut (*mpstack).init_array
                                                                     as *mut MPConvStackVal
                                                             {
@@ -4141,9 +4141,9 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                         ),
                                                                     ),
                                                                 )
-                                                            })
+                                                            }
                                                         } else {
-                                                            (if (*mpstack).items
+                                                            if (*mpstack).items
                                                                 == &raw mut (*mpstack).init_array
                                                                     as *mut MPConvStackVal
                                                             {
@@ -4171,7 +4171,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         })
                                                             as *mut MPConvStackVal;
                                                 } else {
@@ -4291,7 +4291,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                         }
                     };
                     if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                                 .wrapping_div(
@@ -4312,7 +4312,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*mpstack).items = (if (*mpstack).capacity
                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -4323,7 +4323,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 (*mpstack).items as *mut ::core::ffi::c_void
@@ -4336,9 +4336,9 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 memcpy(
@@ -4359,7 +4359,7 @@ unsafe extern "C" fn _typval_encode_lua_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         }) as *mut MPConvStackVal;
                     } else {
                     };
@@ -4552,7 +4552,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                     lua_createtable(lstate, (*pt).pt_argc, 0 as ::core::ffi::c_int);
                                     lua_pushnumber(lstate, 1 as ::core::ffi::c_int as lua_Number);
                                     if mpstack.size == mpstack.capacity {
-                                        mpstack.capacity = (if mpstack.capacity
+                                        mpstack.capacity = if mpstack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                 .wrapping_div(
@@ -4584,7 +4584,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                         as ::core::ffi::c_int
                                                         as size_t,
                                                 )
-                                        });
+                                        };
                                         mpstack.items = (if mpstack.capacity
                                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                 .wrapping_div(
@@ -4600,7 +4600,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                         as ::core::ffi::c_int
                                                         as usize,
                                                 ) {
-                                            (if mpstack.items
+                                            if mpstack.items
                                                 == &raw mut mpstack.init_array
                                                     as *mut MPConvStackVal
                                             {
@@ -4615,9 +4615,9 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                         ::core::mem::size_of::<MPConvStackVal>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         } else {
-                                            (if mpstack.items
+                                            if mpstack.items
                                                 == &raw mut mpstack.init_array
                                                     as *mut MPConvStackVal
                                             {
@@ -4637,7 +4637,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                         ::core::mem::size_of::<MPConvStackVal>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         })
                                             as *mut MPConvStackVal;
                                     } else {
@@ -4745,7 +4745,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                         };
                                         if mpstack.size == mpstack.capacity {
                                             mpstack.capacity =
-                                                (if mpstack.capacity << 1 as ::core::ffi::c_int
+                                                if mpstack.capacity << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
                                                             MPConvStackVal,
@@ -4783,7 +4783,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                             mpstack.items =
                                                 (if mpstack.capacity
                                                     == ::core::mem::size_of::<[MPConvStackVal; 8]>()
@@ -4804,7 +4804,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                                 as usize,
                                                         )
                                                 {
-                                                    (if mpstack.items
+                                                    if mpstack.items
                                                         == &raw mut mpstack.init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -4823,9 +4823,9 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if mpstack.items
+                                                    if mpstack.items
                                                         == &raw mut mpstack.init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -4856,7 +4856,7 @@ unsafe extern "C" fn encode_vim_to_lua(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut MPConvStackVal;
                                         } else {

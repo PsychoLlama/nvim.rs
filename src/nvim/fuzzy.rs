@@ -2335,7 +2335,7 @@ unsafe extern "C" fn do_fuzzymatch(
 pub unsafe extern "C" fn f_matchfuzzy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     do_fuzzymatch(argvars, rettv, false_0 != 0);
 }
@@ -2343,7 +2343,7 @@ pub unsafe extern "C" fn f_matchfuzzy(
 pub unsafe extern "C" fn f_matchfuzzypos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     do_fuzzymatch(argvars, rettv, true_0 != 0);
 }

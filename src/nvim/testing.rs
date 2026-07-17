@@ -1505,7 +1505,7 @@ unsafe extern "C" fn assert_beeps(
 pub unsafe extern "C" fn f_assert_beeps(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_beeps(argvars, false_0 != 0) as varnumber_T;
 }
@@ -1513,7 +1513,7 @@ pub unsafe extern "C" fn f_assert_beeps(
 pub unsafe extern "C" fn f_assert_nobeep(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_beeps(argvars, true_0 != 0) as varnumber_T;
 }
@@ -1521,7 +1521,7 @@ pub unsafe extern "C" fn f_assert_nobeep(
 pub unsafe extern "C" fn f_assert_equal(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_equal_common(argvars, ASSERT_EQUAL) as varnumber_T;
 }
@@ -1705,7 +1705,7 @@ unsafe extern "C" fn assert_equalfile(mut argvars: *mut typval_T) -> ::core::ffi
 pub unsafe extern "C" fn f_assert_equalfile(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_equalfile(argvars) as varnumber_T;
 }
@@ -1713,7 +1713,7 @@ pub unsafe extern "C" fn f_assert_equalfile(
 pub unsafe extern "C" fn f_assert_notequal(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_equal_common(argvars, ASSERT_NOTEQUAL) as varnumber_T;
 }
@@ -1721,7 +1721,7 @@ pub unsafe extern "C" fn f_assert_notequal(
 pub unsafe extern "C" fn f_assert_exception(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
@@ -1761,7 +1761,7 @@ pub unsafe extern "C" fn f_assert_exception(
 pub unsafe extern "C" fn f_assert_fails(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
@@ -2002,7 +2002,7 @@ pub unsafe extern "C" fn f_assert_fails(
 pub unsafe extern "C" fn f_assert_false(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_bool(argvars, false_0 != 0) as varnumber_T;
 }
@@ -2099,7 +2099,7 @@ unsafe extern "C" fn assert_inrange(mut argvars: *mut typval_T) -> ::core::ffi::
 pub unsafe extern "C" fn f_assert_inrange(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_float_or_nr_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
         || tv_check_for_float_or_nr_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
@@ -2114,7 +2114,7 @@ pub unsafe extern "C" fn f_assert_inrange(
 pub unsafe extern "C" fn f_assert_match(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_match_common(argvars, ASSERT_MATCH) as varnumber_T;
 }
@@ -2122,7 +2122,7 @@ pub unsafe extern "C" fn f_assert_match(
 pub unsafe extern "C" fn f_assert_notmatch(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_match_common(argvars, ASSERT_NOTMATCH) as varnumber_T;
 }
@@ -2130,7 +2130,7 @@ pub unsafe extern "C" fn f_assert_notmatch(
 pub unsafe extern "C" fn f_assert_report(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
@@ -2152,15 +2152,15 @@ pub unsafe extern "C" fn f_assert_report(
 pub unsafe extern "C" fn f_assert_true(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = assert_bool(argvars, true_0 != 0) as varnumber_T;
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_test_garbagecollect_now(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if get_vim_var_nr(VV_TESTING) == 0 {
         emsg(gettext(
@@ -2174,8 +2174,8 @@ pub unsafe extern "C" fn f_test_garbagecollect_now(
 #[no_mangle]
 pub unsafe extern "C" fn f_test_write_list_log(
     argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let fname: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));

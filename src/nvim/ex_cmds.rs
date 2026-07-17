@@ -4304,7 +4304,7 @@ static mut e_non_numeric_argument_to_z: [::core::ffi::c_char; 33] = unsafe {
     )
 };
 #[no_mangle]
-pub unsafe extern "C" fn do_ascii(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
     let mut data: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
     let mut len: size_t = utfc_ptr2len(data) as size_t;
     if len == 0 as size_t {
@@ -4489,11 +4489,11 @@ pub unsafe extern "C" fn ex_align(mut eap: *mut exarg_T) {
             } else {
                 let mut has_tab: ::core::ffi::c_int = false_0;
                 let mut len: ::core::ffi::c_int = linelen(
-                    (if (*eap).cmdidx as ::core::ffi::c_int == CMD_right as ::core::ffi::c_int {
+                    if (*eap).cmdidx as ::core::ffi::c_int == CMD_right as ::core::ffi::c_int {
                         &raw mut has_tab
                     } else {
                         ::core::ptr::null_mut::<::core::ffi::c_int>()
-                    }),
+                    },
                 ) - get_indent();
                 if len <= 0 as ::core::ffi::c_int {
                     break 's_118;
@@ -8238,11 +8238,11 @@ unsafe extern "C" fn do_sub(
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
         RE_SUBST as ::core::ffi::c_int,
         which_pat,
-        (if cmdpreview_ns > 0 as ::core::ffi::c_int {
+        if cmdpreview_ns > 0 as ::core::ffi::c_int {
             0 as ::core::ffi::c_int
         } else {
             SEARCH_HIS as ::core::ffi::c_int
-        }),
+        },
         &raw mut regmatch,
     ) == FAIL
     {
@@ -8884,11 +8884,11 @@ unsafe extern "C" fn do_sub(
                                     did_save = true_0 != 0;
                                 }
                                 if line_matches.size == line_matches.capacity {
-                                    line_matches.capacity = (if line_matches.capacity != 0 {
+                                    line_matches.capacity = if line_matches.capacity != 0 {
                                         line_matches.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
-                                    });
+                                    };
                                     line_matches.items = xrealloc(
                                         line_matches.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<LineData>()
@@ -9052,11 +9052,11 @@ unsafe extern "C" fn do_sub(
                             }
                             if preview_lines.subresults.size == preview_lines.subresults.capacity {
                                 preview_lines.subresults.capacity =
-                                    (if preview_lines.subresults.capacity != 0 {
+                                    if preview_lines.subresults.capacity != 0 {
                                         preview_lines.subresults.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
-                                    });
+                                    };
                                 preview_lines.subresults.items = xrealloc(
                                     preview_lines.subresults.items as *mut ::core::ffi::c_void,
                                     ::core::mem::size_of::<SubResult>()
@@ -9102,11 +9102,11 @@ unsafe extern "C" fn do_sub(
                     }
                     if preview_lines.subresults.size == preview_lines.subresults.capacity {
                         preview_lines.subresults.capacity =
-                            (if preview_lines.subresults.capacity != 0 {
+                            if preview_lines.subresults.capacity != 0 {
                                 preview_lines.subresults.capacity << 1 as ::core::ffi::c_int
                             } else {
                                 8 as size_t
-                            });
+                            };
                         preview_lines.subresults.items = xrealloc(
                             preview_lines.subresults.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<SubResult>()
@@ -9571,11 +9571,11 @@ pub unsafe extern "C" fn prepare_tagpreview(mut undo_sync: bool) -> bool {
         wp = (*wp).w_next;
     }
     if win_split(
-        (if g_do_tagpreview > 0 as ::core::ffi::c_int {
+        if g_do_tagpreview > 0 as ::core::ffi::c_int {
             g_do_tagpreview
         } else {
             0 as ::core::ffi::c_int
-        }),
+        },
         0 as ::core::ffi::c_int,
     ) == FAIL
     {

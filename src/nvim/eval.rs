@@ -6287,7 +6287,7 @@ unsafe extern "C" fn get_lval_list(
     mut var1: *mut typval_T,
     mut var2: *mut typval_T,
     mut empty1: bool,
-    mut flags: ::core::ffi::c_int,
+    mut _flags: ::core::ffi::c_int,
     mut quiet: bool,
 ) -> ::core::ffi::c_int {
     if empty1 {
@@ -6322,8 +6322,8 @@ unsafe extern "C" fn get_lval_subscript(
     mut p: *mut ::core::ffi::c_char,
     mut name: *mut ::core::ffi::c_char,
     mut rettv: *mut typval_T,
-    mut ht: *mut hashtab_T,
-    mut v: *mut dictitem_T,
+    mut _ht: *mut hashtab_T,
+    mut _v: *mut dictitem_T,
     mut unlet: bool,
     mut flags: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -8885,7 +8885,7 @@ unsafe extern "C" fn check_can_index(
 pub unsafe extern "C" fn f_slice(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if check_can_index(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -10803,7 +10803,7 @@ unsafe extern "C" fn get_system_output_as_rettv(
 pub unsafe extern "C" fn f_system(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_system_output_as_rettv(argvars, rettv, false_0 != 0);
 }
@@ -10811,7 +10811,7 @@ pub unsafe extern "C" fn f_system(
 pub unsafe extern "C" fn f_systemlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_system_output_as_rettv(argvars, rettv, true_0 != 0);
 }
@@ -11077,7 +11077,7 @@ pub unsafe extern "C" fn add_timer_info_all(mut rettv: *mut typval_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn timer_due_cb(
-    mut tw: *mut TimeWatcher,
+    mut _tw: *mut TimeWatcher,
     mut data: *mut ::core::ffi::c_void,
 ) {
     let mut timer: *mut timer_T = data as *mut timer_T;
@@ -11198,7 +11198,7 @@ pub unsafe extern "C" fn timer_stop(mut timer: *mut timer_T) {
         ),
     );
 }
-unsafe extern "C" fn timer_close_cb(mut tw: *mut TimeWatcher, mut data: *mut ::core::ffi::c_void) {
+unsafe extern "C" fn timer_close_cb(mut _tw: *mut TimeWatcher, mut data: *mut ::core::ffi::c_void) {
     let mut timer: *mut timer_T = data as *mut timer_T;
     multiqueue_free((*timer).tw.events);
     callback_free(&raw mut (*timer).callback);
@@ -11342,11 +11342,11 @@ pub unsafe extern "C" fn save_tv_as_string(
     }
     let mut ret_1: *mut ::core::ffi::c_char = xmalloc((*len as size_t).wrapping_add(
         (if endnl as ::core::ffi::c_int != 0 {
-            (if crlf as ::core::ffi::c_int != 0 {
+            if crlf as ::core::ffi::c_int != 0 {
                 2 as ::core::ffi::c_int
             } else {
                 1 as ::core::ffi::c_int
-            })
+            }
         } else {
             0 as ::core::ffi::c_int
         }) as size_t,
@@ -11656,11 +11656,11 @@ pub unsafe extern "C" fn list2fpos(
         }
         n = buf_charidx_to_byteidx(
             buf,
-            (if (*posp).lnum == 0 as linenr_T {
+            if (*posp).lnum == 0 as linenr_T {
                 (*curwin).w_cursor.lnum
             } else {
                 (*posp).lnum
-            }),
+            },
             n,
         ) + 1 as ::core::ffi::c_int;
     }

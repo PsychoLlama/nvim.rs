@@ -2817,7 +2817,7 @@ pub unsafe extern "C" fn nvim_set_option_value(
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_all_options_info(
     mut arena: *mut Arena,
-    mut err: *mut Error,
+    mut _err: *mut Error,
 ) -> Dict {
     return get_all_vimoptions(arena);
 }

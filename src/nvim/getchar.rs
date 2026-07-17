@@ -4441,7 +4441,7 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
                     on_key_buf.capacity |= on_key_buf.capacity >> 8 as ::core::ffi::c_int;
                     on_key_buf.capacity |= on_key_buf.capacity >> 16 as ::core::ffi::c_int;
                     on_key_buf.capacity = on_key_buf.capacity.wrapping_add(1);
-                    on_key_buf.capacity = (if on_key_buf.capacity
+                    on_key_buf.capacity = if on_key_buf.capacity
                         > ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
                             .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
                             .wrapping_div(
@@ -4460,7 +4460,7 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     on_key_buf.items = (if on_key_buf.capacity
                         == ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
                             .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
@@ -4470,7 +4470,7 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if on_key_buf.items
+                        if on_key_buf.items
                             == &raw mut on_key_buf.init_array as *mut ::core::ffi::c_char
                         {
                             on_key_buf.items as *mut ::core::ffi::c_void
@@ -4483,9 +4483,9 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
                             )
-                        })
+                        }
                     } else {
-                        (if on_key_buf.items
+                        if on_key_buf.items
                             == &raw mut on_key_buf.init_array as *mut ::core::ffi::c_char
                         {
                             memcpy(
@@ -4506,7 +4506,7 @@ unsafe extern "C" fn gotchars(mut chars: *const uint8_t, mut len: size_t) {
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
                             )
-                        })
+                        }
                     }) as *mut ::core::ffi::c_char;
                 }
                 '_c2rust_label: {
@@ -5010,11 +5010,11 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
                 }
             }
             let mut n: ::core::ffi::c_int = 0;
-            n = (if c < 0 as ::core::ffi::c_int || c > 255 as ::core::ffi::c_int {
+            n = if c < 0 as ::core::ffi::c_int || c > 255 as ::core::ffi::c_int {
                 1 as ::core::ffi::c_int
             } else {
                 utf8len_tab[c as usize] as ::core::ffi::c_int
-            });
+            };
             if n > 1 as ::core::ffi::c_int {
                 no_mapping += 1;
                 buf[0 as ::core::ffi::c_int as usize] = c as uint8_t;
@@ -5150,7 +5150,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
     }
     may_garbage_collect = false_0 != 0;
     if on_key_buf.size == on_key_buf.capacity {
-        on_key_buf.capacity = (if on_key_buf.capacity << 1 as ::core::ffi::c_int
+        on_key_buf.capacity = if on_key_buf.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
                 .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
                 .wrapping_div(
@@ -5167,7 +5167,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
                         .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         on_key_buf.items = (if on_key_buf.capacity
             == ::core::mem::size_of::<[::core::ffi::c_char; 51]>()
                 .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
@@ -5176,7 +5176,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
                         .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if on_key_buf.items == &raw mut on_key_buf.init_array as *mut ::core::ffi::c_char {
+            if on_key_buf.items == &raw mut on_key_buf.init_array as *mut ::core::ffi::c_char {
                 on_key_buf.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -5187,9 +5187,9 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
                         .size
                         .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
                 )
-            })
+            }
         } else {
-            (if on_key_buf.items == &raw mut on_key_buf.init_array as *mut ::core::ffi::c_char {
+            if on_key_buf.items == &raw mut on_key_buf.init_array as *mut ::core::ffi::c_char {
                 memcpy(
                     xmalloc(
                         on_key_buf
@@ -5208,7 +5208,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<::core::ffi::c_char>()),
                 )
-            })
+            }
         }) as *mut ::core::ffi::c_char;
     } else {
     };
@@ -5548,7 +5548,7 @@ unsafe extern "C" fn getchar_common(
 pub unsafe extern "C" fn f_getchar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getchar_common(argvars, rettv, true_0 != 0);
 }
@@ -5556,15 +5556,15 @@ pub unsafe extern "C" fn f_getchar(
 pub unsafe extern "C" fn f_getcharstr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getchar_common(argvars, rettv, false_0 != 0);
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcharmod(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = mod_mask as varnumber_T;
 }
@@ -6753,10 +6753,10 @@ pub unsafe extern "C" fn fix_input_buffer(
 }
 #[no_mangle]
 pub unsafe extern "C" fn getcmdkeycmd(
-    mut promptc: ::core::ffi::c_int,
-    mut cookie: *mut ::core::ffi::c_void,
-    mut indent: ::core::ffi::c_int,
-    mut do_concat: bool,
+    mut _promptc: ::core::ffi::c_int,
+    mut _cookie: *mut ::core::ffi::c_void,
+    mut _indent: ::core::ffi::c_int,
+    mut _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     let mut line_ga: garray_T = garray_T {
         ga_len: 0,

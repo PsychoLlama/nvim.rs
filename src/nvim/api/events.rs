@@ -207,7 +207,7 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 #[no_mangle]
 pub unsafe extern "C" fn nvim_error_event(
     mut channel_id: uint64_t,
-    mut type_0: Integer,
+    mut _type_0: Integer,
     mut msg: String_0,
 ) {
     logmsg(
@@ -227,7 +227,7 @@ pub unsafe extern "C" fn nvim_error_event(
 }
 #[no_mangle]
 pub unsafe extern "C" fn nvim_ui_term_event(
-    mut channel_id: uint64_t,
+    mut _channel_id: uint64_t,
     mut event: String_0,
     mut value: Object,
     mut err: *mut Error,

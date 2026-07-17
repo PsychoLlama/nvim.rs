@@ -6028,11 +6028,11 @@ pub unsafe extern "C" fn buflist_new(
     let mut curwin_info: *mut WinInfo =
         xcalloc(1 as size_t, ::core::mem::size_of::<WinInfo>()) as *mut WinInfo;
     if (*buf).b_wininfo.size == (*buf).b_wininfo.capacity {
-        (*buf).b_wininfo.capacity = (if (*buf).b_wininfo.capacity != 0 {
+        (*buf).b_wininfo.capacity = if (*buf).b_wininfo.capacity != 0 {
             (*buf).b_wininfo.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*buf).b_wininfo.items = xrealloc(
             (*buf).b_wininfo.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*mut WinInfo>().wrapping_mul((*buf).b_wininfo.capacity),
@@ -6342,12 +6342,12 @@ pub unsafe extern "C" fn buflist_getfile(
                 tabpage_new();
             } else if win_split(
                 0 as ::core::ffi::c_int,
-                (if swb_flags & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint != 0
+                if swb_flags & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint != 0
                 {
                     WSP_VERT as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
-                }),
+                },
             ) == FAIL
             {
                 return FAIL;
@@ -6893,11 +6893,11 @@ pub unsafe extern "C" fn buflist_setfpos(
         (*wip).wi_optset = true_0 != 0;
     }
     if (*buf).b_wininfo.size == (*buf).b_wininfo.capacity {
-        (*buf).b_wininfo.capacity = (if (*buf).b_wininfo.capacity != 0 {
+        (*buf).b_wininfo.capacity = if (*buf).b_wininfo.capacity != 0 {
             (*buf).b_wininfo.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*buf).b_wininfo.items = xrealloc(
             (*buf).b_wininfo.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*mut WinInfo>().wrapping_mul((*buf).b_wininfo.capacity),
@@ -7901,7 +7901,7 @@ pub unsafe extern "C" fn append_arg_number(
 }
 #[no_mangle]
 pub unsafe extern "C" fn fname_expand(
-    mut buf: *mut buf_T,
+    mut _buf: *mut buf_T,
     mut ffname: *mut *mut ::core::ffi::c_char,
     mut sfname: *mut *mut ::core::ffi::c_char,
 ) {
@@ -8831,11 +8831,11 @@ pub unsafe extern "C" fn read_buffer_into(
         } else if *lp.offset(written as isize) as ::core::ffi::c_int == NL {
             len = 1 as size_t;
             if (*sb).size == (*sb).capacity {
-                (*sb).capacity = (if (*sb).capacity != 0 {
+                (*sb).capacity = if (*sb).capacity != 0 {
                     (*sb).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*sb).items = xrealloc(
                     (*sb).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*sb).capacity),
@@ -8896,11 +8896,11 @@ pub unsafe extern "C" fn read_buffer_into(
                     && (lnum != (*buf).b_ml.ml_line_count || (*buf).b_p_eol != 0)
             {
                 if (*sb).size == (*sb).capacity {
-                    (*sb).capacity = (if (*sb).capacity != 0 {
+                    (*sb).capacity = if (*sb).capacity != 0 {
                         (*sb).capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     (*sb).items = xrealloc(
                         (*sb).items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*sb).capacity),

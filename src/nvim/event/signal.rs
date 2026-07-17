@@ -675,7 +675,7 @@ unsafe extern "C" fn signal_event(mut argv: *mut *mut ::core::ffi::c_void) {
 }
 unsafe extern "C" fn signal_watcher_cb(
     mut handle: *mut uv_signal_t,
-    mut signum: ::core::ffi::c_int,
+    mut _signum: ::core::ffi::c_int,
 ) {
     let mut watcher: *mut SignalWatcher = (*handle).data as *mut SignalWatcher;
     if !(*watcher).events.is_null() {

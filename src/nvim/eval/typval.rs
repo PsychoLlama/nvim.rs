@@ -2376,7 +2376,7 @@ unsafe extern "C" fn tv_list_watch_fix(l: *mut list_T, item: *const listitem_T) 
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn tv_list_alloc(len: ptrdiff_t) -> *mut list_T {
+pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut list_T {
     let list: *mut list_T = xcalloc(1 as size_t, ::core::mem::size_of::<list_T>()) as *mut list_T;
     if !gc_first_list.is_null() {
         (*gc_first_list).lv_used_prev = list;
@@ -3064,7 +3064,7 @@ unsafe extern "C" fn tv_list_slice(
 }
 #[no_mangle]
 pub unsafe extern "C" fn tv_list_slice_or_index(
-    mut list: *mut list_T,
+    mut _list: *mut list_T,
     mut range: bool,
     mut n1_arg: varnumber_T,
     mut n2_arg: varnumber_T,
@@ -3224,7 +3224,7 @@ pub unsafe extern "C" fn tv_list_join(
 pub unsafe extern "C" fn f_join(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3271,7 +3271,7 @@ pub unsafe extern "C" fn f_join(
 pub unsafe extern "C" fn f_list2str(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
@@ -3872,7 +3872,7 @@ unsafe extern "C" fn do_sort_uniq(
 pub unsafe extern "C" fn f_sort(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     do_sort_uniq(argvars, rettv, true_0 != 0);
 }
@@ -3880,7 +3880,7 @@ pub unsafe extern "C" fn f_sort(
 pub unsafe extern "C" fn f_uniq(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     do_sort_uniq(argvars, rettv, false_0 != 0);
 }
@@ -5227,7 +5227,7 @@ pub unsafe extern "C" fn tv_blob_equal(b1: *const blob_T, b2: *const blob_T) -> 
     return true_0 != 0;
 }
 unsafe extern "C" fn tv_blob_slice(
-    mut blob: *const blob_T,
+    mut _blob: *const blob_T,
     mut len: ::core::ffi::c_int,
     mut n1: varnumber_T,
     mut n2: varnumber_T,
@@ -5279,7 +5279,7 @@ unsafe extern "C" fn tv_blob_slice(
     return OK;
 }
 unsafe extern "C" fn tv_blob_index(
-    mut blob: *const blob_T,
+    mut _blob: *const blob_T,
     mut len: ::core::ffi::c_int,
     mut idx: varnumber_T,
     mut rettv: *mut typval_T,
@@ -5485,7 +5485,7 @@ pub unsafe extern "C" fn tv_blob_remove(
 pub unsafe extern "C" fn f_blob2list(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     if tv_check_for_blob_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
@@ -5503,7 +5503,7 @@ pub unsafe extern "C" fn f_blob2list(
 pub unsafe extern "C" fn f_list2blob(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut blob: *mut blob_T = tv_blob_alloc_ret(rettv);
     if tv_check_for_list_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
@@ -5617,7 +5617,7 @@ unsafe extern "C" fn tv_dict2list(
 pub unsafe extern "C" fn f_items(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -5649,7 +5649,7 @@ pub unsafe extern "C" fn f_items(
 pub unsafe extern "C" fn f_keys(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict2list(argvars, rettv, kDict2ListKeys);
 }
@@ -5657,7 +5657,7 @@ pub unsafe extern "C" fn f_keys(
 pub unsafe extern "C" fn f_values(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict2list(argvars, rettv, kDict2ListValues);
 }
@@ -5665,7 +5665,7 @@ pub unsafe extern "C" fn f_values(
 pub unsafe extern "C" fn f_has_key(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_dict_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -5923,7 +5923,7 @@ unsafe extern "C" fn _nothing_conv_real_dict_after_start(
 }
 #[inline(always)]
 unsafe extern "C" fn _nothing_conv_dict_end(
-    tv: *mut typval_T,
+    _tv: *mut typval_T,
     dictp: *mut *mut dict_T,
     nodictvar: *const ::core::ffi::c_void,
 ) {
@@ -7086,13 +7086,13 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
 pub static mut _typval_encode_nothing_nodict_var: *const dict_T = ::core::ptr::null::<dict_T>();
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_nothing_check_self_reference(
-    ignored: *const ::core::ffi::c_void,
-    val: *mut ::core::ffi::c_void,
+    _ignored: *const ::core::ffi::c_void,
+    _val: *mut ::core::ffi::c_void,
     val_copyID: *mut ::core::ffi::c_int,
-    mpstack: *const MPConvStack,
+    _mpstack: *const MPConvStack,
     copyID: ::core::ffi::c_int,
-    conv_type: MPConvStackValType,
-    objname: *const ::core::ffi::c_char,
+    _conv_type: MPConvStackValType,
+    _objname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if *val_copyID == copyID {
         return OK;
@@ -7103,7 +7103,7 @@ unsafe extern "C" fn _typval_encode_nothing_check_self_reference(
 unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
     ignored: *const ::core::ffi::c_void,
     mpstack: *mut MPConvStack,
-    cur_mpsv: *mut MPConvStackVal,
+    _cur_mpsv: *mut MPConvStackVal,
     tv: *mut typval_T,
     copyID: ::core::ffi::c_int,
     objname: *const ::core::ffi::c_char,
@@ -7141,7 +7141,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                 } else {
                     partial_name(pt)
                 };
-                let prefix: *const ::core::ffi::c_char = if !fun.is_null()
+                let _prefix: *const ::core::ffi::c_char = if !fun.is_null()
                     && !pt.is_null()
                     && (*pt).pt_name.is_null()
                     && (*fun.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
@@ -7157,7 +7157,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                     return OK;
                 }
                 if (*mpstack).size == (*mpstack).capacity {
-                    (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                    (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                             .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                             .wrapping_div(
@@ -7176,7 +7176,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*mpstack).items = (if (*mpstack).capacity
                         == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                             .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -7186,7 +7186,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*mpstack).items
+                        if (*mpstack).items
                             == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                         {
                             (*mpstack).items as *mut ::core::ffi::c_void
@@ -7199,9 +7199,9 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*mpstack).items
+                        if (*mpstack).items
                             == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                         {
                             memcpy(
@@ -7222,7 +7222,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                             )
-                        })
+                        }
                     }) as *mut MPConvStackVal;
                 } else {
                 };
@@ -7277,7 +7277,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                         }
                     };
                     if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                                 .wrapping_div(
@@ -7298,7 +7298,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*mpstack).items = (if (*mpstack).capacity
                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -7309,7 +7309,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 (*mpstack).items as *mut ::core::ffi::c_void
@@ -7322,9 +7322,9 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 memcpy(
@@ -7345,7 +7345,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         }) as *mut MPConvStackVal;
                     } else {
                     };
@@ -7631,7 +7631,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                 }
                                             };
                                             if (*mpstack).size == (*mpstack).capacity {
-                                                (*mpstack).capacity = (if (*mpstack).capacity
+                                                (*mpstack).capacity = if (*mpstack).capacity
                                                     << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
@@ -7669,7 +7669,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                                 (*mpstack).items = (if (*mpstack).capacity
                                                     == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
@@ -7688,7 +7688,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as usize,
                                                         ) {
-                                                    (if (*mpstack).items
+                                                    if (*mpstack).items
                                                         == &raw mut (*mpstack).init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -7707,9 +7707,9 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if (*mpstack).items
+                                                    if (*mpstack).items
                                                         == &raw mut (*mpstack).init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -7742,7 +7742,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut MPConvStackVal;
                                             } else {
@@ -7857,7 +7857,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                 };
                                                 if (*mpstack).size == (*mpstack).capacity {
                                                     (*mpstack).capacity =
-                                                        (if (*mpstack).capacity
+                                                        if (*mpstack).capacity
                                                             << 1 as ::core::ffi::c_int
                                                             > ::core::mem::size_of::<
                                                                 [MPConvStackVal; 8],
@@ -7907,7 +7907,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                     as ::core::ffi::c_int
                                                                     as size_t,
                                                             )
-                                                        });
+                                                        };
                                                     (*mpstack).items =
                                                         (if (*mpstack).capacity
                                                             == ::core::mem::size_of::<
@@ -7933,7 +7933,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                     as usize,
                                                             )
                                                         {
-                                                            (if (*mpstack).items
+                                                            if (*mpstack).items
                                                                 == &raw mut (*mpstack).init_array
                                                                     as *mut MPConvStackVal
                                                             {
@@ -7953,9 +7953,9 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                         ),
                                                                     ),
                                                                 )
-                                                            })
+                                                            }
                                                         } else {
-                                                            (if (*mpstack).items
+                                                            if (*mpstack).items
                                                                 == &raw mut (*mpstack).init_array
                                                                     as *mut MPConvStackVal
                                                             {
@@ -7983,7 +7983,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         })
                                                             as *mut MPConvStackVal;
                                                 } else {
@@ -8083,7 +8083,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                         }
                     };
                     if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                                 .wrapping_div(
@@ -8104,7 +8104,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*mpstack).items = (if (*mpstack).capacity
                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -8115,7 +8115,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 (*mpstack).items as *mut ::core::ffi::c_void
@@ -8128,9 +8128,9 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 memcpy(
@@ -8151,7 +8151,7 @@ unsafe extern "C" fn _typval_encode_nothing_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         }) as *mut MPConvStackVal;
                     } else {
                     };
@@ -8330,7 +8330,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                 (*cur_mpsv).data.p.stage = kMPConvPartialSelf;
                                 if !pt.is_null() && (*pt).pt_argc > 0 as ::core::ffi::c_int {
                                     if mpstack.size == mpstack.capacity {
-                                        mpstack.capacity = (if mpstack.capacity
+                                        mpstack.capacity = if mpstack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                 .wrapping_div(
@@ -8362,7 +8362,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                         as ::core::ffi::c_int
                                                         as size_t,
                                                 )
-                                        });
+                                        };
                                         mpstack.items = (if mpstack.capacity
                                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                 .wrapping_div(
@@ -8378,7 +8378,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                         as ::core::ffi::c_int
                                                         as usize,
                                                 ) {
-                                            (if mpstack.items
+                                            if mpstack.items
                                                 == &raw mut mpstack.init_array
                                                     as *mut MPConvStackVal
                                             {
@@ -8393,9 +8393,9 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                         ::core::mem::size_of::<MPConvStackVal>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         } else {
-                                            (if mpstack.items
+                                            if mpstack.items
                                                 == &raw mut mpstack.init_array
                                                     as *mut MPConvStackVal
                                             {
@@ -8415,7 +8415,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                         ::core::mem::size_of::<MPConvStackVal>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         })
                                             as *mut MPConvStackVal;
                                     } else {
@@ -8508,7 +8508,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                         };
                                         if mpstack.size == mpstack.capacity {
                                             mpstack.capacity =
-                                                (if mpstack.capacity << 1 as ::core::ffi::c_int
+                                                if mpstack.capacity << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
                                                             MPConvStackVal,
@@ -8546,7 +8546,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                             mpstack.items =
                                                 (if mpstack.capacity
                                                     == ::core::mem::size_of::<[MPConvStackVal; 8]>()
@@ -8567,7 +8567,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                                 as usize,
                                                         )
                                                 {
-                                                    (if mpstack.items
+                                                    if mpstack.items
                                                         == &raw mut mpstack.init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -8586,9 +8586,9 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if mpstack.items
+                                                    if mpstack.items
                                                         == &raw mut mpstack.init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -8619,7 +8619,7 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut MPConvStackVal;
                                         } else {

@@ -1769,11 +1769,11 @@ pub unsafe extern "C" fn rpc_send_call(
         result_mem: ::core::ptr::null_mut::<consumed_blk>(),
     };
     if (*rpc).call_stack.size == (*rpc).call_stack.capacity {
-        (*rpc).call_stack.capacity = (if (*rpc).call_stack.capacity != 0 {
+        (*rpc).call_stack.capacity = if (*rpc).call_stack.capacity != 0 {
             (*rpc).call_stack.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*rpc).call_stack.items = xrealloc(
             (*rpc).call_stack.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<*mut ChannelCallFrame>()
@@ -2396,11 +2396,11 @@ unsafe extern "C" fn broadcast_event(mut name: *const ::core::ffi::c_char, mut a
         channel = *channels.values.offset(__i as isize) as *mut Channel;
         if (*channel).is_rpc {
             if chans.size == chans.capacity {
-                chans.capacity = (if chans.capacity != 0 {
+                chans.capacity = if chans.capacity != 0 {
                     chans.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 chans.items = xrealloc(
                     chans.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<*mut Channel>().wrapping_mul(chans.capacity),

@@ -3302,7 +3302,7 @@ pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_argdedupe(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*(*curwin).w_alist).al_ga.ga_len {
         let mut firstFullname: *mut ::core::ffi::c_char = FullName_save(
@@ -3453,7 +3453,7 @@ pub unsafe extern "C" fn ex_argdelete(mut eap: *mut exarg_T) {
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_arglist_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx >= (*(*curwin).w_alist).al_ga.ga_len {
@@ -3873,7 +3873,7 @@ pub unsafe extern "C" fn arg_all() -> *mut ::core::ffi::c_char {
 pub unsafe extern "C" fn f_argc(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -3896,9 +3896,9 @@ pub unsafe extern "C" fn f_argc(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_argidx(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (*curwin).w_arg_idx as varnumber_T;
 }
@@ -3906,7 +3906,7 @@ pub unsafe extern "C" fn f_argidx(
 pub unsafe extern "C" fn f_arglistid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut wp: *mut win_T = find_tabwin(
@@ -3939,7 +3939,7 @@ unsafe extern "C" fn get_arglist_as_rettv(
 pub unsafe extern "C" fn f_argv(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut arglist: *mut aentry_T = ::core::ptr::null_mut::<aentry_T>();
     let mut argcount: ::core::ffi::c_int = -1 as ::core::ffi::c_int;

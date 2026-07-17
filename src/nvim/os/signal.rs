@@ -2921,9 +2921,9 @@ unsafe extern "C" fn deadly_signal(mut signum: ::core::ffi::c_int) -> ! {
     preserve_exit(&raw mut IObuff as *mut ::core::ffi::c_char);
 }
 unsafe extern "C" fn on_signal(
-    mut handle: *mut SignalWatcher,
+    mut _handle: *mut SignalWatcher,
     mut signum: ::core::ffi::c_int,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
     '_c2rust_label: {
         if signum >= 0 as ::core::ffi::c_int {

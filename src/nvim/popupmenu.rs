@@ -4652,11 +4652,11 @@ unsafe extern "C" fn pum_preview_set_text(
             line_width
         };
         if replacement.size == replacement.capacity {
-            replacement.capacity = (if replacement.capacity != 0 {
+            replacement.capacity = if replacement.capacity != 0 {
                 replacement.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             replacement.items = xrealloc(
                 replacement.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Object>().wrapping_mul(replacement.capacity),

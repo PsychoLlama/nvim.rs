@@ -526,11 +526,11 @@ unsafe extern "C" fn json_decoder_pop(
 ) -> ::core::ffi::c_int {
     if (*container_stack).size == 0 as size_t {
         if (*stack).size == (*stack).capacity {
-            (*stack).capacity = (if (*stack).capacity != 0 {
+            (*stack).capacity = if (*stack).capacity != 0 {
                 (*stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*stack).items = xrealloc(
                 (*stack).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<ValuesStackItem>().wrapping_mul((*stack).capacity),
@@ -683,11 +683,11 @@ unsafe extern "C" fn json_decoder_pop(
             return OK;
         }
         if (*stack).size == (*stack).capacity {
-            (*stack).capacity = (if (*stack).capacity != 0 {
+            (*stack).capacity = if (*stack).capacity != 0 {
                 (*stack).capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*stack).items = xrealloc(
                 (*stack).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<ValuesStackItem>().wrapping_mul((*stack).capacity),
@@ -1900,11 +1900,11 @@ pub unsafe extern "C" fn json_decode_string(
                                     vval: typval_vval_union { v_list: list },
                                 };
                                 if container_stack.size == container_stack.capacity {
-                                    container_stack.capacity = (if container_stack.capacity != 0 {
+                                    container_stack.capacity = if container_stack.capacity != 0 {
                                         container_stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
-                                    });
+                                    };
                                     container_stack.items = xrealloc(
                                         container_stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ContainerStackItem>()
@@ -1923,11 +1923,11 @@ pub unsafe extern "C" fn json_decode_string(
                                         container: tv,
                                     };
                                 if stack.size == stack.capacity {
-                                    stack.capacity = (if stack.capacity != 0 {
+                                    stack.capacity = if stack.capacity != 0 {
                                         stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
-                                    });
+                                    };
                                     stack.items = xrealloc(
                                         stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ValuesStackItem>()
@@ -1969,11 +1969,11 @@ pub unsafe extern "C" fn json_decode_string(
                                     };
                                 }
                                 if container_stack.size == container_stack.capacity {
-                                    container_stack.capacity = (if container_stack.capacity != 0 {
+                                    container_stack.capacity = if container_stack.capacity != 0 {
                                         container_stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
-                                    });
+                                    };
                                     container_stack.items = xrealloc(
                                         container_stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ContainerStackItem>()
@@ -1992,11 +1992,11 @@ pub unsafe extern "C" fn json_decode_string(
                                         container: tv_0,
                                     };
                                 if stack.size == stack.capacity {
-                                    stack.capacity = (if stack.capacity != 0 {
+                                    stack.capacity = if stack.capacity != 0 {
                                         stack.capacity << 1 as ::core::ffi::c_int
                                     } else {
                                         8 as size_t
-                                    });
+                                    };
                                     stack.items = xrealloc(
                                         stack.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<ValuesStackItem>()
@@ -2273,7 +2273,7 @@ pub unsafe extern "C" fn typval_parser_error_free(mut parser: *mut mpack_parser_
     }
 }
 unsafe extern "C" fn typval_parse_exit(
-    mut parser: *mut mpack_parser_t,
+    mut _parser: *mut mpack_parser_t,
     mut node: *mut mpack_node_t,
 ) {
     let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();

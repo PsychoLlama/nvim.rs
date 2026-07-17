@@ -791,7 +791,7 @@ pub unsafe extern "C" fn rstream_stop(mut stream: *mut RStream) {
 }
 unsafe extern "C" fn alloc_cb(
     mut handle: *mut uv_handle_t,
-    mut suggested: size_t,
+    mut _suggested: size_t,
     mut buf: *mut uv_buf_t,
 ) {
     let mut stream: *mut RStream = (*handle).data as *mut RStream;
@@ -801,7 +801,7 @@ unsafe extern "C" fn alloc_cb(
 unsafe extern "C" fn read_cb(
     mut uvstream: *mut uv_stream_t,
     mut cnt: ssize_t,
-    mut buf: *const uv_buf_t,
+    mut _buf: *const uv_buf_t,
 ) {
     let mut stream: *mut RStream = (*uvstream).data as *mut RStream;
     if cnt <= 0 as ssize_t {

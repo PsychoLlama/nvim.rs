@@ -5493,11 +5493,11 @@ unsafe extern "C" fn may_add_char_to_search(
             }
             if *c == search_delim
                 || !vim_strchr(
-                    (if magic_isset() as ::core::ffi::c_int != 0 {
+                    if magic_isset() as ::core::ffi::c_int != 0 {
                         b"\\~^$.*[\0".as_ptr() as *const ::core::ffi::c_char
                     } else {
                         b"\\^$\0".as_ptr() as *const ::core::ffi::c_char
-                    }),
+                    },
                     *c,
                 )
                 .is_null()
@@ -7687,11 +7687,11 @@ unsafe extern "C" fn command_line_handle_key(mut s: *mut CommandLineState) -> ::
         if (*s).do_abbr as ::core::ffi::c_int != 0
             && ((*s).c < 0 as ::core::ffi::c_int || !vim_iswordc((*s).c))
             && (ccheck_abbr(
-                (if (*s).c >= 0x100 as ::core::ffi::c_int {
+                if (*s).c >= 0x100 as ::core::ffi::c_int {
                     (*s).c + ABBR_OFF
                 } else {
                     (*s).c
-                }),
+                },
             ) != 0
                 || (*s).c == Ctrl_RSB)
         {
@@ -7992,11 +7992,11 @@ unsafe extern "C" fn cmdpreview_prepare(mut cpinfo: *mut CpInfo) {
                 cp_bufinfo.save_changedtick = buf_get_changedtick(buf);
                 cmdpreview_save_undo(&raw mut cp_bufinfo.undo_info, buf);
                 if (*cpinfo).buf_info.size == (*cpinfo).buf_info.capacity {
-                    (*cpinfo).buf_info.capacity = (if (*cpinfo).buf_info.capacity != 0 {
+                    (*cpinfo).buf_info.capacity = if (*cpinfo).buf_info.capacity != 0 {
                         (*cpinfo).buf_info.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     (*cpinfo).buf_info.items = xrealloc(
                         (*cpinfo).buf_info.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<CpBufInfo>()
@@ -8040,11 +8040,11 @@ unsafe extern "C" fn cmdpreview_prepare(mut cpinfo: *mut CpInfo) {
             cp_wininfo.save_w_p_cul = (*win).w_onebuf_opt.wo_cul;
             cp_wininfo.save_w_p_cuc = (*win).w_onebuf_opt.wo_cuc;
             if (*cpinfo).win_info.size == (*cpinfo).win_info.capacity {
-                (*cpinfo).win_info.capacity = (if (*cpinfo).win_info.capacity != 0 {
+                (*cpinfo).win_info.capacity = if (*cpinfo).win_info.capacity != 0 {
                     (*cpinfo).win_info.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*cpinfo).win_info.items = xrealloc(
                     (*cpinfo).win_info.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<CpWinInfo>().wrapping_mul((*cpinfo).win_info.capacity),
@@ -8157,7 +8157,7 @@ unsafe extern "C" fn cmdpreview_restore_state(mut cpinfo: *mut CpInfo) {
     (*cpinfo).buf_info.size = (*cpinfo).buf_info.capacity;
     (*cpinfo).buf_info.items = ::core::ptr::null_mut::<CpBufInfo>();
 }
-unsafe extern "C" fn cmdpreview_may_show(mut s: *mut CommandLineState) -> bool {
+unsafe extern "C" fn cmdpreview_may_show(mut _s: *mut CommandLineState) -> bool {
     let mut cpinfo: CpInfo = CpInfo {
         win_info: C2Rust_Unnamed_50 {
             size: 0,
@@ -8545,7 +8545,7 @@ pub unsafe extern "C" fn getcmdline(
     mut firstc: ::core::ffi::c_int,
     mut count: ::core::ffi::c_int,
     mut indent: ::core::ffi::c_int,
-    mut do_concat: bool,
+    mut _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     return command_line_enter(firstc, count, indent, true_0 != 0) as *mut ::core::ffi::c_char;
 }
@@ -8856,7 +8856,7 @@ unsafe extern "C" fn correct_screencol(
 #[no_mangle]
 pub unsafe extern "C" fn getexline(
     mut c: ::core::ffi::c_int,
-    mut cookie: *mut ::core::ffi::c_void,
+    mut _cookie: *mut ::core::ffi::c_void,
     mut indent: ::core::ffi::c_int,
     mut do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
@@ -9042,12 +9042,12 @@ unsafe extern "C" fn color_expr_cmdline(
         };
         if chunk.start.col != prev_end {
             if (*ret_ccline_colors).colors.size == (*ret_ccline_colors).colors.capacity {
-                (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors).colors.capacity != 0
+                (*ret_ccline_colors).colors.capacity = if (*ret_ccline_colors).colors.capacity != 0
                 {
                     (*ret_ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*ret_ccline_colors).colors.items = xrealloc(
                     (*ret_ccline_colors).colors.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<CmdlineColorChunk>()
@@ -9067,11 +9067,11 @@ unsafe extern "C" fn color_expr_cmdline(
             };
         }
         if (*ret_ccline_colors).colors.size == (*ret_ccline_colors).colors.capacity {
-            (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors).colors.capacity != 0 {
+            (*ret_ccline_colors).colors.capacity = if (*ret_ccline_colors).colors.capacity != 0 {
                 (*ret_ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*ret_ccline_colors).colors.items = xrealloc(
                 (*ret_ccline_colors).colors.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<CmdlineColorChunk>()
@@ -9094,11 +9094,11 @@ unsafe extern "C" fn color_expr_cmdline(
     }
     if prev_end < (*colored_ccline).cmdlen as size_t {
         if (*ret_ccline_colors).colors.size == (*ret_ccline_colors).colors.capacity {
-            (*ret_ccline_colors).colors.capacity = (if (*ret_ccline_colors).colors.capacity != 0 {
+            (*ret_ccline_colors).colors.capacity = if (*ret_ccline_colors).colors.capacity != 0 {
                 (*ret_ccline_colors).colors.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*ret_ccline_colors).colors.items = xrealloc(
                 (*ret_ccline_colors).colors.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<CmdlineColorChunk>()
@@ -9393,14 +9393,14 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                             == (*ccline_colors).colors.capacity
                                                         {
                                                             (*ccline_colors).colors.capacity =
-                                                                (if (*ccline_colors).colors.capacity
+                                                                if (*ccline_colors).colors.capacity
                                                                     != 0
                                                                 {
                                                                     (*ccline_colors).colors.capacity
                                                                         << 1 as ::core::ffi::c_int
                                                                 } else {
                                                                     8 as size_t
-                                                                });
+                                                                };
                                                             (*ccline_colors).colors.items = xrealloc(
                                                                 (*ccline_colors).colors.items
                                                                     as *mut ::core::ffi::c_void,
@@ -9506,14 +9506,14 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                             == (*ccline_colors).colors.capacity
                                                         {
                                                             (*ccline_colors).colors.capacity =
-                                                                (if (*ccline_colors).colors.capacity
+                                                                if (*ccline_colors).colors.capacity
                                                                     != 0
                                                                 {
                                                                     (*ccline_colors).colors.capacity
                                                                         << 1 as ::core::ffi::c_int
                                                                 } else {
                                                                     8 as size_t
-                                                                });
+                                                                };
                                                             (*ccline_colors).colors.items = xrealloc(
                                                                 (*ccline_colors).colors.items
                                                                     as *mut ::core::ffi::c_void,
@@ -9559,12 +9559,12 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                 if (*ccline_colors).colors.size == (*ccline_colors).colors.capacity
                                 {
                                     (*ccline_colors).colors.capacity =
-                                        (if (*ccline_colors).colors.capacity != 0 {
+                                        if (*ccline_colors).colors.capacity != 0 {
                                             (*ccline_colors).colors.capacity
                                                 << 1 as ::core::ffi::c_int
                                         } else {
                                             8 as size_t
-                                        });
+                                        };
                                     (*ccline_colors).colors.items = xrealloc(
                                         (*ccline_colors).colors.items as *mut ::core::ffi::c_void,
                                         ::core::mem::size_of::<CmdlineColorChunk>()
@@ -9880,11 +9880,11 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
     );
     let mut item: Array = ARRAY_DICT_INIT;
     if item.size == item.capacity {
-        item.capacity = (if item.capacity != 0 {
+        item.capacity = if item.capacity != 0 {
             item.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         item.items = xrealloc(
             item.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(item.capacity),
@@ -9900,11 +9900,11 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
         },
     };
     if item.size == item.capacity {
-        item.capacity = (if item.capacity != 0 {
+        item.capacity = if item.capacity != 0 {
             item.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         item.items = xrealloc(
             item.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(item.capacity),
@@ -9920,11 +9920,11 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
         },
     };
     if item.size == item.capacity {
-        item.capacity = (if item.capacity != 0 {
+        item.capacity = if item.capacity != 0 {
             item.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         item.items = xrealloc(
             item.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(item.capacity),
@@ -9941,11 +9941,11 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
     };
     let mut content: Array = ARRAY_DICT_INIT;
     if content.size == content.capacity {
-        content.capacity = (if content.capacity != 0 {
+        content.capacity = if content.capacity != 0 {
             content.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         content.items = xrealloc(
             content.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(content.capacity),
@@ -9959,11 +9959,11 @@ pub unsafe extern "C" fn ui_ext_cmdline_block_append(
         data: C2Rust_Unnamed { array: item },
     };
     if cmdline_block.size == cmdline_block.capacity {
-        cmdline_block.capacity = (if cmdline_block.capacity != 0 {
+        cmdline_block.capacity = if cmdline_block.capacity != 0 {
             cmdline_block.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         cmdline_block.items = xrealloc(
             cmdline_block.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(cmdline_block.capacity),
@@ -10588,36 +10588,36 @@ unsafe extern "C" fn get_cmdline_completion() -> *mut ::core::ffi::c_char {
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdcomplpat(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = get_cmdline_completion_pattern();
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdcompltype(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = get_cmdline_completion();
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdline(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = get_cmdline_str();
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdpos(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut CmdlineInfo = get_ccline_ptr();
     (*rettv).vval.v_number = (if !p.is_null() {
@@ -10628,9 +10628,9 @@ pub unsafe extern "C" fn f_getcmdpos(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdprompt(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut CmdlineInfo = get_ccline_ptr();
     (*rettv).v_type = VAR_STRING;
@@ -10642,9 +10642,9 @@ pub unsafe extern "C" fn f_getcmdprompt(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdscreenpos(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut CmdlineInfo = get_ccline_ptr();
     (*rettv).vval.v_number = (if !p.is_null() {
@@ -10655,9 +10655,9 @@ pub unsafe extern "C" fn f_getcmdscreenpos(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcmdtype(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = xmallocz(1 as size_t) as *mut ::core::ffi::c_char;
@@ -10705,7 +10705,7 @@ unsafe extern "C" fn set_cmdline_pos(mut pos: ::core::ffi::c_int) -> ::core::ffi
 pub unsafe extern "C" fn f_setcmdline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
         || tv_check_for_opt_number_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
@@ -10739,7 +10739,7 @@ pub unsafe extern "C" fn f_setcmdline(
 pub unsafe extern "C" fn f_setcmdpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let pos: ::core::ffi::c_int = tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize))
         as ::core::ffi::c_int
@@ -10820,7 +10820,7 @@ pub unsafe extern "C" fn cmdline_init() {
     );
 }
 #[no_mangle]
-pub unsafe extern "C" fn did_set_cedit(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_cedit(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
     if *p_cedit as ::core::ffi::c_int == NUL {
         cedit_key = -1 as ::core::ffi::c_int;
     } else {
@@ -11418,9 +11418,9 @@ pub unsafe extern "C" fn get_user_input(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_wildtrigger(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if State & MODE_CMDLINE as ::core::ffi::c_int == 0
         || char_avail() as ::core::ffi::c_int != 0

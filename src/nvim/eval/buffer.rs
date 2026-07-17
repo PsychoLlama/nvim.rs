@@ -2154,7 +2154,7 @@ unsafe extern "C" fn set_buffer_lines(
 pub unsafe extern "C" fn f_append(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
     let lnum: linenr_T = tv_get_lnum(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2194,7 +2194,7 @@ unsafe extern "C" fn buf_set_append_line(
 pub unsafe extern "C" fn f_appendbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     buf_set_append_line(argvars, rettv, true_0 != 0);
 }
@@ -2202,7 +2202,7 @@ pub unsafe extern "C" fn f_appendbufline(
 pub unsafe extern "C" fn f_prompt_appendbuf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
     (*rettv).v_type = VAR_NUMBER;
@@ -2297,7 +2297,7 @@ pub unsafe extern "C" fn f_prompt_appendbuf(
 pub unsafe extern "C" fn f_bufadd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut name: *mut ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_char;
@@ -2314,7 +2314,7 @@ pub unsafe extern "C" fn f_bufadd(
 pub unsafe extern "C" fn f_bufexists(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = !find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize))
         .is_null() as ::core::ffi::c_int as varnumber_T;
@@ -2323,7 +2323,7 @@ pub unsafe extern "C" fn f_bufexists(
 pub unsafe extern "C" fn f_buflisted(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     buf = find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2333,8 +2333,8 @@ pub unsafe extern "C" fn f_buflisted(
 #[no_mangle]
 pub unsafe extern "C" fn f_bufload(
     mut argvars: *mut typval_T,
-    mut unused: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _unused: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: *mut buf_T = get_buf_arg(argvars.offset(0 as ::core::ffi::c_int as isize));
     if !buf.is_null() {
@@ -2348,7 +2348,7 @@ pub unsafe extern "C" fn f_bufload(
 pub unsafe extern "C" fn f_bufloaded(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     buf = find_buffer(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2359,7 +2359,7 @@ pub unsafe extern "C" fn f_bufloaded(
 pub unsafe extern "C" fn f_bufname(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: *const buf_T = ::core::ptr::null::<buf_T>();
     (*rettv).v_type = VAR_STRING;
@@ -2379,7 +2379,7 @@ pub unsafe extern "C" fn f_bufname(
 pub unsafe extern "C" fn f_bufnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: *const buf_T = ::core::ptr::null::<buf_T>();
     let mut error: bool = false_0 != 0;
@@ -2465,7 +2465,7 @@ unsafe extern "C" fn buf_win_common(
 pub unsafe extern "C" fn f_bufwinid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     buf_win_common(argvars, rettv, false_0 != 0);
 }
@@ -2473,7 +2473,7 @@ pub unsafe extern "C" fn f_bufwinid(
 pub unsafe extern "C" fn f_bufwinnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     buf_win_common(argvars, rettv, true_0 != 0);
 }
@@ -2481,7 +2481,7 @@ pub unsafe extern "C" fn f_bufwinnr(
 pub unsafe extern "C" fn f_deletebufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
     (*rettv).vval.v_number = 1 as varnumber_T;
@@ -2696,7 +2696,7 @@ unsafe extern "C" fn get_buffer_info(mut buf: *mut buf_T) -> *mut dict_T {
 pub unsafe extern "C" fn f_getbufinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut argbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     let mut filtered: bool = false_0 != 0;
@@ -2836,7 +2836,7 @@ unsafe extern "C" fn getbufline(
 pub unsafe extern "C" fn f_getbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getbufline(argvars, rettv, true_0 != 0);
 }
@@ -2844,7 +2844,7 @@ pub unsafe extern "C" fn f_getbufline(
 pub unsafe extern "C" fn f_getbufoneline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getbufline(argvars, rettv, false_0 != 0);
 }
@@ -2852,7 +2852,7 @@ pub unsafe extern "C" fn f_getbufoneline(
 pub unsafe extern "C" fn f_getline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut end: linenr_T = 0;
     let mut retlist: bool = false;
@@ -2872,7 +2872,7 @@ pub unsafe extern "C" fn f_getline(
 pub unsafe extern "C" fn f_setbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     buf_set_append_line(argvars, rettv, false_0 != 0);
 }
@@ -2880,7 +2880,7 @@ pub unsafe extern "C" fn f_setbufline(
 pub unsafe extern "C" fn f_setline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let did_emsg_before: ::core::ffi::c_int = did_emsg;
     let mut lnum: linenr_T = tv_get_lnum(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -2916,8 +2916,8 @@ pub unsafe extern "C" fn restore_buffer(mut save_curbuf: *mut bufref_T) {
 #[no_mangle]
 pub unsafe extern "C" fn f_prompt_setcallback(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut prompt_callback: Callback = Callback {
         data: C2Rust_Unnamed_5 {
@@ -2944,8 +2944,8 @@ pub unsafe extern "C" fn f_prompt_setcallback(
 #[no_mangle]
 pub unsafe extern "C" fn f_prompt_setinterrupt(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut interrupt_callback: Callback = Callback {
         data: C2Rust_Unnamed_5 {
@@ -2972,8 +2972,8 @@ pub unsafe extern "C" fn f_prompt_setinterrupt(
 #[no_mangle]
 pub unsafe extern "C" fn f_prompt_setprompt(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;

@@ -1215,7 +1215,7 @@ pub unsafe extern "C" fn server_address_list(
 unsafe extern "C" fn connection_cb(
     mut watcher: *mut SocketWatcher,
     mut result: ::core::ffi::c_int,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
     if result != 0 {
         logmsg(
@@ -1233,7 +1233,7 @@ unsafe extern "C" fn connection_cb(
 }
 unsafe extern "C" fn free_server(
     mut watcher: *mut SocketWatcher,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
     xfree(watcher as *mut ::core::ffi::c_void);
 }

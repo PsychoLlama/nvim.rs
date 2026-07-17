@@ -2877,11 +2877,11 @@ unsafe extern "C" fn draw_virt_text(
                         win_col: (*item).draw_col,
                     };
                     if win_extmark_arr.size == win_extmark_arr.capacity {
-                        win_extmark_arr.capacity = (if win_extmark_arr.capacity != 0 {
+                        win_extmark_arr.capacity = if win_extmark_arr.capacity != 0 {
                             win_extmark_arr.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         win_extmark_arr.items = xrealloc(
                             win_extmark_arr.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<WinExtmark>()
@@ -3779,7 +3779,7 @@ unsafe extern "C" fn has_more_inline_virt(mut wlv: *mut winlinevars_T, mut v: pt
     return false_0 != 0;
 }
 unsafe extern "C" fn handle_inline_virtual_text(
-    mut wp: *mut win_T,
+    mut _wp: *mut win_T,
     mut wlv: *mut winlinevars_T,
     mut v: ptrdiff_t,
     mut selected: bool,

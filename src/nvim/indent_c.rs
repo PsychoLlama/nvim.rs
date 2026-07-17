@@ -5960,7 +5960,7 @@ pub unsafe extern "C" fn do_c_expr_indent() {
 pub unsafe extern "C" fn f_cindent(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut pos: pos_T = (*curwin).w_cursor;
     let mut lnum: linenr_T = tv_get_lnum(argvars);

@@ -10304,7 +10304,7 @@ pub unsafe extern "C" fn cmd_exists(name: *const ::core::ffi::c_char) -> ::core:
 pub unsafe extern "C" fn f_fullcommand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut name: *mut ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_char;
@@ -11454,7 +11454,7 @@ pub unsafe extern "C" fn get_bad_opt(
     return OK;
 }
 unsafe extern "C" fn get_bad_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut p_bad_values: [*mut ::core::ffi::c_char; 3] = [
@@ -11614,7 +11614,7 @@ pub unsafe extern "C" fn getargopt(mut eap: *mut exarg_T) -> ::core::ffi::c_int 
     return OK;
 }
 unsafe extern "C" fn get_argopt_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     static mut p_opt_values: [*mut ::core::ffi::c_char; 7] = [
@@ -12096,7 +12096,7 @@ unsafe extern "C" fn check_more(mut message: bool, mut forceit: bool) -> ::core:
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_command_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx >= CMD_SIZE as ::core::ffi::c_int {
@@ -13110,7 +13110,7 @@ unsafe extern "C" fn ex_print(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_goto(mut eap: *mut exarg_T) {
     goto_byte((*eap).line2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn ex_preserve(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_preserve(mut _eap: *mut exarg_T) {
     ml_preserve(curbuf, true_0 != 0, true_0 != 0);
 }
 unsafe extern "C" fn ex_recover(mut eap: *mut exarg_T) {
@@ -13406,16 +13406,16 @@ pub unsafe extern "C" fn ex_splitview(mut eap: *mut exarg_T) {
                 }
             }
         } else if win_split(
-            (if (*eap).addr_count > 0 as ::core::ffi::c_int {
+            if (*eap).addr_count > 0 as ::core::ffi::c_int {
                 (*eap).line2 as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            }),
-            (if *(*eap).cmd as ::core::ffi::c_int == 'v' as ::core::ffi::c_int {
+            },
+            if *(*eap).cmd as ::core::ffi::c_int == 'v' as ::core::ffi::c_int {
                 WSP_VERT as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
-            }),
+            },
         ) != FAIL
         {
             if *(*eap).arg as ::core::ffi::c_int != NUL {
@@ -13521,7 +13521,7 @@ unsafe extern "C" fn ex_tabmove(mut eap: *mut exarg_T) {
         tabpage_move(tab_number);
     }
 }
-unsafe extern "C" fn ex_tabs(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_tabs(mut _eap: *mut exarg_T) {
     let mut tabcount: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
     msg_start();
@@ -13885,11 +13885,11 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
         }
         if do_ecmd(
             0 as ::core::ffi::c_int,
-            (if (*eap).cmdidx as ::core::ffi::c_int == CMD_enew as ::core::ffi::c_int {
+            if (*eap).cmdidx as ::core::ffi::c_int == CMD_enew as ::core::ffi::c_int {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             } else {
                 (*eap).arg
-            }),
+            },
             ::core::ptr::null_mut::<::core::ffi::c_char>(),
             eap,
             (*eap).do_ecmd_lnum,
@@ -13914,11 +13914,11 @@ pub unsafe extern "C" fn do_exedit(mut eap: *mut exarg_T, mut old_curwin: *mut w
             } else {
                 0 as ::core::ffi::c_int
             }),
-            (if old_curwin.is_null() {
+            if old_curwin.is_null() {
                 curwin
             } else {
                 ::core::ptr::null_mut::<win_T>()
-            }),
+            },
         ) == FAIL
         {
             if !old_curwin.is_null() {
@@ -13968,7 +13968,7 @@ unsafe extern "C" fn ex_nogui(mut eap: *mut exarg_T) {
 unsafe extern "C" fn ex_popup(mut eap: *mut exarg_T) {
     pum_make_popup((*eap).arg, (*eap).forceit);
 }
-unsafe extern "C" fn ex_swapname(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_swapname(mut _eap: *mut exarg_T) {
     if (*curbuf).b_ml.ml_mfp.is_null() || (*(*curbuf).b_ml.ml_mfp).mf_fname.is_null() {
         msg(
             gettext(b"No swap file\0".as_ptr() as *const ::core::ffi::c_char),
@@ -13978,7 +13978,7 @@ unsafe extern "C" fn ex_swapname(mut eap: *mut exarg_T) {
         msg((*(*curbuf).b_ml.ml_mfp).mf_fname, 0 as ::core::ffi::c_int);
     };
 }
-unsafe extern "C" fn ex_syncbind(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_syncbind(mut _eap: *mut exarg_T) {
     let mut vtopline: linenr_T = 0;
     let mut old_linenr: linenr_T = (*curwin).w_cursor.lnum;
     setpcmark();
@@ -14262,7 +14262,7 @@ pub unsafe extern "C" fn ex_cd(mut eap: *mut exarg_T) {
         }
     }
 }
-unsafe extern "C" fn ex_pwd(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_pwd(mut _eap: *mut exarg_T) {
     if os_dirname(
         &raw mut NameBuff as *mut ::core::ffi::c_char,
         MAXPATHL as size_t,
@@ -14753,7 +14753,7 @@ unsafe extern "C" fn ex_rundo(mut eap: *mut exarg_T) {
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
 }
-unsafe extern "C" fn ex_redo(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_redo(mut _eap: *mut exarg_T) {
     u_redo(1 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn ex_later(mut eap: *mut exarg_T) {
@@ -14958,7 +14958,7 @@ unsafe extern "C" fn ex_redrawstatus(mut eap: *mut exarg_T) {
     p_lz = p;
     ui_flush();
 }
-unsafe extern "C" fn ex_redrawtabline(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_redrawtabline(mut _eap: *mut exarg_T) {
     let r: ::core::ffi::c_int = RedrawingDisabled;
     let p: ::core::ffi::c_int = p_lz;
     RedrawingDisabled = 0 as ::core::ffi::c_int;
@@ -15280,7 +15280,7 @@ unsafe extern "C" fn ex_startinsert(mut eap: *mut exarg_T) {
         showmode();
     }
 }
-unsafe extern "C" fn ex_stopinsert(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_stopinsert(mut _eap: *mut exarg_T) {
     restart_edit = 0 as ::core::ffi::c_int;
     stop_insert_mode = true_0 != 0;
     clearmode();
@@ -16227,7 +16227,7 @@ pub unsafe extern "C" fn set_no_hlsearch(mut flag: bool) {
         (!no_hlsearch && p_hls != 0) as ::core::ffi::c_int as varnumber_T,
     );
 }
-unsafe extern "C" fn ex_nohlsearch(mut eap: *mut exarg_T) {
+unsafe extern "C" fn ex_nohlsearch(mut _eap: *mut exarg_T) {
     set_no_hlsearch(true_0 != 0);
     redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
 }

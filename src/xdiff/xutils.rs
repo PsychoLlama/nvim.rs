@@ -781,17 +781,17 @@ pub unsafe extern "C" fn xdl_emit_hunk_hdr(
     }
     if (*ecb).out_hunk.expect("non-null function pointer")(
         (*ecb).priv_0,
-        (if c1 != 0 {
+        if c1 != 0 {
             s1
         } else {
             s1 - 1 as ::core::ffi::c_long
-        }),
+        },
         c1,
-        (if c2 != 0 {
+        if c2 != 0 {
             s2
         } else {
             s2 - 1 as ::core::ffi::c_long
-        }),
+        },
         c2,
         func,
         funclen,

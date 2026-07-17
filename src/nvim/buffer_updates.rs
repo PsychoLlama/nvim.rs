@@ -1720,11 +1720,11 @@ pub unsafe extern "C" fn buf_updates_register(
     }
     if channel_id == LUA_INTERNAL_CALL {
         if (*buf).update_callbacks.size == (*buf).update_callbacks.capacity {
-            (*buf).update_callbacks.capacity = (if (*buf).update_callbacks.capacity != 0 {
+            (*buf).update_callbacks.capacity = if (*buf).update_callbacks.capacity != 0 {
                 (*buf).update_callbacks.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*buf).update_callbacks.items = xrealloc(
                 (*buf).update_callbacks.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<BufUpdateCallbacks>()
@@ -1749,11 +1749,11 @@ pub unsafe extern "C" fn buf_updates_register(
         i = i.wrapping_add(1);
     }
     if (*buf).update_channels.size == (*buf).update_channels.capacity {
-        (*buf).update_channels.capacity = (if (*buf).update_channels.capacity != 0 {
+        (*buf).update_channels.capacity = if (*buf).update_channels.capacity != 0 {
             (*buf).update_channels.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*buf).update_channels.items = xrealloc(
             (*buf).update_channels.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<uint64_t>().wrapping_mul((*buf).update_channels.capacity),

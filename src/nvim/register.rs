@@ -6862,7 +6862,7 @@ pub unsafe extern "C" fn write_reg_contents_ex(
 pub unsafe extern "C" fn prepare_yankreg_from_object(
     mut reg: *mut yankreg_T,
     mut regtype: String_0,
-    mut lines: size_t,
+    mut _lines: size_t,
 ) -> bool {
     let mut type_0: ::core::ffi::c_char = (if !regtype.data.is_null() {
         *regtype.data.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int

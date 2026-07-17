@@ -4161,11 +4161,11 @@ unsafe extern "C" fn parse_bordertext(
         (*chunks).size = (*chunks).capacity;
         (*chunks).items = ::core::ptr::null_mut::<VirtTextChunk>();
         if (*chunks).size == (*chunks).capacity {
-            (*chunks).capacity = (if (*chunks).capacity != 0 {
+            (*chunks).capacity = if (*chunks).capacity != 0 {
                 (*chunks).capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*chunks).items = xrealloc(
                 (*chunks).items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<VirtTextChunk>().wrapping_mul((*chunks).capacity),
@@ -4791,11 +4791,11 @@ pub unsafe extern "C" fn parse_winborder(
             }
             let mut str: String_0 = cstr_to_string(&raw mut part as *mut ::core::ffi::c_char);
             if border_chars.size == border_chars.capacity {
-                border_chars.capacity = (if border_chars.capacity != 0 {
+                border_chars.capacity = if border_chars.capacity != 0 {
                     border_chars.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 border_chars.items = xrealloc(
                     border_chars.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<Object>().wrapping_mul(border_chars.capacity),

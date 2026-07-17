@@ -6618,7 +6618,7 @@ unsafe extern "C" fn api_wrapper(
 unsafe extern "C" fn f_abs(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -6650,7 +6650,7 @@ unsafe extern "C" fn f_abs(
 unsafe extern "C" fn f_and(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -6661,16 +6661,16 @@ unsafe extern "C" fn f_and(
     );
 }
 unsafe extern "C" fn f_api_info(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     object_to_vim(api_metadata(), rettv, ::core::ptr::null_mut::<Error>());
 }
 unsafe extern "C" fn f_atan2(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fx: float_T = 0.;
     let mut fy: float_T = 0.;
@@ -6757,7 +6757,7 @@ pub unsafe extern "C" fn get_buf_arg(mut arg: *mut typval_T) -> *mut buf_T {
 unsafe extern "C" fn f_byte2line(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut boff: ::core::ffi::c_int =
         tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
@@ -6773,7 +6773,7 @@ unsafe extern "C" fn f_byte2line(
 unsafe extern "C" fn f_call(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_list_arg(argvars, 1 as ::core::ffi::c_int) == FAIL {
         return;
@@ -6859,16 +6859,16 @@ unsafe extern "C" fn f_call(
     xfree(tofree as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn f_changenr(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (*curbuf).b_u_seq_cur as varnumber_T;
 }
 unsafe extern "C" fn f_chanclose(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -6922,7 +6922,7 @@ unsafe extern "C" fn f_chanclose(
 unsafe extern "C" fn f_chansend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -6974,7 +6974,7 @@ unsafe extern "C" fn f_chansend(
 unsafe extern "C" fn f_char2nr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -7052,7 +7052,7 @@ unsafe extern "C" fn get_col(
 unsafe extern "C" fn f_charcol(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_col(argvars, rettv, true_0 != 0);
 }
@@ -7078,14 +7078,14 @@ pub unsafe extern "C" fn get_optional_window(
 unsafe extern "C" fn f_col(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_col(argvars, rettv, false_0 != 0);
 }
 unsafe extern "C" fn f_confirm(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
@@ -7172,7 +7172,7 @@ unsafe extern "C" fn f_confirm(
 unsafe extern "C" fn f_copy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     var_item_copy(
         ::core::ptr::null::<vimconv_T>(),
@@ -7185,7 +7185,7 @@ unsafe extern "C" fn f_copy(
 unsafe extern "C" fn f_ctxget(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut index: size_t = 0 as size_t;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -7230,9 +7230,9 @@ unsafe extern "C" fn f_ctxget(
     api_clear_error(&raw mut err);
 }
 unsafe extern "C" fn f_ctxpop(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if !ctx_restore(::core::ptr::null_mut::<Context>(), kCtxAll) {
         emsg(gettext(
@@ -7242,8 +7242,8 @@ unsafe extern "C" fn f_ctxpop(
 }
 unsafe extern "C" fn f_ctxpush(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut types: ::core::ffi::c_int = kCtxAll;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -7308,8 +7308,8 @@ unsafe extern "C" fn f_ctxpush(
 }
 unsafe extern "C" fn f_ctxset(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -7374,9 +7374,9 @@ unsafe extern "C" fn f_ctxset(
     did_emsg = save_did_emsg;
 }
 unsafe extern "C" fn f_ctxsize(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = ctx_size() as varnumber_T;
@@ -7478,14 +7478,14 @@ unsafe extern "C" fn set_cursorpos(
 unsafe extern "C" fn f_cursor(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     set_cursorpos(argvars, rettv, false_0 != 0);
 }
 unsafe extern "C" fn f_debugbreak(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = FAIL as varnumber_T;
     let mut pid: ::core::ffi::c_int =
@@ -7499,7 +7499,7 @@ unsafe extern "C" fn f_debugbreak(
 unsafe extern "C" fn f_deepcopy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_opt_bool_arg(argvars, 1 as ::core::ffi::c_int) == FAIL {
         return;
@@ -7527,8 +7527,8 @@ unsafe extern "C" fn f_deepcopy(
 }
 unsafe extern "C" fn f_dictwatcheradd(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;
@@ -7600,8 +7600,8 @@ unsafe extern "C" fn f_dictwatcheradd(
 }
 unsafe extern "C" fn f_dictwatcherdel(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;
@@ -7659,16 +7659,16 @@ unsafe extern "C" fn f_dictwatcherdel(
     callback_free(&raw mut callback);
 }
 unsafe extern "C" fn f_did_filetype(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (*curbuf).b_did_filetype as varnumber_T;
 }
 unsafe extern "C" fn f_empty(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: bool = true_0 != 0;
     match (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint {
@@ -7746,9 +7746,9 @@ unsafe extern "C" fn f_empty(
     (*rettv).vval.v_number = n as varnumber_T;
 }
 unsafe extern "C" fn f_environ(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let mut env_size: size_t = os_get_fullenv_size();
@@ -7820,7 +7820,7 @@ unsafe extern "C" fn f_environ(
 unsafe extern "C" fn f_escape(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 65] = [0; 65];
     (*rettv).vval.v_string = vim_strsave_escaped(
@@ -7835,7 +7835,7 @@ unsafe extern "C" fn f_escape(
 unsafe extern "C" fn f_getenv(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut ::core::ffi::c_char = vim_getenv(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -7851,7 +7851,7 @@ unsafe extern "C" fn f_getenv(
 unsafe extern "C" fn f_eval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut s: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -7883,17 +7883,17 @@ unsafe extern "C" fn f_eval(
     }
 }
 unsafe extern "C" fn f_eventhandler(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = vgetc_busy as varnumber_T;
 }
 unsafe extern "C" fn get_list_line(
-    mut c: ::core::ffi::c_int,
+    mut _c: ::core::ffi::c_int,
     mut cookie: *mut ::core::ffi::c_void,
-    mut indent: ::core::ffi::c_int,
-    mut do_concat: bool,
+    mut _indent: ::core::ffi::c_int,
+    mut _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
     let p: *mut GetListLineCookie = cookie as *mut GetListLineCookie;
     let item: *const listitem_T = (*p).li;
@@ -8022,14 +8022,14 @@ pub unsafe extern "C" fn execute_common(
 unsafe extern "C" fn f_execute(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     execute_common(argvars, rettv, 0 as ::core::ffi::c_int);
 }
 unsafe extern "C" fn f_exists(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: ::core::ffi::c_int = false_0;
     let mut p: *const ::core::ffi::c_char =
@@ -8083,7 +8083,7 @@ unsafe extern "C" fn f_exists(
 unsafe extern "C" fn f_expand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut options: ::core::ffi::c_int = WILD_SILENT as ::core::ffi::c_int
         | WILD_USE_NL as ::core::ffi::c_int
@@ -8225,7 +8225,7 @@ unsafe extern "C" fn f_expand(
 unsafe extern "C" fn f_menu_get(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let mut modes: ::core::ffi::c_int = MENU_ALL_MODES as ::core::ffi::c_int;
@@ -8250,7 +8250,7 @@ unsafe extern "C" fn f_menu_get(
 unsafe extern "C" fn f_expandcmd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut errormsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut emsgoff: bool = true_0 != 0;
@@ -8395,21 +8395,21 @@ unsafe extern "C" fn flatten_common(
 unsafe extern "C" fn f_flatten(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     flatten_common(argvars, rettv, false_0 != 0);
 }
 unsafe extern "C" fn f_flattennew(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     flatten_common(argvars, rettv, true_0 != 0);
 }
 unsafe extern "C" fn f_feedkeys(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;
@@ -8431,7 +8431,7 @@ unsafe extern "C" fn f_feedkeys(
 unsafe extern "C" fn f_float2nr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut f: float_T = 0.;
     if !tv_get_float_chk(argvars, &raw mut f) {
@@ -8448,7 +8448,7 @@ unsafe extern "C" fn f_float2nr(
 unsafe extern "C" fn f_fmod(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fx: float_T = 0.;
     let mut fy: float_T = 0.;
@@ -8469,7 +8469,7 @@ unsafe extern "C" fn f_fmod(
 unsafe extern "C" fn f_fnameescape(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_string = vim_strsave_fnameescape(
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
@@ -8478,9 +8478,9 @@ unsafe extern "C" fn f_fnameescape(
     (*rettv).v_type = VAR_STRING;
 }
 unsafe extern "C" fn f_foreground(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
 }
 unsafe extern "C" fn common_function(
@@ -8704,21 +8704,21 @@ unsafe extern "C" fn common_function(
 unsafe extern "C" fn f_funcref(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     common_function(argvars, rettv, true_0 != 0);
 }
 unsafe extern "C" fn f_function(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     common_function(argvars, rettv, false_0 != 0);
 }
 unsafe extern "C" fn f_garbagecollect(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     want_garbage_collect = true_0 != 0;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -8731,7 +8731,7 @@ unsafe extern "C" fn f_garbagecollect(
 unsafe extern "C" fn f_get(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut tv: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
     let mut what_is_dict: bool = false_0 != 0;
@@ -8963,7 +8963,7 @@ unsafe extern "C" fn f_get(
 unsafe extern "C" fn f_getchangelist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
     let mut buf: *const buf_T = ::core::ptr::null::<buf_T>();
@@ -9136,14 +9136,14 @@ unsafe extern "C" fn getpos_both(
 unsafe extern "C" fn f_getcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, false_0 != 0, true_0 != 0);
 }
 unsafe extern "C" fn f_getcharsearch(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     let mut dict: *mut dict_T = (*rettv).vval.v_dict;
@@ -9167,9 +9167,9 @@ unsafe extern "C" fn f_getcharsearch(
     );
 }
 unsafe extern "C" fn f_getfontname(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -9177,7 +9177,7 @@ unsafe extern "C" fn f_getfontname(
 unsafe extern "C" fn f_getjumplist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     let wp: *mut win_T = find_tabwin(
@@ -9235,7 +9235,7 @@ unsafe extern "C" fn f_getjumplist(
 unsafe extern "C" fn f_getmarklist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -9251,30 +9251,30 @@ unsafe extern "C" fn f_getmarklist(
     get_buf_local_marks(buf, (*rettv).vval.v_list);
 }
 unsafe extern "C" fn f_getpid(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = os_get_pid() as varnumber_T;
 }
 unsafe extern "C" fn f_getcurpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, true_0 != 0, false_0 != 0);
 }
 unsafe extern "C" fn f_getcursorcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, true_0 != 0, true_0 != 0);
 }
 unsafe extern "C" fn f_getpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, false_0 != 0, false_0 != 0);
 }
@@ -9520,7 +9520,7 @@ unsafe extern "C" fn getregionpos(
 unsafe extern "C" fn f_getregion(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let save_curbuf: *mut buf_T = curbuf;
     let save_virtual: TriState = virtual_op;
@@ -9665,7 +9665,7 @@ unsafe extern "C" fn add_regionpos_range(mut rettv: *mut typval_T, mut p1: pos_T
 unsafe extern "C" fn f_getregionpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let save_curbuf: *mut buf_T = curbuf;
     let save_virtual: TriState = virtual_op;
@@ -9867,7 +9867,7 @@ unsafe extern "C" fn getreg_get_regname(mut argvars: *mut typval_T) -> ::core::f
 unsafe extern "C" fn f_getreg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut arg2: ::core::ffi::c_int = false_0;
     let mut return_list: bool = false_0 != 0;
@@ -9927,7 +9927,7 @@ unsafe extern "C" fn f_getreg(
 unsafe extern "C" fn f_getregtype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -9955,7 +9955,7 @@ unsafe extern "C" fn f_getregtype(
 unsafe extern "C" fn f_gettagstack(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = curwin;
     tv_dict_alloc_ret(rettv);
@@ -9971,7 +9971,7 @@ unsafe extern "C" fn f_gettagstack(
 }
 unsafe extern "C" fn dummy_timer_due_cb(
     mut tw: *mut TimeWatcher,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
     if main_loop.closing {
         time_watcher_stop(tw);
@@ -9986,14 +9986,14 @@ unsafe extern "C" fn dummy_timer_due_cb(
 }
 unsafe extern "C" fn dummy_timer_close_cb(
     mut tw: *mut TimeWatcher,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
     xfree(tw as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn f_wait(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = -1 as varnumber_T;
@@ -10120,7 +10120,7 @@ unsafe extern "C" fn f_wait(
 unsafe extern "C" fn f_gettext(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_nonempty_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -10135,7 +10135,7 @@ unsafe extern "C" fn f_gettext(
 unsafe extern "C" fn f_has(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     static mut has_list: [*const ::core::ffi::c_char; 90] = [
         b"linux\0".as_ptr() as *const ::core::ffi::c_char,
@@ -10446,7 +10446,7 @@ unsafe extern "C" fn has_wsl() -> bool {
 unsafe extern "C" fn f_hlID(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = syn_name2id(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -10455,16 +10455,16 @@ unsafe extern "C" fn f_hlID(
 unsafe extern "C" fn f_hlexists(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = highlight_exists(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
     )) as varnumber_T;
 }
 unsafe extern "C" fn f_hostname(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut hostname: [::core::ffi::c_char; 256] = [0; 256];
     os_get_hostname(&raw mut hostname as *mut ::core::ffi::c_char, 256 as size_t);
@@ -10474,7 +10474,7 @@ unsafe extern "C" fn f_hostname(
 unsafe extern "C" fn f_index(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut ic: bool = false_0 != 0;
@@ -10718,7 +10718,7 @@ unsafe extern "C" fn indexof_list(
 unsafe extern "C" fn f_indexof(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     if tv_check_for_list_or_blob_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
@@ -10799,21 +10799,21 @@ static mut inputsecret_flag: bool = false_0 != 0;
 unsafe extern "C" fn f_input(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_user_input(argvars, rettv, false_0 != 0, inputsecret_flag);
 }
 unsafe extern "C" fn f_inputdialog(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     get_user_input(argvars, rettv, true_0 != 0, inputsecret_flag);
 }
 unsafe extern "C" fn f_inputlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -10864,9 +10864,9 @@ static mut ga_userinput: garray_T = garray_T {
     ga_data: NULL_0,
 };
 unsafe extern "C" fn f_inputrestore(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if !(ga_userinput.ga_len <= 0 as ::core::ffi::c_int) {
         ga_userinput.ga_len -= 1;
@@ -10882,9 +10882,9 @@ unsafe extern "C" fn f_inputrestore(
     }
 }
 unsafe extern "C" fn f_inputsave(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut tasave_T =
         ga_append_via_ptr(&raw mut ga_userinput, ::core::mem::size_of::<tasave_T>())
@@ -10903,16 +10903,16 @@ unsafe extern "C" fn f_inputsecret(
     inputsecret_flag = false_0 != 0;
 }
 unsafe extern "C" fn f_interrupt(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     got_int = true_0 != 0;
 }
 unsafe extern "C" fn f_invert(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = !tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -10922,7 +10922,7 @@ unsafe extern "C" fn f_invert(
 unsafe extern "C" fn f_islocked(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut lv: lval_T = lval_T {
         ll_name: ::core::ptr::null::<::core::ffi::c_char>(),
@@ -10994,7 +10994,7 @@ unsafe extern "C" fn f_islocked(
 unsafe extern "C" fn f_isinf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -11018,7 +11018,7 @@ unsafe extern "C" fn f_isinf(
 unsafe extern "C" fn f_isnan(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = ((*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type
         as ::core::ffi::c_uint
@@ -11032,7 +11032,7 @@ unsafe extern "C" fn f_isnan(
 unsafe extern "C" fn f_id(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let len: ::core::ffi::c_int = vim_vsnprintf_typval(
         ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -11055,7 +11055,7 @@ unsafe extern "C" fn f_id(
 unsafe extern "C" fn f_jobpid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -11083,7 +11083,7 @@ unsafe extern "C" fn f_jobpid(
 unsafe extern "C" fn f_jobresize(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -11266,7 +11266,7 @@ pub unsafe extern "C" fn create_environment(
 pub unsafe extern "C" fn f_jobstart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut len: size_t = 0;
     let mut err: Error = Error {
@@ -11703,7 +11703,7 @@ pub unsafe extern "C" fn f_jobstart(
 pub unsafe extern "C" fn f_jobstop(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -11738,7 +11738,7 @@ pub unsafe extern "C" fn f_jobstop(
 unsafe extern "C" fn f_jobwait(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -11880,7 +11880,7 @@ unsafe extern "C" fn f_jobwait(
 unsafe extern "C" fn f_json_decode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut numbuf: [::core::ffi::c_char; 65] = [0; 65];
     let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
@@ -11958,7 +11958,7 @@ unsafe extern "C" fn f_json_decode(
 unsafe extern "C" fn f_json_encode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = encode_tv2json(
@@ -11969,7 +11969,7 @@ unsafe extern "C" fn f_json_encode(
 unsafe extern "C" fn f_keytrans(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
@@ -11991,7 +11991,7 @@ unsafe extern "C" fn f_keytrans(
 unsafe extern "C" fn f_len(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     match (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint {
         2 | 1 => {
@@ -12091,21 +12091,21 @@ unsafe extern "C" fn libcall_common(
 unsafe extern "C" fn f_libcall(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     libcall_common(argvars, rettv, VAR_STRING as ::core::ffi::c_int);
 }
 unsafe extern "C" fn f_libcallnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     libcall_common(argvars, rettv, VAR_NUMBER as ::core::ffi::c_int);
 }
 unsafe extern "C" fn f_line(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut lnum: linenr_T = 0 as linenr_T;
     let mut fp: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
@@ -12150,7 +12150,7 @@ unsafe extern "C" fn f_line(
 unsafe extern "C" fn f_line2byte(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let lnum: linenr_T = tv_get_lnum(argvars);
     if lnum < 1 as linenr_T || lnum > (*curbuf).b_ml.ml_line_count + 1 as linenr_T {
@@ -12168,16 +12168,16 @@ unsafe extern "C" fn f_line2byte(
     }
 }
 unsafe extern "C" fn f_localtime(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = time(::core::ptr::null_mut::<time_t>()) as varnumber_T;
 }
 unsafe extern "C" fn f_luaeval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let str: *const ::core::ffi::c_char =
         tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -12552,7 +12552,7 @@ unsafe extern "C" fn get_matches_in_str(
 unsafe extern "C" fn f_matchbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
@@ -12674,35 +12674,35 @@ unsafe extern "C" fn f_matchbufline(
 unsafe extern "C" fn f_match(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatch);
 }
 unsafe extern "C" fn f_matchend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchEnd);
 }
 unsafe extern "C" fn f_matchlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchList);
 }
 unsafe extern "C" fn f_matchstr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchStr);
 }
 unsafe extern "C" fn f_matchstrlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut idx: ::core::ffi::c_int = 0;
     let mut submatches: bool = false;
@@ -12797,7 +12797,7 @@ unsafe extern "C" fn f_matchstrlist(
 unsafe extern "C" fn f_matchstrpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchStrPos);
 }
@@ -12880,21 +12880,21 @@ unsafe extern "C" fn max_min(tv: *const typval_T, rettv: *mut typval_T, domax: b
 unsafe extern "C" fn f_max(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     max_min(argvars, rettv, true_0 != 0);
 }
 unsafe extern "C" fn f_min(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     max_min(argvars, rettv, false_0 != 0);
 }
 unsafe extern "C" fn f_mode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut buf: [::core::ffi::c_char; 4] = [0; 4];
     get_mode(&raw mut buf as *mut ::core::ffi::c_char);
@@ -12916,7 +12916,7 @@ unsafe extern "C" fn may_add_state_char(
 unsafe extern "C" fn f_state(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
@@ -12968,7 +12968,7 @@ unsafe extern "C" fn f_state(
 unsafe extern "C" fn f_msgpackdump(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -13189,7 +13189,7 @@ unsafe extern "C" fn msgpackparse_unpack_blob(blob: *const blob_T, ret_list: *mu
 unsafe extern "C" fn f_msgpackparse(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -13225,7 +13225,7 @@ unsafe extern "C" fn f_msgpackparse(
 unsafe extern "C" fn f_nextnonblank(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut lnum: linenr_T = 0;
     lnum = tv_get_lnum(argvars);
@@ -13245,7 +13245,7 @@ unsafe extern "C" fn f_nextnonblank(
 unsafe extern "C" fn f_nr2char(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -13293,7 +13293,7 @@ unsafe extern "C" fn f_nr2char(
 unsafe extern "C" fn f_or(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -13306,7 +13306,7 @@ unsafe extern "C" fn f_or(
 unsafe extern "C" fn f_pow(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fx: float_T = 0.;
     let mut fy: float_T = 0.;
@@ -13327,7 +13327,7 @@ unsafe extern "C" fn f_pow(
 unsafe extern "C" fn f_prevnonblank(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut lnum: linenr_T = tv_get_lnum(argvars);
     if lnum < 1 as linenr_T || lnum > (*curbuf).b_ml.ml_line_count {
@@ -13342,7 +13342,7 @@ unsafe extern "C" fn f_prevnonblank(
 unsafe extern "C" fn f_printf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -13377,7 +13377,7 @@ unsafe extern "C" fn f_printf(
 unsafe extern "C" fn f_prompt_getprompt(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -13393,7 +13393,7 @@ unsafe extern "C" fn f_prompt_getprompt(
 unsafe extern "C" fn f_prompt_getinput(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -13407,17 +13407,17 @@ unsafe extern "C" fn f_prompt_getinput(
     (*rettv).vval.v_string = prompt_get_input(buf);
 }
 unsafe extern "C" fn f_pum_getpos(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     pum_set_event_info((*rettv).vval.v_dict);
 }
 unsafe extern "C" fn f_pumvisible(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if pum_visible() {
         (*rettv).vval.v_number = 1 as varnumber_T;
@@ -13426,7 +13426,7 @@ unsafe extern "C" fn f_pumvisible(
 unsafe extern "C" fn f_py3eval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     script_host_eval(
         b"python3\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -13481,7 +13481,7 @@ unsafe extern "C" fn shuffle_xoshiro128starstar(
 unsafe extern "C" fn f_rand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut result: uint32_t = 0;
     's_126: {
@@ -13591,7 +13591,7 @@ unsafe extern "C" fn f_rand(
 unsafe extern "C" fn f_srand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut x: uint32_t = 0 as uint32_t;
     tv_list_alloc_ret(rettv, 4 as ptrdiff_t);
@@ -13617,7 +13617,7 @@ unsafe extern "C" fn f_srand(
 unsafe extern "C" fn f_perleval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     script_host_eval(
         b"perl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -13628,7 +13628,7 @@ unsafe extern "C" fn f_perleval(
 unsafe extern "C" fn f_rubyeval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     script_host_eval(
         b"ruby\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
@@ -13639,7 +13639,7 @@ unsafe extern "C" fn f_rubyeval(
 unsafe extern "C" fn f_range(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut end: varnumber_T = 0;
     let mut stride: varnumber_T = 1 as varnumber_T;
@@ -13705,7 +13705,7 @@ unsafe extern "C" fn f_range(
 unsafe extern "C" fn f_getreginfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut regname: ::core::ffi::c_int = getreg_get_regname(argvars);
     if regname == 0 as ::core::ffi::c_int {
@@ -13790,23 +13790,23 @@ unsafe extern "C" fn return_register(mut regname: ::core::ffi::c_int, mut rettv:
     (*rettv).vval.v_string = xstrdup(&raw mut buf as *mut ::core::ffi::c_char);
 }
 unsafe extern "C" fn f_reg_executing(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     return_register(reg_executing, rettv);
 }
 unsafe extern "C" fn f_reg_recording(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     return_register(reg_recording, rettv);
 }
 unsafe extern "C" fn f_reg_recorded(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     return_register(reg_recorded, rettv);
 }
@@ -13839,7 +13839,7 @@ unsafe extern "C" fn list2proftime(
 unsafe extern "C" fn f_reltime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut res: proftime_T = 0;
     let mut start: proftime_T = 0;
@@ -13880,7 +13880,7 @@ unsafe extern "C" fn f_reltime(
 unsafe extern "C" fn f_reltimestr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut tm: proftime_T = 0;
     (*rettv).v_type = VAR_STRING;
@@ -13896,7 +13896,7 @@ unsafe extern "C" fn f_reltimestr(
 unsafe extern "C" fn f_repeat(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: varnumber_T = tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize));
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -14212,7 +14212,7 @@ unsafe extern "C" fn reduce_blob(
 unsafe extern "C" fn f_reduce(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -14541,7 +14541,7 @@ unsafe extern "C" fn search_cmn(
 unsafe extern "C" fn f_rpcnotify(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -14607,7 +14607,7 @@ unsafe extern "C" fn f_rpcnotify(
 unsafe extern "C" fn f_rpcrequest(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = 0 as varnumber_T;
@@ -14753,7 +14753,7 @@ unsafe extern "C" fn screenchar_adjust(
 unsafe extern "C" fn f_screenattr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut row: ::core::ffi::c_int = tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -14784,7 +14784,7 @@ unsafe extern "C" fn f_screenattr(
 unsafe extern "C" fn f_screenchar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut row: ::core::ffi::c_int = tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -14816,7 +14816,7 @@ unsafe extern "C" fn f_screenchar(
 unsafe extern "C" fn f_screenchars(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut row: ::core::ffi::c_int = tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -14862,23 +14862,23 @@ unsafe extern "C" fn f_screenchars(
     }
 }
 unsafe extern "C" fn f_screencol(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (ui_current_col() + 1 as ::core::ffi::c_int) as varnumber_T;
 }
 unsafe extern "C" fn f_screenrow(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (ui_current_row() + 1 as ::core::ffi::c_int) as varnumber_T;
 }
 unsafe extern "C" fn f_screenstring(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*rettv).v_type = VAR_STRING;
@@ -14916,7 +14916,7 @@ unsafe extern "C" fn f_screenstring(
 unsafe extern "C" fn f_search(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     (*rettv).vval.v_number =
@@ -14925,7 +14925,7 @@ unsafe extern "C" fn f_search(
 unsafe extern "C" fn f_searchdecl(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut locally: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     let mut thisblock: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -15060,7 +15060,7 @@ unsafe extern "C" fn searchpair_cmn(
 unsafe extern "C" fn f_searchpair(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number =
         searchpair_cmn(argvars, ::core::ptr::null_mut::<pos_T>()) as varnumber_T;
@@ -15068,7 +15068,7 @@ unsafe extern "C" fn f_searchpair(
 unsafe extern "C" fn f_searchpairpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut match_pos: pos_T = pos_T {
         lnum: 0,
@@ -15280,7 +15280,7 @@ pub unsafe extern "C" fn do_searchpair(
 unsafe extern "C" fn f_searchpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut match_pos: pos_T = pos_T {
         lnum: 0,
@@ -15312,7 +15312,7 @@ unsafe extern "C" fn f_searchpos(
 unsafe extern "C" fn f_serverlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut args: Array = Array {
         size: 0,
@@ -15414,7 +15414,7 @@ unsafe extern "C" fn f_serverlist(
 unsafe extern "C" fn f_serverstart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -15462,7 +15462,7 @@ unsafe extern "C" fn f_serverstart(
 unsafe extern "C" fn f_serverstop(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if check_secure() {
         return;
@@ -15559,14 +15559,14 @@ unsafe extern "C" fn set_position(
 unsafe extern "C" fn f_setcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     set_position(argvars, rettv, true_0 != 0);
 }
 unsafe extern "C" fn f_setcharsearch(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_dict_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -15612,14 +15612,14 @@ unsafe extern "C" fn f_setcharsearch(
 unsafe extern "C" fn f_setcursorcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     set_cursorpos(argvars, rettv, true_0 != 0);
 }
 unsafe extern "C" fn f_setenv(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut namebuf: [::core::ffi::c_char; 65] = [0; 65];
     let mut valbuf: [::core::ffi::c_char; 65] = [0; 65];
@@ -15651,7 +15651,7 @@ unsafe extern "C" fn f_setenv(
 unsafe extern "C" fn f_setfperm(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = 0 as varnumber_T;
     let fname: *const ::core::ffi::c_char =
@@ -15689,7 +15689,7 @@ unsafe extern "C" fn f_setfperm(
 unsafe extern "C" fn f_setpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     set_position(argvars, rettv, false_0 != 0);
 }
@@ -15724,7 +15724,7 @@ unsafe extern "C" fn get_yank_type(
 unsafe extern "C" fn f_setreg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut append: bool = false_0 != 0;
     let mut block_len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -15939,7 +15939,7 @@ unsafe extern "C" fn f_setreg(
 unsafe extern "C" fn f_settagstack(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     static mut e_invact2: *const ::core::ffi::c_char =
         b"E962: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char;
@@ -15988,7 +15988,7 @@ unsafe extern "C" fn f_settagstack(
 unsafe extern "C" fn f_sha256(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -16029,7 +16029,7 @@ unsafe extern "C" fn f_sha256(
 unsafe extern "C" fn f_shellescape(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let do_special: bool = non_zero_arg(argvars.offset(1 as ::core::ffi::c_int as isize));
     (*rettv).vval.v_string = vim_strsave_shellescape(
@@ -16042,7 +16042,7 @@ unsafe extern "C" fn f_shellescape(
 unsafe extern "C" fn f_shiftwidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = 0 as varnumber_T;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -16061,7 +16061,7 @@ unsafe extern "C" fn f_shiftwidth(
 unsafe extern "C" fn f_sockconnect(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -16164,7 +16164,7 @@ unsafe extern "C" fn f_sockconnect(
 unsafe extern "C" fn f_stdioopen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -16228,7 +16228,7 @@ unsafe extern "C" fn f_stdioopen(
 unsafe extern "C" fn f_reltimefloat(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut tm: proftime_T = 0;
     (*rettv).v_type = VAR_FLOAT;
@@ -16245,7 +16245,7 @@ unsafe extern "C" fn f_reltimefloat(
 unsafe extern "C" fn f_soundfold(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     let s: *const ::core::ffi::c_char =
@@ -16255,7 +16255,7 @@ unsafe extern "C" fn f_soundfold(
 unsafe extern "C" fn f_spellbadword(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let wo_spell_save: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_spell;
     if (*curwin).w_onebuf_opt.wo_spell == 0 {
@@ -16371,7 +16371,7 @@ unsafe extern "C" fn f_spellbadword(
 unsafe extern "C" fn f_spellsuggest(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ga: garray_T = GA_EMPTY_INIT_VALUE;
     let wo_spell_save: ::core::ffi::c_int = (*curwin).w_onebuf_opt.wo_spell;
@@ -16436,7 +16436,7 @@ unsafe extern "C" fn f_spellsuggest(
 unsafe extern "C" fn f_split(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut regmatch: regmatch_T = regmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
@@ -16589,7 +16589,7 @@ unsafe extern "C" fn get_xdg_var_list(xdg: XDGVarType, mut rettv: *mut typval_T)
 unsafe extern "C" fn f_stdpath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -16626,7 +16626,7 @@ unsafe extern "C" fn f_stdpath(
 unsafe extern "C" fn f_str2float(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut p: *mut ::core::ffi::c_char = skipwhite(tv_get_string(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -16646,7 +16646,7 @@ unsafe extern "C" fn f_str2float(
 unsafe extern "C" fn f_strftime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut seconds: time_t = 0;
     (*rettv).v_type = VAR_STRING;
@@ -16725,7 +16725,7 @@ unsafe extern "C" fn f_strftime(
 unsafe extern "C" fn f_strptime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut fmt_buf: [::core::ffi::c_char; 65] = [0; 65];
     let mut str_buf: [::core::ffi::c_char; 65] = [0; 65];
@@ -16780,7 +16780,7 @@ unsafe extern "C" fn f_strptime(
 unsafe extern "C" fn f_submatch(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut error: bool = false_0 != 0;
     let mut no: ::core::ffi::c_int = tv_get_number_chk(
@@ -16820,7 +16820,7 @@ unsafe extern "C" fn f_submatch(
 unsafe extern "C" fn f_substitute(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut patbuf: [::core::ffi::c_char; 65] = [0; 65];
     let mut subbuf: [::core::ffi::c_char; 65] = [0; 65];
@@ -16861,9 +16861,9 @@ unsafe extern "C" fn f_substitute(
     };
 }
 unsafe extern "C" fn f_swapfilelist(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
     recover_names(
@@ -16877,7 +16877,7 @@ unsafe extern "C" fn f_swapfilelist(
 unsafe extern "C" fn f_swapinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     swapfile_dict(tv_get_string(argvars), (*rettv).vval.v_dict);
@@ -16885,7 +16885,7 @@ unsafe extern "C" fn f_swapinfo(
 unsafe extern "C" fn f_swapname(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     let mut buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
@@ -16898,7 +16898,7 @@ unsafe extern "C" fn f_swapname(
 unsafe extern "C" fn f_synID(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let lnum: linenr_T = tv_get_lnum(argvars);
     let col: colnr_T =
@@ -16929,7 +16929,7 @@ unsafe extern "C" fn f_synID(
 unsafe extern "C" fn f_synIDattr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let id: ::core::ffi::c_int =
         tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
@@ -17163,7 +17163,7 @@ unsafe extern "C" fn f_synIDattr(
 unsafe extern "C" fn f_synIDtrans(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut id: ::core::ffi::c_int =
         tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
@@ -17177,7 +17177,7 @@ unsafe extern "C" fn f_synIDtrans(
 unsafe extern "C" fn f_synconcealed(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut syntax_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut matchid: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -17238,7 +17238,7 @@ unsafe extern "C" fn f_synconcealed(
 unsafe extern "C" fn f_synstack(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_set_ret(rettv, ::core::ptr::null_mut::<list_T>());
     let lnum: linenr_T = tv_get_lnum(argvars);
@@ -17274,7 +17274,7 @@ unsafe extern "C" fn f_synstack(
 unsafe extern "C" fn f_tabpagebuflist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -17305,9 +17305,9 @@ unsafe extern "C" fn f_tabpagebuflist(
     }
 }
 unsafe extern "C" fn f_tagfiles(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
     let mut fname: *mut ::core::ffi::c_char =
@@ -17330,7 +17330,7 @@ unsafe extern "C" fn f_tagfiles(
 unsafe extern "C" fn f_taglist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let tag_pattern: *const ::core::ffi::c_char =
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
@@ -17353,7 +17353,7 @@ unsafe extern "C" fn f_taglist(
 unsafe extern "C" fn f_timer_info(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
     if tv_check_for_opt_number_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
@@ -17374,8 +17374,8 @@ unsafe extern "C" fn f_timer_info(
 }
 unsafe extern "C" fn f_timer_pause(
     mut argvars: *mut typval_T,
-    mut unused: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _unused: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -17411,7 +17411,7 @@ unsafe extern "C" fn f_timer_pause(
 unsafe extern "C" fn f_timer_start(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut repeat: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
     (*rettv).vval.v_number = -1 as varnumber_T;
@@ -17460,8 +17460,8 @@ unsafe extern "C" fn f_timer_start(
 }
 unsafe extern "C" fn f_timer_stop(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_number_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;
@@ -17475,16 +17475,16 @@ unsafe extern "C" fn f_timer_stop(
     timer_stop(timer);
 }
 unsafe extern "C" fn f_timer_stopall(
-    mut argvars: *mut typval_T,
-    mut unused: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _argvars: *mut typval_T,
+    mut _unused: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     timer_stop_all();
 }
 unsafe extern "C" fn f_type(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     match (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint {
@@ -17525,7 +17525,7 @@ unsafe extern "C" fn f_type(
 unsafe extern "C" fn f_virtcol(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut bp: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     let mut fnum: ::core::ffi::c_int = 0;
@@ -17594,7 +17594,7 @@ unsafe extern "C" fn f_virtcol(
 unsafe extern "C" fn f_visualmode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut str: [::core::ffi::c_char; 2] = [0; 2];
     (*rettv).v_type = VAR_STRING;
@@ -17606,9 +17606,9 @@ unsafe extern "C" fn f_visualmode(
     }
 }
 unsafe extern "C" fn f_wildmenumode(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if wild_menu_showing != 0
         || State & MODE_CMDLINE as ::core::ffi::c_int != 0
@@ -17618,17 +17618,17 @@ unsafe extern "C" fn f_wildmenumode(
     }
 }
 unsafe extern "C" fn f_windowsversion(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = xstrdup(&raw mut windowsVersion as *mut ::core::ffi::c_char);
 }
 unsafe extern "C" fn f_wordcount(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_dict_alloc_ret(rettv);
     cursor_pos_info((*rettv).vval.v_dict);
@@ -17636,7 +17636,7 @@ unsafe extern "C" fn f_wordcount(
 unsafe extern "C" fn f_xor(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = tv_get_number_chk(
         argvars.offset(0 as ::core::ffi::c_int as isize),

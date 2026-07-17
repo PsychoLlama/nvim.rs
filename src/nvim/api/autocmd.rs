@@ -3537,7 +3537,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                 };
                                         }
                                         if autocmd_list.size == autocmd_list.capacity {
-                                            autocmd_list.capacity = (if autocmd_list.capacity
+                                            autocmd_list.capacity = if autocmd_list.capacity
                                                 << 1 as ::core::ffi::c_int
                                                 > ::core::mem::size_of::<[Object; 16]>()
                                                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -3565,7 +3565,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             as ::core::ffi::c_int
                                                             as size_t,
                                                     )
-                                            });
+                                            };
                                             autocmd_list.items = (if autocmd_list.capacity
                                                 == ::core::mem::size_of::<[Object; 16]>()
                                                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -3579,7 +3579,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             as ::core::ffi::c_int
                                                             as usize,
                                                     ) {
-                                                (if autocmd_list.items
+                                                if autocmd_list.items
                                                     == &raw mut autocmd_list.init_array
                                                         as *mut Object
                                                 {
@@ -3595,9 +3595,9 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             ::core::mem::size_of::<Object>(),
                                                         ),
                                                     )
-                                                })
+                                                }
                                             } else {
-                                                (if autocmd_list.items
+                                                if autocmd_list.items
                                                     == &raw mut autocmd_list.init_array
                                                         as *mut Object
                                                 {
@@ -3621,7 +3621,7 @@ pub unsafe extern "C" fn nvim_get_autocmds(
                                                             ::core::mem::size_of::<Object>(),
                                                         ),
                                                     )
-                                                })
+                                                }
                                             })
                                                 as *mut Object;
                                         } else {
@@ -4422,7 +4422,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
             let mut patlen: size_t = aucmd_span_pattern(pat, &raw mut pat);
             while patlen != 0 {
                 if patterns.size == patterns.capacity {
-                    patterns.capacity = (if patterns.capacity << 1 as ::core::ffi::c_int
+                    patterns.capacity = if patterns.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[Object; 16]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
@@ -4441,7 +4441,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     patterns.items = (if patterns.capacity
                         == ::core::mem::size_of::<[Object; 16]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -4451,7 +4451,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                        if patterns.items == &raw mut patterns.init_array as *mut Object {
                             patterns.items as *mut ::core::ffi::c_void
                         } else {
                             _memcpy_free(
@@ -4460,9 +4460,9 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                 patterns.items as *mut ::core::ffi::c_void,
                                 patterns.size.wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     } else {
-                        (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                        if patterns.items == &raw mut patterns.init_array as *mut Object {
                             memcpy(
                                 xmalloc(
                                     patterns
@@ -4479,7 +4479,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     }) as *mut Object;
                 } else {
                 };
@@ -4522,7 +4522,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                 let mut patlen_0: size_t = aucmd_span_pattern(pat_0, &raw mut pat_0);
                 while patlen_0 != 0 {
                     if patterns.size == patterns.capacity {
-                        patterns.capacity = (if patterns.capacity << 1 as ::core::ffi::c_int
+                        patterns.capacity = if patterns.capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
                                 .wrapping_div(
@@ -4543,7 +4543,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         patterns.items = (if patterns.capacity
                             == ::core::mem::size_of::<[Object; 16]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -4554,7 +4554,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                            if patterns.items == &raw mut patterns.init_array as *mut Object {
                                 patterns.items as *mut ::core::ffi::c_void
                             } else {
                                 _memcpy_free(
@@ -4563,9 +4563,9 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                     patterns.items as *mut ::core::ffi::c_void,
                                     patterns.size.wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                            if patterns.items == &raw mut patterns.init_array as *mut Object {
                                 memcpy(
                                     xmalloc(
                                         patterns
@@ -4582,7 +4582,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -4627,7 +4627,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
             };
         }
         if patterns.size == patterns.capacity {
-            patterns.capacity = (if patterns.capacity << 1 as ::core::ffi::c_int
+            patterns.capacity = if patterns.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
@@ -4644,7 +4644,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             patterns.items = (if patterns.capacity
                 == ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -4653,7 +4653,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                if patterns.items == &raw mut patterns.init_array as *mut Object {
                     patterns.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -4661,9 +4661,9 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                         patterns.items as *mut ::core::ffi::c_void,
                         patterns.size.wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             } else {
-                (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                if patterns.items == &raw mut patterns.init_array as *mut Object {
                     memcpy(
                         xmalloc(
                             patterns
@@ -4680,7 +4680,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             }) as *mut Object;
         } else {
         };
@@ -4699,7 +4699,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
     }
     if patterns.size == 0 as size_t && !fallback.is_null() {
         if patterns.size == patterns.capacity {
-            patterns.capacity = (if patterns.capacity << 1 as ::core::ffi::c_int
+            patterns.capacity = if patterns.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
@@ -4716,7 +4716,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             patterns.items = (if patterns.capacity
                 == ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -4725,7 +4725,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                if patterns.items == &raw mut patterns.init_array as *mut Object {
                     patterns.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -4733,9 +4733,9 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                         patterns.items as *mut ::core::ffi::c_void,
                         patterns.size.wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             } else {
-                (if patterns.items == &raw mut patterns.init_array as *mut Object {
+                if patterns.items == &raw mut patterns.init_array as *mut Object {
                     memcpy(
                         xmalloc(
                             patterns
@@ -4752,7 +4752,7 @@ unsafe extern "C" fn get_patterns_from_pattern_or_buf(
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             }) as *mut Object;
         } else {
         };

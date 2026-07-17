@@ -4577,7 +4577,7 @@ pub unsafe extern "C" fn nvim_set_hl_ns(mut ns_id: Integer, mut err: *mut Error)
     redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
 }
 #[no_mangle]
-pub unsafe extern "C" fn nvim_set_hl_ns_fast(mut ns_id: Integer, mut err: *mut Error) {
+pub unsafe extern "C" fn nvim_set_hl_ns_fast(mut ns_id: Integer, mut _err: *mut Error) {
     ns_hl_fast = ns_id as NS;
     hl_check_ns();
 }
@@ -4959,7 +4959,7 @@ unsafe extern "C" fn find_runtime_cb(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < num_fnames {
         if (*cookie).rv.size == (*cookie).rv.capacity {
-            (*cookie).rv.capacity = (if (*cookie).rv.capacity << 1 as ::core::ffi::c_int
+            (*cookie).rv.capacity = if (*cookie).rv.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
@@ -4976,7 +4976,7 @@ unsafe extern "C" fn find_runtime_cb(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             (*cookie).rv.items = (if (*cookie).rv.capacity
                 == ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -4985,7 +4985,7 @@ unsafe extern "C" fn find_runtime_cb(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if (*cookie).rv.items == &raw mut (*cookie).rv.init_array as *mut Object {
+                if (*cookie).rv.items == &raw mut (*cookie).rv.init_array as *mut Object {
                     (*cookie).rv.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -4996,9 +4996,9 @@ unsafe extern "C" fn find_runtime_cb(
                             .size
                             .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             } else {
-                (if (*cookie).rv.items == &raw mut (*cookie).rv.init_array as *mut Object {
+                if (*cookie).rv.items == &raw mut (*cookie).rv.init_array as *mut Object {
                     memcpy(
                         xmalloc(
                             (*cookie)
@@ -5020,7 +5020,7 @@ unsafe extern "C" fn find_runtime_cb(
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             }) as *mut Object;
         } else {
         };
@@ -5771,7 +5771,7 @@ pub unsafe extern "C" fn nvim_open_term(
     }
     return (*chan).id as Integer;
 }
-unsafe extern "C" fn term_read_pause(mut pause: bool, mut data: *mut ::core::ffi::c_void) {}
+unsafe extern "C" fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
 unsafe extern "C" fn term_write(
     mut buf: *const ::core::ffi::c_char,
     mut size: size_t,
@@ -5832,12 +5832,12 @@ unsafe extern "C" fn term_write(
     textlock -= 1;
 }
 unsafe extern "C" fn term_resize(
-    mut width: uint16_t,
-    mut height: uint16_t,
-    mut data: *mut ::core::ffi::c_void,
+    mut _width: uint16_t,
+    mut _height: uint16_t,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
 }
-unsafe extern "C" fn term_resume(mut data: *mut ::core::ffi::c_void) {}
+unsafe extern "C" fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
 unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
     let mut chan: *mut Channel = data as *mut Channel;
     terminal_destroy(&raw mut (*chan).term);
@@ -6350,7 +6350,7 @@ pub unsafe extern "C" fn nvim_set_client_info(
     mut methods: Dict,
     mut attributes: Dict,
     mut arena: *mut Arena,
-    mut err: *mut Error,
+    mut _err: *mut Error,
 ) {
     let mut info: Dict = Dict {
         size: 0 as size_t,
@@ -6480,7 +6480,7 @@ pub unsafe extern "C" fn nvim_get_chan_info(
     mut channel_id: uint64_t,
     mut chan: Integer,
     mut arena: *mut Arena,
-    mut err: *mut Error,
+    mut _err: *mut Error,
 ) -> Dict {
     if chan < 0 as Integer {
         return Dict {
@@ -6740,11 +6740,11 @@ pub unsafe extern "C" fn nvim_get_proc(
     a.capacity = 1 as size_t;
     a.items = &raw mut a__items as *mut Object;
     if a.size == a.capacity {
-        a.capacity = (if a.capacity != 0 {
+        a.capacity = if a.capacity != 0 {
             a.capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         a.items = xrealloc(
             a.items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<Object>().wrapping_mul(a.capacity),
@@ -6796,8 +6796,8 @@ pub unsafe extern "C" fn nvim_select_popupmenu_item(
     mut item: Integer,
     mut insert: Boolean,
     mut finish: Boolean,
-    mut opts: *mut KeyDict_empty,
-    mut err: *mut Error,
+    mut _opts: *mut KeyDict_empty,
+    mut _err: *mut Error,
 ) {
     if finish {
         insert = true_0 != 0;
@@ -6931,7 +6931,7 @@ pub unsafe extern "C" fn nvim_del_mark(mut name: String_0, mut err: *mut Error) 
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_mark(
     mut name: String_0,
-    mut opts: *mut KeyDict_empty,
+    mut _opts: *mut KeyDict_empty,
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Array {

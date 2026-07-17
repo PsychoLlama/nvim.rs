@@ -3833,11 +3833,11 @@ unsafe extern "C" fn block_insert(
                     .wrapping_add(spaces as size_t)
                     .wrapping_add(slen)
                     .wrapping_add(
-                        (if spaces > 0 as ::core::ffi::c_int && (*bdp).is_short == 0 {
+                        if spaces > 0 as ::core::ffi::c_int && (*bdp).is_short == 0 {
                             (ts_val - spaces) as size_t
                         } else {
                             0 as size_t
-                        }),
+                        },
                     )
                     .wrapping_add(count as size_t)
                     .wrapping_add(1 as size_t),
@@ -6929,7 +6929,7 @@ static mut opfunc_cb: Callback = Callback {
 };
 #[no_mangle]
 pub unsafe extern "C" fn did_set_operatorfunc(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     if option_set_callback_func(p_opfunc, &raw mut opfunc_cb) == FAIL {
         return &raw const e_invarg as *const ::core::ffi::c_char;

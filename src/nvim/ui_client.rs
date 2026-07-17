@@ -2036,7 +2036,7 @@ pub unsafe extern "C" fn ui_client_set_size(
 pub unsafe extern "C" fn ui_client_get_redraw_handler(
     mut name: *const ::core::ffi::c_char,
     mut name_len: size_t,
-    mut error: *mut Error,
+    mut _error: *mut Error,
 ) -> UIClientHandler {
     let mut hash: ::core::ffi::c_int = ui_client_handler_hash(name, name_len);
     if hash < 0 as ::core::ffi::c_int {
@@ -2049,9 +2049,9 @@ pub unsafe extern "C" fn ui_client_get_redraw_handler(
 }
 #[no_mangle]
 pub unsafe extern "C" fn handle_ui_client_redraw(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
+    mut _channel_id: uint64_t,
+    mut _args: Array,
+    mut _arena: *mut Arena,
     mut error: *mut Error,
 ) -> Object {
     api_set_error(
@@ -2139,7 +2139,7 @@ pub unsafe extern "C" fn ui_client_event_grid_resize(mut args: Array) {
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_grid_line(mut args: Array) -> ! {
+pub unsafe extern "C" fn ui_client_event_grid_line(mut _args: Array) -> ! {
     abort();
 }
 #[no_mangle]
@@ -2409,23 +2409,23 @@ pub unsafe extern "C" fn ui_client_event_mode_info_set(mut args: Array) {
     tui_mode_info_set(tui, arg_1 as bool, arg_2);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_update_menu(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_update_menu(mut _args: Array) {
     tui_update_menu(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_busy_start(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_busy_start(mut _args: Array) {
     tui_busy_start(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_busy_stop(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_busy_stop(mut _args: Array) {
     tui_busy_stop(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_mouse_on(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_mouse_on(mut _args: Array) {
     tui_mouse_on(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_mouse_off(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_mouse_off(mut _args: Array) {
     tui_mouse_off(tui);
 }
 #[no_mangle]
@@ -2455,19 +2455,19 @@ pub unsafe extern "C" fn ui_client_event_mode_change(mut args: Array) {
     tui_mode_change(tui, arg_1, arg_2);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_bell(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_bell(mut _args: Array) {
     tui_bell(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_visual_bell(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_visual_bell(mut _args: Array) {
     tui_visual_bell(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_flush(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_flush(mut _args: Array) {
     tui_flush(tui);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ui_client_event_suspend(mut args: Array) {
+pub unsafe extern "C" fn ui_client_event_suspend(mut _args: Array) {
     tui_suspend(tui);
 }
 #[no_mangle]

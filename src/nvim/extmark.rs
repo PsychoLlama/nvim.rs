@@ -1861,7 +1861,7 @@ pub unsafe extern "C" fn extmark_set(
     mut end_right_gravity: bool,
     mut no_undo: bool,
     mut invalidate: bool,
-    mut err: *mut Error,
+    mut _err: *mut Error,
 ) {
     let mut mark: MTKey = MTKey {
         pos: MTPos { row: 0, col: 0 },
@@ -2519,11 +2519,11 @@ unsafe extern "C" fn push_mark(
         }
     }
     if (*array).size == (*array).capacity {
-        (*array).capacity = (if (*array).capacity != 0 {
+        (*array).capacity = if (*array).capacity != 0 {
             (*array).capacity << 1 as ::core::ffi::c_int
         } else {
             8 as size_t
-        });
+        };
         (*array).items = xrealloc(
             (*array).items as *mut ::core::ffi::c_void,
             ::core::mem::size_of::<MTPair>().wrapping_mul((*array).capacity),
@@ -2765,11 +2765,11 @@ pub unsafe extern "C" fn extmark_splice_delete(
             undo.data.savepos = pos;
             undo.type_0 = kExtmarkSavePos;
             if (*uvp).size == (*uvp).capacity {
-                (*uvp).capacity = (if (*uvp).capacity != 0 {
+                (*uvp).capacity = if (*uvp).capacity != 0 {
                     (*uvp).capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*uvp).items = xrealloc(
                     (*uvp).items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<ExtmarkUndoObject>().wrapping_mul((*uvp).capacity),
@@ -3115,11 +3115,11 @@ pub unsafe extern "C" fn extmark_splice_impl(
             splice_0.new_col = new_col;
             splice_0.new_byte = new_byte;
             if (*uhp_0).uh_extmark.size == (*uhp_0).uh_extmark.capacity {
-                (*uhp_0).uh_extmark.capacity = (if (*uhp_0).uh_extmark.capacity != 0 {
+                (*uhp_0).uh_extmark.capacity = if (*uhp_0).uh_extmark.capacity != 0 {
                     (*uhp_0).uh_extmark.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*uhp_0).uh_extmark.items = xrealloc(
                     (*uhp_0).uh_extmark.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<ExtmarkUndoObject>()
@@ -3244,11 +3244,11 @@ pub unsafe extern "C" fn extmark_move_region(
         move_0.new_col = new_col as ::core::ffi::c_int;
         move_0.new_byte = new_byte;
         if (*uhp).uh_extmark.size == (*uhp).uh_extmark.capacity {
-            (*uhp).uh_extmark.capacity = (if (*uhp).uh_extmark.capacity != 0 {
+            (*uhp).uh_extmark.capacity = if (*uhp).uh_extmark.capacity != 0 {
                 (*uhp).uh_extmark.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             (*uhp).uh_extmark.items = xrealloc(
                 (*uhp).uh_extmark.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<ExtmarkUndoObject>()

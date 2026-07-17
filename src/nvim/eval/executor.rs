@@ -389,7 +389,7 @@ unsafe extern "C" fn tv_op_number(
 unsafe extern "C" fn tv_op_string(
     mut tv1: *mut typval_T,
     mut tv2: *const typval_T,
-    mut op: *const ::core::ffi::c_char,
+    mut _op: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if (*tv2).v_type as ::core::ffi::c_uint
         == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint

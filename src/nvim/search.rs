@@ -5851,7 +5851,7 @@ unsafe extern "C" fn update_search_stat(
 pub unsafe extern "C" fn f_searchcount(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut pos: pos_T = (*curwin).w_cursor;
     let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();

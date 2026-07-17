@@ -3373,7 +3373,7 @@ unsafe extern "C" fn channel_destroy_early(mut chan: *mut Channel) {
         },
     );
 }
-unsafe extern "C" fn close_cb(mut stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
+unsafe extern "C" fn close_cb(mut _stream: *mut Stream, mut data: *mut ::core::ffi::c_void) {
     channel_decref(data as *mut Channel);
 }
 #[no_mangle]
@@ -3791,7 +3791,7 @@ pub unsafe extern "C" fn on_job_stderr(
     return on_channel_output(stream, chan, buf, count, eof, &raw mut (*chan).on_stderr);
 }
 unsafe extern "C" fn on_channel_output(
-    mut stream: *mut RStream,
+    mut _stream: *mut RStream,
     mut chan: *mut Channel,
     mut buf: *const ::core::ffi::c_char,
     mut count: size_t,
@@ -3919,7 +3919,7 @@ pub unsafe extern "C" fn channel_reader_callbacks(
     };
 }
 unsafe extern "C" fn channel_proc_exit_cb(
-    mut proc: *mut Proc,
+    mut _proc: *mut Proc,
     mut status: ::core::ffi::c_int,
     mut data: *mut ::core::ffi::c_void,
 ) {
@@ -3948,7 +3948,7 @@ unsafe extern "C" fn channel_proc_exit_cb(
     channel_decref(chan);
 }
 unsafe extern "C" fn channel_proc_state_cb(
-    mut proc: *mut Proc,
+    mut _proc: *mut Proc,
     mut suspended: bool,
     mut data: *mut ::core::ffi::c_void,
 ) {
@@ -4463,11 +4463,11 @@ pub unsafe extern "C" fn channel_all_info(mut arena: *mut Arena) -> Array {
     while __i < channels.set.h.n_keys {
         id = *channels.set.keys.offset(__i as isize);
         if ids.size == ids.capacity {
-            ids.capacity = (if ids.capacity != 0 {
+            ids.capacity = if ids.capacity != 0 {
                 ids.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             ids.items = xrealloc(
                 ids.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<int64_t>().wrapping_mul(ids.capacity),

@@ -3342,13 +3342,13 @@ unsafe extern "C" fn read_limits(
     if *regparse as ::core::ffi::c_int != '}' as ::core::ffi::c_int {
         semsg(
             gettext(b"E554: Syntax error in %s{...}\0".as_ptr() as *const ::core::ffi::c_char),
-            (if reg_magic as ::core::ffi::c_uint
+            if reg_magic as ::core::ffi::c_uint
                 == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
-            }),
+            },
         );
         rc_did_emsg = true_0 != 0;
         return FAIL;
@@ -4316,7 +4316,7 @@ pub unsafe extern "C" fn regtilde(
     return newsub;
 }
 unsafe extern "C" fn fill_submatch_list(
-    mut argc: ::core::ffi::c_int,
+    mut _argc: ::core::ffi::c_int,
     mut argv: *mut typval_T,
     mut argskip: ::core::ffi::c_int,
     mut fp: *mut ufunc_T,
@@ -6560,13 +6560,13 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                         &raw const e_invalid_item_in_str_brackets
                                             as *const ::core::ffi::c_char,
                                     ),
-                                    (if reg_magic as ::core::ffi::c_uint
+                                    if reg_magic as ::core::ffi::c_uint
                                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
                                         b"\0".as_ptr() as *const ::core::ffi::c_char
                                     } else {
                                         b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                    }),
+                                    },
                                 );
                                 rc_did_emsg = true_0 != 0;
                                 return NULL_0 as *mut uint8_t;
@@ -6585,13 +6585,13 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                         &raw const e_invalid_item_in_str_brackets
                                             as *const ::core::ffi::c_char,
                                     ),
-                                    (if reg_magic as ::core::ffi::c_uint
+                                    if reg_magic as ::core::ffi::c_uint
                                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
                                         b"\0".as_ptr() as *const ::core::ffi::c_char
                                     } else {
                                         b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                    }),
+                                    },
                                 );
                                 rc_did_emsg = true_0 != 0;
                                 return NULL_0 as *mut uint8_t;
@@ -6607,7 +6607,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                             semsg(
                                 gettext(b"E64: %s%c follows nothing\0".as_ptr()
                                     as *const ::core::ffi::c_char),
-                                (if (if c == '*' as ::core::ffi::c_int {
+                                if (if c == '*' as ::core::ffi::c_int {
                                     (reg_magic as ::core::ffi::c_uint
                                         >= MAGIC_ON as ::core::ffi::c_int as ::core::ffi::c_uint)
                                         as ::core::ffi::c_int
@@ -6620,7 +6620,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                 } else {
                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                }),
+                                },
                                 c,
                             );
                             rc_did_emsg = true_0 != 0;
@@ -6677,14 +6677,14 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                 &raw const e_invalid_item_in_str_brackets
                                                     as *const ::core::ffi::c_char,
                                             ),
-                                            (if reg_magic as ::core::ffi::c_uint
+                                            if reg_magic as ::core::ffi::c_uint
                                                 == MAGIC_ALL as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
                                             {
                                                 b"\0".as_ptr() as *const ::core::ffi::c_char
                                             } else {
                                                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                            }),
+                                            },
                                         );
                                         rc_did_emsg = true_0 != 0;
                                         return NULL_0 as *mut uint8_t;
@@ -6746,14 +6746,14 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     &raw const e_invalid_item_in_str_brackets
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                (if reg_magic as ::core::ffi::c_uint
+                                                if reg_magic as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                 {
                                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                                 } else {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                }),
+                                                },
                                             );
                                             rc_did_emsg = true_0 != 0;
                                             return NULL_0 as *mut uint8_t;
@@ -6806,14 +6806,14 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     &raw const e_invalid_item_in_str_brackets
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                (if reg_magic as ::core::ffi::c_uint
+                                                if reg_magic as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                 {
                                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                                 } else {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                }),
+                                                },
                                             );
                                             rc_did_emsg = true_0 != 0;
                                             return NULL_0 as *mut uint8_t;
@@ -6836,7 +6836,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                         &raw const e_missing_sb
                                                             as *const ::core::ffi::c_char,
                                                     ),
-                                                    (if reg_magic as ::core::ffi::c_uint
+                                                    if reg_magic as ::core::ffi::c_uint
                                                         == MAGIC_ALL as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint
                                                     {
@@ -6844,7 +6844,7 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     } else {
                                                         b"\\\0".as_ptr()
                                                             as *const ::core::ffi::c_char
-                                                    }),
+                                                    },
                                                 );
                                                 rc_did_emsg = true_0 != 0;
                                                 return NULL_0 as *mut uint8_t;
@@ -6872,14 +6872,14 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                     &raw const e_empty_sb
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                (if reg_magic as ::core::ffi::c_uint
+                                                if reg_magic as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                 {
                                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                                 } else {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                }),
+                                                },
                                             );
                                             rc_did_emsg = true_0 != 0;
                                             return NULL_0 as *mut uint8_t;
@@ -6934,14 +6934,14 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                         .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                (if reg_magic as ::core::ffi::c_uint
+                                                if reg_magic as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                 {
                                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                                 } else {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                }),
+                                                },
                                             );
                                             rc_did_emsg = true_0 != 0;
                                             return NULL_0 as *mut uint8_t;
@@ -7065,14 +7065,14 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                                                 b"E71: Invalid character after %s%%\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
                                             ),
-                                            (if reg_magic as ::core::ffi::c_uint
+                                            if reg_magic as ::core::ffi::c_uint
                                                 == MAGIC_ALL as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
                                             {
                                                 b"\0".as_ptr() as *const ::core::ffi::c_char
                                             } else {
                                                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                            }),
+                                            },
                                         );
                                         rc_did_emsg = true_0 != 0;
                                         return NULL_0 as *mut uint8_t;
@@ -7457,13 +7457,13 @@ unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t
                         if reg_strict != 0 {
                             semsg(
                                 gettext(&raw const e_missingbracket as *const ::core::ffi::c_char),
-                                (if reg_magic as ::core::ffi::c_uint
+                                if reg_magic as ::core::ffi::c_uint
                                     > MAGIC_OFF as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                 } else {
                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                }),
+                                },
                             );
                             rc_did_emsg = true_0 != 0;
                             return NULL_0 as *mut uint8_t;
@@ -7602,13 +7602,13 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
                     gettext(
                         &raw const e_invalid_character_after_str_at as *const ::core::ffi::c_char,
                     ),
-                    (if reg_magic as ::core::ffi::c_uint
+                    if reg_magic as ::core::ffi::c_uint
                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         b"\0".as_ptr() as *const ::core::ffi::c_char
                     } else {
                         b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                    }),
+                    },
                 );
                 rc_did_emsg = true_0 != 0;
                 return NULL_0 as *mut uint8_t;
@@ -7646,13 +7646,13 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
                     semsg(
                         gettext(b"E60: Too many complex %s{...}s\0".as_ptr()
                             as *const ::core::ffi::c_char),
-                        (if reg_magic as ::core::ffi::c_uint
+                        if reg_magic as ::core::ffi::c_uint
                             == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                         {
                             b"\0".as_ptr() as *const ::core::ffi::c_char
                         } else {
                             b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                        }),
+                        },
                     );
                     rc_did_emsg = true_0 != 0;
                     return NULL_0 as *mut uint8_t;
@@ -7673,26 +7673,26 @@ unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_
         if peekchr() == '*' as ::core::ffi::c_int - 256 as ::core::ffi::c_int {
             semsg(
                 gettext(b"E61: Nested %s*\0".as_ptr() as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     >= MAGIC_ON as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return NULL_0 as *mut uint8_t;
         }
         semsg(
             gettext(b"E62: Nested %s%c\0".as_ptr() as *const ::core::ffi::c_char),
-            (if reg_magic as ::core::ffi::c_uint
+            if reg_magic as ::core::ffi::c_uint
                 == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 b"\0".as_ptr() as *const ::core::ffi::c_char
             } else {
                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
-            }),
+            },
             no_Magic(peekchr()),
         );
         rc_did_emsg = true_0 != 0;
@@ -7822,13 +7822,13 @@ unsafe extern "C" fn reg(
         if regnpar >= NSUBEXP as ::core::ffi::c_int {
             semsg(
                 gettext(b"E51: Too many %s(\0".as_ptr() as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return NULL_0 as *mut uint8_t;
@@ -7891,26 +7891,26 @@ unsafe extern "C" fn reg(
         } else if paren == REG_NPAREN {
             semsg(
                 gettext(&raw const e_unmatchedpp as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return NULL_0 as *mut uint8_t;
         } else {
             semsg(
                 gettext(&raw const e_unmatchedp as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return NULL_0 as *mut uint8_t;
@@ -7919,13 +7919,13 @@ unsafe extern "C" fn reg(
         if curchr == ')' as ::core::ffi::c_int - 256 as ::core::ffi::c_int {
             semsg(
                 gettext(&raw const e_unmatchedpar as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return NULL_0 as *mut uint8_t;
@@ -19551,14 +19551,14 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                         .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                (if reg_magic as ::core::ffi::c_uint
+                                                if reg_magic as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                 {
                                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                                 } else {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                }),
+                                                },
                                             );
                                             rc_did_emsg = true_0 != 0;
                                             return FAIL;
@@ -19648,7 +19648,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                         &raw const e_missing_sb
                                                             as *const ::core::ffi::c_char,
                                                     ),
-                                                    (if reg_magic as ::core::ffi::c_uint
+                                                    if reg_magic as ::core::ffi::c_uint
                                                         == MAGIC_ALL as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint
                                                     {
@@ -19656,7 +19656,7 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     } else {
                                                         b"\\\0".as_ptr()
                                                             as *const ::core::ffi::c_char
-                                                    }),
+                                                    },
                                                 );
                                                 rc_did_emsg = true_0 != 0;
                                                 return FAIL;
@@ -19673,14 +19673,14 @@ unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     &raw const e_empty_sb
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                (if reg_magic as ::core::ffi::c_uint
+                                                if reg_magic as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
                                                 {
                                                     b"\0".as_ptr() as *const ::core::ffi::c_char
                                                 } else {
                                                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                }),
+                                                },
                                             );
                                             rc_did_emsg = true_0 != 0;
                                             return FAIL;
@@ -20974,26 +20974,26 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
         if paren == REG_NPAREN {
             semsg(
                 gettext(&raw const e_unmatchedpp as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return FAIL;
         } else {
             semsg(
                 gettext(&raw const e_unmatchedp as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return FAIL;
@@ -21002,13 +21002,13 @@ unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core::ffi::c_in
         if peekchr() == ')' as ::core::ffi::c_int - 256 as ::core::ffi::c_int {
             semsg(
                 gettext(&raw const e_unmatchedpar as *const ::core::ffi::c_char),
-                (if reg_magic as ::core::ffi::c_uint
+                if reg_magic as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     b"\0".as_ptr() as *const ::core::ffi::c_char
                 } else {
                     b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                }),
+                },
             );
             rc_did_emsg = true_0 != 0;
             return FAIL;
@@ -21110,9 +21110,9 @@ static mut empty: Frag_T = Frag_T {
     out: ::core::ptr::null_mut::<Ptrlist>(),
 };
 unsafe extern "C" fn st_error(
-    mut postfix: *mut ::core::ffi::c_int,
-    mut end: *mut ::core::ffi::c_int,
-    mut p: *mut ::core::ffi::c_int,
+    mut _postfix: *mut ::core::ffi::c_int,
+    mut _end: *mut ::core::ffi::c_int,
+    mut _p: *mut ::core::ffi::c_int,
 ) {
     emsg(gettext(
         b"E874: (NFA) Could not pop the stack!\0".as_ptr() as *const ::core::ffi::c_char

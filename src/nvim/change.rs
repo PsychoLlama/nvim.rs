@@ -3652,11 +3652,11 @@ pub unsafe extern "C" fn open_line(
     let mut do_cindent: bool = p_paste == 0
         && ((*curbuf).b_p_cin != 0 || *(*curbuf).b_p_inde as ::core::ffi::c_int != NUL)
         && in_cinkeys(
-            (if dir == FORWARD as ::core::ffi::c_int {
+            if dir == FORWARD as ::core::ffi::c_int {
                 KEY_OPEN_FORW as ::core::ffi::c_int
             } else {
                 KEY_OPEN_BACK as ::core::ffi::c_int
-            }),
+            },
             ' ' as ::core::ffi::c_int,
             linewhite((*curwin).w_cursor.lnum),
         ) as ::core::ffi::c_int

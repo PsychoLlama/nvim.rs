@@ -3323,11 +3323,11 @@ pub unsafe extern "C" fn shell_build_argv(
 ) -> *mut *mut ::core::ffi::c_char {
     let mut argc: size_t = tokenize(p_sh, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
         .wrapping_add(
-            (if !cmd.is_null() {
+            if !cmd.is_null() {
                 tokenize(p_shcf, ::core::ptr::null_mut::<*mut ::core::ffi::c_char>())
             } else {
                 0 as size_t
-            }),
+            },
         );
     let mut rv: *mut *mut ::core::ffi::c_char = xmalloc(
         argc.wrapping_add(4 as size_t)
@@ -3751,11 +3751,11 @@ unsafe extern "C" fn do_os_system(
                 } else {
                     *nread = buf.size;
                     if buf.size == buf.capacity {
-                        buf.capacity = (if buf.capacity != 0 {
+                        buf.capacity = if buf.capacity != 0 {
                             buf.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         buf.items = xrealloc(
                             buf.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<::core::ffi::c_char>()
@@ -3789,11 +3789,11 @@ unsafe extern "C" fn do_os_system(
     return exitcode;
 }
 unsafe extern "C" fn system_data_cb(
-    mut stream: *mut RStream,
+    mut _stream: *mut RStream,
     mut buf: *const ::core::ffi::c_char,
     mut count: size_t,
     mut data: *mut ::core::ffi::c_void,
-    mut eof: bool,
+    mut _eof: bool,
 ) -> size_t {
     let mut dbuf: *mut StringBuilder = data as *mut StringBuilder;
     if count > 0 as size_t {
@@ -4069,7 +4069,7 @@ unsafe extern "C" fn out_data_cb(
     mut stream: *mut RStream,
     mut ptr: *const ::core::ffi::c_char,
     mut count: size_t,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
     mut eof: bool,
 ) -> size_t {
     if count > 0 as size_t && out_data_decide_throttle(count) as ::core::ffi::c_int != 0 {
@@ -4198,7 +4198,7 @@ unsafe extern "C" fn write_output(
 }
 unsafe extern "C" fn shell_write_cb(
     mut stream: *mut Stream,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
     mut status: ::core::ffi::c_int,
 ) {
     if status != 0 {

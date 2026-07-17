@@ -585,7 +585,7 @@ pub unsafe extern "C" fn mpack_object_inner(
                         } else {
                             if !container.is_null() {
                                 if stack.size == stack.capacity {
-                                    stack.capacity = (if stack.capacity << 1 as ::core::ffi::c_int
+                                    stack.capacity = if stack.capacity << 1 as ::core::ffi::c_int
                                         > ::core::mem::size_of::<[ContainerStackItem; 2]>()
                                             .wrapping_div(
                                                 ::core::mem::size_of::<ContainerStackItem>(),
@@ -616,7 +616,7 @@ pub unsafe extern "C" fn mpack_object_inner(
                                                     as ::core::ffi::c_int
                                                     as size_t,
                                             )
-                                    });
+                                    };
                                     stack.items = (if stack.capacity
                                         == ::core::mem::size_of::<[ContainerStackItem; 2]>()
                                             .wrapping_div(
@@ -632,7 +632,7 @@ pub unsafe extern "C" fn mpack_object_inner(
                                                     as ::core::ffi::c_int
                                                     as usize,
                                             ) {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut ContainerStackItem
                                         {
                                             stack.items as *mut ::core::ffi::c_void
@@ -646,9 +646,9 @@ pub unsafe extern "C" fn mpack_object_inner(
                                                 >(
                                                 )),
                                             )
-                                        })
+                                        }
                                     } else {
-                                        (if stack.items
+                                        if stack.items
                                             == &raw mut stack.init_array as *mut ContainerStackItem
                                         {
                                             memcpy(
@@ -668,7 +668,7 @@ pub unsafe extern "C" fn mpack_object_inner(
                                                     ::core::mem::size_of::<ContainerStackItem>(),
                                                 ),
                                             )
-                                        })
+                                        }
                                     })
                                         as *mut ContainerStackItem;
                                 } else {

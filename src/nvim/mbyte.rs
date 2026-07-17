@@ -6208,7 +6208,7 @@ unsafe extern "C" fn iconv_string(
 pub unsafe extern "C" fn f_iconv(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut vimconv: vimconv_T = vimconv_T {
         vc_type: 0,
@@ -6576,8 +6576,8 @@ unsafe extern "C" fn tv_nr_compare(
 #[no_mangle]
 pub unsafe extern "C" fn f_setcellwidths(
     mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _rettv: *mut typval_T,
+    mut _fptr: EvalFuncData,
 ) {
     let mut ptrs: *mut *const list_T = ::core::ptr::null_mut::<*const list_T>();
     let mut item: ::core::ffi::c_int = 0;
@@ -6741,9 +6741,9 @@ pub unsafe extern "C" fn f_setcellwidths(
 }
 #[no_mangle]
 pub unsafe extern "C" fn f_getcellwidths(
-    mut argvars: *mut typval_T,
+    mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     tv_list_alloc_ret(rettv, cw_table_size as ptrdiff_t);
     let mut i: size_t = 0 as size_t;
@@ -6760,7 +6760,7 @@ pub unsafe extern "C" fn f_getcellwidths(
 pub unsafe extern "C" fn f_charclass(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_string_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
         || (*argvars.offset(0 as ::core::ffi::c_int as isize))
@@ -6778,7 +6778,7 @@ pub unsafe extern "C" fn f_charclass(
 }
 #[no_mangle]
 pub unsafe extern "C" fn get_encoding_name(
-    mut xp: *mut expand_T,
+    mut _xp: *mut expand_T,
     mut idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     if idx

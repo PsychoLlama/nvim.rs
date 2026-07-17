@@ -804,7 +804,7 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn default_malloc(
     mut size: size_t,
-    mut allocdata: *mut ::core::ffi::c_void,
+    mut _allocdata: *mut ::core::ffi::c_void,
 ) -> *mut ::core::ffi::c_void {
     let mut ptr: *mut ::core::ffi::c_void = xmalloc(size);
     if !ptr.is_null() {
@@ -814,7 +814,7 @@ unsafe extern "C" fn default_malloc(
 }
 unsafe extern "C" fn default_free(
     mut ptr: *mut ::core::ffi::c_void,
-    mut allocdata: *mut ::core::ffi::c_void,
+    mut _allocdata: *mut ::core::ffi::c_void,
 ) {
     xfree(ptr);
 }

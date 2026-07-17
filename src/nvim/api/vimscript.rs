@@ -2780,11 +2780,11 @@ pub unsafe extern "C" fn nvim_exec2(
     }
     if (*opts).output {
         if result.size == result.capacity {
-            result.capacity = (if result.capacity != 0 {
+            result.capacity = if result.capacity != 0 {
                 result.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             result.items = xrealloc(
                 result.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<KeyValuePair>().wrapping_mul(result.capacity),
@@ -3461,7 +3461,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
         data: C2Rust_Unnamed { boolean: false },
     };
     if ast_conv_stack.size == ast_conv_stack.capacity {
-        ast_conv_stack.capacity = (if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
+        ast_conv_stack.capacity = if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
                 .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
                 .wrapping_div(
@@ -3478,7 +3478,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         ast_conv_stack.items = (if ast_conv_stack.capacity
             == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
                 .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
@@ -3487,7 +3487,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         .wrapping_rem(::core::mem::size_of::<ExprASTConvStackItem>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if ast_conv_stack.items
+            if ast_conv_stack.items
                 == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
             {
                 ast_conv_stack.items as *mut ::core::ffi::c_void
@@ -3500,9 +3500,9 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         .size
                         .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
                 )
-            })
+            }
         } else {
-            (if ast_conv_stack.items
+            if ast_conv_stack.items
                 == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
             {
                 memcpy(
@@ -3523,7 +3523,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
                 )
-            })
+            }
         }) as *mut ExprASTConvStackItem;
     } else {
     };
@@ -3634,7 +3634,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                     },
                 };
                 if ast_conv_stack.size == ast_conv_stack.capacity {
-                    ast_conv_stack.capacity = (if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
+                    ast_conv_stack.capacity = if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
                             .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
                             .wrapping_div(
@@ -3653,7 +3653,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     ast_conv_stack.items = (if ast_conv_stack.capacity
                         == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
                             .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
@@ -3663,7 +3663,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if ast_conv_stack.items
+                        if ast_conv_stack.items
                             == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
                         {
                             ast_conv_stack.items as *mut ::core::ffi::c_void
@@ -3676,9 +3676,9 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
                             )
-                        })
+                        }
                     } else {
-                        (if ast_conv_stack.items
+                        if ast_conv_stack.items
                             == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
                         {
                             memcpy(
@@ -3701,7 +3701,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
                             )
-                        })
+                        }
                     }) as *mut ExprASTConvStackItem;
                 } else {
                 };
@@ -3715,7 +3715,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                 };
             } else if !(*node).next.is_null() {
                 if ast_conv_stack.size == ast_conv_stack.capacity {
-                    ast_conv_stack.capacity = (if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
+                    ast_conv_stack.capacity = if ast_conv_stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
                             .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
                             .wrapping_div(
@@ -3734,7 +3734,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     ast_conv_stack.items = (if ast_conv_stack.capacity
                         == ::core::mem::size_of::<[ExprASTConvStackItem; 16]>()
                             .wrapping_div(::core::mem::size_of::<ExprASTConvStackItem>())
@@ -3744,7 +3744,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if ast_conv_stack.items
+                        if ast_conv_stack.items
                             == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
                         {
                             ast_conv_stack.items as *mut ::core::ffi::c_void
@@ -3757,9 +3757,9 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
                             )
-                        })
+                        }
                     } else {
-                        (if ast_conv_stack.items
+                        if ast_conv_stack.items
                             == &raw mut ast_conv_stack.init_array as *mut ExprASTConvStackItem
                         {
                             memcpy(
@@ -3782,7 +3782,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<ExprASTConvStackItem>()),
                             )
-                        })
+                        }
                     }) as *mut ExprASTConvStackItem;
                 } else {
                 };

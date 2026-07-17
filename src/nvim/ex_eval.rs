@@ -3270,7 +3270,7 @@ pub unsafe extern "C" fn rewind_conditionals(
     }
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_endfunction(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_endfunction(mut _eap: *mut exarg_T) {
     semsg(
         gettext(&raw const e_str_not_inside_function as *const ::core::ffi::c_char),
         b":endfunction\0".as_ptr() as *const ::core::ffi::c_char,

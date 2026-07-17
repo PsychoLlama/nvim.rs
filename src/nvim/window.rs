@@ -10759,11 +10759,11 @@ pub unsafe extern "C" fn win_setheight(mut height: ::core::ffi::c_int) {
 pub unsafe extern "C" fn win_setheight_win(mut height: ::core::ffi::c_int, mut win: *mut win_T) {
     height = if height
         > (if win == curwin {
-            (if p_wmh > 1 as OptInt {
+            if p_wmh > 1 as OptInt {
                 p_wmh
             } else {
                 1 as OptInt
-            })
+            }
         } else {
             p_wmh
         }) as ::core::ffi::c_int
@@ -10772,11 +10772,11 @@ pub unsafe extern "C" fn win_setheight_win(mut height: ::core::ffi::c_int, mut w
         height
     } else {
         (if win == curwin {
-            (if p_wmh > 1 as OptInt {
+            if p_wmh > 1 as OptInt {
                 p_wmh
             } else {
                 1 as OptInt
-            })
+            }
         } else {
             p_wmh
         }) as ::core::ffi::c_int
@@ -10878,11 +10878,11 @@ unsafe extern "C" fn frame_setheight(mut curfrp: *mut frame_T, mut height: ::cor
             room_reserved = 0 as ::core::ffi::c_int;
         }
         if take > 0 as ::core::ffi::c_int && room_cmdline > 0 as ::core::ffi::c_int {
-            room_cmdline = (if room_cmdline < take {
+            room_cmdline = if room_cmdline < take {
                 room_cmdline
             } else {
                 take
-            });
+            };
             take -= room_cmdline;
             (*topframe).fr_height += room_cmdline;
         }
@@ -11081,7 +11081,7 @@ unsafe extern "C" fn frame_setwidth(mut curfrp: *mut frame_T, mut width: ::core:
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_winminheight(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut first: bool = true_0 != 0;
     while p_wmh > 0 as OptInt {
@@ -11100,7 +11100,7 @@ pub unsafe extern "C" fn did_set_winminheight(
 }
 #[no_mangle]
 pub unsafe extern "C" fn did_set_winminwidth(
-    mut args: *mut optset_T,
+    mut _args: *mut optset_T,
 ) -> *const ::core::ffi::c_char {
     let mut first: bool = true_0 != 0;
     while p_wmw > 0 as OptInt {

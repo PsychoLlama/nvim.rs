@@ -5226,11 +5226,11 @@ unsafe extern "C" fn on_osc(
         }
         if command == 8 as ::core::ffi::c_int {
             if (*term).termrequest_buffer.size == (*term).termrequest_buffer.capacity {
-                (*term).termrequest_buffer.capacity = (if (*term).termrequest_buffer.capacity != 0 {
+                (*term).termrequest_buffer.capacity = if (*term).termrequest_buffer.capacity != 0 {
                     (*term).termrequest_buffer.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 (*term).termrequest_buffer.items = xrealloc(
                     (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>()
@@ -6666,11 +6666,11 @@ pub unsafe extern "C" fn terminal_receive(
                             != '\r' as ::core::ffi::c_int)
             {
                 if crlf_data.size == crlf_data.capacity {
-                    crlf_data.capacity = (if crlf_data.capacity != 0 {
+                    crlf_data.capacity = if crlf_data.capacity != 0 {
                         crlf_data.capacity << 1 as ::core::ffi::c_int
                     } else {
                         8 as size_t
-                    });
+                    };
                     crlf_data.items = xrealloc(
                         crlf_data.items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of::<::core::ffi::c_char>()
@@ -6683,11 +6683,11 @@ pub unsafe extern "C" fn terminal_receive(
                 *crlf_data.items.offset(c2rust_fresh8 as isize) = '\r' as ::core::ffi::c_char;
             }
             if crlf_data.size == crlf_data.capacity {
-                crlf_data.capacity = (if crlf_data.capacity != 0 {
+                crlf_data.capacity = if crlf_data.capacity != 0 {
                     crlf_data.capacity << 1 as ::core::ffi::c_int
                 } else {
                     8 as size_t
-                });
+                };
                 crlf_data.items = xrealloc(
                     crlf_data.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(crlf_data.capacity),
@@ -6763,7 +6763,7 @@ unsafe extern "C" fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> :
 #[no_mangle]
 pub unsafe extern "C" fn terminal_get_line_attributes(
     mut term: *mut Terminal,
-    mut wp: *mut win_T,
+    mut _wp: *mut win_T,
     mut linenr: ::core::ffi::c_int,
     mut term_attrs: *mut ::core::ffi::c_int,
 ) {
@@ -7015,8 +7015,8 @@ unsafe extern "C" fn term_moverect(
 }
 unsafe extern "C" fn term_movecursor(
     mut new_pos: VTermPos,
-    mut old_pos: VTermPos,
-    mut visible: ::core::ffi::c_int,
+    mut _old_pos: VTermPos,
+    mut _visible: ::core::ffi::c_int,
     mut data: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     let mut term: *mut Terminal = data as *mut Terminal;
@@ -7147,13 +7147,13 @@ unsafe extern "C" fn term_settermprop(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn term_bell(mut data: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
+unsafe extern "C" fn term_bell(mut _data: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
     vim_beep(kOptBoFlagTerm as ::core::ffi::c_int as ::core::ffi::c_uint);
     return 1 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn term_theme(
     mut dark: *mut bool,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
 ) -> ::core::ffi::c_int {
     *dark = *p_bg as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
     return 1 as ::core::ffi::c_int;
@@ -8165,8 +8165,8 @@ unsafe extern "C" fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible:
     ui_mode_info_set();
 }
 unsafe extern "C" fn refresh_timer_cb(
-    mut watcher: *mut TimeWatcher,
-    mut data: *mut ::core::ffi::c_void,
+    mut _watcher: *mut TimeWatcher,
+    mut _data: *mut ::core::ffi::c_void,
 ) {
     refresh_pending = false_0 != 0;
     if exiting {
@@ -8190,7 +8190,7 @@ unsafe extern "C" fn refresh_timer_cb(
     to_refresh = SET_INIT;
     unblock_autocmds();
 }
-unsafe extern "C" fn refresh_size(mut term: *mut Terminal, mut buf: *mut buf_T) -> bool {
+unsafe extern "C" fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T) -> bool {
     if !(*term).pending.resize || (*term).closed as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }

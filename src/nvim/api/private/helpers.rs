@@ -2516,7 +2516,7 @@ pub unsafe extern "C" fn string_to_array(
             line_len,
         );
         if ret.size == ret.capacity {
-            ret.capacity = (if ret.capacity << 1 as ::core::ffi::c_int
+            ret.capacity = if ret.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
@@ -2533,7 +2533,7 @@ pub unsafe extern "C" fn string_to_array(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             ret.items = (if ret.capacity
                 == ::core::mem::size_of::<[Object; 16]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -2542,7 +2542,7 @@ pub unsafe extern "C" fn string_to_array(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if ret.items == &raw mut ret.init_array as *mut Object {
+                if ret.items == &raw mut ret.init_array as *mut Object {
                     ret.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -2550,9 +2550,9 @@ pub unsafe extern "C" fn string_to_array(
                         ret.items as *mut ::core::ffi::c_void,
                         ret.size.wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             } else {
-                (if ret.items == &raw mut ret.init_array as *mut Object {
+                if ret.items == &raw mut ret.init_array as *mut Object {
                     memcpy(
                         xmalloc(ret.capacity.wrapping_mul(::core::mem::size_of::<Object>())),
                         ret.items as *const ::core::ffi::c_void,
@@ -2563,7 +2563,7 @@ pub unsafe extern "C" fn string_to_array(
                         ret.items as *mut ::core::ffi::c_void,
                         ret.capacity.wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             }) as *mut Object;
         } else {
         };
@@ -2578,7 +2578,7 @@ pub unsafe extern "C" fn string_to_array(
                 || crlf as ::core::ffi::c_int != 0 && *end as ::core::ffi::c_int == CAR)
         {
             if ret.size == ret.capacity {
-                ret.capacity = (if ret.capacity << 1 as ::core::ffi::c_int
+                ret.capacity = if ret.capacity << 1 as ::core::ffi::c_int
                     > ::core::mem::size_of::<[Object; 16]>()
                         .wrapping_div(::core::mem::size_of::<Object>())
                         .wrapping_div(
@@ -2595,7 +2595,7 @@ pub unsafe extern "C" fn string_to_array(
                                 .wrapping_rem(::core::mem::size_of::<Object>())
                                 == 0) as ::core::ffi::c_int as size_t,
                         )
-                });
+                };
                 ret.items = (if ret.capacity
                     == ::core::mem::size_of::<[Object; 16]>()
                         .wrapping_div(::core::mem::size_of::<Object>())
@@ -2604,7 +2604,7 @@ pub unsafe extern "C" fn string_to_array(
                                 .wrapping_rem(::core::mem::size_of::<Object>())
                                 == 0) as ::core::ffi::c_int as usize,
                         ) {
-                    (if ret.items == &raw mut ret.init_array as *mut Object {
+                    if ret.items == &raw mut ret.init_array as *mut Object {
                         ret.items as *mut ::core::ffi::c_void
                     } else {
                         _memcpy_free(
@@ -2612,9 +2612,9 @@ pub unsafe extern "C" fn string_to_array(
                             ret.items as *mut ::core::ffi::c_void,
                             ret.size.wrapping_mul(::core::mem::size_of::<Object>()),
                         )
-                    })
+                    }
                 } else {
-                    (if ret.items == &raw mut ret.init_array as *mut Object {
+                    if ret.items == &raw mut ret.init_array as *mut Object {
                         memcpy(
                             xmalloc(ret.capacity.wrapping_mul(::core::mem::size_of::<Object>())),
                             ret.items as *const ::core::ffi::c_void,
@@ -2625,7 +2625,7 @@ pub unsafe extern "C" fn string_to_array(
                             ret.items as *mut ::core::ffi::c_void,
                             ret.capacity.wrapping_mul(::core::mem::size_of::<Object>()),
                         )
-                    })
+                    }
                 }) as *mut Object;
             } else {
             };
@@ -2929,11 +2929,11 @@ pub unsafe extern "C" fn copy_array(mut array: Array, mut arena: *mut Arena) -> 
     let mut i: size_t = 0 as size_t;
     while i < array.size {
         if rv.size == rv.capacity {
-            rv.capacity = (if rv.capacity != 0 {
+            rv.capacity = if rv.capacity != 0 {
                 rv.capacity << 1 as ::core::ffi::c_int
             } else {
                 8 as size_t
-            });
+            };
             rv.items = xrealloc(
                 rv.items as *mut ::core::ffi::c_void,
                 ::core::mem::size_of::<Object>().wrapping_mul(rv.capacity),
@@ -3226,11 +3226,11 @@ pub unsafe extern "C" fn parse_hl_msg(
                         0 as ::core::ffi::c_int
                     };
                     if hl_msg.size == hl_msg.capacity {
-                        hl_msg.capacity = (if hl_msg.capacity != 0 {
+                        hl_msg.capacity = if hl_msg.capacity != 0 {
                             hl_msg.capacity << 1 as ::core::ffi::c_int
                         } else {
                             8 as size_t
-                        });
+                        };
                         hl_msg.items = xrealloc(
                             hl_msg.items as *mut ::core::ffi::c_void,
                             ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(hl_msg.capacity),

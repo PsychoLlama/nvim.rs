@@ -583,7 +583,7 @@ unsafe extern "C" fn typval_cbuf_to_obj(
 #[inline(always)]
 unsafe extern "C" fn typval_encode_list_start(edata: *mut EncodedData, len: size_t) {
     if (*edata).stack.size == (*edata).stack.capacity {
-        (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+        (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[Object; 2]>()
                 .wrapping_div(::core::mem::size_of::<Object>())
                 .wrapping_div(
@@ -600,7 +600,7 @@ unsafe extern "C" fn typval_encode_list_start(edata: *mut EncodedData, len: size
                         .wrapping_rem(::core::mem::size_of::<Object>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         (*edata).stack.items = (if (*edata).stack.capacity
             == ::core::mem::size_of::<[Object; 2]>()
                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -609,7 +609,7 @@ unsafe extern "C" fn typval_encode_list_start(edata: *mut EncodedData, len: size
                         .wrapping_rem(::core::mem::size_of::<Object>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
+            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
                 (*edata).stack.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -620,9 +620,9 @@ unsafe extern "C" fn typval_encode_list_start(edata: *mut EncodedData, len: size
                         .size
                         .wrapping_mul(::core::mem::size_of::<Object>()),
                 )
-            })
+            }
         } else {
-            (if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
+            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
                 memcpy(
                     xmalloc(
                         (*edata)
@@ -644,7 +644,7 @@ unsafe extern "C" fn typval_encode_list_start(edata: *mut EncodedData, len: size
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<Object>()),
                 )
-            })
+            }
         }) as *mut Object;
     } else {
     };
@@ -729,7 +729,7 @@ unsafe extern "C" fn typval_encode_list_end(edata: *mut EncodedData) {
 #[inline(always)]
 unsafe extern "C" fn typval_encode_dict_start(edata: *mut EncodedData, len: size_t) {
     if (*edata).stack.size == (*edata).stack.capacity {
-        (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+        (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
             > ::core::mem::size_of::<[Object; 2]>()
                 .wrapping_div(::core::mem::size_of::<Object>())
                 .wrapping_div(
@@ -746,7 +746,7 @@ unsafe extern "C" fn typval_encode_dict_start(edata: *mut EncodedData, len: size
                         .wrapping_rem(::core::mem::size_of::<Object>())
                         == 0) as ::core::ffi::c_int as size_t,
                 )
-        });
+        };
         (*edata).stack.items = (if (*edata).stack.capacity
             == ::core::mem::size_of::<[Object; 2]>()
                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -755,7 +755,7 @@ unsafe extern "C" fn typval_encode_dict_start(edata: *mut EncodedData, len: size
                         .wrapping_rem(::core::mem::size_of::<Object>())
                         == 0) as ::core::ffi::c_int as usize,
                 ) {
-            (if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
+            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
                 (*edata).stack.items as *mut ::core::ffi::c_void
             } else {
                 _memcpy_free(
@@ -766,9 +766,9 @@ unsafe extern "C" fn typval_encode_dict_start(edata: *mut EncodedData, len: size
                         .size
                         .wrapping_mul(::core::mem::size_of::<Object>()),
                 )
-            })
+            }
         } else {
-            (if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
+            if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
                 memcpy(
                     xmalloc(
                         (*edata)
@@ -790,7 +790,7 @@ unsafe extern "C" fn typval_encode_dict_start(edata: *mut EncodedData, len: size
                         .capacity
                         .wrapping_mul(::core::mem::size_of::<Object>()),
                 )
-            })
+            }
         }) as *mut Object;
     } else {
     };
@@ -939,16 +939,16 @@ pub static mut _typval_encode_object_nodict_var: *const dict_T = ::core::ptr::nu
 #[inline(always)]
 unsafe extern "C" fn _typval_encode_object_check_self_reference(
     edata: *mut EncodedData,
-    val: *mut ::core::ffi::c_void,
+    _val: *mut ::core::ffi::c_void,
     val_copyID: *mut ::core::ffi::c_int,
-    mpstack: *const MPConvStack,
+    _mpstack: *const MPConvStack,
     copyID: ::core::ffi::c_int,
-    conv_type: MPConvStackValType,
-    objname: *const ::core::ffi::c_char,
+    _conv_type: MPConvStackValType,
+    _objname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     if *val_copyID == copyID {
         if (*edata).stack.size == (*edata).stack.capacity {
-            (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+            (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
                 > ::core::mem::size_of::<[Object; 2]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
                     .wrapping_div(
@@ -965,7 +965,7 @@ unsafe extern "C" fn _typval_encode_object_check_self_reference(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as size_t,
                     )
-            });
+            };
             (*edata).stack.items = (if (*edata).stack.capacity
                 == ::core::mem::size_of::<[Object; 2]>()
                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -974,7 +974,7 @@ unsafe extern "C" fn _typval_encode_object_check_self_reference(
                             .wrapping_rem(::core::mem::size_of::<Object>())
                             == 0) as ::core::ffi::c_int as usize,
                     ) {
-                (if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
+                if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
                     (*edata).stack.items as *mut ::core::ffi::c_void
                 } else {
                     _memcpy_free(
@@ -986,9 +986,9 @@ unsafe extern "C" fn _typval_encode_object_check_self_reference(
                             .size
                             .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             } else {
-                (if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
+                if (*edata).stack.items == &raw mut (*edata).stack.init_array as *mut Object {
                     memcpy(
                         xmalloc(
                             (*edata)
@@ -1010,7 +1010,7 @@ unsafe extern "C" fn _typval_encode_object_check_self_reference(
                             .capacity
                             .wrapping_mul(::core::mem::size_of::<Object>()),
                     )
-                })
+                }
             }) as *mut Object;
         } else {
         };
@@ -1028,7 +1028,7 @@ unsafe extern "C" fn _typval_encode_object_check_self_reference(
 unsafe extern "C" fn _typval_encode_object_convert_one_value(
     edata: *mut EncodedData,
     mpstack: *mut MPConvStack,
-    cur_mpsv: *mut MPConvStackVal,
+    _cur_mpsv: *mut MPConvStackVal,
     tv: *mut typval_T,
     copyID: ::core::ffi::c_int,
     objname: *const ::core::ffi::c_char,
@@ -1053,7 +1053,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     }
                 };
                 if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
@@ -1072,7 +1072,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*edata).stack.items = (if (*edata).stack.capacity
                         == ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -1082,7 +1082,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1096,9 +1096,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
@@ -1122,7 +1122,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     }) as *mut Object;
                 } else {
                 };
@@ -1133,7 +1133,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
             }
             1 => {
                 if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
@@ -1152,7 +1152,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*edata).stack.items = (if (*edata).stack.capacity
                         == ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -1162,7 +1162,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1176,9 +1176,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
@@ -1202,7 +1202,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     }) as *mut Object;
                 } else {
                 };
@@ -1217,7 +1217,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
             }
             6 => {
                 if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
@@ -1236,7 +1236,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*edata).stack.items = (if (*edata).stack.capacity
                         == ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -1246,7 +1246,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1260,9 +1260,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
@@ -1286,7 +1286,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     }) as *mut Object;
                 } else {
                 };
@@ -1303,7 +1303,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                 let len__0: size_t = tv_blob_len((*tv).vval.v_blob) as size_t;
                 let blob_: *const blob_T = (*tv).vval.v_blob;
                 if (*edata).stack.size == (*edata).stack.capacity {
-                    (*edata).stack.capacity = (if (*edata).stack.capacity << 1 as ::core::ffi::c_int
+                    (*edata).stack.capacity = if (*edata).stack.capacity << 1 as ::core::ffi::c_int
                         > ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
                             .wrapping_div(
@@ -1322,7 +1322,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as size_t,
                             )
-                    });
+                    };
                     (*edata).stack.items = (if (*edata).stack.capacity
                         == ::core::mem::size_of::<[Object; 2]>()
                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -1332,7 +1332,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     == 0) as ::core::ffi::c_int
                                     as usize,
                             ) {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1346,9 +1346,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .size
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     } else {
-                        (if (*edata).stack.items
+                        if (*edata).stack.items
                             == &raw mut (*edata).stack.init_array as *mut Object
                         {
                             memcpy(
@@ -1372,7 +1372,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                     .capacity
                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                             )
-                        })
+                        }
                     }) as *mut Object;
                 } else {
                 };
@@ -1399,7 +1399,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     && (*fp).uf_flags & FC_LUAREF != 0
                 {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1421,7 +1421,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1432,7 +1432,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1446,9 +1446,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -1472,7 +1472,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -1486,7 +1486,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     };
                 } else {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1508,7 +1508,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1519,7 +1519,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1533,9 +1533,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -1559,7 +1559,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -1578,7 +1578,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                 } else {
                     partial_name(pt)
                 };
-                let prefix: *const ::core::ffi::c_char = if !fun.is_null()
+                let _prefix: *const ::core::ffi::c_char = if !fun.is_null()
                     && !pt.is_null()
                     && (*pt).pt_name.is_null()
                     && (*fun.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
@@ -1600,7 +1600,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     && (*fp_0).uf_flags & FC_LUAREF != 0
                 {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1622,7 +1622,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1633,7 +1633,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1647,9 +1647,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -1673,7 +1673,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -1687,7 +1687,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     };
                 } else {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1709,7 +1709,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1720,7 +1720,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1734,9 +1734,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -1760,7 +1760,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -1777,7 +1777,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     || tv_list_len((*tv).vval.v_list) == 0 as ::core::ffi::c_int
                 {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1799,7 +1799,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -1810,7 +1810,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -1824,9 +1824,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -1850,7 +1850,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -1896,7 +1896,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                         }
                     };
                     if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                                 .wrapping_div(
@@ -1917,7 +1917,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*mpstack).items = (if (*mpstack).capacity
                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -1928,7 +1928,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 (*mpstack).items as *mut ::core::ffi::c_void
@@ -1941,9 +1941,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 memcpy(
@@ -1964,7 +1964,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         }) as *mut MPConvStackVal;
                     } else {
                     };
@@ -1986,7 +1986,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
             7 => match (*tv).vval.v_bool as ::core::ffi::c_uint {
                 1 | 0 => {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -2008,7 +2008,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -2019,7 +2019,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -2033,9 +2033,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -2059,7 +2059,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -2078,7 +2078,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
             8 => match (*tv).vval.v_special as ::core::ffi::c_uint {
                 0 => {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -2100,7 +2100,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -2111,7 +2111,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -2125,9 +2125,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -2151,7 +2151,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -2169,7 +2169,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                     || (*(*tv).vval.v_dict).dv_hashtab.ht_used == 0 as size_t
                 {
                     if (*edata).stack.size == (*edata).stack.capacity {
-                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                        (*edata).stack.capacity = if (*edata).stack.capacity
                             << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -2191,7 +2191,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*edata).stack.items = (if (*edata).stack.capacity
                             == ::core::mem::size_of::<[Object; 2]>()
                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -2202,7 +2202,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -2216,9 +2216,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*edata).stack.items
+                            if (*edata).stack.items
                                 == &raw mut (*edata).stack.init_array as *mut Object
                             {
                                 memcpy(
@@ -2242,7 +2242,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<Object>()),
                                 )
-                            })
+                            }
                         }) as *mut Object;
                     } else {
                     };
@@ -2319,7 +2319,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                 match i as MessagePackType as ::core::ffi::c_uint {
                                     0 => {
                                         if (*edata).stack.size == (*edata).stack.capacity {
-                                            (*edata).stack.capacity = (if (*edata).stack.capacity
+                                            (*edata).stack.capacity = if (*edata).stack.capacity
                                                 << 1 as ::core::ffi::c_int
                                                 > ::core::mem::size_of::<[Object; 2]>()
                                                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -2347,7 +2347,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                             as ::core::ffi::c_int
                                                             as size_t,
                                                     )
-                                            });
+                                            };
                                             (*edata).stack.items = (if (*edata).stack.capacity
                                                 == ::core::mem::size_of::<[Object; 2]>()
                                                     .wrapping_div(::core::mem::size_of::<Object>())
@@ -2361,7 +2361,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                             as ::core::ffi::c_int
                                                             as usize,
                                                     ) {
-                                                (if (*edata).stack.items
+                                                if (*edata).stack.items
                                                     == &raw mut (*edata).stack.init_array
                                                         as *mut Object
                                                 {
@@ -2377,9 +2377,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                             ::core::mem::size_of::<Object>(),
                                                         ),
                                                     )
-                                                })
+                                                }
                                             } else {
-                                                (if (*edata).stack.items
+                                                if (*edata).stack.items
                                                     == &raw mut (*edata).stack.init_array
                                                         as *mut Object
                                                 {
@@ -2403,7 +2403,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                             ::core::mem::size_of::<Object>(),
                                                         ),
                                                     )
-                                                })
+                                                }
                                             })
                                                 as *mut Object;
                                         } else {
@@ -2423,7 +2423,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             if (*edata).stack.size == (*edata).stack.capacity {
-                                                (*edata).stack.capacity = (if (*edata)
+                                                (*edata).stack.capacity = if (*edata)
                                                     .stack
                                                     .capacity
                                                     << 1 as ::core::ffi::c_int
@@ -2458,7 +2458,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                                 (*edata).stack.items = (if (*edata).stack.capacity
                                                     == ::core::mem::size_of::<[Object; 2]>()
                                                         .wrapping_div(
@@ -2474,7 +2474,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as usize,
                                                         ) {
-                                                    (if (*edata).stack.items
+                                                    if (*edata).stack.items
                                                         == &raw mut (*edata).stack.init_array
                                                             as *mut Object
                                                     {
@@ -2491,9 +2491,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 ::core::mem::size_of::<Object>(),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if (*edata).stack.items
+                                                    if (*edata).stack.items
                                                         == &raw mut (*edata).stack.init_array
                                                             as *mut Object
                                                     {
@@ -2523,7 +2523,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 ::core::mem::size_of::<Object>(),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut Object;
                                             } else {
@@ -2614,7 +2614,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 if (*edata).stack.size
                                                                     == (*edata).stack.capacity
                                                                 {
-                                                                    (*edata).stack.capacity = (if (*edata).stack.capacity
+                                                                    (*edata).stack.capacity = if (*edata).stack.capacity
                                                                         << 1 as ::core::ffi::c_int
                                                                         > ::core::mem::size_of::<[Object; 2]>()
                                                                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -2633,7 +2633,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
                                                                                     as ::core::ffi::c_int as size_t,
                                                                             )
-                                                                    });
+                                                                    };
                                                                     (*edata).stack.items = (if (*edata).stack.capacity
                                                                         == ::core::mem::size_of::<[Object; 2]>()
                                                                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -2643,7 +2643,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     as ::core::ffi::c_int as usize,
                                                                             )
                                                                     {
-                                                                        (if (*edata).stack.items
+                                                                        if (*edata).stack.items
                                                                             == &raw mut (*edata).stack.init_array as *mut Object
                                                                         {
                                                                             (*edata).stack.items as *mut ::core::ffi::c_void
@@ -2657,9 +2657,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     .size
                                                                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                                                                             )
-                                                                        })
+                                                                        }
                                                                     } else {
-                                                                        (if (*edata).stack.items
+                                                                        if (*edata).stack.items
                                                                             == &raw mut (*edata).stack.init_array as *mut Object
                                                                         {
                                                                             memcpy(
@@ -2683,7 +2683,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     .capacity
                                                                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                                                                             )
-                                                                        })
+                                                                        }
                                                                     }) as *mut Object;
                                                                 } else {
                                                                 };
@@ -2705,7 +2705,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 if (*edata).stack.size
                                                                     == (*edata).stack.capacity
                                                                 {
-                                                                    (*edata).stack.capacity = (if (*edata).stack.capacity
+                                                                    (*edata).stack.capacity = if (*edata).stack.capacity
                                                                         << 1 as ::core::ffi::c_int
                                                                         > ::core::mem::size_of::<[Object; 2]>()
                                                                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -2724,7 +2724,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     .wrapping_rem(::core::mem::size_of::<Object>()) == 0)
                                                                                     as ::core::ffi::c_int as size_t,
                                                                             )
-                                                                    });
+                                                                    };
                                                                     (*edata).stack.items = (if (*edata).stack.capacity
                                                                         == ::core::mem::size_of::<[Object; 2]>()
                                                                             .wrapping_div(::core::mem::size_of::<Object>())
@@ -2734,7 +2734,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     as ::core::ffi::c_int as usize,
                                                                             )
                                                                     {
-                                                                        (if (*edata).stack.items
+                                                                        if (*edata).stack.items
                                                                             == &raw mut (*edata).stack.init_array as *mut Object
                                                                         {
                                                                             (*edata).stack.items as *mut ::core::ffi::c_void
@@ -2748,9 +2748,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     .size
                                                                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                                                                             )
-                                                                        })
+                                                                        }
                                                                     } else {
-                                                                        (if (*edata).stack.items
+                                                                        if (*edata).stack.items
                                                                             == &raw mut (*edata).stack.init_array as *mut Object
                                                                         {
                                                                             memcpy(
@@ -2774,7 +2774,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                                     .capacity
                                                                                     .wrapping_mul(::core::mem::size_of::<Object>()),
                                                                             )
-                                                                        })
+                                                                        }
                                                                     }) as *mut Object;
                                                                 } else {
                                                                 };
@@ -2808,7 +2808,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             if (*edata).stack.size == (*edata).stack.capacity {
-                                                (*edata).stack.capacity = (if (*edata)
+                                                (*edata).stack.capacity = if (*edata)
                                                     .stack
                                                     .capacity
                                                     << 1 as ::core::ffi::c_int
@@ -2843,7 +2843,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                                 (*edata).stack.items = (if (*edata).stack.capacity
                                                     == ::core::mem::size_of::<[Object; 2]>()
                                                         .wrapping_div(
@@ -2859,7 +2859,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as usize,
                                                         ) {
-                                                    (if (*edata).stack.items
+                                                    if (*edata).stack.items
                                                         == &raw mut (*edata).stack.init_array
                                                             as *mut Object
                                                     {
@@ -2876,9 +2876,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 ::core::mem::size_of::<Object>(),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if (*edata).stack.items
+                                                    if (*edata).stack.items
                                                         == &raw mut (*edata).stack.init_array
                                                             as *mut Object
                                                     {
@@ -2908,7 +2908,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 ::core::mem::size_of::<Object>(),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut Object;
                                             } else {
@@ -2956,7 +2956,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 };
                                                 if (*edata).stack.size == (*edata).stack.capacity {
                                                     (*edata).stack.capacity =
-                                                        (if (*edata).stack.capacity
+                                                        if (*edata).stack.capacity
                                                             << 1 as ::core::ffi::c_int
                                                             > ::core::mem::size_of::<[Object; 2]>()
                                                                 .wrapping_div(
@@ -3000,7 +3000,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         as ::core::ffi::c_int
                                                                         as size_t,
                                                                 )
-                                                        });
+                                                        };
                                                     (*edata).stack.items =
                                                         (if (*edata).stack.capacity
                                                             == ::core::mem::size_of::<[Object; 2]>()
@@ -3023,7 +3023,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         as usize,
                                                                 )
                                                         {
-                                                            (if (*edata).stack.items
+                                                            if (*edata).stack.items
                                                                 == &raw mut (*edata)
                                                                     .stack
                                                                     .init_array
@@ -3050,9 +3050,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         } else {
-                                                            (if (*edata).stack.items
+                                                            if (*edata).stack.items
                                                                 == &raw mut (*edata)
                                                                     .stack
                                                                     .init_array
@@ -3085,7 +3085,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         })
                                                             as *mut Object;
                                                 } else {
@@ -3146,7 +3146,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 }
                                             };
                                             if (*mpstack).size == (*mpstack).capacity {
-                                                (*mpstack).capacity = (if (*mpstack).capacity
+                                                (*mpstack).capacity = if (*mpstack).capacity
                                                     << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
@@ -3184,7 +3184,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                                 (*mpstack).items = (if (*mpstack).capacity
                                                     == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
@@ -3203,7 +3203,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 as ::core::ffi::c_int
                                                                 as usize,
                                                         ) {
-                                                    (if (*mpstack).items
+                                                    if (*mpstack).items
                                                         == &raw mut (*mpstack).init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -3222,9 +3222,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if (*mpstack).items
+                                                    if (*mpstack).items
                                                         == &raw mut (*mpstack).init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -3257,7 +3257,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut MPConvStackVal;
                                             } else {
@@ -3293,7 +3293,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                             {
                                                 if (*edata).stack.size == (*edata).stack.capacity {
                                                     (*edata).stack.capacity =
-                                                        (if (*edata).stack.capacity
+                                                        if (*edata).stack.capacity
                                                             << 1 as ::core::ffi::c_int
                                                             > ::core::mem::size_of::<[Object; 2]>()
                                                                 .wrapping_div(
@@ -3337,7 +3337,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         as ::core::ffi::c_int
                                                                         as size_t,
                                                                 )
-                                                        });
+                                                        };
                                                     (*edata).stack.items =
                                                         (if (*edata).stack.capacity
                                                             == ::core::mem::size_of::<[Object; 2]>()
@@ -3360,7 +3360,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         as usize,
                                                                 )
                                                         {
-                                                            (if (*edata).stack.items
+                                                            if (*edata).stack.items
                                                                 == &raw mut (*edata)
                                                                     .stack
                                                                     .init_array
@@ -3387,9 +3387,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         } else {
-                                                            (if (*edata).stack.items
+                                                            if (*edata).stack.items
                                                                 == &raw mut (*edata)
                                                                     .stack
                                                                     .init_array
@@ -3422,7 +3422,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         })
                                                             as *mut Object;
                                                 } else {
@@ -3509,7 +3509,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                 };
                                                 if (*mpstack).size == (*mpstack).capacity {
                                                     (*mpstack).capacity =
-                                                        (if (*mpstack).capacity
+                                                        if (*mpstack).capacity
                                                             << 1 as ::core::ffi::c_int
                                                             > ::core::mem::size_of::<
                                                                 [MPConvStackVal; 8],
@@ -3559,7 +3559,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                     as ::core::ffi::c_int
                                                                     as size_t,
                                                             )
-                                                        });
+                                                        };
                                                     (*mpstack).items =
                                                         (if (*mpstack).capacity
                                                             == ::core::mem::size_of::<
@@ -3585,7 +3585,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                     as usize,
                                                             )
                                                         {
-                                                            (if (*mpstack).items
+                                                            if (*mpstack).items
                                                                 == &raw mut (*mpstack).init_array
                                                                     as *mut MPConvStackVal
                                                             {
@@ -3605,9 +3605,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         ),
                                                                     ),
                                                                 )
-                                                            })
+                                                            }
                                                         } else {
-                                                            (if (*mpstack).items
+                                                            if (*mpstack).items
                                                                 == &raw mut (*mpstack).init_array
                                                                     as *mut MPConvStackVal
                                                             {
@@ -3635,7 +3635,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         })
                                                             as *mut MPConvStackVal;
                                                 } else {
@@ -3696,7 +3696,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                             ) {
                                                 if (*edata).stack.size == (*edata).stack.capacity {
                                                     (*edata).stack.capacity =
-                                                        (if (*edata).stack.capacity
+                                                        if (*edata).stack.capacity
                                                             << 1 as ::core::ffi::c_int
                                                             > ::core::mem::size_of::<[Object; 2]>()
                                                                 .wrapping_div(
@@ -3740,7 +3740,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         as ::core::ffi::c_int
                                                                         as size_t,
                                                                 )
-                                                        });
+                                                        };
                                                     (*edata).stack.items =
                                                         (if (*edata).stack.capacity
                                                             == ::core::mem::size_of::<[Object; 2]>()
@@ -3763,7 +3763,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                         as usize,
                                                                 )
                                                         {
-                                                            (if (*edata).stack.items
+                                                            if (*edata).stack.items
                                                                 == &raw mut (*edata)
                                                                     .stack
                                                                     .init_array
@@ -3790,9 +3790,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         } else {
-                                                            (if (*edata).stack.items
+                                                            if (*edata).stack.items
                                                                 == &raw mut (*edata)
                                                                     .stack
                                                                     .init_array
@@ -3825,7 +3825,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                                                             ),
                                                                         ),
                                                                 )
-                                                            })
+                                                            }
                                                         })
                                                             as *mut Object;
                                                 } else {
@@ -3882,7 +3882,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                         }
                     };
                     if (*mpstack).size == (*mpstack).capacity {
-                        (*mpstack).capacity = (if (*mpstack).capacity << 1 as ::core::ffi::c_int
+                        (*mpstack).capacity = if (*mpstack).capacity << 1 as ::core::ffi::c_int
                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
                                 .wrapping_div(
@@ -3903,7 +3903,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as size_t,
                                 )
-                        });
+                        };
                         (*mpstack).items = (if (*mpstack).capacity
                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                 .wrapping_div(::core::mem::size_of::<MPConvStackVal>())
@@ -3914,7 +3914,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         as ::core::ffi::c_int
                                         as usize,
                                 ) {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 (*mpstack).items as *mut ::core::ffi::c_void
@@ -3927,9 +3927,9 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .size
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         } else {
-                            (if (*mpstack).items
+                            if (*mpstack).items
                                 == &raw mut (*mpstack).init_array as *mut MPConvStackVal
                             {
                                 memcpy(
@@ -3950,7 +3950,7 @@ unsafe extern "C" fn _typval_encode_object_convert_one_value(
                                         .capacity
                                         .wrapping_mul(::core::mem::size_of::<MPConvStackVal>()),
                                 )
-                            })
+                            }
                         }) as *mut MPConvStackVal;
                     } else {
                     };
@@ -4078,7 +4078,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                 }
                             };
                             if (*edata).stack.size == (*edata).stack.capacity {
-                                (*edata).stack.capacity = (if (*edata).stack.capacity
+                                (*edata).stack.capacity = if (*edata).stack.capacity
                                     << 1 as ::core::ffi::c_int
                                     > ::core::mem::size_of::<[Object; 2]>()
                                         .wrapping_div(::core::mem::size_of::<Object>())
@@ -4100,7 +4100,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                 as ::core::ffi::c_int
                                                 as size_t,
                                         )
-                                });
+                                };
                                 (*edata).stack.items = (if (*edata).stack.capacity
                                     == ::core::mem::size_of::<[Object; 2]>()
                                         .wrapping_div(::core::mem::size_of::<Object>())
@@ -4111,7 +4111,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                 as ::core::ffi::c_int
                                                 as usize,
                                         ) {
-                                    (if (*edata).stack.items
+                                    if (*edata).stack.items
                                         == &raw mut (*edata).stack.init_array as *mut Object
                                     {
                                         (*edata).stack.items as *mut ::core::ffi::c_void
@@ -4125,9 +4125,9 @@ unsafe extern "C" fn encode_vim_to_object(
                                                 .size
                                                 .wrapping_mul(::core::mem::size_of::<Object>()),
                                         )
-                                    })
+                                    }
                                 } else {
-                                    (if (*edata).stack.items
+                                    if (*edata).stack.items
                                         == &raw mut (*edata).stack.init_array as *mut Object
                                     {
                                         memcpy(
@@ -4151,7 +4151,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                 .capacity
                                                 .wrapping_mul(::core::mem::size_of::<Object>()),
                                         )
-                                    })
+                                    }
                                 })
                                     as *mut Object;
                             } else {
@@ -4222,7 +4222,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                 if !pt.is_null() && (*pt).pt_argc > 0 as ::core::ffi::c_int {
                                     typval_encode_list_start(edata, (*pt).pt_argc as size_t);
                                     if mpstack.size == mpstack.capacity {
-                                        mpstack.capacity = (if mpstack.capacity
+                                        mpstack.capacity = if mpstack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                 .wrapping_div(
@@ -4254,7 +4254,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         as ::core::ffi::c_int
                                                         as size_t,
                                                 )
-                                        });
+                                        };
                                         mpstack.items = (if mpstack.capacity
                                             == ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                 .wrapping_div(
@@ -4270,7 +4270,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         as ::core::ffi::c_int
                                                         as usize,
                                                 ) {
-                                            (if mpstack.items
+                                            if mpstack.items
                                                 == &raw mut mpstack.init_array
                                                     as *mut MPConvStackVal
                                             {
@@ -4285,9 +4285,9 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         ::core::mem::size_of::<MPConvStackVal>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         } else {
-                                            (if mpstack.items
+                                            if mpstack.items
                                                 == &raw mut mpstack.init_array
                                                     as *mut MPConvStackVal
                                             {
@@ -4307,7 +4307,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         ::core::mem::size_of::<MPConvStackVal>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         })
                                             as *mut MPConvStackVal;
                                     } else {
@@ -4342,7 +4342,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                 }
                                 if (*dict).dv_hashtab.ht_used == 0 as size_t {
                                     if (*edata).stack.size == (*edata).stack.capacity {
-                                        (*edata).stack.capacity = (if (*edata).stack.capacity
+                                        (*edata).stack.capacity = if (*edata).stack.capacity
                                             << 1 as ::core::ffi::c_int
                                             > ::core::mem::size_of::<[Object; 2]>()
                                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -4368,7 +4368,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         as ::core::ffi::c_int
                                                         as size_t,
                                                 )
-                                        });
+                                        };
                                         (*edata).stack.items = (if (*edata).stack.capacity
                                             == ::core::mem::size_of::<[Object; 2]>()
                                                 .wrapping_div(::core::mem::size_of::<Object>())
@@ -4381,7 +4381,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         as ::core::ffi::c_int
                                                         as usize,
                                                 ) {
-                                            (if (*edata).stack.items
+                                            if (*edata).stack.items
                                                 == &raw mut (*edata).stack.init_array as *mut Object
                                             {
                                                 (*edata).stack.items as *mut ::core::ffi::c_void
@@ -4396,9 +4396,9 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         ::core::mem::size_of::<Object>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         } else {
-                                            (if (*edata).stack.items
+                                            if (*edata).stack.items
                                                 == &raw mut (*edata).stack.init_array as *mut Object
                                             {
                                                 memcpy(
@@ -4419,7 +4419,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                         ::core::mem::size_of::<Object>(),
                                                     ),
                                                 )
-                                            })
+                                            }
                                         })
                                             as *mut Object;
                                     } else {
@@ -4475,7 +4475,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                         };
                                         if mpstack.size == mpstack.capacity {
                                             mpstack.capacity =
-                                                (if mpstack.capacity << 1 as ::core::ffi::c_int
+                                                if mpstack.capacity << 1 as ::core::ffi::c_int
                                                     > ::core::mem::size_of::<[MPConvStackVal; 8]>()
                                                         .wrapping_div(::core::mem::size_of::<
                                                             MPConvStackVal,
@@ -4513,7 +4513,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                                 as ::core::ffi::c_int
                                                                 as size_t,
                                                         )
-                                                });
+                                                };
                                             mpstack.items =
                                                 (if mpstack.capacity
                                                     == ::core::mem::size_of::<[MPConvStackVal; 8]>()
@@ -4534,7 +4534,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                                 as usize,
                                                         )
                                                 {
-                                                    (if mpstack.items
+                                                    if mpstack.items
                                                         == &raw mut mpstack.init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -4553,9 +4553,9 @@ unsafe extern "C" fn encode_vim_to_object(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 } else {
-                                                    (if mpstack.items
+                                                    if mpstack.items
                                                         == &raw mut mpstack.init_array
                                                             as *mut MPConvStackVal
                                                     {
@@ -4586,7 +4586,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                                                 ),
                                                             ),
                                                         )
-                                                    })
+                                                    }
                                                 })
                                                     as *mut MPConvStackVal;
                                         } else {

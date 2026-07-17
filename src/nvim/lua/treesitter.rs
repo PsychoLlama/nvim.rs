@@ -2211,8 +2211,8 @@ unsafe extern "C" fn load_language_from_object(
 }
 unsafe extern "C" fn load_language_from_wasm(
     mut L: *mut lua_State,
-    mut path: *const ::core::ffi::c_char,
-    mut lang_name: *const ::core::ffi::c_char,
+    mut _path: *const ::core::ffi::c_char,
+    mut _lang_name: *const ::core::ffi::c_char,
 ) -> *const TSLanguage {
     luaL_error(L, b"Not supported\0".as_ptr() as *const ::core::ffi::c_char);
     return ::core::ptr::null::<TSLanguage>();
@@ -2554,7 +2554,7 @@ unsafe extern "C" fn parser_tostring(mut L: *mut lua_State) -> ::core::ffi::c_in
 }
 unsafe extern "C" fn input_cb(
     mut payload: *mut ::core::ffi::c_void,
-    mut byte_index: uint32_t,
+    mut _byte_index: uint32_t,
     mut position: TSPoint,
     mut bytes_read: *mut uint32_t,
 ) -> *const ::core::ffi::c_char {

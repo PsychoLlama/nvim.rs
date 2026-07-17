@@ -3992,11 +3992,11 @@ pub unsafe extern "C" fn get_local_additions() {
     api_clear_error(&raw mut err);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_exusage(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_exusage(mut _eap: *mut exarg_T) {
     do_cmdline_cmd(b"help ex-cmd-index\0".as_ptr() as *const ::core::ffi::c_char);
 }
 #[no_mangle]
-pub unsafe extern "C" fn ex_viusage(mut eap: *mut exarg_T) {
+pub unsafe extern "C" fn ex_viusage(mut _eap: *mut exarg_T) {
     do_cmdline_cmd(b"help normal-index\0".as_ptr() as *const ::core::ffi::c_char);
 }
 unsafe extern "C" fn helptags_one(

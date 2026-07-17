@@ -672,7 +672,7 @@ unsafe extern "C" fn filter_map_one(
 unsafe extern "C" fn filter_map_dict(
     mut d: *mut dict_T,
     mut filtermap: filtermap_T,
-    mut func_name: *const ::core::ffi::c_char,
+    mut _func_name: *const ::core::ffi::c_char,
     mut arg_errmsg: *const ::core::ffi::c_char,
     mut expr: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -980,7 +980,7 @@ unsafe extern "C" fn filter_map_string(
 unsafe extern "C" fn filter_map_list(
     mut l: *mut list_T,
     mut filtermap: filtermap_T,
-    mut func_name: *const ::core::ffi::c_char,
+    mut _func_name: *const ::core::ffi::c_char,
     mut arg_errmsg: *const ::core::ffi::c_char,
     mut expr: *mut typval_T,
     mut rettv: *mut typval_T,
@@ -1217,7 +1217,7 @@ unsafe extern "C" fn filter_map(
 pub unsafe extern "C" fn f_filter(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     filter_map(argvars, rettv, FILTERMAP_FILTER);
 }
@@ -1225,7 +1225,7 @@ pub unsafe extern "C" fn f_filter(
 pub unsafe extern "C" fn f_map(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     filter_map(argvars, rettv, FILTERMAP_MAP);
 }
@@ -1233,7 +1233,7 @@ pub unsafe extern "C" fn f_map(
 pub unsafe extern "C" fn f_mapnew(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     filter_map(argvars, rettv, FILTERMAP_MAPNEW);
 }
@@ -1241,7 +1241,7 @@ pub unsafe extern "C" fn f_mapnew(
 pub unsafe extern "C" fn f_foreach(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     filter_map(argvars, rettv, FILTERMAP_FOREACH);
 }
@@ -1249,7 +1249,7 @@ pub unsafe extern "C" fn f_foreach(
 pub unsafe extern "C" fn f_add(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = 1 as varnumber_T;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -1384,7 +1384,7 @@ unsafe extern "C" fn count_dict(
 pub unsafe extern "C" fn f_count(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut n: varnumber_T = 0 as varnumber_T;
     let mut ic: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1678,7 +1678,7 @@ unsafe extern "C" fn extend(
 pub unsafe extern "C" fn f_extend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut errmsg: *mut ::core::ffi::c_char =
         b"extend() argument\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
@@ -1688,7 +1688,7 @@ pub unsafe extern "C" fn f_extend(
 pub unsafe extern "C" fn f_extendnew(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut errmsg: *mut ::core::ffi::c_char = b"extendnew() argument\0".as_ptr()
         as *const ::core::ffi::c_char
@@ -1699,7 +1699,7 @@ pub unsafe extern "C" fn f_extendnew(
 pub unsafe extern "C" fn f_insert(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let mut error: bool = false_0 != 0;
     if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
@@ -1815,7 +1815,7 @@ pub unsafe extern "C" fn f_insert(
 pub unsafe extern "C" fn f_remove(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     let arg_errmsg: *const ::core::ffi::c_char =
         b"remove() argument\0".as_ptr() as *const ::core::ffi::c_char;
@@ -1842,7 +1842,7 @@ pub unsafe extern "C" fn f_remove(
 pub unsafe extern "C" fn f_reverse(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
-    mut fptr: EvalFuncData,
+    mut _fptr: EvalFuncData,
 ) {
     if tv_check_for_string_or_list_or_blob_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
         return;

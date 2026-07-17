@@ -43,13 +43,13 @@ pub struct UTF8DecoderData {
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UNICODE_INVALID: ::core::ffi::c_int = 0xfffd as ::core::ffi::c_int;
-unsafe extern "C" fn init_utf8(mut enc: *mut VTermEncoding, mut data_: *mut ::core::ffi::c_void) {
+unsafe extern "C" fn init_utf8(mut _enc: *mut VTermEncoding, mut data_: *mut ::core::ffi::c_void) {
     let mut data: *mut UTF8DecoderData = data_ as *mut UTF8DecoderData;
     (*data).bytes_remaining = 0 as ::core::ffi::c_int;
     (*data).bytes_total = 0 as ::core::ffi::c_int;
 }
 unsafe extern "C" fn decode_utf8(
-    mut enc: *mut VTermEncoding,
+    mut _enc: *mut VTermEncoding,
     mut data_: *mut ::core::ffi::c_void,
     mut cp: *mut uint32_t,
     mut cpi: *mut ::core::ffi::c_int,
@@ -213,8 +213,8 @@ static mut encoding_utf8: VTermEncoding = VTermEncoding {
     ),
 };
 unsafe extern "C" fn decode_usascii(
-    mut enc: *mut VTermEncoding,
-    mut data: *mut ::core::ffi::c_void,
+    mut _enc: *mut VTermEncoding,
+    mut _data: *mut ::core::ffi::c_void,
     mut cp: *mut uint32_t,
     mut cpi: *mut ::core::ffi::c_int,
     mut cplen: ::core::ffi::c_int,
@@ -257,7 +257,7 @@ static mut encoding_usascii: VTermEncoding = VTermEncoding {
 };
 unsafe extern "C" fn decode_table(
     mut enc: *mut VTermEncoding,
-    mut data: *mut ::core::ffi::c_void,
+    mut _data: *mut ::core::ffi::c_void,
     mut cp: *mut uint32_t,
     mut cpi: *mut ::core::ffi::c_int,
     mut cplen: ::core::ffi::c_int,
