@@ -66,6 +66,15 @@ rustPlatform.buildRustPackage {
 
     mkdir -p $out/lib/nvim
     cp -r ${nvim-deps}/lib/nvim/parser $out/lib/nvim/parser
+
+    # Regenerate the help tags. Upstream's CMake build produced
+    # `runtime/doc/tags` by running `:helptags`; with that tooling gone,
+    # nothing else generates it and `:help <topic>` fails with "E433: No
+    # tags file". Run the just-built binary against its own installed docs.
+    # Native-only: this executes the target binary, which a cross build
+    # could not — fine, since the flake is Linux-native anyway.
+    HOME=$(mktemp -d) $out/bin/nvim --headless -u NONE \
+      -c "helptags $out/share/nvim/runtime/doc" -c "qa!"
   '';
 
   # The transpiled sources have no test harness wired up here.

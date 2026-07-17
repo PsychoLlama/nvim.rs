@@ -103,6 +103,20 @@
             # requires this to be set.
             NVIM_DEPS_PREFIX = "${self.packages.${system}.nvim-deps}";
 
+            # `runtime/doc/tags` is a generated artifact (gitignored): upstream's
+            # CMake build produced it, and the package regenerates it in
+            # postInstall. A dev binary bakes the in-tree `runtime/` as its
+            # runtime dir, so generate the tags here too, once, if missing —
+            # otherwise `:help` fails with "E433: No tags file". The tags format
+            # is stable, so nixpkgs' nvim yields the same output as ours without
+            # needing a compiled binary to bootstrap from.
+            shellHook = ''
+              if [ -d runtime/doc ] && [ ! -f runtime/doc/tags ]; then
+                ${pkgs.neovim}/bin/nvim --headless -u NONE \
+                  -c 'helptags runtime/doc' -c 'qa!'
+              fi
+            '';
+
             packages = [
               (mkToolchain pkgs)
               pkgs.cmake
