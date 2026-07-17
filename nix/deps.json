@@ -1,0 +1,60 @@
+{
+  "_comment": "Canonical manifest for neovim's bundled C dependencies. Nix is the source of truth for what gets fetched; `nix/deps.nix` feeds these tarballs to cmake.deps offline, and the `deps-in-sync` flake check asserts these entries agree with `cmake.deps/deps.txt`. Keys are the cmake ExternalProject names (uppercased, matching the `<NAME>_URL`/`<NAME>_SHA256` variables). sha256 is hex, exactly as it appears in deps.txt — it is what fetchurl expects.",
+
+  "LIBUV": {
+    "url": "https://github.com/libuv/libuv/archive/v1.52.1.tar.gz",
+    "sha256": "478baf2599bfbc882c355288c9cb6f92e0e7dda435fa04031fa5b607cf3f414c"
+  },
+  "LUAJIT": {
+    "url": "https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz",
+    "sha256": "e60cd2f3057aa39d33d1c895a20087ab54494d9a1ca45aa488ff0378af42df48"
+  },
+  "LUV": {
+    "url": "https://github.com/luvit/luv/archive/1.52.1-0.tar.gz",
+    "sha256": "e8b8774b31d24be4fcf2b021b90599ecccc8e476c61efcc59c3c10cab813a885"
+  },
+  "LUA_COMPAT53": {
+    "url": "https://github.com/lunarmodules/lua-compat-5.3/archive/v0.13.tar.gz",
+    "sha256": "f5dc30e7b1fda856ee4d392be457642c1f0c259264a9b9bfbcb680302ce88fc2"
+  },
+  "LPEG": {
+    "url": "https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz",
+    "sha256": "4b155d67d2246c1ffa7ad7bc466c1ea899bbc40fef0257cc9c03cecbaed4352a"
+  },
+  "UNIBILIUM": {
+    "url": "https://github.com/neovim/unibilium/archive/v2.1.2.tar.gz",
+    "sha256": "370ecb07fbbc20d91d1b350c55f1c806b06bf86797e164081ccc977fc9b3af7a"
+  },
+  "UTF8PROC": {
+    "url": "https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz",
+    "sha256": "abfed50b6d4da51345713661370290f4f4747263ee73dc90356299dfc7990c78"
+  },
+  "TREESITTER": {
+    "url": "https://github.com/tree-sitter/tree-sitter/archive/v0.26.7.tar.gz",
+    "sha256": "4343107ad1097a35e106092b79e5dd87027142c6fba5e4486b1d1d44d5499f84"
+  },
+  "TREESITTER_C": {
+    "url": "https://github.com/tree-sitter/tree-sitter-c/archive/v0.24.1.tar.gz",
+    "sha256": "25dd4bb3dec770769a407e0fc803f424ce02c494a56ce95fedc525316dcf9b48"
+  },
+  "TREESITTER_LUA": {
+    "url": "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/v0.5.0.tar.gz",
+    "sha256": "cf01b93f4b61b96a6d27942cf28eeda4cbce7d503c3bef773a8930b3d778a2d9"
+  },
+  "TREESITTER_VIM": {
+    "url": "https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz",
+    "sha256": "93cafb9a0269420362454ace725a118ff1c3e08dcdfdc228aa86334b54d53c2a"
+  },
+  "TREESITTER_VIMDOC": {
+    "url": "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz",
+    "sha256": "020e8f117f648c8697fca967995c342e92dbd81dab137a115cc7555207fbc84f"
+  },
+  "TREESITTER_QUERY": {
+    "url": "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz",
+    "sha256": "c2b23b9a54cffcc999ded4a5d3949daf338bebb7945dece229f832332e6e6a7d"
+  },
+  "TREESITTER_MARKDOWN": {
+    "url": "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz",
+    "sha256": "df845b1ab7c7c163ec57d7fa17170c92b04be199bddab02523636efec5224ab6"
+  }
+}
