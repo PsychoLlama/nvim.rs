@@ -30,5 +30,12 @@ c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b
 libc = "0.2"
 
 
+# The transpiled C assumes two's-complement wraparound (e.g. vimscript
+# arithmetic in eval.rs); debug-build overflow panics crash nvim where the C
+# original wrapped. Match C semantics until the code is rewritten to declare
+# overflow behavior explicitly.
+[profile.dev]
+overflow-checks = false
+
 [profile.release]
 strip = "debuginfo"

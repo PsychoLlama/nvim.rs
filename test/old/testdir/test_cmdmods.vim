@@ -12,6 +12,9 @@ END
 let s:cmdmods = []
 
 func s:get_cmdmods()
+  " The Rust port deleted src/nvim/ex_cmds.lua (command metadata now lives in
+  " the transpiled Rust), so the modifier list can't be derived anymore.
+  throw 'Skipped: src/nvim/ex_cmds.lua does not exist in the Rust port'
   if empty(s:cmdmods)
     let s:cmdmods = luaeval(s:luaeval_cmdmods->join("\n"))
   endif

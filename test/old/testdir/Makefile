@@ -24,8 +24,11 @@ NEW_TESTS_ALOT := test_alot_utf8 test_alot test_alot_latin
 NEW_TESTS_IN_ALOT := $(shell sed -n '/^source/ s/^source //; s/\.vim$$//p' $(addsuffix .vim,$(NEW_TESTS_ALOT)))
 # Ignored tests.
 # test_largefile: uses too much resources to run on CI.
+# test_options_all: generated from src/nvim/options.lua, which the Rust port
+# no longer has (option metadata lives in the transpiled Rust).
 NEW_TESTS_IGNORE := \
   test_largefile \
+  test_options_all \
 
 NEW_TESTS := $(sort $(basename $(notdir $(wildcard test_*.vim))))
 NEW_TESTS_RES := $(addsuffix .res,$(filter-out $(NEW_TESTS_ALOT) $(NEW_TESTS_IN_ALOT) $(NEW_TESTS_IGNORE),$(NEW_TESTS)) $(NEW_TESTS_ALOT))

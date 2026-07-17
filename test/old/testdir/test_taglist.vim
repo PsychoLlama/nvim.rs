@@ -108,8 +108,10 @@ func Test_tagfiles()
   "       Filter out the '../../../runtime/doc/tags'.
   call filter(tf, 'v:val != "../../../runtime/doc/tags"')
   call assert_equal(1, len(tf))
-  call assert_equal(fnamemodify(expand('$BUILD_DIR/runtime/doc/tags'), ':p:gs?\\?/?'),
-	\           fnamemodify(tf[0], ':p:gs?\\?/?'))
+  " Nvim.rs: compare resolved paths; $BUILD_DIR/runtime is a symlink to the
+  " in-tree runtime (see scripts/prep-test-tree.sh).
+  call assert_equal(resolve(fnamemodify(expand('$BUILD_DIR/runtime/doc/tags'), ':p:gs?\\?/?')),
+	\           resolve(fnamemodify(tf[0], ':p:gs?\\?/?')))
   helpclose
   call assert_equal(['Xtags1', 'Xtags2'], tagfiles())
   " Nvim: defaults to "./tags;,tags", which might cause false positives.

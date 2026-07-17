@@ -11,6 +11,7 @@ describe('xxd', function()
   before_each(clear)
 
   it('works', function()
+    t.skip(fn.executable(testprg('xxd')) == 0, 'xxd is not built by the Rust port')
     t.skip(t.is_arch('s390x'), 'FIXME: xxd not built correctly on s390x with QEMU?')
     -- Round-trip test: encode then decode should return original
     local input = 'hello'
@@ -20,6 +21,7 @@ describe('xxd', function()
   end)
 
   it('handles long lines in revert mode', function()
+    t.skip(fn.executable(testprg('xxd')) == 0, 'xxd is not built by the Rust port')
     t.skip(t.is_arch('s390x'), 'FIXME: xxd not built correctly on s390x with QEMU?')
     local long_line = ('4'):rep(512) .. '\n'
     fn.system({ testprg('xxd'), '-r' }, long_line)
