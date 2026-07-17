@@ -63,7 +63,9 @@
               pkgs.pkg-config
               pkgs.nixfmt
               pkgs.prettier
+              pkgs.stylua
               pkgs.treefmt
+              pkgs.luaPackages.luacheck
             ];
           };
         }

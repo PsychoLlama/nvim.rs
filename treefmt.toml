@@ -10,3 +10,8 @@ includes = ["*.nix"]
 command = "prettier"
 options = ["--write"]
 includes = ["*.md"]
+
+[formatter.stylua]
+command = "stylua"
+options = ["--respect-ignores"]
+includes = ["*.lua"]
