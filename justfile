@@ -13,3 +13,6 @@ fmt:
 # Check formatting without writing changes; fails if anything is unformatted.
 fmt-check:
   treefmt --ci
+
+# Run the full check suite (formatting + compile). Used by CI.
+check: fmt-check build

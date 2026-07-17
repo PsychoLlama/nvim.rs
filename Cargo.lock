@@ -5,6 +5,7 @@ version = 3
 [[package]]
 name = "c2rust-bitfields"
 version = "0.22.1"
+source = "git+https://github.com/PsychoLlama/c2rust.git?rev=b66c7594ddf97d4cef707d84f03c3f9717757199#b66c7594ddf97d4cef707d84f03c3f9717757199"
 dependencies = [
  "c2rust-bitfields-derive",
 ]
@@ -12,6 +13,7 @@ dependencies = [
 [[package]]
 name = "c2rust-bitfields-derive"
 version = "0.22.1"
+source = "git+https://github.com/PsychoLlama/c2rust.git?rev=b66c7594ddf97d4cef707d84f03c3f9717757199#b66c7594ddf97d4cef707d84f03c3f9717757199"
 dependencies = [
  "proc-macro2",
  "quote",

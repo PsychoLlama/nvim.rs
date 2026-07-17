@@ -26,7 +26,7 @@ name = "nvim"
 path = "src/bin/nvim.rs"
 
 [dependencies]
-c2rust-bitfields = { path = "/home/overlord/projects/immunant/c2rust/c2rust-bitfields" }
+c2rust-bitfields = { git = "https://github.com/PsychoLlama/c2rust.git", rev = "b66c7594ddf97d4cef707d84f03c3f9717757199" }
 libc = "0.2"
 
 
