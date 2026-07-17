@@ -66,6 +66,7 @@
               pkgs.stylua
               pkgs.treefmt
               pkgs.luaPackages.luacheck
+              pkgs.lua-language-server
             ];
           };
         }
