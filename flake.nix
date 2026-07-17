@@ -119,6 +119,7 @@
 
             packages = [
               (mkToolchain pkgs)
+              pkgs.just
               pkgs.cmake
               pkgs.ninja
               pkgs.pkg-config
